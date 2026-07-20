@@ -51,6 +51,20 @@ Tray integration uses the **first-party `System.Windows.Forms.NotifyIcon`** (`<U
 
 If data is unavailable, show a neutral icon and explain in the popup. If data is estimated (JSONL-derived), label it **"local estimate"**. A monitoring tool that confidently displays a wrong number is worse than one that admits uncertainty.
 
+Three specific applications of this rule:
+
+- **"Est. value" tiles are not money charged.** Within plan limits the marginal cost is £0; these figures price tokens at public API rates. Always prefix `Est.`
+- **Partial history must state its coverage** — `3 of 31 days recorded`. A small 31-day number without that caveat reads as low usage rather than short history.
+- **Days before install have no data, not zero data.** Never render them as zero-height bars in the graph.
+
+### 7. Ingestion must be idempotent
+
+The rollup store ([ADR-0006](docs/adr/0006-local-rollup-store.md)) is re-fed from JSONL on every poll. Upsert by natural key or track a per-file watermark — never blind `INSERT`. Together with `requestId` de-duplication this is one of two silent double-counting bugs the design is exposed to; **both need explicit tests.**
+
+### 8. Read the fields that actually hold data
+
+Account info comes from `~/.claude.json` → `oauthAccount` (no token, no network). **Tier is `organizationType`** (e.g. `claude_pro`). `seatTier` and `userRateLimitTier` are empty strings on the dev account — the obvious-looking fields are the wrong ones and silently render a blank badge.
+
 ## Prerequisites
 
 **.NET 10 SDK `10.0.302` is installed and verified** (2026-07-20), including `Microsoft.WindowsDesktop.App 10.0.10` for WPF. Verified end to end: a `net10.0-windows` WPF project scaffolds and builds clean, and **`H.NotifyIcon.Wpf 2.4.1` resolves and builds** against .NET 10 — so the ADR-0001 tray dependency is confirmed viable, not assumed.
@@ -64,11 +78,13 @@ Older runtimes (3.1, 6.0) are also present on the machine. Ignore them; always t
 ```
 O-view.sln
 ├── src/
-│   ├── O-view.Core/      # Providers, models, window math — no UI, no Win32
-│   └── O-view.Tray/      # WPF + H.NotifyIcon, icon rendering, popup
+│   ├── O-view.Core/      # Providers, rollup store, window math — no UI, no Win32
+│   └── O-view.Tray/      # WPF + WinForms NotifyIcon, icon rendering, popup
 └── tests/
     └── O-view.Core.Tests/  # xUnit
 ```
+
+The full UI contract is [docs/ui-spec.md](docs/ui-spec.md) — read it before building any panel.
 
 Keep `Core` free of UI and Win32 dependencies so the accounting logic stays testable without a desktop session.
 
@@ -91,6 +107,7 @@ Deliberately **not** in order of importance — in order of ascending unknowns:
 2. **Token-discovery spike** — where does Claude Code Desktop store its OAuth token on Windows? Unresolved: `.credentials.json` held only MCP tokens; Credential Manager had no match. Timebox it; JSONL fallback means failure here is not fatal.
 3. **`JsonlUsageProvider`** — no auth, no network, fully testable. First test is the `requestId` de-duplication test.
 4. **Rolling-window math** — 5h window rolls from first use, not a wall clock. UTC throughout.
+4b. **Rollup store** (ADR-0006) — SQLite daily aggregates; idempotency test alongside.
 5. **Tray shell** — icon, tooltip, popup positioning, `TaskbarCreated` re-registration, single-instance mutex.
 6. **`OAuthUsageProvider`** — backoff with jitter, `retry-after`, nullable-everything parsing, ≥5 min polling.
 7. **Polish** — notifications, startup registration, settings, publish.

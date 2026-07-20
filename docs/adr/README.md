@@ -11,6 +11,7 @@ These are **decided, not drafts.** To change one, add a new ADR that supersedes 
 | [0003](0003-windows-tray-constraints.md) | Windows-only target and notification-area design constraints | Accepted *(icon design revised)* | Windows 11 only. The tray icon cannot show text — information tiers across icon, tooltip, popup. |
 | [0004](0004-clean-room-provenance.md) | Clean-room provenance policy | Accepted | No CodexBar source is read or copied. Implementation derives from platform docs and local observation. |
 | [0005](0005-native-tray-integration.md) | Native tray integration — drop H.NotifyIcon | Accepted | Use first-party `System.Windows.Forms.NotifyIcon`. **Zero third-party runtime dependencies.** |
+| [0006](0006-local-rollup-store.md) | Local rollup store for usage history | Accepted | SQLite daily aggregates. Claude Code deletes transcripts at 30 days, so 31-day figures need our own store. |
 
 ## Findings
 
@@ -27,6 +28,8 @@ Tracked here until resolved by a spike, then folded into an ADR:
 |---|---|---|
 | Where does Claude Code Desktop store its OAuth token on Windows? `.credentials.json` held only MCP tokens; Credential Manager showed no match. | `OAuthUsageProvider` | Ship JSONL-only v1 ([ADR-0002](0002-usage-data-providers.md)) |
 | What is the exact response shape of `/api/oauth/usage`? | `OAuthUsageProvider` parsing | Defensive nullable parsing regardless |
+| Is there any source for a **credit balance**? Account has `hasExtraUsageEnabled=true`, but no local file carries a balance and the API is untested. | Credits section of the popup | Section shows an explanatory note, not invented figures ([ui-spec](../ui-spec.md)) |
+| What does "Limit Reset Credits" refer to? Could not be mapped to a documented concept. | Credits section | Needs clarification from @mlengmark |
 | Does icon legibility hold on a real taskbar at 125/150/175% scaling and in high-contrast themes? | Final icon polish | Auto-fitted font already adapts; verify on-device |
 
 ### Resolved
