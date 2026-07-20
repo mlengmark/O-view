@@ -45,9 +45,11 @@ If data is unavailable, show a neutral icon and explain in the popup. If data is
 
 ## Prerequisites
 
-**The .NET 10 SDK is not installed on the dev machine** — only the 3.1 and 6.0 runtimes. Install it before attempting a build; `dotnet build` will fail with "No .NET SDKs were found" until then.
+**.NET 10 SDK `10.0.302` is installed and verified** (2026-07-20), including `Microsoft.WindowsDesktop.App 10.0.10` for WPF. Verified end to end: a `net10.0-windows` WPF project scaffolds and builds clean, and **`H.NotifyIcon.Wpf 2.4.1` resolves and builds** against .NET 10 — so the ADR-0001 tray dependency is confirmed viable, not assumed.
 
-Available: `git`, `gh` (authenticated as `mlengmark`). Not available: Node, Rust. The `python` on PATH is the non-functional Microsoft Store alias stub — do not use it for tooling scripts; use PowerShell or C#.
+Available: `git`, `gh` (authenticated as `mlengmark`), `dotnet` 10.0.302. Not available: Node, Rust. The `python` on PATH is the non-functional Microsoft Store alias stub — do not use it for tooling scripts; use PowerShell or C#.
+
+Older runtimes (3.1, 6.0) are also present on the machine. Ignore them; always target `net10.0-windows`.
 
 ## Intended structure
 

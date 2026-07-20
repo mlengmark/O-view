@@ -52,6 +52,14 @@ Earlier planning assumed .NET 8. Revised: as of mid-2026, **.NET 8 LTS support e
 
 **Negative**
 - Self-contained single-file output is ~60–90 MB. Mitigate with trimming; accept as the cost of a no-install binary.
-- **The .NET 10 SDK must be installed before the first build** — currently only the 3.1 and 6.0 *runtimes* are present.
 - Tray support comes from a third-party dependency (H.NotifyIcon). Contain the risk by keeping all usage behind an internal `ITrayHost` abstraction so it can be swapped for direct `Shell_NotifyIcon` P/Invoke if the library stalls.
+
+### Verification (2026-07-20)
+
+Toolchain confirmed rather than assumed:
+
+- .NET SDK **10.0.302** installed, with `Microsoft.WindowsDesktop.App 10.0.10`
+- A `net10.0-windows` WPF project scaffolds and builds with 0 warnings / 0 errors
+- **`H.NotifyIcon.Wpf 2.4.1`** resolves as compatible and builds against .NET 10 — the one third-party risk in this ADR is retired
+- .NET 11 is preview-only at this date, confirming .NET 10 as the correct LTS choice
 - Windows-only by construction. This is intended — see [ADR-0003](0003-windows-tray-constraints.md).

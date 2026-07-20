@@ -43,7 +43,7 @@ When operating on fallback data the UI shows a visible **"local estimate"** badg
 ## Prerequisites
 
 - Windows 11
-- [.NET 10 SDK](https://dotnet.microsoft.com/download) — **not currently installed on the dev machine**; required before first build
+- [.NET 10 SDK](https://dotnet.microsoft.com/download) 10.0.302 or later (includes the WindowsDesktop runtime for WPF)
 - Claude Code installed with data present under `%USERPROFILE%\.claude\`
 
 ## Documentation
