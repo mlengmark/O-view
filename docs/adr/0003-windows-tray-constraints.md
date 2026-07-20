@@ -26,8 +26,12 @@ Information is tiered across three surfaces by available space:
 
 | Surface | Capacity | Content |
 |---|---|---|
-| **Tray icon** | ~2 glyphs | Ring/arc gauge + 2 digits (`47`), colour-coded green → amber → red. No `%` sign — the glyph budget is better spent on digits. At 100% (`⚠` or a full ring) use a symbol rather than 3 digits. |
-| **Tooltip** | 128 chars | `5h: 47% · resets 16:32 · 7d: 61%` |
+| **Tray icon** | ~2 glyphs | **2 digits only, no ring** (`47`), digit colour green → amber → red. No `%` sign — the glyph budget is better spent on digits. At 100% use a full-ring `!` symbol rather than 3 digits. *(Revised — see below.)* |
+| **Tooltip** | **127 chars** | `5h: 47% · resets 16:32 · 7d: 61%` (32 chars) |
+
+> **Revised 2026-07-20 by spike.** This ADR originally specified a ring gauge *plus* digits. Measurement showed the ring is counterproductive at 16 px: it consumes the outer ~25% of the canvas, forcing the font from 13.5 px down to 9.5 px and rendering the digits mushy. The ring only ever duplicated the number already shown. **Digits-only is the design.** Evidence and measurements: [findings/tray-icon-rendering.md](../findings/tray-icon-rendering.md).
+>
+> Tooltip capacity also corrected: `NotifyIcon.Text` caps at **127** characters, not 128.
 | **Popup panel** | Unconstrained | Full breakdown, token counts, model split, data-source badge, settings |
 
 **Colour must never be the sole signal** — the gauge fill level and the digits carry the same information, for colour-blind users and for monochrome/high-contrast taskbar themes.
@@ -61,7 +65,8 @@ These have no macOS analogue and are each a real work item:
 | **Cross-platform (Avalonia/MAUI)** | Adds abstraction cost for platforms with no requirement, and tray behaviour is precisely where cross-platform frameworks are weakest — the abstraction would leak on the one feature that matters most. |
 | **Taskbar toolbar / deskband** | Would allow wide text like macOS. Rejected: the deskband API is **deprecated and non-functional on Windows 11**. |
 | **Widgets board / desktop widget** | More display space. Rejected: not always-visible, which defeats an at-a-glance monitor. |
-| **Text-free icon (gauge only)** | Cleaner at 16px. Rejected: users want the number. Revisit only if the rasterisation spike shows digits are genuinely illegible at 100% scaling. |
+| **Text-free icon (gauge only)** | Cleaner at 16px. Rejected: users want the number, and the spike confirmed digits *are* legible at 16 px (13.5 px font) — so there is no legibility argument for dropping them. |
+| **Ring gauge + digits** (as originally specified here) | Rejected after measurement: the ring starves the digits of space at 16 px. See the revision note above. |
 
 ## Consequences
 
