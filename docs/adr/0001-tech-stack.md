@@ -1,8 +1,10 @@
 # ADR-0001: Technology stack — .NET 10 + WPF
 
-- **Status:** Accepted
+- **Status:** Accepted — *partially superseded by [ADR-0005](0005-native-tray-integration.md)*
 - **Date:** 2026-07-20
 - **Deciders:** @mlengmark
+
+> **⚠️ Superseded in part.** The **H.NotifyIcon.Wpf** dependency selected below was dropped in favour of the first-party `System.Windows.Forms.NotifyIcon` — see [ADR-0005](0005-native-tray-integration.md). The .NET 10 + WPF decision, and all other content here, still stands.
 
 ## Context
 
@@ -24,7 +26,7 @@ Build O-view as a **.NET 10 (LTS) WPF** application, C#, targeting `net10.0-wind
 
 Supporting choices:
 
-- **[H.NotifyIcon.Wpf](https://github.com/HavenDV/H.NotifyIcon)** for notification-area integration — WPF has no first-party tray control, and this library is the maintained, WPF-native option
+- ~~**[H.NotifyIcon.Wpf](https://github.com/HavenDV/H.NotifyIcon)** for notification-area integration~~ → **superseded by [ADR-0005](0005-native-tray-integration.md):** use the first-party `System.Windows.Forms.NotifyIcon` via `<UseWindowsForms>true</UseWindowsForms>`, no third-party dependency
 - **System.Drawing / GDI+** for rasterising the tray icon bitmap
 - **xUnit** for tests
 - **Single-file, self-contained** publish (`win-x64`)

@@ -15,7 +15,7 @@ O-view sits in the Windows 11 notification area and answers two questions at a g
 
 | Surface | Shows |
 |---|---|
-| Tray icon | Ring gauge + 2 digits (e.g. `47`), colour-coded green → amber → red |
+| Tray icon | 2 digits (e.g. `47`), colour-coded green → amber → red; full-ring `!` at 100% |
 | Tooltip | `5h: 47% · resets 16:32 · 7d: 61%` |
 | Popup panel | Full breakdown, token counts, model split, data-source badge |
 
