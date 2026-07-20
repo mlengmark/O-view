@@ -31,9 +31,13 @@ This project was inspired by [ReferenceApp](https://github.com/example/reference
 
 Its macOS design is not merely encumbered — it is *incorrect* for this platform.
 
-### 3. Never leak the auth token
+### 3. v1 handles no credentials — keep it that way
 
-`OAuthUsageProvider` handles a live credential. Never log it, persist it, include it in exception messages, or write it to diagnostics. Memory only. `/security-review` is required before this repo goes public.
+**`OAuthUsageProvider` is deferred out of v1** ([ADR-0007](docs/adr/0007-plan-history-primary-provider.md)). The primary source is a local file Claude Desktop already maintains, so v1 needs no token, no network call, and no credential handling at all. Do not reintroduce auth to solve a problem a local file already solves.
+
+If OAuth is ever built: never log the token, persist it, include it in exception messages, or write it to diagnostics. Memory only.
+
+**Never write to `%APPDATA%\Claude\plan-usage-history.json`** — it belongs to another application. Read-only, always.
 
 ### 4. De-duplicate JSONL by `requestId`
 
@@ -92,19 +96,23 @@ Keep `Core` free of UI and Win32 dependencies so the accounting logic stays test
 
 ```
 IUsageProvider
- ├─ OAuthUsageProvider   (primary)   → authoritative %, reset times
+ ├─ PlanHistoryProvider  (primary)   → session/weekly %, derived reset times
+ ├─ OAuthUsageProvider   (deferred)  → post-v1 enhancement only
  ├─ JsonlUsageProvider   (fallback)  → local token counts, offline
  └─ CompositeUsageProvider           → resolution, caching, source labelling
 ```
 
-Resolution: fresh OAuth → cached OAuth (labelled with age) → JSONL (labelled estimate) → no data. See [ADR-0002](docs/adr/0002-usage-data-providers.md).
+Resolution: fresh plan-history → OAuth if it ever exists → JSONL (labelled estimate) → no data. See [ADR-0002](docs/adr/0002-usage-data-providers.md) and [ADR-0007](docs/adr/0007-plan-history-primary-provider.md).
+
+**Reset times are derived, not reported:** detect a decrease in `fh` of ≥2 points, then `next = last drop + 5h`, re-anchoring on each new drop. Before any drop is observed the reset time is genuinely **unknown** — show it as unknown rather than guessing.
 
 ## Build order
 
 Deliberately **not** in order of importance — in order of ascending unknowns:
 
-1. **Icon rasterisation spike** — can 2 digits be read at 16×16? If not, ADR-0003's design changes. Do this before any other UI work.
-2. **Token-discovery spike** — where does Claude Code Desktop store its OAuth token on Windows? Unresolved: `.credentials.json` held only MCP tokens; Credential Manager had no match. Timebox it; JSONL fallback means failure here is not fatal.
+1. ~~Icon rasterisation spike~~ — **done.** Digits legible at 16 px; ring dropped. See [findings](docs/findings/tray-icon-rendering.md).
+2. ~~Token-discovery spike~~ — **no longer needed.** Superseded by `PlanHistoryProvider` ([ADR-0007](docs/adr/0007-plan-history-primary-provider.md)).
+2b. **`PlanHistoryProvider`** — parse `%APPDATA%\Claude\plan-usage-history.json`, plus the reset-drop detector. This is the primary source; build it first.
 3. **`JsonlUsageProvider`** — no auth, no network, fully testable. First test is the `requestId` de-duplication test.
 4. **Rolling-window math** — 5h window rolls from first use, not a wall clock. UTC throughout.
 4b. **Rollup store** (ADR-0006) — SQLite daily aggregates; idempotency test alongside.
