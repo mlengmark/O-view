@@ -86,11 +86,14 @@ Planned once a source exists: free credits, remaining credits (% bar), and reset
 | UI element | Source | Status |
 |---|---|---|
 | Name, email, tier | `~/.claude.json` | ✅ verified present |
-| Session % + reset | OAuth endpoint | ⚠️ token location unresolved |
-| Weekly % + reset | OAuth endpoint | ⚠️ as above |
+| Session % (`fh`) | `plan-usage-history.json` | ✅ **verified — no token needed** |
+| Weekly % (`sd`) | `plan-usage-history.json` | ✅ verified |
+| Reset countdowns | Derived from `fh` drops | ✅ verified exact (5.00014 h cadence) |
 | Tokens today / 31d | Rollup store ← JSONL | ✅ verified; needs ADR-0006 |
 | Est. value | Rollup store + price table | ✅ computable |
 | Usage graph | Rollup store | ✅ sparse until history builds |
 | Credits | **unknown** | ❌ spike required |
 
-If the token spike fails, the session and weekly bars fall back to JSONL estimates and are labelled `local estimate`. The panel degrades; it does not break.
+Every element except credits is served from **local files with no network call and no credential**. See [ADR-0007](adr/0007-plan-history-primary-provider.md).
+
+Degradation path: if Claude Desktop is not installed or its data is stale, the session and weekly bars fall back to JSONL estimates labelled `local estimate`, and reset times show as unknown. The panel degrades; it does not break.
