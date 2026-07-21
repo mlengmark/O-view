@@ -24,15 +24,50 @@ public sealed class JsonlUsageProvider : IUsageProvider
 
     public UsageSnapshot GetSnapshot(DateTimeOffset utcNow)
     {
-        // Sync-then-report: each poll re-feeds the store. The store's upsert-by-
-        // request_id makes re-ingestion idempotent, so a full rescan is safe.
-        foreach (var file in ClaudeProjectsLocator.FindTranscripts(_projectsRoot))
-        {
-            _store.Ingest(TranscriptReader.ReadFile(file));
-        }
+        Sync();
 
         return _store.LatestActivityUtc() is { } latest
             ? new UsageSnapshot(DataSource.Estimate, null, null, null, latest)
             : UsageSnapshot.None;
+    }
+
+    /// <summary>
+    /// Feeds new transcript content into the store, reading only what each file has
+    /// gained since the last poll. Idempotent upserts still make a full re-read safe,
+    /// so offsets are purely an optimisation — but a necessary one: transcripts grew
+    /// 0.2 MB to 6.7 MB in a single day of use, and a full rescan every 60 s scales
+    /// with total history rather than with new activity.
+    /// </summary>
+    private void Sync()
+    {
+        foreach (var file in ClaudeProjectsLocator.FindTranscripts(_projectsRoot))
+        {
+            long length;
+            try
+            {
+                length = new FileInfo(file).Length;
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                continue;
+            }
+
+            var (offset, knownLength) = _store.GetFileOffset(file);
+
+            // Unchanged since the last poll: nothing to parse. This is the common case
+            // and the reason the optimisation pays.
+            if (length == knownLength && offset > 0)
+            {
+                continue;
+            }
+
+            var (records, nextOffset) = TranscriptReader.ReadFrom(file, offset);
+            if (records.Count > 0)
+            {
+                _store.Ingest(records);
+            }
+
+            _store.SetFileOffset(file, nextOffset, length);
+        }
     }
 }

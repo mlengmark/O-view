@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Text;
 using System.Text.Json;
 
 namespace OView.Core.Providers.Jsonl;
@@ -12,31 +13,67 @@ namespace OView.Core.Providers.Jsonl;
 public static class TranscriptReader
 {
     /// <summary>
-    /// Parse one transcript file into assistant records, in file order (append order —
-    /// so per-request, later records supersede earlier ones). Returns empty on any
-    /// file-level failure. Never throws.
+    /// Parse a whole transcript file into assistant records, in file order (append
+    /// order — so per-request, later records supersede earlier ones). Returns empty on
+    /// any file-level failure. Never throws.
     /// </summary>
-    public static IReadOnlyList<TranscriptRecord> ReadFile(string path)
+    public static IReadOnlyList<TranscriptRecord> ReadFile(string path) => ReadFrom(path, 0).Records;
+
+    /// <summary>
+    /// Parse only the bytes appended after <paramref name="startOffset"/>, returning
+    /// the records found and the offset to resume from next time.
+    ///
+    /// Transcripts are append-only and grow without bound, so re-parsing them whole on
+    /// every poll wastes work that scales with history rather than with new activity.
+    /// The returned offset lands on a line boundary: a poll that catches a half-written
+    /// line leaves it unconsumed and re-reads it next time, rather than parsing a
+    /// truncated record or skipping it permanently.
+    /// </summary>
+    public static (IReadOnlyList<TranscriptRecord> Records, long NextOffset) ReadFrom(string path, long startOffset)
     {
-        var result = new List<TranscriptRecord>();
         try
         {
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            using var reader = new StreamReader(stream);
-            while (reader.ReadLine() is { } line)
+
+            // A shorter file than we last saw means it was replaced or rotated; the
+            // stored offset now points into unrelated content, so start over.
+            if (startOffset > stream.Length)
+            {
+                startOffset = 0;
+            }
+
+            stream.Position = startOffset;
+            var buffer = new byte[stream.Length - startOffset];
+            var read = stream.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
+            if (read == 0)
+            {
+                return ([], startOffset);
+            }
+
+            // Consume up to the last newline only. Anything after it is a line still
+            // being written; leaving it unconsumed is what makes resumption safe.
+            var lastNewline = Array.LastIndexOf(buffer, (byte)'\n', read - 1);
+            if (lastNewline < 0)
+            {
+                return ([], startOffset);
+            }
+
+            var records = new List<TranscriptRecord>();
+            foreach (var line in Encoding.UTF8.GetString(buffer, 0, lastNewline + 1)
+                         .Split('\n', StringSplitOptions.RemoveEmptyEntries))
             {
                 if (TryParseLine(line) is { } record)
                 {
-                    result.Add(record);
+                    records.Add(record);
                 }
             }
+
+            return (records, startOffset + lastNewline + 1);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            return [];
+            return ([], startOffset);
         }
-
-        return result;
     }
 
     private static TranscriptRecord? TryParseLine(string line)
