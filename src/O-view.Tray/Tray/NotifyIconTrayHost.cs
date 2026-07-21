@@ -17,6 +17,7 @@ public sealed class NotifyIconTrayHost : ITrayHost
     private nint _currentHandle;
 
     public event EventHandler? IconClicked;
+    public event EventHandler? IconRightClicked;
 
     public NotifyIconTrayHost()
     {
@@ -26,8 +27,15 @@ public sealed class NotifyIconTrayHost : ITrayHost
             {
                 IconClicked?.Invoke(this, EventArgs.Empty);
             }
+            else if (e.Button == MouseButtons.Right)
+            {
+                IconRightClicked?.Invoke(this, EventArgs.Empty);
+            }
         };
     }
+
+    public void ShowNotification(string title, string message) =>
+        _notifyIcon.ShowBalloonTip(10_000, title, message, ToolTipIcon.Warning);
 
     public void Update(Bitmap icon, string tooltip)
     {

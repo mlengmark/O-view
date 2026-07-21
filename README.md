@@ -2,7 +2,7 @@
 
 A Windows notification-area (system tray) app that displays your Claude AI token usage and the time remaining until your next usage-limit reset.
 
-> **Status:** Planning / pre-implementation. No application code yet — see [`docs/adr/`](docs/adr/) for the decisions that shape the build.
+> **Status:** Working. All five build phases are complete — tray icon, popup panel, usage history, notifications, and publish pipeline. See [`docs/adr/`](docs/adr/) for the decisions that shaped the build.
 
 ---
 
@@ -15,9 +15,12 @@ O-view sits in the Windows 11 notification area and answers two questions at a g
 
 | Surface | Shows |
 |---|---|
-| Tray icon | 2 digits (e.g. `47`), colour-coded green → amber → red; full-ring `!` at 100% |
+| Tray icon | 2 digits + a proportional % fill bar (e.g. `47` over a half-full bar), colour-coded green → amber → red; full-ring `!` at 100% |
 | Tooltip | `5h: 47% · resets 16:32 · 7d: 61%` |
-| Popup panel | Full breakdown, token counts, model split, data-source badge |
+| Popup panel | Session/weekly bars, token counts, estimated API-equivalent value, 31-day usage graph, data-source badge. Docks to the taskbar corner like a system flyout. |
+| Right-click menu | Run at startup · threshold notification toggle · exit |
+
+A balloon notification fires once per session-window crossing of the threshold (default 85%).
 
 ## Platform
 
@@ -40,11 +43,21 @@ O-view reads usage from two independent providers and falls back gracefully:
 
 When operating on fallback data the UI shows a visible **"local estimate"** badge. See [ADR-0002](docs/adr/0002-usage-data-providers.md).
 
-## Prerequisites
+## Install and run
 
-- Windows 11
-- [.NET 10 SDK](https://dotnet.microsoft.com/download) 10.0.302 or later (includes the WindowsDesktop runtime for WPF)
-- Claude Code installed with data present under `%USERPROFILE%\.claude\`
+**Users:** download `O-view.Tray.exe` from the latest release and run it. It is self-contained — no .NET install required. The icon lands in the taskbar overflow flyout (the `^` chevron) by default; drag it onto the taskbar to pin it. Left-click opens the panel, right-click the menu.
+
+> **SmartScreen, honestly:** the executable is not code-signed — a certificate costs more than a free tool justifies. Windows SmartScreen will warn on first run ("Windows protected your PC"); *More info → Run anyway* proceeds. The source is in this repository, and the release binary is built from it by the GitHub Actions workflow — verify rather than trust.
+
+**Building from source:**
+
+```
+dotnet build          # requires .NET 10 SDK 10.0.302+
+dotnet test           # 72 tests
+dotnet publish src/O-view.Tray -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
+```
+
+Runtime prerequisites: Windows 11, and Claude data present locally — [Claude Desktop](https://claude.ai/download) for authoritative percentages, and/or Claude Code transcripts under `%USERPROFILE%\.claude\` for token counts.
 
 ## Documentation
 

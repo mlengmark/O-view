@@ -25,6 +25,9 @@ public partial class App : System.Windows.Application
     private NotifyIconTrayHost? _trayHost;
     private TrayController? _controller;
     private PopupWindow? _popup;
+    private TraySettings _settings = new();
+    private ThresholdWatcher? _watcher;
+    private System.Windows.Controls.ContextMenu? _menu;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -61,9 +64,36 @@ public partial class App : System.Windows.Application
         _controller = new TrayController(_trayHost, provider, interval, log);
 
         _trayHost.IconClicked += (_, _) => ShowPopup();
+        _trayHost.IconRightClicked += (_, _) => ShowMenu();
+
+        _settings = TraySettings.Load();
+        _watcher = new ThresholdWatcher(_settings.ThresholdPercent);
+        _controller.SnapshotUpdated += snapshot =>
+        {
+            if (_settings.NotifyOnThreshold && _watcher.ShouldNotify(snapshot.SessionPercent))
+            {
+                _trayHost.ShowNotification("Claude usage",
+                    $"Session usage is at {snapshot.SessionPercent}% of the 5-hour limit.");
+            }
+        };
 
         log?.Write($"startup interval={interval.TotalSeconds}s");
         _controller.Start();
+
+        if (args.ContainsKey("--test-notify"))
+        {
+            _trayHost.ShowNotification("Claude usage", "Test notification (--test-notify).");
+        }
+
+        // Verification hooks for the startup-registration round trip.
+        if (args.ContainsKey("--startup-on"))
+        {
+            log?.Write($"startup-on ok={StartupRegistration.Enable()} enabled={StartupRegistration.IsEnabled()}");
+        }
+        if (args.ContainsKey("--startup-off"))
+        {
+            log?.Write($"startup-off ok={StartupRegistration.Disable()} enabled={StartupRegistration.IsEnabled()}");
+        }
 
         if (args.TryGetValue("--stress", out var stress) &&
             int.TryParse(stress, NumberStyles.Integer, CultureInfo.InvariantCulture, out var iterations))
@@ -98,6 +128,56 @@ public partial class App : System.Windows.Application
     }
 
     private PopupWindow EnsurePopup() => _popup ??= new PopupWindow();
+
+    /// <summary>
+    /// Right-click menu. WPF ContextMenu, not WinForms ContextMenuStrip — WinForms
+    /// stays confined to NotifyIcon itself (CLAUDE.md rule 5).
+    /// </summary>
+    private void ShowMenu()
+    {
+        if (_menu is null)
+        {
+            var startup = new System.Windows.Controls.MenuItem
+            {
+                Header = "Run at startup",
+                IsCheckable = true,
+                IsChecked = StartupRegistration.IsEnabled(),
+            };
+            startup.Click += (_, _) =>
+            {
+                var ok = startup.IsChecked ? StartupRegistration.Enable() : StartupRegistration.Disable();
+                startup.IsChecked = ok ? startup.IsChecked : StartupRegistration.IsEnabled();
+            };
+
+            var notify = new System.Windows.Controls.MenuItem
+            {
+                Header = $"Notify at {_settings.ThresholdPercent}% session usage",
+                IsCheckable = true,
+                IsChecked = _settings.NotifyOnThreshold,
+            };
+            notify.Click += (_, _) =>
+            {
+                _settings = _settings with { NotifyOnThreshold = notify.IsChecked };
+                _settings.Save();
+            };
+
+            var exit = new System.Windows.Controls.MenuItem { Header = "Exit O-view" };
+            exit.Click += (_, _) => Shutdown();
+
+            _menu = new System.Windows.Controls.ContextMenu { StaysOpen = false };
+            _menu.Items.Add(startup);
+            _menu.Items.Add(notify);
+            _menu.Items.Add(new System.Windows.Controls.Separator());
+            _menu.Items.Add(exit);
+        }
+
+        // Re-read on every open: the value can change externally (another instance,
+        // manual registry edit, Task Manager's startup page).
+        ((System.Windows.Controls.MenuItem)_menu.Items[0]).IsChecked = StartupRegistration.IsEnabled();
+
+        _menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
+        _menu.IsOpen = true;
+    }
 
     protected override void OnExit(ExitEventArgs e)
     {

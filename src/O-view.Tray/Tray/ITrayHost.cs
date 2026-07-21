@@ -12,6 +12,12 @@ public interface ITrayHost : IDisposable
     /// <summary>Replace the tray icon and tooltip. Takes ownership of nothing — the bitmap may be disposed by the caller after return.</summary>
     void Update(Bitmap icon, string tooltip);
 
-    /// <summary>Left-click on the icon — the Phase 4 popup hook.</summary>
+    /// <summary>Left-click on the icon — opens the popup.</summary>
     event EventHandler? IconClicked;
+
+    /// <summary>Right-click on the icon — opens the context menu.</summary>
+    event EventHandler? IconRightClicked;
+
+    /// <summary>Threshold notification. Balloon-tip path — legacy but dependency-free (ADR-0005).</summary>
+    void ShowNotification(string title, string message);
 }
