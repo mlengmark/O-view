@@ -44,9 +44,30 @@ No new data source is required to *detect* this. O-view already holds both signa
 
 > Transcript activity is high **and** `fh` is flat ⇒ that usage is not drawing from the plan window.
 
-Sketch: over a recent interval, compare deduplicated token throughput against the change in `fh`. Sustained throughput with a flat meter indicates off-plan billing. Tuning (interval length, thresholds, treatment of the sub-1% rounding floor) needs its own spike — integer percentages mean small genuine movements are invisible, so the detector must not mistake rounding for divergence.
+Over the current session window (anchored on the last observed reset so it never spans one), compare deduplicated output tokens against the change in `fh`. Sustained throughput with a flat meter indicates off-plan billing.
 
 An exact credit *balance* still needs the deferred OAuth work. Detection and spend estimation do not.
+
+### Calibration (spike, 2026-07-21)
+
+The rounding-floor question is answered empirically. Walking every consecutive sample pair where `fh` rose, and summing deduplicated output tokens in each interval:
+
+```
+20 rise events, all Opus 4.8
+  tokens per percentage point:  min 305 · median 2,523 · max 5,793
+```
+
+**Zero rise events on Fable 5** — across ~174K output tokens it never moved the meter once, which is the finding restated from the other direction.
+
+Chosen thresholds, biased deliberately toward silence (a false "you're on credits" alarm would destroy trust faster than a missed one):
+
+| Parameter | Value | Rationale |
+|---|---|---|
+| Min output tokens | **50,000** | ~10× the observed worst case (5,793/pt) — implies ≥8 points expected even pessimistically, ~20 at the median. Below this, a flat meter proves nothing. |
+| Tolerated rise | **≤1 point** | Absorbs rounding at window edges. Two points is treated as real movement. |
+| Limit-reached | **≥99%** | A pinned meter means the allowance is spent; further work bills elsewhere by definition, so volume is irrelevant there. |
+
+Calibration comes from one account and one model, so the floor is set high rather than tuned tight. If a future account shows movement at much coarser granularity, the threshold — not the logic — is what needs revisiting.
 
 ## Product decision (2026-07-21, @mlengmark)
 

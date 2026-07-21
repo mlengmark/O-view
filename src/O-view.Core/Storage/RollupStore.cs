@@ -149,6 +149,41 @@ public sealed class RollupStore : IDisposable
         return Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
+    /// <summary>
+    /// Per-model totals for requests at or after <paramref name="sinceUtc"/>. The daily
+    /// rollups are too coarse for a 5-hour window, so this reads the request ledger
+    /// directly — the same de-duplicated rows, just filtered by time rather than day.
+    /// </summary>
+    public IReadOnlyList<DailyRollup> GetUsageSince(DateTimeOffset sinceUtc)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT model,
+                   SUM(input_tokens), SUM(cache_creation_tokens),
+                   SUM(cache_read_tokens), SUM(output_tokens), COUNT(*)
+            FROM ingested_requests
+            WHERE last_timestamp >= $since
+            GROUP BY model
+            ORDER BY model
+            """;
+        cmd.Parameters.AddWithValue("$since", sinceUtc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
+
+        var result = new List<DailyRollup>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            result.Add(new DailyRollup(
+                DateOnly.FromDateTime(sinceUtc.UtcDateTime),
+                reader.GetString(0),
+                reader.GetInt64(1),
+                reader.GetInt64(2),
+                reader.GetInt64(3),
+                reader.GetInt64(4),
+                reader.GetInt64(5)));
+        }
+        return result;
+    }
+
     /// <summary>Timestamp of the newest ingested record, or null when the store is empty.</summary>
     public DateTimeOffset? LatestActivityUtc()
     {

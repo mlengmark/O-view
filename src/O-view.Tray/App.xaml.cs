@@ -28,6 +28,9 @@ public partial class App : System.Windows.Application
     private TraySettings _settings = new();
     private ThresholdWatcher? _watcher;
     private System.Windows.Controls.ContextMenu? _menu;
+    private PlanHistoryProvider? _planHistory;
+    private bool _offPlanNotified;
+    private string? _simulateDivergence;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -56,8 +59,9 @@ public partial class App : System.Windows.Application
             : TimeSpan.FromSeconds(60);
 
         _store = new RollupStore();
+        _planHistory = new PlanHistoryProvider(orgUuid: ClaudeAccount.TryRead()?.OrganizationUuid);
         var provider = new CompositeUsageProvider(
-            new PlanHistoryProvider(orgUuid: ClaudeAccount.TryRead()?.OrganizationUuid),
+            _planHistory,
             new JsonlUsageProvider(_store));
 
         _trayHost = new NotifyIconTrayHost();
@@ -75,6 +79,8 @@ public partial class App : System.Windows.Application
                 _trayHost.ShowNotification("Claude usage",
                     $"Session usage is at {snapshot.SessionPercent}% of the 5-hour limit.");
             }
+
+            CheckOffPlan(log);
         };
 
         log?.Write($"startup interval={interval.TotalSeconds}s");
@@ -109,6 +115,10 @@ public partial class App : System.Windows.Application
             _popup!.ThemeOverride = args.TryGetValue("--popup-theme", out var theme)
                 ? theme == "light"
                 : null;
+            // Off-plan rendering can't be produced on demand from real data, so it is
+            // verifiable via simulation. This whole feature exists because a UI failed
+            // to communicate something expensive — the UI itself needs verifying.
+            _simulateDivergence = args.TryGetValue("--simulate-divergence", out var sim) ? sim ?? "diverging" : null;
             ShowPopup();
         }
     }
@@ -123,8 +133,76 @@ public partial class App : System.Windows.Application
         _controller.Refresh();  // fresh data on open; local reads are cheap
         EnsurePopup().ShowNearTrayIcon(
             _controller.Latest,
-            PanelStatistics.Build(_store, DateTimeOffset.UtcNow),
+            BuildStatistics(),
             ClaudeAccount.TryRead());
+    }
+
+    private PanelStatistics BuildStatistics()
+    {
+        var utcNow = DateTimeOffset.UtcNow;
+        var stats = PanelStatistics.Build(_store!, utcNow);
+        if (_planHistory is null)
+        {
+            return stats;
+        }
+
+        var (windowStart, percents) = _planHistory.GetCurrentWindow(utcNow);
+
+        if (_simulateDivergence is { } mode)
+        {
+            // Feed the real detector synthetic inputs rather than faking its output,
+            // so the simulation exercises the same code path the real case would.
+            var fake = mode == "limit" ? new[] { 99, 100 } : [6, 6, 6];
+            return stats.WithDivergence(_store!, windowStart, fake) with
+            {
+                EstOffPlanUsd = 92.75m,
+                Divergence = DivergenceDetector.Evaluate(fake, 69_091),
+            };
+        }
+
+        return stats.WithDivergence(_store!, windowStart, percents);
+    }
+
+    /// <summary>
+    /// Notifies once when usage starts bypassing the plan. Edge-triggered like the
+    /// threshold watcher, and re-armed when it stops — the point is to catch the
+    /// silent-and-expensive case the plan bars cannot show, not to nag.
+    /// </summary>
+    private void CheckOffPlan(FileLog? log)
+    {
+        if (_store is null || _planHistory is null || _trayHost is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var stats = BuildStatistics();
+            if (!stats.IsOffPlan)
+            {
+                _offPlanNotified = false;
+                return;
+            }
+
+            log?.Write($"off-plan detected state={stats.Divergence?.State} " +
+                       $"tokens={stats.Divergence?.OutputTokensInWindow} rise={stats.Divergence?.PlanRisePoints}");
+
+            if (_offPlanNotified || !_settings.NotifyOnThreshold)
+            {
+                return;
+            }
+
+            _offPlanNotified = true;
+            var spend = stats.EstOffPlanUsd is { } usd
+                ? $" Est. {usd.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-US"))} so far this window."
+                : "";
+            _trayHost.ShowNotification("Usage is billing beyond your plan",
+                $"Work this session isn't drawing from your plan allowance.{spend} Open O-view for detail.");
+        }
+        catch (Exception ex)
+        {
+            log?.Write($"off-plan check FAILED {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     private PopupWindow EnsurePopup() => _popup ??= new PopupWindow();

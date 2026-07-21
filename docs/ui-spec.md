@@ -78,9 +78,23 @@ Daily token totals across the trailing 31 days, from the rollup store ([ADR-0006
 
 Days before install have **no data, not zero data**. Render them as an explicit empty region with an explanatory label — never as zero-height bars, which would misread as idle days.
 
-### Credits
+### Off-plan usage (was: Credits)
 
-Deferred pending a spike. The account carries `hasExtraUsageEnabled = true` and `billingType = stripe_subscription`, and [extra usage](https://support.claude.com/en/articles/12429409-manage-extra-usage-for-paid-claude-plans) and [usage bundles](https://support.claude.com/en/articles/14246112-buy-usage-bundles) are real products — but **no verified source for a credit balance has been found**, locally or via API.
+**Implemented 2026-07-21** after [credit-usage-divergence.md](findings/credit-usage-divergence.md) established that plan percentages can be accurate and misleading at once.
+
+When the session window shows substantial activity but a flat plan meter, the panel:
+
+1. **Shows an amber banner** above the quota bars — the bars are correct but no longer the whole story, so the correction must appear before them, not after.
+2. **Relabels the value tile** from `Est. value today` to `Est. spend today` with an `incl. off-plan usage` note. The "not money charged" framing is only true for plan usage; off-plan work bills at API rates, so the label flips with the reality.
+3. **Reports estimated spend for the window**, with the caveats stated inline: published API rates, deduplicated locally, an upper bound because bundles discount up to 30%, and O-view cannot read the actual balance.
+
+A notification fires once per onset (edge-triggered, re-armed when it clears) — this is the case the plan bars structurally cannot show.
+
+When the plan limit is reached (≥99%) the wording changes: continued work bills beyond the plan by definition rather than by inference.
+
+**The tray icon is unchanged** — session % remains the headline per the product decision. The divergence signal lives in the panel and notifications.
+
+Exact credit *balances* remain deferred. The account carries `hasExtraUsageEnabled = true` and `billingType = stripe_subscription`, and [extra usage](https://support.claude.com/en/articles/12429409-manage-extra-usage-for-paid-claude-plans) and [usage bundles](https://support.claude.com/en/articles/14246112-buy-usage-bundles) are real products — but **no verified source for a credit balance has been found**, locally or via API.
 
 Planned once a source exists: free credits, remaining credits (% bar), and reset date. Until then the section shows a short explanatory note rather than empty or invented figures.
 

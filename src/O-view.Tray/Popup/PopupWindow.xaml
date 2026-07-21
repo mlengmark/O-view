@@ -36,6 +36,17 @@
 
             <Separator Margin="0,12,0,12" Background="{DynamicResource PanelBorder}"/>
 
+            <!-- Off-plan warning: the plan % is true but not the whole story -->
+            <Border x:Name="DivergenceBanner" Background="{DynamicResource WarnBg}" CornerRadius="6"
+                    Padding="10,8" Margin="0,0,0,12" Visibility="Collapsed">
+                <StackPanel>
+                    <TextBlock x:Name="DivergenceTitle" FontSize="12" FontWeight="SemiBold"
+                               Foreground="{DynamicResource WarnText}" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="DivergenceDetail" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"
+                               Foreground="{DynamicResource TextSecondary}"/>
+                </StackPanel>
+            </Border>
+
             <!-- Session bar -->
             <Grid>
                 <TextBlock Text="Current session" FontSize="12" FontWeight="SemiBold"
@@ -73,9 +84,11 @@
                 </Border>
                 <Border Background="{DynamicResource TileBg}" CornerRadius="6" Padding="10,8" Margin="4,0,0,4">
                     <StackPanel>
-                        <TextBlock Text="Est. value today" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+                        <TextBlock x:Name="TileEstTodayLabel" Text="Est. value today" FontSize="11"
+                                   Foreground="{DynamicResource TextSecondary}"/>
                         <TextBlock x:Name="TileEstToday" FontSize="17" FontWeight="SemiBold"
                                    Foreground="{DynamicResource TextPrimary}" Margin="0,2,0,0"/>
+                        <TextBlock x:Name="TileEstTodayNote" FontSize="10" Foreground="{DynamicResource WarnText}"/>
                     </StackPanel>
                 </Border>
                 <Border Background="{DynamicResource TileBg}" CornerRadius="6" Padding="10,8" Margin="0,4,4,0">
@@ -110,15 +123,20 @@
             <!-- Credits: deferred pending a data source (ui-spec.md) -->
             <Separator Margin="0,12,0,10" Background="{DynamicResource PanelBorder}"/>
             <Grid>
-                <TextBlock Text="Credits" FontSize="12" FontWeight="SemiBold"
+                <TextBlock Text="Off-plan usage" FontSize="12" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimary}"/>
-                <Border Background="{DynamicResource WarnBg}" CornerRadius="4" Padding="6,1" HorizontalAlignment="Right">
-                    <TextBlock Text="pending" FontSize="10" Foreground="{DynamicResource WarnText}"/>
+                <Border x:Name="CreditsBadge" Background="{DynamicResource WarnBg}" CornerRadius="4"
+                        Padding="6,1" HorizontalAlignment="Right">
+                    <TextBlock x:Name="CreditsBadgeText" FontSize="10" Foreground="{DynamicResource WarnText}"/>
                 </Border>
             </Grid>
-            <TextBlock FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
-                       Foreground="{DynamicResource TextSecondary}"
-                       Text="Extra usage is enabled on this account, but no verified source for a credit balance exists yet."/>
+            <Grid Margin="0,6,0,0">
+                <TextBlock x:Name="CreditsSpendLabel" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+                <TextBlock x:Name="CreditsSpendValue" FontSize="15" FontWeight="SemiBold"
+                           HorizontalAlignment="Right" Foreground="{DynamicResource TextPrimary}"/>
+            </Grid>
+            <TextBlock x:Name="CreditsNote" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
+                       Foreground="{DynamicResource TextSecondary}"/>
 
         </StackPanel>
     </Border>
