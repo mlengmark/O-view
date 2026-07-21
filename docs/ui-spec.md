@@ -8,11 +8,14 @@ Two surfaces: the always-visible **tray icon**, and the **popup panel** shown wh
 
 ## 1. Tray icon
 
-Per [ADR-0003](adr/0003-windows-tray-constraints.md) and the [legibility spike](findings/tray-icon-rendering.md):
+Per [ADR-0003](adr/0003-windows-tray-constraints.md) and the [legibility spike](findings/tray-icon-rendering.md), revised 2026-07-21 by product direction (the icon must carry a **% graph**, not digits alone):
 
-- **Two digits, no ring** — the session utilisation percentage (e.g. `47`)
-- Digit colour: green < 60% · amber 60–84% · red ≥ 85%
+- **Two digits + a proportional fill bar along the bottom edge** — the bar is the
+  % graph (~3 px at 16 px, so digits keep most of the canvas; the ring the spike
+  rejected consumed the outer 25% and crushed the font)
+- Digit and bar colour: green < 60% · amber 60–84% · red ≥ 85%
 - At 100%: full-ring `!` symbol (three digits do not fit legibly at 16 px)
+- No data / estimate: neutral dash + empty track — never a fabricated number
 - Tooltip (≤127 chars): `5h: 47% · resets 16:32 · 7d: 61%`
 
 The icon tracks the **session** window, since that is the limit users hit first.
@@ -21,7 +24,11 @@ The icon tracks the **session** window, since that is the limit users hit first.
 
 ## 2. Popup panel
 
-Roughly 400 px wide, opening anchored to the tray icon.
+Roughly 400 px wide. **Docks to the work-area corner adjacent to the taskbar** —
+the same placement model as the system flyouts (volume, network, calendar), so it
+always opens in the same dedicated place regardless of exact click position. The
+cursor selects only the monitor; the taskbar edge is derived from the work-area
+inset (handles all four dock positions and auto-hide).
 
 ### Header
 

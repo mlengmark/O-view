@@ -3,25 +3,33 @@ using System.Runtime.InteropServices;
 namespace OView.Tray.Popup;
 
 /// <summary>
-/// Manual popup placement (ADR-0003 item 2: no NSPopover equivalent exists). Anchors
-/// near a point — the cursor at click time, which sits on the tray icon — and clamps
-/// fully into the work area of the monitor containing that point. Clamping handles
-/// all four taskbar edges and secondary monitors by construction: the work area
-/// excludes the taskbar wherever it is docked. DIP conversion uses the target
-/// monitor's effective DPI (PerMonitorV2).
+/// Manual popup placement (ADR-0003 item 2: no NSPopover equivalent exists). The
+/// popup docks to a FIXED corner of the work area adjacent to the taskbar — the
+/// same placement model as the system flyouts (volume, network, calendar) — so it
+/// always opens in the same place regardless of exact click position. The cursor
+/// is used only to select the monitor (the one whose tray was clicked); the
+/// taskbar edge is derived from where the work area is inset relative to the
+/// monitor rect. DIP conversion uses that monitor's effective DPI (PerMonitorV2).
 /// </summary>
 internal static class PopupPositioner
 {
-    /// <summary>Anchor point plus placement for a popup of the given DIP size.</summary>
+    /// <summary>Placement for a popup of the given DIP size, docked at the tray corner.</summary>
     public static (double LeftDip, double TopDip) Place(double widthDip, double heightDip)
     {
         GetCursorPos(out var anchor);
         var monitor = MonitorFromPoint(anchor, MONITOR_DEFAULTTONEAREST);
 
         var info = new MONITORINFO { cbSize = Marshal.SizeOf<MONITORINFO>() };
-        var work = GetMonitorInfoW(monitor, ref info)
-            ? info.rcWork
-            : new RECT { Right = 1920, Bottom = 1040 };
+        RECT mon, work;
+        if (GetMonitorInfoW(monitor, ref info))
+        {
+            mon = info.rcMonitor;
+            work = info.rcWork;
+        }
+        else
+        {
+            mon = work = new RECT { Right = 1920, Bottom = 1040 };
+        }
 
         var scale = GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, out var dpiX, out _) == 0 && dpiX > 0
             ? dpiX / 96.0
@@ -29,17 +37,29 @@ internal static class PopupPositioner
 
         var widthPx = widthDip * scale;
         var heightPx = heightDip * scale;
-        const int margin = 8;
+        const int margin = 12;
 
-        // Horizontal: centred on the anchor, clamped inside the work area.
-        var left = Clamp(anchor.X - widthPx / 2, work.Left + margin, work.Right - margin - widthPx);
+        // The tray sits at the right (horizontal taskbars) or bottom (vertical ones)
+        // end of the bar, so dock to the work-area corner nearest it. Auto-hide
+        // taskbars leave no inset; bottom-right is the Windows 11 default.
+        double left, top;
+        if (work.Top > mon.Top)                 // taskbar at top
+        {
+            left = work.Right - margin - widthPx;
+            top = work.Top + margin;
+        }
+        else if (work.Left > mon.Left)          // taskbar at left
+        {
+            left = work.Left + margin;
+            top = work.Bottom - margin - heightPx;
+        }
+        else                                    // bottom (default), right, or auto-hide
+        {
+            left = work.Right - margin - widthPx;
+            top = work.Bottom - margin - heightPx;
+        }
 
-        // Vertical: open away from the taskbar — above the anchor when it sits in the
-        // bottom half (bottom-docked taskbar), below it otherwise. Clamped regardless.
-        var workCentre = (work.Top + work.Bottom) / 2.0;
-        var top = anchor.Y >= workCentre
-            ? anchor.Y - heightPx - 12
-            : anchor.Y + 12;
+        left = Clamp(left, work.Left + margin, work.Right - margin - widthPx);
         top = Clamp(top, work.Top + margin, work.Bottom - margin - heightPx);
 
         return (left / scale, top / scale);

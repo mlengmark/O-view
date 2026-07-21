@@ -23,6 +23,15 @@ Each design rendered at 16/20/24 px on both dark and light taskbar colours, show
 
 ## Revised icon design
 
+> **Revised again 2026-07-21 (product direction).** The product owner requires the
+> icon to carry a **% graph**, not digits alone. The implemented design adds a
+> **proportional fill bar along the bottom edge** (~3 px at 16 px) under the
+> digits: the bar is the graph, digits keep ~80% of the canvas, and re-rendered
+> samples at 16/24 px on both themes confirmed digits remain legible with the bar
+> present. This preserves the spike's core result — the *ring* remains rejected
+> because it consumed the outer 25% and crushed the font; a 3 px bottom bar does
+> not.
+
 > **Digits only. No ring.** The two digits are the primary signal; **the digit colour** carries urgency (green → amber → red).
 
 This is not a downgrade. The ring was only ever a redundant encoding of the number already displayed — dropping it buys ~40% more font size for the signal users actually read.
