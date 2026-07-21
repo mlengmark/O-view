@@ -89,6 +89,7 @@ O-view.sln
 ```
 
 The full UI contract is [docs/ui-spec.md](docs/ui-spec.md) — read it before building any panel.
+Phased work breakdown with acceptance criteria: [docs/build-plan.md](docs/build-plan.md).
 
 Keep `Core` free of UI and Win32 dependencies so the accounting logic stays testable without a desktop session.
 
