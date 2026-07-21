@@ -25,6 +25,8 @@ public sealed record PanelStatistics(
     int RecordedDays,
     int WindowDays,
     IReadOnlyList<DayUsage> DailySeries,
+    long CreditTokens31Days,
+    decimal? EstCredit31DaysUsd,
     DivergenceResult? Divergence = null,
     decimal? EstOffPlanUsd = null)
 {
@@ -32,6 +34,9 @@ public sealed record PanelStatistics(
 
     /// <summary>True when work in the current session window is not drawing from the plan.</summary>
     public bool IsOffPlan => Divergence?.IsOffPlan == true;
+
+    /// <summary>True when any credit-billed usage was recorded in the 31-day window.</summary>
+    public bool HasCreditUsage => CreditTokens31Days > 0;
 
     /// <summary>
     /// Adds divergence analysis for the current session window. Kept separate from
@@ -78,6 +83,12 @@ public sealed record PanelStatistics(
             series.Add(new DayUsage(day, byDate.GetValueOrDefault(day), preInstall));
         }
 
+        // 31-day credit spend (GitHub issue #3): the estimated API-rate value of usage
+        // on models that bill as extra usage rather than drawing from the plan window.
+        // A retroactive per-model estimate — see CreditBilledModels for why this is
+        // inferred, not read, and what it can miss.
+        var creditRollups = rollups.Where(r => CreditBilledModels.IsCreditBilled(r.Model)).ToList();
+
         return new PanelStatistics(
             todayRollups.Sum(r => r.TotalTokens),
             EstimateTotal(todayRollups),
@@ -85,7 +96,9 @@ public sealed record PanelStatistics(
             EstimateTotal(rollups),
             store.CountRecordedDays(windowStart, today),
             windowDays,
-            series);
+            series,
+            creditRollups.Sum(r => r.TotalTokens),
+            EstimateTotal(creditRollups));
     }
 
     /// <summary>Null when any contributing model is unpriced — never a partial sum.</summary>

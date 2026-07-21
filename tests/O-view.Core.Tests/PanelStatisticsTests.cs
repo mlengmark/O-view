@@ -110,4 +110,43 @@ public class PanelStatisticsTests : IDisposable
 
         Assert.Equal(25.00m, stats.EstTodayUsd);
     }
+
+    // ── 31-day off-plan credit spend (issue #3) ────────────────────────────────
+    [Fact]
+    public void Credit31Days_CountsOnlyCreditBilledModels()
+    {
+        Seed("r1", "2026-07-21", 1_000_000, "claude-opus-4-8");   // plan model — excluded
+        Seed("r2", "2026-07-21", 1_000_000, "claude-fable-5");    // credit-billed — counted
+        Seed("r3", "2026-07-15", 500_000, "claude-fable-5");      // earlier in window — counted
+
+        var stats = PanelStatistics.Build(_store, Now);
+
+        // Fable output only: (1M + 0.5M) tokens.
+        Assert.Equal(1_500_000, stats.CreditTokens31Days);
+        // Priced at Fable's $50/MTok output: 1.5M -> $75.
+        Assert.Equal(75.00m, stats.EstCredit31DaysUsd);
+        Assert.True(stats.HasCreditUsage);
+    }
+
+    [Fact]
+    public void Credit31Days_ZeroWhenNoCreditModels()
+    {
+        Seed("r1", "2026-07-21", 1_000_000, "claude-opus-4-8");
+
+        var stats = PanelStatistics.Build(_store, Now);
+
+        Assert.Equal(0, stats.CreditTokens31Days);
+        Assert.False(stats.HasCreditUsage);
+    }
+
+    [Fact]
+    public void Credit31Days_ExcludesUsageOutsideWindow()
+    {
+        Seed("old", "2026-06-01", 1_000_000, "claude-fable-5");   // before the 31-day window
+        Seed("new", "2026-07-21", 400_000, "claude-fable-5");
+
+        var stats = PanelStatistics.Build(_store, Now);
+
+        Assert.Equal(400_000, stats.CreditTokens31Days);
+    }
 }

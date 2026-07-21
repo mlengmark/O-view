@@ -48,6 +48,15 @@ Over the current session window (anchored on the last observed reset so it never
 
 An exact credit *balance* still needs the deferred OAuth work. Detection and spend estimation do not.
 
+### 31-day spend view (GitHub issue #3, 2026-07-21)
+
+The live detector is session-scoped by necessity — it compares token flow against the 5-hour meter, which is the only window where both signals exist. For a **31-day off-plan spend** total, two facts rule out a lookback classification:
+
+- **No per-request billing-tier field.** `service_tier` is uniformly `"standard"` across all transcripts, including the Fable requests known to have billed to credits. Nothing in a record says on-plan vs off-plan.
+- **The plan meter has short retention** (~12 h of samples), so past requests can't be correlated against past meter movement.
+
+So the 31-day figure is a **per-model estimate**, not a per-request fact: the API-rate value of usage on models that bill as extra usage (`CreditBilledModels` — Fable, verified; Mythos by parity). This is honest about being inferred: the UI names the models it counts, carries the `N of 31 days recorded` coverage caveat, and states it is an upper bound. Its limits are the model set's limits — it misses plan-tier usage (Opus) that goes off-plan once the plan cap is hit (the live detector catches that), and it assumes the model→billing mapping holds on this plan.
+
 ### Calibration (spike, 2026-07-21)
 
 The rounding-floor question is answered empirically. Walking every consecutive sample pair where `fh` rose, and summing deduplicated output tokens in each interval:

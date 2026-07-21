@@ -95,15 +95,20 @@ public partial class PopupWindow : Window
     }
 
     /// <summary>
-    /// Surfaces off-plan usage. The plan bars above can be entirely accurate while
-    /// telling the user nothing about what they are spending — this is the correction
-    /// for that (docs/findings/credit-usage-divergence.md).
+    /// Surfaces off-plan usage in two distinct registers:
+    ///   • a live banner + tile relabel for what is happening in the CURRENT session
+    ///     window (the divergence detector's real-time signal), and
+    ///   • a standing 31-day off-plan SPEND total (GitHub issue #3), estimated from
+    ///     credit-billed models rather than the 5-hour session.
+    /// The two are independent: the 31-day figure shows even when the current window
+    /// is on-plan, and the banner shows even before any credit spend has accrued.
     /// </summary>
     private void PopulateDivergence(PanelStatistics stats)
     {
         var d = stats.Divergence;
         var offPlan = stats.IsOffPlan;
 
+        // ── live, session-scoped signal ──────────────────────────────────────────
         DivergenceBanner.Visibility = offPlan ? Visibility.Visible : Visibility.Collapsed;
 
         // The "not money charged" framing is only true for plan usage. Off-plan work
@@ -121,22 +126,29 @@ public partial class PopupWindow : Window
                 ? "The 5-hour window is exhausted, so continued work bills as extra usage at API rates."
                 : $"About {FormatTokens(d.OutputTokensInWindow)} output tokens ran this window while the plan meter moved "
                   + $"{d.PlanRisePoints} point{(d.PlanRisePoints == 1 ? "" : "s")}. That work is billing elsewhere — most likely extra-usage credits.";
+        }
 
-            CreditsBadgeText.Text = limitReached ? "limit reached" : "detected";
-            CreditsSpendLabel.Text = "Est. spend this session window";
-            CreditsSpendValue.Text = FormatUsd(stats.EstOffPlanUsd);
-            CreditsNote.Text = "Estimated at published API rates and deduplicated from local transcripts — "
-                + "an upper bound, since usage bundles discount up to 30%. O-view cannot read your credit balance; "
-                + "check your billing page for exact figures.";
+        // ── standing 31-day off-plan spend (issue #3) ────────────────────────────
+        if (stats.HasCreditUsage)
+        {
+            CreditsBadgeText.Text = "credit-billed";
+            CreditsSpendLabel.Text = "Est. credit spend";
+            CreditsSpendValue.Text = FormatUsd(stats.EstCredit31DaysUsd);
+            CreditsCoverage.Text = stats.HasPartialHistory
+                ? $"{stats.RecordedDays} of {stats.WindowDays} days recorded"
+                : "";
+            CreditsNote.Text = $"Estimated at published API rates for models billed as extra usage ({CreditBilledModels.DisplayList}), "
+                + "deduplicated from local transcripts. An upper bound — usage bundles discount up to 30%. "
+                + "O-view cannot read your credit balance; check your billing page for exact figures.";
         }
         else
         {
-            CreditsBadgeText.Text = "none detected";
-            CreditsSpendLabel.Text = "Est. spend this session window";
+            CreditsBadgeText.Text = "none recorded";
+            CreditsSpendLabel.Text = "Est. credit spend";
             CreditsSpendValue.Text = "$0.00";
-            CreditsNote.Text = d?.State == DivergenceState.InsufficientActivity
-                ? "Not enough activity this window to tell whether usage is drawing from your plan."
-                : "Session usage is drawing from your plan allowance.";
+            CreditsCoverage.Text = "";
+            CreditsNote.Text = $"No credit-billed usage ({CreditBilledModels.DisplayList}) recorded in the last 31 days. "
+                + "Off-plan usage while O-view wasn't running isn't captured.";
         }
     }
 
