@@ -86,19 +86,26 @@ Days before install have **no data, not zero data**. Render them as an explicit 
 
 When the session window shows substantial activity but a flat plan meter, the panel:
 
-1. **Shows an amber banner** above the quota bars — the bars are correct but no longer the whole story, so the correction must appear before them, not after.
+The panel carries the signal in **two independent registers**:
+
+**Live (current session window)** — the real-time divergence detector:
+
+1. **An amber banner** above the quota bars — the bars are correct but no longer the whole story, so the correction must appear before them, not after.
 2. **Relabels the value tile** from `Est. value today` to `Est. spend today` with an `incl. off-plan usage` note. The "not money charged" framing is only true for plan usage; off-plan work bills at API rates, so the label flips with the reality.
-3. **Reports estimated spend for the window**, with the caveats stated inline: published API rates, deduplicated locally, an upper bound because bundles discount up to 30%, and O-view cannot read the actual balance.
 
-A notification fires once per onset (edge-triggered, re-armed when it clears) — this is the case the plan bars structurally cannot show.
+A notification fires once per onset (edge-triggered, re-armed when it clears). When the plan limit is reached (≥99%) the wording changes: continued work bills beyond the plan by definition rather than by inference.
 
-When the plan limit is reached (≥99%) the wording changes: continued work bills beyond the plan by definition rather than by inference.
+**Standing (last 31 days)** — the `Off-plan usage · last 31 days` section ([GitHub issue #3](https://github.com/mlengmark/O-view/issues/3)):
 
-**The tray icon is unchanged** — session % remains the headline per the product decision. The divergence signal lives in the panel and notifications.
+- Shows **estimated credit spend over 31 days**, the API-rate value of usage on credit-billed models ([`CreditBilledModels`](../src/O-view.Core/Models/CreditBilledModels.cs) — currently Fable, the one case verified against billing).
+- **Why not a lookback classifier:** there is no per-request billing-tier field (`service_tier` is uniformly `"standard"`, even on requests known to have billed to credits), and the plan meter's short retention makes retroactive divergence impossible. So the 31-day figure is a per-model estimate, not a per-request fact — hence the explicit "models billed as extra usage (Fable)" caption.
+- Carries the same coverage caveat as the other 31-day tiles (`N of 31 days recorded`) and the standard caveats: published API rates, deduplicated locally, an upper bound (bundles discount up to 30%), balance unreadable — check billing for exact.
 
-Exact credit *balances* remain deferred. The account carries `hasExtraUsageEnabled = true` and `billingType = stripe_subscription`, and [extra usage](https://support.claude.com/en/articles/12429409-manage-extra-usage-for-paid-claude-plans) and [usage bundles](https://support.claude.com/en/articles/14246112-buy-usage-bundles) are real products — but **no verified source for a credit balance has been found**, locally or via API.
+The two registers are independent by design: the 31-day figure shows even when the current session is on-plan, and the live banner shows even before any credit spend has accrued.
 
-Planned once a source exists: free credits, remaining credits (% bar), and reset date. Until then the section shows a short explanatory note rather than empty or invented figures.
+**The tray icon is unchanged** — session % remains the headline per the product decision. The off-plan signal lives in the panel and notifications.
+
+Exact credit *balances* remain deferred (no local or API source found). What the section shows is estimated **spend**, not remaining balance.
 
 `Limit Reset Credits` from the original spec could not be mapped to a documented concept and needs clarification.
 
