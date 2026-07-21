@@ -7,6 +7,7 @@ using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Core.Storage;
 using OView.Tray.Diagnostics;
+using OView.Tray.Popup;
 using OView.Tray.Tray;
 
 namespace OView.Tray;
@@ -23,6 +24,7 @@ public partial class App : System.Windows.Application
     private RollupStore? _store;
     private NotifyIconTrayHost? _trayHost;
     private TrayController? _controller;
+    private PopupWindow? _popup;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -58,6 +60,8 @@ public partial class App : System.Windows.Application
         _trayHost = new NotifyIconTrayHost();
         _controller = new TrayController(_trayHost, provider, interval, log);
 
+        _trayHost.IconClicked += (_, _) => ShowPopup();
+
         log?.Write($"startup interval={interval.TotalSeconds}s");
         _controller.Start();
 
@@ -66,7 +70,34 @@ public partial class App : System.Windows.Application
         {
             _controller.StressTest(iterations);
         }
+
+        // Verification hooks: open the popup immediately, optionally pinned (auto-hide
+        // off so screenshots can be taken) and with a forced theme.
+        if (args.ContainsKey("--show-popup"))
+        {
+            EnsurePopup().PinForVerification = args.ContainsKey("--popup-pin");
+            _popup!.ThemeOverride = args.TryGetValue("--popup-theme", out var theme)
+                ? theme == "light"
+                : null;
+            ShowPopup();
+        }
     }
+
+    private void ShowPopup()
+    {
+        if (_controller is null || _store is null)
+        {
+            return;
+        }
+
+        _controller.Refresh();  // fresh data on open; local reads are cheap
+        EnsurePopup().ShowNearTrayIcon(
+            _controller.Latest,
+            PanelStatistics.Build(_store, DateTimeOffset.UtcNow),
+            ClaudeAccount.TryRead());
+    }
+
+    private PopupWindow EnsurePopup() => _popup ??= new PopupWindow();
 
     protected override void OnExit(ExitEventArgs e)
     {

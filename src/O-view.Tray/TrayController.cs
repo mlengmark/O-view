@@ -20,6 +20,9 @@ public sealed class TrayController : IDisposable
     private readonly FileLog? _log;
     private readonly DispatcherTimer _timer;
 
+    /// <summary>Most recent snapshot — what the popup opens with.</summary>
+    public UsageSnapshot Latest { get; private set; } = UsageSnapshot.None;
+
     public TrayController(ITrayHost host, IUsageProvider provider, TimeSpan interval, FileLog? log)
     {
         _host = host;
@@ -41,6 +44,7 @@ public sealed class TrayController : IDisposable
         {
             var utcNow = DateTimeOffset.UtcNow;
             var snapshot = _provider.GetSnapshot(utcNow);
+            Latest = snapshot;
             var tooltip = TooltipFormatter.Format(snapshot);
             var size = IconRenderer.CurrentIconSize();
 
