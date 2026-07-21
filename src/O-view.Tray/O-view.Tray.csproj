@@ -13,6 +13,18 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
+  <!-- Single-file publish settings live here, not only in the release workflow, so a
+       local publish and a CI publish cannot drift apart.
+       IncludeNativeLibrariesForSelfExtract is load-bearing: WPF ships native DLLs
+       (wpfgfx, PresentationNative, D3DCompiler) plus e_sqlite3, and without it
+       PublishSingleFile leaves them beside the exe. Shipping the exe alone then
+       crashes at launch with 0xC000041D - verified before the first release. -->
+  <PropertyGroup Condition="'$(PublishSingleFile)' == 'true'">
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+    <DebugType>none</DebugType>
+  </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\O-view.Core\O-view.Core.csproj" />
   </ItemGroup>
