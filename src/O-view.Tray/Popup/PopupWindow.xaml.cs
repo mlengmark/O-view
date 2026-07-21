@@ -23,7 +23,6 @@ public partial class PopupWindow : Window
     private static readonly Color Green = Color.FromRgb(64, 200, 110);
     private static readonly Color Amber = Color.FromRgb(240, 170, 40);
     private static readonly Color Red = Color.FromRgb(232, 72, 72);
-    private static readonly Color GraphBar = Color.FromRgb(127, 119, 221);
 
     /// <summary>Forces a theme for verification screenshots; null follows the OS.</summary>
     public bool? ThemeOverride { get; set; }
@@ -48,6 +47,9 @@ public partial class PopupWindow : Window
         Top = -10_000;
         Show();
         UpdateLayout();
+        // The chart is a Canvas — its ActualWidth is only known after layout, so it is
+        // drawn here rather than in Populate.
+        BuildGraph(stats);
         (Left, Top) = PopupPositioner.Place(ActualWidth, ActualHeight);
         Activate();
     }
@@ -74,7 +76,18 @@ public partial class PopupWindow : Window
 
         PopulateBar(WeeklyPctText, WeeklyBar, WeeklyBarFill,
             authoritative ? snapshot.WeeklyPercent : null);
-        WeeklyResetText.Text = "Reset time unknown";  // 7d resets are not derivable yet (ADR-0007)
+        // Issue #6: show the weekly reset only once it has genuinely been derived
+        // (two observed resets). Until then, no line at all — an honest blank beats a
+        // "reset time unknown" that reads as broken.
+        if (snapshot.WeeklyResetAtUtc is { } weeklyReset)
+        {
+            WeeklyResetText.Text = $"Resets in {FormatCountdown(weeklyReset - Now(TimeZoneInfo.Utc))} · {TimeZoneInfo.ConvertTime(weeklyReset, local):ddd HH:mm}";
+            WeeklyResetText.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            WeeklyResetText.Visibility = Visibility.Collapsed;
+        }
 
         TileTokensToday.Text = FormatTokens(stats.TokensToday);
         TileEstToday.Text = FormatUsd(stats.EstTodayUsd);
@@ -91,7 +104,7 @@ public partial class PopupWindow : Window
         TileCoverage31.Text = coverage;
         TileCoverage31b.Text = coverage;
 
-        BuildGraph(stats);
+        // BuildGraph is deferred to ShowNearTrayIcon (needs post-layout ActualWidth).
     }
 
     /// <summary>
@@ -181,54 +194,106 @@ public partial class PopupWindow : Window
         }
     }
 
+    // Blue gradient endpoints for within-week intensity (issue #5): light → dark.
+    private static readonly Color GraphBlueLo = Color.FromRgb(176, 208, 240);
+    private static readonly Color GraphBlueHi = Color.FromRgb(24, 95, 165);
+
+    /// <summary>
+    /// Draws the 31-day usage chart on the Canvas (issues #4, #5): one bar per day,
+    /// coloured light→dark blue by its intensity WITHIN its calendar week, dotted
+    /// gridlines at Monday boundaries, vertical date labels, and a per-bar hover
+    /// tooltip. Pre-install days are blank columns (no bar) — with the date axis, an
+    /// empty column reads as "no data" without needing the old caption.
+    /// </summary>
     private void BuildGraph(PanelStatistics stats)
     {
         GraphHost.Children.Clear();
-        GraphHost.ColumnDefinitions.Clear();
 
         var series = stats.DailySeries;
-        var max = Math.Max(1, series.Max(d => d.TotalTokens));
-        var preInstallCount = series.TakeWhile(d => d.PreInstall).Count();
+        if (series.Count == 0)
+        {
+            return;
+        }
+
+        var width = GraphHost.ActualWidth > 0 ? GraphHost.ActualWidth : 344;
+        const double barAreaHeight = 52;
+        const double labelTop = 58;
+        var col = width / series.Count;
+        var globalMax = Math.Max(1, series.Max(d => d.TotalTokens));
+
+        // Per-calendar-week peak, so colour intensity is normalised within each week.
+        var weekMax = series
+            .Where(d => !d.PreInstall)
+            .GroupBy(d => WeekStart(d.DateUtc))
+            .ToDictionary(g => g.Key, g => Math.Max(1, g.Max(d => d.TotalTokens)));
+
+        var gridBrush = (Brush)FindResource("TextMuted");
+        var labelBrush = (Brush)FindResource("TextMuted");
 
         for (var i = 0; i < series.Count; i++)
         {
-            GraphHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        }
+            var day = series[i];
+            var x = i * col;
 
-        // Pre-install days: an explicit empty region, never zero-height bars (rule 6).
-        if (preInstallCount > 0)
-        {
-            var region = new Border
+            // Monday gridline (skip index 0 — the left edge needs no line).
+            if (i > 0 && day.DateUtc.DayOfWeek == DayOfWeek.Monday)
             {
-                BorderBrush = (Brush)FindResource("TextMuted"),
-                BorderThickness = new Thickness(1),
-                CornerRadius = new CornerRadius(2),
-                Opacity = 0.45,
-            };
-            Grid.SetColumn(region, 0);
-            Grid.SetColumnSpan(region, preInstallCount);
-            GraphHost.Children.Add(region);
-        }
+                var line = new Line
+                {
+                    X1 = x, X2 = x, Y1 = 0, Y2 = barAreaHeight + 3,
+                    Stroke = gridBrush,
+                    StrokeThickness = 1,
+                    StrokeDashArray = [1, 2],
+                    Opacity = 0.7,
+                };
+                GraphHost.Children.Add(line);
+            }
 
-        for (var i = preInstallCount; i < series.Count; i++)
-        {
-            var bar = new Rectangle
+            // Bar — height by absolute tokens, colour by within-week intensity.
+            if (!day.PreInstall && day.TotalTokens > 0)
             {
-                Fill = new SolidColorBrush(GraphBar),
-                Height = Math.Max(series[i].TotalTokens == 0 ? 0 : 2, 56.0 * series[i].TotalTokens / max),
-                VerticalAlignment = VerticalAlignment.Bottom,
-                Margin = new Thickness(0.5, 0, 0.5, 0),
-                RadiusX = 1,
-                RadiusY = 1,
-            };
-            Grid.SetColumn(bar, i);
-            GraphHost.Children.Add(bar);
-        }
+                var intensity = day.TotalTokens / (double)weekMax[WeekStart(day.DateUtc)];
+                var height = Math.Max(2, barAreaHeight * day.TotalTokens / globalMax);
+                var bar = new Rectangle
+                {
+                    Width = Math.Max(2, col - 2),
+                    Height = height,
+                    Fill = new SolidColorBrush(Lerp(GraphBlueLo, GraphBlueHi, intensity)),
+                    RadiusX = 1,
+                    RadiusY = 1,
+                    ToolTip = $"{day.DateUtc:ddd d MMM} · {FormatTokens(day.TotalTokens)} tokens",
+                };
+                Canvas.SetLeft(bar, x + 1);
+                Canvas.SetTop(bar, barAreaHeight - height);
+                GraphHost.Children.Add(bar);
+            }
 
-        GraphCaption.Text = preInstallCount > 0
-            ? "Outlined region: before O-view install — no data, not zero usage."
-            : "";
-        GraphCaption.Visibility = preInstallCount > 0 ? Visibility.Visible : Visibility.Collapsed;
+            // Vertical date label under every column (rotated, small but legible).
+            var label = new TextBlock
+            {
+                Text = day.DateUtc.ToString("d MMM", CultureInfo.InvariantCulture),
+                FontSize = 8,
+                Foreground = labelBrush,
+                RenderTransform = new RotateTransform(90),
+                Opacity = day.PreInstall ? 0.5 : 1.0,
+            };
+            Canvas.SetLeft(label, x + col / 2 + 3);
+            Canvas.SetTop(label, labelTop);
+            GraphHost.Children.Add(label);
+        }
+    }
+
+    /// <summary>Monday of the ISO week containing the date.</summary>
+    private static DateOnly WeekStart(DateOnly date) =>
+        date.AddDays(-(((int)date.DayOfWeek + 6) % 7));
+
+    private static Color Lerp(Color a, Color b, double t)
+    {
+        t = Math.Clamp(t, 0, 1);
+        return Color.FromRgb(
+            (byte)(a.R + (b.R - a.R) * t),
+            (byte)(a.G + (b.G - a.G) * t),
+            (byte)(a.B + (b.B - a.B) * t));
     }
 
     // ── formatting (display edge) ──────────────────────────────────────────────

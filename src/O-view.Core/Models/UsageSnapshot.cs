@@ -13,12 +13,17 @@ namespace OView.Core.Models;
 /// the source — null until at least one drop has been observed (ADR-0007).
 /// </param>
 /// <param name="CapturedAtUtc">When the underlying sample was taken. Drives staleness labels.</param>
+/// <param name="WeeklyResetAtUtc">
+/// Predicted next seven-day window reset. Derived from persisted `sd` drops with a
+/// measured period — null until two resets have been observed (GitHub issue #6).
+/// </param>
 public sealed record UsageSnapshot(
     DataSource Source,
     int? SessionPercent,
     int? WeeklyPercent,
     DateTimeOffset? SessionResetAtUtc,
-    DateTimeOffset? CapturedAtUtc)
+    DateTimeOffset? CapturedAtUtc,
+    DateTimeOffset? WeeklyResetAtUtc = null)
 {
     /// <summary>The canonical "no data" snapshot.</summary>
     public static UsageSnapshot None { get; } = new(DataSource.None, null, null, null, null);

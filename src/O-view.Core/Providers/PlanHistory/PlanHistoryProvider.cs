@@ -20,6 +20,7 @@ public sealed class PlanHistoryProvider : IUsageProvider
     private readonly string _path;
     private readonly string? _orgUuid;
     private readonly TimeSpan _freshness;
+    private readonly IWeeklyResetLog? _weeklyResetLog;
 
     /// <param name="path">File to read; defaults to the real Claude Desktop location.</param>
     /// <param name="orgUuid">
@@ -28,11 +29,18 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// samples (single-org machines).
     /// </param>
     /// <param name="freshness">Maximum sample age still labelled <see cref="DataSource.Live"/>.</param>
-    public PlanHistoryProvider(string? path = null, string? orgUuid = null, TimeSpan? freshness = null)
+    /// <param name="weeklyResetLog">
+    /// Persists observed weekly resets so the 7-day reset can be derived over time
+    /// (issue #6). Null disables weekly-reset prediction — fine for tests and for the
+    /// JSONL-only fallback.
+    /// </param>
+    public PlanHistoryProvider(string? path = null, string? orgUuid = null, TimeSpan? freshness = null,
+        IWeeklyResetLog? weeklyResetLog = null)
     {
         _path = path ?? PlanHistoryFile.DefaultPath;
         _orgUuid = orgUuid;
         _freshness = freshness ?? DefaultFreshness;
+        _weeklyResetLog = weeklyResetLog;
     }
 
     /// <summary>
@@ -76,11 +84,21 @@ public sealed class PlanHistoryProvider : IUsageProvider
         var lastDrop = ResetDetector.FindLastDrop(samples);
         var nextReset = ResetDetector.PredictNextReset(lastDrop, utcNow);
 
+        // Weekly reset (issue #6): record any clean sd drops seen this poll, then
+        // predict from the full persisted history. Null until the period is measurable.
+        DateTimeOffset? weeklyReset = null;
+        if (_weeklyResetLog is not null)
+        {
+            _weeklyResetLog.RecordResets(WeeklyResetDetector.FindResets(samples));
+            weeklyReset = WeeklyResetDetector.PredictNextReset(_weeklyResetLog.GetResets(), utcNow);
+        }
+
         return new UsageSnapshot(
             source,
             latest.FiveHourPercent,
             latest.SevenDayPercent,
             nextReset,
-            latest.AtUtc);
+            latest.AtUtc,
+            weeklyReset);
     }
 }

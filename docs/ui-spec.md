@@ -53,9 +53,11 @@ Both bars show **percentage of quota consumed** — consistent metric, with time
 | Row | Bar | Text |
 |---|---|---|
 | **Current session** | % of 5-hour rolling limit used | `Resets in 2h 14m · 16:32` |
-| **Weekly** | % of 7-day limit used | `Resets in 3d 6h · Thu 09:00` |
+| **Weekly** | % of 7-day limit used | reset line only once derived (see below) |
 
 *Design note:* the original spec had the session bar showing **remaining time** and the weekly bar showing **remaining tokens**. Rejected during review: a time bar cannot warn about quota exhaustion — you could sit at 95% used with 4 hours "remaining" and the bar would still look healthy, which defeats the purpose of the tool. Time is still shown, as text.
+
+**Weekly reset ([GitHub issue #6](https://github.com/mlengmark/O-view/issues/6)):** derived from `sd` drops the same way the 5-hour reset is derived from `fh` drops — but two things differ. The weekly period is undocumented (disputed 7-day vs 72-hour), so it is **measured from two observed resets**, never assumed; and weekly resets are rare while plan-history retention is ~1.5 days, so observed resets are **persisted** (`weekly_resets` table). Until two clean resets have accrued, the reset is genuinely unknown and **no line is shown** — an honest blank replaces the earlier "Reset time unknown", which read as broken. Restart-snap drops (across a Desktop-closed gap) are rejected, not counted. The API almost certainly holds this directly, but reading it needs the encrypted OAuth token (deferred — ADR-0007).
 
 Percentages come from the OAuth provider. On JSONL fallback they are estimates and must be labelled as such.
 
@@ -76,9 +78,15 @@ Any tile whose window exceeds recorded history shows coverage: `3 of 31 days rec
 
 ### Usage graph
 
-Daily token totals across the trailing 31 days, from the rollup store ([ADR-0006](adr/0006-local-rollup-store.md)).
+Daily token totals across the trailing 31 days, from the rollup store ([ADR-0006](adr/0006-local-rollup-store.md)). Enhanced per [issues #4 and #5](https://github.com/mlengmark/O-view/issues/4):
 
-Days before install have **no data, not zero data**. Render them as an explicit empty region with an explanatory label — never as zero-height bars, which would misread as idle days.
+- **One bar per day**, height by absolute daily tokens.
+- **Colour: light → dark blue by intensity within each calendar week** (issue #5) — each Mon–Sun week is its own gradient scale, so the busiest day of a week is darkest. The absolute weekly token limit is unknown, so this is *relative* intensity, not a fraction of a limit.
+- **Dotted vertical gridlines at Monday boundaries** (issue #5), giving weekly context. The plan's true weekly reset isn't derivable, so calendar weeks (Mon–Sun) are the anchor — a clean visual reference, not a claim about the plan boundary.
+- **Vertical date labels under every column** (issue #4), small but legible.
+- **Hover tooltip** per bar: date and exact token count (issue #5).
+
+Days before install are **blank columns** (no bar) with their date still labelled — with the date axis, an empty column reads as "no data" on its own, so the earlier "before O-view install" caption was **removed to save space** (issue #4). They are never rendered as zero-height bars, which would misread as idle days.
 
 ### Off-plan usage (was: Credits)
 
