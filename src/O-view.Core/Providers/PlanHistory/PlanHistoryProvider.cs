@@ -35,14 +35,38 @@ public sealed class PlanHistoryProvider : IUsageProvider
         _freshness = freshness ?? DefaultFreshness;
     }
 
-    public UsageSnapshot GetSnapshot(DateTimeOffset utcNow)
+    /// <summary>
+    /// Meter values for the current session window (since the last observed reset),
+    /// plus that window's start — the inputs the divergence detector needs. Empty
+    /// when no data is available.
+    /// </summary>
+    public (DateTimeOffset WindowStartUtc, IReadOnlyList<int> Percents) GetCurrentWindow(DateTimeOffset utcNow)
     {
-        var samples = PlanHistoryFile.Read(_path);
-        if (_orgUuid is not null)
+        var samples = ReadSamples();
+        if (samples.Count == 0)
         {
-            samples = samples.Where(s => s.OrgUuid == _orgUuid).ToList();
+            return (utcNow, []);
         }
 
+        // Anchor on the last reset so the window never spans one — a reset would show
+        // as a large negative rise and mask real divergence.
+        var windowStart = ResetDetector.FindLastDrop(samples) ?? samples[0].AtUtc;
+        var inWindow = samples.Where(s => s.AtUtc >= windowStart).ToList();
+
+        return (windowStart, inWindow.Select(s => s.FiveHourPercent).ToList());
+    }
+
+    private IReadOnlyList<PlanHistorySample> ReadSamples()
+    {
+        var samples = PlanHistoryFile.Read(_path);
+        return _orgUuid is not null
+            ? samples.Where(s => s.OrgUuid == _orgUuid).ToList()
+            : samples;
+    }
+
+    public UsageSnapshot GetSnapshot(DateTimeOffset utcNow)
+    {
+        var samples = ReadSamples();
         if (samples.Count == 0) return UsageSnapshot.None;
 
         var latest = samples[^1];

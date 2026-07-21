@@ -78,6 +78,23 @@ First visible output.
 
 ---
 
+## Phase 6 — Off-plan detection *(added after v0.1.0)*
+
+Not in the original plan. Added because v0.1.0 shipped a tray that read a comfortable green 6% while ~€86 of credit usage went unreported — see [credit-usage-divergence.md](findings/credit-usage-divergence.md).
+
+**Build**
+- `DivergenceDetector` (Core, pure) — window-scoped comparison of deduplicated output tokens against plan-meter movement, calibrated against the integer-percent rounding floor
+- `RollupStore.GetUsageSince` — window-grain queries over the existing request ledger
+- `PlanHistoryProvider.GetCurrentWindow` — meter series since the last reset, so a window never spans one
+- Panel: warning banner, tile relabelling, off-plan spend section; edge-triggered notification
+
+**Acceptance**
+- Detector correctly flags the real frozen-meter case and stays silent on the real tracking case, both as unit tests using measured values
+- No false positive against live data while the meter is tracking normally
+- Both panel states verified visually (simulation hook for the off-plan rendering, since it cannot be produced on demand)
+
+---
+
 ## Phase 5 — Ship
 
 Run-at-startup (`HKCU\...\Run`), settings, threshold notifications, `/security-review`, single-file publish, release workflow.

@@ -24,9 +24,34 @@ public sealed record PanelStatistics(
     decimal? Est31DaysUsd,
     int RecordedDays,
     int WindowDays,
-    IReadOnlyList<DayUsage> DailySeries)
+    IReadOnlyList<DayUsage> DailySeries,
+    DivergenceResult? Divergence = null,
+    decimal? EstOffPlanUsd = null)
 {
     public bool HasPartialHistory => RecordedDays < WindowDays;
+
+    /// <summary>True when work in the current session window is not drawing from the plan.</summary>
+    public bool IsOffPlan => Divergence?.IsOffPlan == true;
+
+    /// <summary>
+    /// Adds divergence analysis for the current session window. Kept separate from
+    /// <see cref="Build"/> because it needs the plan-meter series, which lives in the
+    /// provider layer — Core stays free of file-format knowledge here.
+    /// </summary>
+    public PanelStatistics WithDivergence(RollupStore store, DateTimeOffset windowStartUtc, IReadOnlyList<int> planPercentsInWindow)
+    {
+        var windowUsage = store.GetUsageSince(windowStartUtc);
+        var outputTokens = windowUsage.Sum(r => r.OutputTokens);
+        var result = DivergenceDetector.Evaluate(planPercentsInWindow, outputTokens);
+
+        // Only price the window when it is actually off-plan: otherwise this figure
+        // would read as money spent when it is plan usage costing nothing marginal.
+        return this with
+        {
+            Divergence = result,
+            EstOffPlanUsd = result.IsOffPlan ? EstimateTotal(windowUsage) : null,
+        };
+    }
 
     public static PanelStatistics Build(RollupStore store, DateTimeOffset utcNow, int windowDays = 31)
     {

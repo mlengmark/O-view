@@ -81,6 +81,8 @@ public partial class PopupWindow : Window
         TileTokens31.Text = FormatTokens(stats.Tokens31Days);
         TileEst31.Text = FormatUsd(stats.Est31DaysUsd);
 
+        PopulateDivergence(stats);
+
         // Partial history states its coverage — a small number without this caveat
         // reads as low usage rather than short history (ADR-0006).
         var coverage = stats.HasPartialHistory
@@ -90,6 +92,52 @@ public partial class PopupWindow : Window
         TileCoverage31b.Text = coverage;
 
         BuildGraph(stats);
+    }
+
+    /// <summary>
+    /// Surfaces off-plan usage. The plan bars above can be entirely accurate while
+    /// telling the user nothing about what they are spending — this is the correction
+    /// for that (docs/findings/credit-usage-divergence.md).
+    /// </summary>
+    private void PopulateDivergence(PanelStatistics stats)
+    {
+        var d = stats.Divergence;
+        var offPlan = stats.IsOffPlan;
+
+        DivergenceBanner.Visibility = offPlan ? Visibility.Visible : Visibility.Collapsed;
+
+        // The "not money charged" framing is only true for plan usage. Off-plan work
+        // bills at API rates, so the label has to flip with it.
+        TileEstTodayLabel.Text = offPlan ? "Est. spend today" : "Est. value today";
+        TileEstTodayNote.Text = offPlan ? "incl. off-plan usage" : "";
+
+        if (offPlan && d is not null)
+        {
+            var limitReached = d.State == DivergenceState.PlanLimitReached;
+            DivergenceTitle.Text = limitReached
+                ? "Plan limit reached — usage is billing beyond your plan"
+                : "This session's usage is not drawing from your plan";
+            DivergenceDetail.Text = limitReached
+                ? "The 5-hour window is exhausted, so continued work bills as extra usage at API rates."
+                : $"About {FormatTokens(d.OutputTokensInWindow)} output tokens ran this window while the plan meter moved "
+                  + $"{d.PlanRisePoints} point{(d.PlanRisePoints == 1 ? "" : "s")}. That work is billing elsewhere — most likely extra-usage credits.";
+
+            CreditsBadgeText.Text = limitReached ? "limit reached" : "detected";
+            CreditsSpendLabel.Text = "Est. spend this session window";
+            CreditsSpendValue.Text = FormatUsd(stats.EstOffPlanUsd);
+            CreditsNote.Text = "Estimated at published API rates and deduplicated from local transcripts — "
+                + "an upper bound, since usage bundles discount up to 30%. O-view cannot read your credit balance; "
+                + "check your billing page for exact figures.";
+        }
+        else
+        {
+            CreditsBadgeText.Text = "none detected";
+            CreditsSpendLabel.Text = "Est. spend this session window";
+            CreditsSpendValue.Text = "$0.00";
+            CreditsNote.Text = d?.State == DivergenceState.InsufficientActivity
+                ? "Not enough activity this window to tell whether usage is drawing from your plan."
+                : "Session usage is drawing from your plan allowance.";
+        }
     }
 
     private void PopulateBar(TextBlock pctText, Grid bar, Border fill, int? percent)
