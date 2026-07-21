@@ -8,17 +8,19 @@ Two surfaces: the always-visible **tray icon**, and the **popup panel** shown wh
 
 ## 1. Tray icon
 
-Per [ADR-0003](adr/0003-windows-tray-constraints.md) and the [legibility spike](findings/tray-icon-rendering.md), revised 2026-07-21 by product direction (the icon must carry a **% graph**, not digits alone):
+Per [ADR-0003](adr/0003-windows-tray-constraints.md) and the [legibility spike](findings/tray-icon-rendering.md), revised 2026-07-21 to a **ring gauge** ([GitHub issue #1](https://github.com/mlengmark/O-view/issues/1)):
 
-- **Two digits + a proportional fill bar along the bottom edge** — the bar is the
-  % graph (~3 px at 16 px, so digits keep most of the canvas; the ring the spike
-  rejected consumed the outer 25% and crushed the font)
-- Digit and bar colour: green < 60% · amber 60–84% · red ≥ 85%
-- At 100%: full-ring `!` symbol (three digits do not fit legibly at 16 px)
-- No data / estimate: neutral dash + empty track — never a fabricated number
+- **A circular arc, proportional to session %, no digits.** Ring-only sidesteps the
+  spike's finding (which rejected ring *plus* digits, where they competed for space)
+  by removing the digits — the exact number lives in the tooltip instead.
+- Arc colour — the shared `UsageLevels` bands ([issue #2](https://github.com/mlengmark/O-view/issues/2)):
+  **green < 50% · amber 50–69% · red ≥ 70%**. Same classifier drives the popup bars.
+- No data / estimate: faint empty ring — never a fabricated fill
 - Tooltip (≤127 chars): `5h: 47% · resets 16:32 · 7d: 61%`
 
 The icon tracks the **session** window, since that is the limit users hit first.
+A threshold notification fires once when session usage first reaches the critical
+band (default 70%, matching red; user-adjustable).
 
 ---
 

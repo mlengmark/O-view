@@ -31,6 +31,15 @@ Each design rendered at 16/20/24 px on both dark and light taskbar colours, show
 > present. This preserves the spike's core result — the *ring* remains rejected
 > because it consumed the outer 25% and crushed the font; a 3 px bottom bar does
 > not.
+>
+> **Superseded 2026-07-21 (GitHub issue #1): ring-only.** Digits-plus-bar read as
+> cluttered at 16 px in practice. The icon is now a **ring gauge with no digits**.
+> The spike's finding still holds and is *why this works*: the spike rejected ring
+> **plus** digits, where the two competed for a 16 px canvas. A ring **alone** has
+> no digits to crush — it uses the full area for the arc, and re-rendered samples
+> confirm it is clean and legible at 16/24 px across all three colour bands (green
+> <50, amber 50–69, red ≥70) on both themes. The exact number lives in the tooltip.
+> Below this line, "digits-only is the design" is historical.
 
 > **Digits only. No ring.** The two digits are the primary signal; **the digit colour** carries urgency (green → amber → red).
 

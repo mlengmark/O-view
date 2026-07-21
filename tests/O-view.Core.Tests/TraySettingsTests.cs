@@ -12,12 +12,20 @@ public class TraySettingsTests : IDisposable
     public void RoundTrips()
     {
         var path = Path.Combine(_dir, "settings.json");
-        new TraySettings(NotifyOnThreshold: false, ThresholdPercent: 70).Save(path);
+        // A non-default value, so a bug that silently returns defaults would fail here.
+        new TraySettings(NotifyOnThreshold: false, ThresholdPercent: 55).Save(path);
 
         var loaded = TraySettings.Load(path);
 
         Assert.False(loaded.NotifyOnThreshold);
-        Assert.Equal(70, loaded.ThresholdPercent);
+        Assert.Equal(55, loaded.ThresholdPercent);
+    }
+
+    [Fact]
+    public void DefaultThreshold_MatchesCriticalBand()
+    {
+        // Out of the box, notify exactly when the gauge turns red (issue #2).
+        Assert.Equal(OView.Core.Models.UsageLevels.CriticalPercent, new TraySettings().ThresholdPercent);
     }
 
     [Fact]
@@ -36,6 +44,6 @@ public class TraySettingsTests : IDisposable
         var path = Path.Combine(_dir, "settings.json");
         File.WriteAllText(path, "{\"NotifyOnThreshold\":true,\"ThresholdPercent\":0}");
 
-        Assert.Equal(85, TraySettings.Load(path).ThresholdPercent);
+        Assert.Equal(70, TraySettings.Load(path).ThresholdPercent);
     }
 }
