@@ -20,6 +20,8 @@ Empirical results from spikes, cited by the ADRs above:
 
 - [jsonl-schema.md](../findings/jsonl-schema.md) — local transcript format; the `requestId` de-duplication requirement
 - [tray-icon-rendering.md](../findings/tray-icon-rendering.md) — icon legibility measurements; why the ring gauge was dropped
+- [plan-usage-history.md](../findings/plan-usage-history.md) — Claude Desktop's cached utilisation series; how reset times are derived
+- [credit-usage-divergence.md](../findings/credit-usage-divergence.md) — **credit-billed usage bypasses the plan window**; the headline % can be true and misleading at once
 
 ## Open questions
 
@@ -29,7 +31,8 @@ Tracked here until resolved by a spike, then folded into an ADR:
 |---|---|---|
 | Is `plan-usage-history.json` capped at ~139 samples, or was that just Desktop's uptime? | Nothing — rollup store persists samples either way | Observe over a longer run |
 | What is the exact response shape of `/api/oauth/usage`? | `OAuthUsageProvider` — **deferred out of v1** | Defensive nullable parsing regardless |
-| Is there any source for a **credit balance**? Account has `hasExtraUsageEnabled=true`, but no local file carries a balance and the API is untested. | Credits section of the popup | Section shows an explanatory note, not invented figures ([ui-spec](../ui-spec.md)) |
+| Is there any source for a **credit balance**? No local file carries one; the API is untested. *(Partially answered — see Resolved: credit **spend** is estimable locally and divergence is detectable; only the exact **balance** still needs the API.)* | Credits section of the popup | Section shows an explanatory note, not invented figures ([ui-spec](../ui-spec.md)) |
+| How should divergence detection be tuned — interval, threshold, and the integer-percent rounding floor? | Phase 6 divergence detector | Conservative thresholds; never flag on rounding alone ([findings](../findings/credit-usage-divergence.md)) |
 | What does "Limit Reset Credits" refer to? Could not be mapped to a documented concept. | Credits section | Needs clarification from @mlengmark |
 | Does icon legibility hold on a real taskbar at 125/150/175% scaling and in high-contrast themes? | Final icon polish | Auto-fitted font already adapts; verify on-device |
 
@@ -41,6 +44,7 @@ Tracked here until resolved by a spike, then folded into an ADR:
 | ~~Is a third-party tray library required?~~ | **No** — `System.Windows.Forms.NotifyIcon` is first-party and sufficient. → [ADR-0005](0005-native-tray-integration.md) |
 | ~~Where does Claude Code Desktop store its OAuth token on Windows?~~ | **Moot for v1.** Claude Desktop caches session/weekly % to `%APPDATA%\Claude\plan-usage-history.json`, so no token is needed. → [ADR-0007](0007-plan-history-primary-provider.md), [findings](../findings/plan-usage-history.md) |
 | ~~Can reset times be obtained without the OAuth endpoint?~~ | **Yes** — `fh` drops mark resets, measured exactly 5.00014 h apart; anchor and extrapolate. |
+| ~~Does the plan window capture all usage?~~ | **No — and this is the project's most consequential finding.** Credit-billed usage bypasses the 5-hour window entirely: the icon read a green 6% while ~€86 was spent off-plan (billing-confirmed). Divergence is detectable from data already on disk. → [credit-usage-divergence.md](../findings/credit-usage-divergence.md) |
 
 ## Format
 
