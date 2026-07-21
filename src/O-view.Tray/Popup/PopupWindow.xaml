@@ -1,0 +1,125 @@
+<Window x:Class="OView.Tray.Popup.PopupWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="400" SizeToContent="Height"
+        WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False"
+        Topmost="True" AllowsTransparency="True" Background="Transparent"
+        TextOptions.TextFormattingMode="Display">
+
+    <Border Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource PanelBorder}"
+            BorderThickness="1" CornerRadius="10" Padding="16">
+        <StackPanel>
+
+            <!-- Header: title + freshness left, account right (ui-spec.md) -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="O-view" FontSize="16" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimary}"/>
+                    <TextBlock x:Name="UpdatedText" FontSize="11" Margin="0,2,0,0"
+                               Foreground="{DynamicResource TextMuted}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                    <TextBlock x:Name="NameText" FontSize="12" FontWeight="SemiBold" TextAlignment="Right"
+                               Foreground="{DynamicResource TextPrimary}"/>
+                    <TextBlock x:Name="EmailText" FontSize="11" TextAlignment="Right"
+                               Foreground="{DynamicResource TextSecondary}"/>
+                    <Border x:Name="TierBadge" Background="{DynamicResource BadgeBg}" CornerRadius="4"
+                            Padding="6,1" Margin="0,3,0,0" HorizontalAlignment="Right">
+                        <TextBlock x:Name="TierText" FontSize="10" Foreground="{DynamicResource BadgeText}"/>
+                    </Border>
+                </StackPanel>
+            </Grid>
+
+            <Separator Margin="0,12,0,12" Background="{DynamicResource PanelBorder}"/>
+
+            <!-- Session bar -->
+            <Grid>
+                <TextBlock Text="Current session" FontSize="12" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}"/>
+                <TextBlock x:Name="SessionPctText" FontSize="12" HorizontalAlignment="Right"
+                           Foreground="{DynamicResource TextSecondary}"/>
+            </Grid>
+            <Grid x:Name="SessionBar" Height="8" Margin="0,6,0,4">
+                <Border Background="{DynamicResource BarTrack}" CornerRadius="4"/>
+                <Border x:Name="SessionBarFill" CornerRadius="4" HorizontalAlignment="Left"/>
+            </Grid>
+            <TextBlock x:Name="SessionResetText" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+
+            <!-- Weekly bar -->
+            <Grid Margin="0,12,0,0">
+                <TextBlock Text="Weekly" FontSize="12" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}"/>
+                <TextBlock x:Name="WeeklyPctText" FontSize="12" HorizontalAlignment="Right"
+                           Foreground="{DynamicResource TextSecondary}"/>
+            </Grid>
+            <Grid x:Name="WeeklyBar" Height="8" Margin="0,6,0,4">
+                <Border Background="{DynamicResource BarTrack}" CornerRadius="4"/>
+                <Border x:Name="WeeklyBarFill" CornerRadius="4" HorizontalAlignment="Left"/>
+            </Grid>
+            <TextBlock x:Name="WeeklyResetText" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+
+            <!-- Stats tiles 2×2 -->
+            <UniformGrid Columns="2" Margin="0,14,0,0">
+                <Border Background="{DynamicResource TileBg}" CornerRadius="6" Padding="10,8" Margin="0,0,4,4">
+                    <StackPanel>
+                        <TextBlock Text="Tokens today" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+                        <TextBlock x:Name="TileTokensToday" FontSize="17" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </Border>
+                <Border Background="{DynamicResource TileBg}" CornerRadius="6" Padding="10,8" Margin="4,0,0,4">
+                    <StackPanel>
+                        <TextBlock Text="Est. value today" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+                        <TextBlock x:Name="TileEstToday" FontSize="17" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" Margin="0,2,0,0"/>
+                    </StackPanel>
+                </Border>
+                <Border Background="{DynamicResource TileBg}" CornerRadius="6" Padding="10,8" Margin="0,4,4,0">
+                    <StackPanel>
+                        <TextBlock Text="Tokens · 31 days" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+                        <TextBlock x:Name="TileTokens31" FontSize="17" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" Margin="0,2,0,0"/>
+                        <TextBlock x:Name="TileCoverage31" FontSize="10" Foreground="{DynamicResource WarnText}"/>
+                    </StackPanel>
+                </Border>
+                <Border Background="{DynamicResource TileBg}" CornerRadius="6" Padding="10,8" Margin="4,4,0,0">
+                    <StackPanel>
+                        <TextBlock Text="Est. value · 31 days" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+                        <TextBlock x:Name="TileEst31" FontSize="17" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextPrimary}" Margin="0,2,0,0"/>
+                        <TextBlock x:Name="TileCoverage31b" FontSize="10" Foreground="{DynamicResource WarnText}"/>
+                    </StackPanel>
+                </Border>
+            </UniformGrid>
+
+            <!-- Usage graph -->
+            <TextBlock Text="Usage · last 31 days" FontSize="12" FontWeight="SemiBold" Margin="0,14,0,6"
+                       Foreground="{DynamicResource TextPrimary}"/>
+            <Border Background="{DynamicResource TileBg}" CornerRadius="6" Padding="8,6">
+                <StackPanel>
+                    <Grid x:Name="GraphHost" Height="56"/>
+                    <TextBlock x:Name="GraphCaption" FontSize="10" Margin="0,4,0,0"
+                               Foreground="{DynamicResource TextMuted}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Credits: deferred pending a data source (ui-spec.md) -->
+            <Separator Margin="0,12,0,10" Background="{DynamicResource PanelBorder}"/>
+            <Grid>
+                <TextBlock Text="Credits" FontSize="12" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}"/>
+                <Border Background="{DynamicResource WarnBg}" CornerRadius="4" Padding="6,1" HorizontalAlignment="Right">
+                    <TextBlock Text="pending" FontSize="10" Foreground="{DynamicResource WarnText}"/>
+                </Border>
+            </Grid>
+            <TextBlock FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
+                       Foreground="{DynamicResource TextSecondary}"
+                       Text="Extra usage is enabled on this account, but no verified source for a credit balance exists yet."/>
+
+        </StackPanel>
+    </Border>
+</Window>
