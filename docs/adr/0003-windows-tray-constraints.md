@@ -31,6 +31,8 @@ Information is tiered across three surfaces by available space:
 
 > **Revised 2026-07-20 by spike.** This ADR originally specified a ring gauge *plus* digits. Measurement showed the ring is counterproductive at 16 px: it consumes the outer ~25% of the canvas, forcing the font from 13.5 px down to 9.5 px and rendering the digits mushy. The ring only ever duplicated the number already shown. **Digits-only is the design.** Evidence and measurements: [findings/tray-icon-rendering.md](../findings/tray-icon-rendering.md).
 >
+> **Revised 2026-07-21 by product direction.** The icon must carry a **% graph**, not digits alone. Implemented as digits plus a **~3 px proportional fill bar along the bottom edge** — the graph requirement satisfied without the ring's cost; legibility re-verified at 16/24 px on both themes. The ring remains rejected.
+>
 > Tooltip capacity also corrected: `NotifyIcon.Text` caps at **127** characters, not 128.
 | **Popup panel** | Unconstrained | Full breakdown, token counts, model split, data-source badge, settings |
 

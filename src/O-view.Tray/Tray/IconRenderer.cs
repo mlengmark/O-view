@@ -48,7 +48,7 @@ public static class IconRenderer
 
         if (percent is null)
         {
-            return RenderText(size, "–", lightTaskbar ? LightNeutral : DarkNeutral);
+            return RenderDigitsWithBar(size, "–", lightTaskbar ? LightNeutral : DarkNeutral, fillPercent: 0, lightTaskbar);
         }
 
         if (percent >= 100)
@@ -62,17 +62,50 @@ public static class IconRenderer
             >= 60 => lightTaskbar ? LightAmber : DarkAmber,
             _ => lightTaskbar ? LightGreen : DarkGreen,
         };
-        return RenderText(size, percent.Value.ToString(System.Globalization.CultureInfo.InvariantCulture), color);
+        return RenderDigitsWithBar(size,
+            percent.Value.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            color, fillPercent: percent.Value, lightTaskbar);
     }
 
-    private static Bitmap RenderText(int size, string text, Color color)
+    /// <summary>
+    /// Digits with a proportional fill bar along the bottom edge — the % graph.
+    /// The bar takes ~3px at 16px, so digits keep most of the canvas; the ring
+    /// design the spike rejected consumed the outer 25% and crushed the font.
+    /// </summary>
+    private static Bitmap RenderDigitsWithBar(int size, string text, Color color, int fillPercent, bool lightTaskbar)
     {
         var bmp = NewCanvas(size, out var g);
         using (g)
         {
-            DrawAutoFitText(g, size, text, color, availableFraction: 1f);
+            var barHeight = Math.Max(2, (int)Math.Round(size * 3.0 / 16.0));
+            var barTop = size - barHeight;
+
+            // Track: full width, subtle; fill: proportional, threshold colour.
+            using (var track = new SolidBrush(lightTaskbar ? Color.FromArgb(205, 205, 205) : Color.FromArgb(72, 72, 72)))
+            {
+                FillRounded(g, track, 0, barTop, size, barHeight);
+            }
+            var fillWidth = (int)Math.Round(size * Math.Clamp(fillPercent, 0, 100) / 100.0);
+            if (fillWidth > 0)
+            {
+                using var fill = new SolidBrush(color);
+                FillRounded(g, fill, 0, barTop, Math.Max(fillWidth, barHeight), barHeight);
+            }
+
+            // Digits auto-fit and centre in what remains above the bar.
+            DrawAutoFitText(g, size, text, color,
+                availableFraction: (barTop - 1f) / size,
+                layout: new RectangleF(0, 0, size, barTop));
         }
         return bmp;
+    }
+
+    private static void FillRounded(Graphics g, Brush brush, float x, float y, float width, float height)
+    {
+        var radius = height / 2f;
+        using var path = new GraphicsPath();
+        path.AddRoundedRectangle(new RectangleF(x, y, width, height), new SizeF(radius, radius));
+        g.FillPath(brush, path);
     }
 
     /// <summary>The 100% state: full ring + "!" — unmistakable at every size (spike-verified).</summary>
@@ -102,9 +135,10 @@ public static class IconRenderer
         return bmp;
     }
 
-    private static void DrawAutoFitText(Graphics g, int size, string text, Color color, float availableFraction)
+    private static void DrawAutoFitText(Graphics g, int size, string text, Color color, float availableFraction, RectangleF? layout = null)
     {
         var avail = size * availableFraction;
+        var drawRect = layout ?? new RectangleF(0, 0, size, size);
 
         // GenericTypographic + NoWrap: default StringFormat wraps and pads —
         // the spike's hard-coded scale clipped "47" to "4" before auto-fit.
@@ -127,6 +161,6 @@ public static class IconRenderer
 
         using var font = new Font("Segoe UI", best, FontStyle.Bold, GraphicsUnit.Pixel);
         using var brush = new SolidBrush(color);
-        g.DrawString(text, font, brush, new RectangleF(0, 0, size, size), format);
+        g.DrawString(text, font, brush, drawRect, format);
     }
 }
