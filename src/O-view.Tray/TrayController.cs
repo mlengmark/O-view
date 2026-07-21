@@ -23,6 +23,9 @@ public sealed class TrayController : IDisposable
     /// <summary>Most recent snapshot — what the popup opens with.</summary>
     public UsageSnapshot Latest { get; private set; } = UsageSnapshot.None;
 
+    /// <summary>Raised after every successful refresh — the notification hook.</summary>
+    public event Action<UsageSnapshot>? SnapshotUpdated;
+
     public TrayController(ITrayHost host, IUsageProvider provider, TimeSpan interval, FileLog? log)
     {
         _host = host;
@@ -52,6 +55,7 @@ public sealed class TrayController : IDisposable
             _host.Update(bitmap, tooltip);
 
             _log?.Write($"refresh source={snapshot.Source} session={snapshot.SessionPercent?.ToString() ?? "null"} size={size} tooltip=\"{tooltip}\"");
+            SnapshotUpdated?.Invoke(snapshot);
         }
         catch (Exception ex)
         {

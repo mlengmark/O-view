@@ -6,7 +6,7 @@ Guidance for AI coding assistants working in this repository. Read this before w
 
 A **Windows 11 notification-area (system tray) application** that displays Claude AI token usage and time until the next usage-limit reset.
 
-Status: **planning complete, no application code yet.** The ADRs in `docs/adr/` are decided, not drafts — follow them. If you believe one is wrong, say so and propose superseding it; do not silently deviate.
+Status: **all five build phases complete** (see [docs/build-plan.md](docs/build-plan.md)) — the app is working end to end. The ADRs in `docs/adr/` are decided, not drafts — follow them. If you believe one is wrong, say so and propose superseding it; do not silently deviate.
 
 ## Hard rules
 
