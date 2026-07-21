@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using OView.Core.Providers.Jsonl;
+using OView.Core.Providers.PlanHistory;
 
 namespace OView.Core.Storage;
 
@@ -17,7 +18,7 @@ namespace OView.Core.Storage;
 /// Ledger rows hold ids, dates, models, and token counts only — no conversation
 /// content (ADR-0006 privacy rationale).
 /// </summary>
-public sealed class RollupStore : IDisposable
+public sealed class RollupStore : IWeeklyResetLog, IDisposable
 {
     /// <summary>Default location: %LOCALAPPDATA%\O-view\usage.db</summary>
     public static string DefaultPath => Path.Combine(
@@ -56,8 +57,43 @@ public sealed class RollupStore : IDisposable
                 byte_offset INTEGER NOT NULL,
                 file_length INTEGER NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS weekly_resets (
+                reset_at TEXT PRIMARY KEY
+            );
             """;
         cmd.ExecuteNonQuery();
+    }
+
+    // ── IWeeklyResetLog (issue #6) ───────────────────────────────────────────────
+
+    /// <summary>Persist observed weekly resets; idempotent by timestamp.</summary>
+    public void RecordResets(IEnumerable<DateTimeOffset> resets)
+    {
+        using var transaction = _connection.BeginTransaction();
+        using var cmd = _connection.CreateCommand();
+        cmd.Transaction = transaction;
+        cmd.CommandText = "INSERT OR IGNORE INTO weekly_resets (reset_at) VALUES ($at)";
+        var pAt = cmd.Parameters.Add("$at", SqliteType.Text);
+        foreach (var reset in resets)
+        {
+            pAt.Value = reset.UtcDateTime.ToString("o", CultureInfo.InvariantCulture);
+            cmd.ExecuteNonQuery();
+        }
+        transaction.Commit();
+    }
+
+    public IReadOnlyList<DateTimeOffset> GetResets()
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT reset_at FROM weekly_resets ORDER BY reset_at";
+        var result = new List<DateTimeOffset>();
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            result.Add(DateTimeOffset.Parse(reader.GetString(0), CultureInfo.InvariantCulture,
+                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal));
+        }
+        return result;
     }
 
     /// <summary>

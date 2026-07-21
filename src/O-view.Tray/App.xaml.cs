@@ -59,7 +59,11 @@ public partial class App : System.Windows.Application
             : TimeSpan.FromSeconds(60);
 
         _store = new RollupStore();
-        _planHistory = new PlanHistoryProvider(orgUuid: ClaudeAccount.TryRead()?.OrganizationUuid);
+        // The store doubles as the weekly-reset log so the 7-day reset accrues across
+        // runs (issue #6) — plan-history retention alone is far too short.
+        _planHistory = new PlanHistoryProvider(
+            orgUuid: ClaudeAccount.TryRead()?.OrganizationUuid,
+            weeklyResetLog: _store);
         var provider = new CompositeUsageProvider(
             _planHistory,
             new JsonlUsageProvider(_store));

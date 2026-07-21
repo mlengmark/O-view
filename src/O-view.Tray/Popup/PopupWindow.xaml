@@ -109,15 +109,12 @@
                 </Border>
             </UniformGrid>
 
-            <!-- Usage graph -->
+            <!-- Usage graph: daily bars, calendar-week gridlines, blue-by-week intensity,
+                 vertical date labels, hover tooltips (issues #4, #5) -->
             <TextBlock Text="Usage · last 31 days" FontSize="12" FontWeight="SemiBold" Margin="0,14,0,6"
                        Foreground="{DynamicResource TextPrimary}"/>
             <Border Background="{DynamicResource TileBg}" CornerRadius="6" Padding="8,6">
-                <StackPanel>
-                    <Grid x:Name="GraphHost" Height="56"/>
-                    <TextBlock x:Name="GraphCaption" FontSize="10" Margin="0,4,0,0"
-                               Foreground="{DynamicResource TextMuted}"/>
-                </StackPanel>
+                <Canvas x:Name="GraphHost" Height="86" HorizontalAlignment="Stretch"/>
             </Border>
 
             <!-- Credits: deferred pending a data source (ui-spec.md) -->
