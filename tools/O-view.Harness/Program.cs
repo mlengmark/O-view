@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Text.Json;
 using OView.Core.Models;
 using OView.Core.Pricing;
 using OView.Core.Providers;
@@ -11,35 +10,18 @@ using OView.Core.Storage;
 // real local data. Deleted when the tray shell exists.
 
 var utcNow = DateTimeOffset.UtcNow;
-
-// Account context from ~/.claude.json (CLAUDE.md rule 8: tier is organizationType;
-// seatTier is empty and would render blank). All fields optional.
-string? orgUuid = null, displayName = null, tier = null;
-try
-{
-    var claudeJson = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude.json");
-    using var doc = JsonDocument.Parse(File.ReadAllText(claudeJson));
-    if (doc.RootElement.TryGetProperty("oauthAccount", out var account))
-    {
-        orgUuid = account.TryGetProperty("organizationUuid", out var o) ? o.GetString() : null;
-        displayName = account.TryGetProperty("displayName", out var d) ? d.GetString() : null;
-        tier = account.TryGetProperty("organizationType", out var t) ? t.GetString() : null;
-    }
-}
-catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
-{
-    // Account info is cosmetic here; the providers work without it.
-}
+var account = ClaudeAccount.TryRead();
 
 using var store = new RollupStore();
 var composite = new CompositeUsageProvider(
-    new PlanHistoryProvider(orgUuid: orgUuid),
+    new PlanHistoryProvider(orgUuid: account?.OrganizationUuid),
     new JsonlUsageProvider(store));
 
 var snapshot = composite.GetSnapshot(utcNow);
 
 Console.WriteLine($"O-view harness — {utcNow:yyyy-MM-dd HH:mm:ss}Z");
-Console.WriteLine($"account   : {displayName ?? "(unknown)"} · tier {tier ?? "(unknown)"}");
+Console.WriteLine($"account   : {account?.DisplayName ?? "(unknown)"} · tier {account?.Tier ?? "(unknown)"}");
+Console.WriteLine($"tooltip   : {TooltipFormatter.Format(snapshot)}");
 Console.WriteLine($"source    : {snapshot.Source}");
 
 if (snapshot.Source == DataSource.None)
