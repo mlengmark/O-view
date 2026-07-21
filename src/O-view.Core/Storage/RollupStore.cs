@@ -51,7 +51,43 @@ public sealed class RollupStore : IDisposable
                 last_timestamp        TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS ix_requests_date ON ingested_requests(utc_date);
+            CREATE TABLE IF NOT EXISTS file_offsets (
+                path        TEXT PRIMARY KEY,
+                byte_offset INTEGER NOT NULL,
+                file_length INTEGER NOT NULL
+            );
             """;
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Resume point for a transcript: how far it was parsed, and how long it was at
+    /// the time. Both are needed — a file shorter than recorded was replaced, and its
+    /// offset must not be trusted. Zeroes when the file is unknown.
+    /// </summary>
+    public (long Offset, long KnownLength) GetFileOffset(string path)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT byte_offset, file_length FROM file_offsets WHERE path = $path";
+        cmd.Parameters.AddWithValue("$path", path);
+
+        using var reader = cmd.ExecuteReader();
+        return reader.Read() ? (reader.GetInt64(0), reader.GetInt64(1)) : (0L, 0L);
+    }
+
+    public void SetFileOffset(string path, long offset, long fileLength)
+    {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            INSERT INTO file_offsets (path, byte_offset, file_length)
+            VALUES ($path, $offset, $length)
+            ON CONFLICT(path) DO UPDATE SET
+                byte_offset = excluded.byte_offset,
+                file_length = excluded.file_length
+            """;
+        cmd.Parameters.AddWithValue("$path", path);
+        cmd.Parameters.AddWithValue("$offset", offset);
+        cmd.Parameters.AddWithValue("$length", fileLength);
         cmd.ExecuteNonQuery();
     }
 
