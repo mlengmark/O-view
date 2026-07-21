@@ -6,7 +6,12 @@ namespace OView.Core.Models;
 /// User settings, persisted to %LOCALAPPDATA%\O-view\settings.json. Run-at-startup
 /// is deliberately NOT here — the registry Run key is its single source of truth.
 /// </summary>
-public sealed record TraySettings(bool NotifyOnThreshold = true, int ThresholdPercent = 85)
+/// <summary>
+/// Persisted user settings. The default threshold aligns with the "Critical" colour
+/// band (<see cref="UsageLevels.CriticalPercent"/>), so out of the box O-view notifies
+/// exactly when the gauge turns red — GitHub issue #2.
+/// </summary>
+public sealed record TraySettings(bool NotifyOnThreshold = true, int ThresholdPercent = UsageLevels.CriticalPercent)
 {
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

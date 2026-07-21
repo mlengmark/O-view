@@ -289,6 +289,7 @@ public partial class App : System.Windows.Application
         {
             ("live-06", new(DataSource.Live, 6, 1, null, DateTimeOffset.UtcNow)),
             ("live-47", new(DataSource.Live, 47, 20, null, DateTimeOffset.UtcNow)),
+            ("live-58", new(DataSource.Live, 58, 30, null, DateTimeOffset.UtcNow)),
             ("live-72", new(DataSource.Live, 72, 40, null, DateTimeOffset.UtcNow)),
             ("live-91", new(DataSource.Live, 91, 60, null, DateTimeOffset.UtcNow)),
             ("live-100", new(DataSource.Live, 100, 80, null, DateTimeOffset.UtcNow)),

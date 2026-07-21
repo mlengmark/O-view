@@ -33,6 +33,8 @@ Information is tiered across three surfaces by available space:
 >
 > **Revised 2026-07-21 by product direction.** The icon must carry a **% graph**, not digits alone. Implemented as digits plus a **~3 px proportional fill bar along the bottom edge** — the graph requirement satisfied without the ring's cost; legibility re-verified at 16/24 px on both themes. The ring remains rejected.
 >
+> **Revised again 2026-07-21 (GitHub issue #1).** Digits-plus-bar read as cluttered at 16 px. Adopted a **ring-only gauge — a proportional arc, no digits.** This does *not* reverse the spike: the spike rejected ring **plus** digits because they starved each other; **removing the digits removes that conflict**, letting the ring use the whole canvas. The exact percentage moves to the tooltip. Colour bands set by issue #2: green <50, amber 50–69, red ≥70 (a shared `UsageLevels` classifier, so the icon and popup cannot drift apart). Ring legibility verified at 16/24 px on both themes, all three bands. This supersedes the two revisions above.
+>
 > Tooltip capacity also corrected: `NotifyIcon.Text` caps at **127** characters, not 128.
 | **Popup panel** | Unconstrained | Full breakdown, token counts, model split, data-source badge, settings |
 

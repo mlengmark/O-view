@@ -147,7 +147,13 @@ public partial class PopupWindow : Window
         if (percent is { } p)
         {
             pctText.Text = string.Create(CultureInfo.InvariantCulture, $"{p}% used");
-            fill.Background = new SolidColorBrush(p switch { >= 85 => Red, >= 60 => Amber, _ => Green });
+            // Shared colour bands (UsageLevels) so the popup and tray icon agree.
+            fill.Background = new SolidColorBrush(UsageLevels.Classify(p) switch
+            {
+                UsageLevel.Critical => Red,
+                UsageLevel.Warning => Amber,
+                _ => Green,
+            });
             // Fill width tracks the bar's laid-out width × percent.
             fill.SetBinding(WidthProperty, new System.Windows.Data.Binding(nameof(bar.ActualWidth))
             {
