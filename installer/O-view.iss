@@ -56,6 +56,10 @@ ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=yes
 RestartApplications=no
 
+; Brand the setup .exe itself (issue #10 — it defaulted to a generic download
+; icon). The installed exe and the uninstall entry already carry the icon via the
+; app's embedded ApplicationIcon; this is the icon of Setup.exe in Explorer.
+SetupIconFile=..\brand\o-view.ico
 UninstallDisplayIcon={app}\{#AppExeName}
 UninstallDisplayName={#AppName}
 OutputDir=.
