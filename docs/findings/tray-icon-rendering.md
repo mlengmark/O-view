@@ -41,7 +41,20 @@ Each design rendered at 16/20/24 px on both dark and light taskbar colours, show
 > <50, amber 50–69, red ≥70) on both themes. The exact number lives in the tooltip.
 > Below this line, "digits-only is the design" is historical.
 
-> **Digits only. No ring.** The two digits are the primary signal; **the digit colour** carries urgency (green → amber → red).
+> **Superseded 2026-07-22 (brand unification): ring + centre pupil.** The static exe
+> icon (`<ApplicationIcon>`) is the O-view brand mark — a ring gauge with a filled
+> centre pupil (the "eye"). The live tray icon now renders that same mark so the app
+> reads as one thing everywhere: `IconRenderer` draws the pupil in the ring's hole at
+> **every size, including 16 px**, in the same colour band as the arc. This does **not**
+> reopen the spike's core result. The spike rejected ring **plus digits** — two data
+> signals competing for a 16 px canvas. The pupil is **not** a second signal: it carries
+> no number, sits in the otherwise-empty hole, and takes the arc's colour, so the icon
+> stays a single-colour gauge. Pupil radius is 0.405× the ring radius (the mark's
+> 30/74-at-256 px ratio). Renders through the real `IconRenderer` at 16/24/32 px on both
+> themes confirm the pupil stays a distinct eye with a clear gap to the ring. See
+> [IconRenderer.cs](../../src/O-view.Tray/Tray/IconRenderer.cs).
+
+> **Digits only. No ring.** _(Historical — superseded twice, see above: ring-only per issue #1, then ring + pupil per the 2026-07-22 block.)_ The two digits are the primary signal; **the digit colour** carries urgency (green → amber → red).
 
 This is not a downgrade. The ring was only ever a redundant encoding of the number already displayed — dropping it buys ~40% more font size for the signal users actually read.
 

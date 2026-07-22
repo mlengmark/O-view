@@ -11,6 +11,10 @@
     <UseWPF>true</UseWPF>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Exe / window icon (Explorer, Alt-Tab, installer). This is the static brand
+         mark; the *tray* icon is rendered live at runtime by IconRenderer and is
+         unaffected by this (CLAUDE.md rule 5). Multi-resolution .ico: 16-256. -->
+    <ApplicationIcon>..\..\brand\o-view.ico</ApplicationIcon>
   </PropertyGroup>
 
   <!-- Single-file publish settings live here, not only in the release workflow, so a

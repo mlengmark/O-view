@@ -1,0 +1,17 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="O-view mark">
+  <defs>
+    <linearGradient id="arc" x1="40" y1="40" x2="216" y2="216" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F4A17A"/>
+      <stop offset="1" stop-color="#D9603A"/>
+    </linearGradient>
+    <radialGradient id="pupil" cx="0.4" cy="0.35" r="0.75">
+      <stop offset="0" stop-color="#F5A57F"/>
+      <stop offset="1" stop-color="#D0532F"/>
+    </radialGradient>
+  </defs>
+  <circle cx="128" cy="128" r="74" fill="none" stroke="#D8D3CC" stroke-opacity="0.28" stroke-width="20" stroke-linecap="round"/>
+  <circle cx="128" cy="128" r="74" fill="none" stroke="url(#arc)" stroke-width="20" stroke-linecap="round"
+          stroke-dasharray="335 465" transform="rotate(-90 128 128)"/>
+  <circle cx="128" cy="128" r="30" fill="url(#pupil)"/>
+  <circle cx="118" cy="118" r="8" fill="#FBE3D6" fill-opacity="0.85"/>
+</svg>

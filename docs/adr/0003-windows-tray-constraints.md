@@ -26,19 +26,23 @@ Information is tiered across three surfaces by available space:
 
 | Surface | Capacity | Content |
 |---|---|---|
-| **Tray icon** | ~2 glyphs | **2 digits only, no ring** (`47`), digit colour green → amber → red. No `%` sign — the glyph budget is better spent on digits. At 100% use a full-ring `!` symbol rather than 3 digits. *(Revised — see below.)* |
+| **Tray icon** | ~2 glyphs | **Brand mark: a colour-coded ring gauge with a centre pupil** (the "eye"), no digits. The arc is proportional to session %; colour is green → amber → red from the shared `UsageLevels` bands. The exact number lives in the tooltip. |
 | **Tooltip** | **127 chars** | `5h: 47% · resets 16:32 · 7d: 61%` (32 chars) |
-
-> **Revised 2026-07-20 by spike.** This ADR originally specified a ring gauge *plus* digits. Measurement showed the ring is counterproductive at 16 px: it consumes the outer ~25% of the canvas, forcing the font from 13.5 px down to 9.5 px and rendering the digits mushy. The ring only ever duplicated the number already shown. **Digits-only is the design.** Evidence and measurements: [findings/tray-icon-rendering.md](../findings/tray-icon-rendering.md).
->
-> **Revised 2026-07-21 by product direction.** The icon must carry a **% graph**, not digits alone. Implemented as digits plus a **~3 px proportional fill bar along the bottom edge** — the graph requirement satisfied without the ring's cost; legibility re-verified at 16/24 px on both themes. The ring remains rejected.
->
-> **Revised again 2026-07-21 (GitHub issue #1).** Digits-plus-bar read as cluttered at 16 px. Adopted a **ring-only gauge — a proportional arc, no digits.** This does *not* reverse the spike: the spike rejected ring **plus** digits because they starved each other; **removing the digits removes that conflict**, letting the ring use the whole canvas. The exact percentage moves to the tooltip. Colour bands set by issue #2: green <50, amber 50–69, red ≥70 (a shared `UsageLevels` classifier, so the icon and popup cannot drift apart). Ring legibility verified at 16/24 px on both themes, all three bands. This supersedes the two revisions above.
->
-> Tooltip capacity also corrected: `NotifyIcon.Text` caps at **127** characters, not 128.
 | **Popup panel** | Unconstrained | Full breakdown, token counts, model split, data-source badge, settings |
 
-**Colour must never be the sole signal** — the gauge fill level and the digits carry the same information, for colour-blind users and for monochrome/high-contrast taskbar themes.
+> **Icon design revised after acceptance (2026-07-20 → 2026-07-22).** The row above is
+> the current design; it is no longer the ring-plus-digits originally decided here. The
+> spike ([findings/tray-icon-rendering.md](../findings/tray-icon-rendering.md)) and then
+> GitHub issues [#1](https://github.com/mlengmark/O-view/issues/1) and
+> [#2](https://github.com/mlengmark/O-view/issues/2) reshaped it into a colour-coded ring
+> gauge, later unified with the exe icon as the brand mark (ring + centre pupil). Colour
+> bands (green <50 / amber 50–69 / red ≥70) come from a shared `UsageLevels` classifier so
+> the icon and popup cannot drift apart. The findings doc holds the full trail and the
+> measured legibility evidence at 16/24/32 px on both themes.
+>
+> Tooltip capacity also corrected: `NotifyIcon.Text` caps at **127** characters, not 128.
+
+**Colour must never be the sole signal** — the arc's fill *level* (how far it sweeps round the ring) encodes the percentage independently of its colour, for colour-blind users and for monochrome/high-contrast taskbar themes.
 
 ### Platform behaviours that must be handled explicitly
 
@@ -69,8 +73,8 @@ These have no macOS analogue and are each a real work item:
 | **Cross-platform (Avalonia/MAUI)** | Adds abstraction cost for platforms with no requirement, and tray behaviour is precisely where cross-platform frameworks are weakest — the abstraction would leak on the one feature that matters most. |
 | **Taskbar toolbar / deskband** | Would allow wide text like macOS. Rejected: the deskband API is **deprecated and non-functional on Windows 11**. |
 | **Widgets board / desktop widget** | More display space. Rejected: not always-visible, which defeats an at-a-glance monitor. |
-| **Text-free icon (gauge only)** | Cleaner at 16px. Rejected: users want the number, and the spike confirmed digits *are* legible at 16 px (13.5 px font) — so there is no legibility argument for dropping them. |
-| **Ring gauge + digits** (as originally specified here) | Rejected after measurement: the ring starves the digits of space at 16 px. See the revision note above. |
+| **Ring gauge + digits** (as originally specified here) | Rejected after measurement: the ring and digits starve each other of space at 16 px. See the icon-design revision note above. |
+| **Digits only, no graphic** | The spike's first winner (digits are legible at 16 px, 13.5 px font), but superseded: product direction required the icon to show a graph, and digits-plus-bar then read as cluttered — so the icon dropped digits for the ring-gauge mark and moved the number to the tooltip (issue #1). |
 
 ## Consequences
 
@@ -81,5 +85,5 @@ These have no macOS analogue and are each a real work item:
 
 **Negative**
 - Nothing is reusable for a future macOS version — accepted; that is not a goal
-- The tiered-information design must be validated by a **rasterisation spike before UI work begins**. If two digits are illegible at 16×16, the icon design changes and this ADR is superseded.
+- The tiered-information design had to be validated by a **rasterisation spike before UI work began** — done ([findings](../findings/tray-icon-rendering.md)). The spike and the issues that followed reshaped the icon from the original ring-plus-digits spec into the current ring-gauge brand mark; the decision table above reflects that outcome.
 - Items 1–7 above are individually small but collectively a meaningful slice of the build. They are easy to underestimate because they are all invisible when they work.

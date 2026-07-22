@@ -8,11 +8,13 @@ Two surfaces: the always-visible **tray icon**, and the **popup panel** shown wh
 
 ## 1. Tray icon
 
-Per [ADR-0003](adr/0003-windows-tray-constraints.md) and the [legibility spike](findings/tray-icon-rendering.md), revised 2026-07-21 to a **ring gauge** ([GitHub issue #1](https://github.com/mlengmark/O-view/issues/1)):
+Per [ADR-0003](adr/0003-windows-tray-constraints.md) and the [legibility spike](findings/tray-icon-rendering.md), revised 2026-07-21 to a **ring gauge** ([GitHub issue #1](https://github.com/mlengmark/O-view/issues/1)), then unified with the exe icon as the **brand mark** (ring + centre pupil) on 2026-07-22:
 
-- **A circular arc, proportional to session %, no digits.** Ring-only sidesteps the
-  spike's finding (which rejected ring *plus* digits, where they competed for space)
-  by removing the digits — the exact number lives in the tooltip instead.
+- **A circular arc, proportional to session %, plus a filled centre pupil — the brand
+  "eye" — and no digits.** Ring-only sidesteps the spike's finding (which rejected ring
+  *plus* digits, where they competed for space) by removing the digits — the exact
+  number lives in the tooltip instead. The pupil is brand, not a second signal: it
+  carries no number and takes the arc's colour, so it coexists with the ring.
 - Arc colour — the shared `UsageLevels` bands ([issue #2](https://github.com/mlengmark/O-view/issues/2)):
   **green < 50% · amber 50–69% · red ≥ 70%**. Same classifier drives the popup bars.
 - No data / estimate: faint empty ring — never a fabricated fill
