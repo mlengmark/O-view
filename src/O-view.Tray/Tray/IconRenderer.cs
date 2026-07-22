@@ -6,15 +6,20 @@ using OView.Core.Models;
 namespace OView.Tray.Tray;
 
 /// <summary>
-/// Rasterises the tray icon as a circular gauge — a proportional arc, no digits
-/// (GitHub issue #1). The earlier digits-plus-bar design cluttered the ~16 px canvas;
-/// a ring-only gauge uses the whole area for one signal. This does NOT contradict the
-/// original spike (docs/findings/tray-icon-rendering.md), which rejected ring *plus*
-/// digits because they starved each other of space — removing the digits removes that
-/// conflict. The exact percentage lives in the tooltip.
+/// Rasterises the tray icon as the O-view brand mark: a proportional ring gauge with a
+/// filled centre pupil — the "eye" the wordmark is built on. No digits (GitHub issue #1).
+///
+/// The pupil is drawn at every size, including 16 px. This revisits issue #1's ring-only
+/// note, deliberately: the pupil unifies the live tray icon with the static exe icon
+/// (the brand mark) so the app reads as one thing everywhere. It does NOT reopen the
+/// original spike (docs/findings/tray-icon-rendering.md), which rejected ring *plus
+/// digits* — two competing signals starving each other. A pupil is not a second signal:
+/// it sits in the ring's empty hole and carries no data, so the 16 px legibility finding
+/// for digits still stands. The exact percentage lives in the tooltip.
 ///
 /// Colour bands come from OView.Core.UsageLevels (issue #2): green &lt;50, amber 50–69,
-/// red ≥70 — shared with the popup so they cannot drift apart.
+/// red ≥70 — shared with the popup so they cannot drift apart. The pupil takes the same
+/// band colour as the arc, so the icon stays a single-colour signal.
 /// </summary>
 public static class IconRenderer
 {
@@ -76,6 +81,7 @@ public static class IconRenderer
         var stroke = Math.Max(2f, size / 7f);
         var inset = stroke / 2f + 0.5f;
         var rect = new RectangleF(inset, inset, size - 2 * inset, size - 2 * inset);
+        var center = size / 2f;
 
         // Track: the full circle, faint, so an empty gauge still reads as "a gauge".
         var trackColor = lightTaskbar ? Color.FromArgb(90, 60, 60, 60) : Color.FromArgb(90, 200, 200, 200);
@@ -90,6 +96,16 @@ public static class IconRenderer
         {
             using var arc = new Pen(color, stroke) { StartCap = LineCap.Round, EndCap = LineCap.Round };
             g.DrawArc(arc, rect, -90f, 360f * fillPercent / 100f);
+        }
+
+        // Pupil: the brand "eye", centred in the ring's hole. Radius is 0.405× the ring
+        // radius — the ratio taken from the master mark (pupil 30 / ring 74 at 256 px) so
+        // the tray icon and the exe icon are the same shape at every scale.
+        var ringRadius = (size - 2f * inset) / 2f;
+        var pupilRadius = 0.405f * ringRadius;
+        using (var pupil = new SolidBrush(color))
+        {
+            g.FillEllipse(pupil, center - pupilRadius, center - pupilRadius, pupilRadius * 2f, pupilRadius * 2f);
         }
 
         return bmp;

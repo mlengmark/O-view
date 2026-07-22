@@ -1,0 +1,31 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="O-view app icon">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="256" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#20222C"/>
+      <stop offset="1" stop-color="#121319"/>
+    </linearGradient>
+    <linearGradient id="arc" x1="40" y1="40" x2="216" y2="216" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F4A17A"/>
+      <stop offset="1" stop-color="#D9603A"/>
+    </linearGradient>
+    <radialGradient id="pupil" cx="0.4" cy="0.35" r="0.75">
+      <stop offset="0" stop-color="#F5A57F"/>
+      <stop offset="1" stop-color="#D0532F"/>
+    </radialGradient>
+  </defs>
+
+  <!-- app-icon rounded square -->
+  <rect x="8" y="8" width="240" height="240" rx="54" fill="url(#bg)"/>
+  <rect x="8.5" y="8.5" width="239" height="239" rx="53.5" fill="none" stroke="#000000" stroke-opacity="0.35"/>
+
+  <!-- gauge track -->
+  <circle cx="128" cy="128" r="74" fill="none" stroke="#363B49" stroke-width="20" stroke-linecap="round"/>
+
+  <!-- usage arc (~72%), starts at top, clockwise -->
+  <circle cx="128" cy="128" r="74" fill="none" stroke="url(#arc)" stroke-width="20" stroke-linecap="round"
+          stroke-dasharray="335 465" transform="rotate(-90 128 128)"/>
+
+  <!-- pupil / the eye = "view" -->
+  <circle cx="128" cy="128" r="30" fill="url(#pupil)"/>
+  <circle cx="118" cy="118" r="8" fill="#FBE3D6" fill-opacity="0.85"/>
+</svg>

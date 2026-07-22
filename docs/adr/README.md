@@ -20,7 +20,7 @@ These are **decided, not drafts.** To change one, add a new ADR that supersedes 
 Empirical results from spikes, cited by the ADRs above:
 
 - [jsonl-schema.md](../findings/jsonl-schema.md) — local transcript format; the `requestId` de-duplication requirement
-- [tray-icon-rendering.md](../findings/tray-icon-rendering.md) — icon legibility measurements; why the ring gauge was dropped
+- [tray-icon-rendering.md](../findings/tray-icon-rendering.md) — icon legibility measurements; how the icon became the ring-gauge brand mark (ring + pupil)
 - [plan-usage-history.md](../findings/plan-usage-history.md) — Claude Desktop's cached utilisation series; how reset times are derived
 - [credit-usage-divergence.md](../findings/credit-usage-divergence.md) — **credit-billed usage bypasses the plan window**; the headline % can be true and misleading at once
 
@@ -35,13 +35,13 @@ Tracked here until resolved by a spike, then folded into an ADR:
 | Is there any source for a **credit balance**? No local file carries one; the API is untested. *(Partially answered — see Resolved: credit **spend** is estimable locally and divergence is detectable; only the exact **balance** still needs the API.)* | Credits section of the popup | Section shows an explanatory note, not invented figures ([ui-spec](../ui-spec.md)) |
 | Does the calibration hold on other accounts, plans, and models? Thresholds derive from one account and one model. | Detector accuracy elsewhere | Floor set ~10× worst observed case; tune the threshold, not the logic |
 | What does "Limit Reset Credits" refer to? Could not be mapped to a documented concept. | Credits section | Needs clarification from @mlengmark |
-| Does icon legibility hold on a real taskbar at 125/150/175% scaling and in high-contrast themes? | Final icon polish | Auto-fitted font already adapts; verify on-device |
+| Does icon legibility hold on a real taskbar at 125/150/175% scaling and in high-contrast themes? | Final icon polish | Ring/pupil geometry scales with the icon size; verify on-device |
 
 ### Resolved
 
 | Question | Outcome |
 |---|---|
-| ~~Are 2 digits legible at 16×16 px?~~ | **Yes** — 13.5 px font, crisp. But the *ring* had to go: it starved the digits. → [tray-icon-rendering.md](../findings/tray-icon-rendering.md), revises [ADR-0003](0003-windows-tray-constraints.md) |
+| ~~Are 2 digits legible at 16×16 px?~~ | Moot — digits were dropped for a ring-gauge brand mark (ring + pupil), with the number in the tooltip, so the digit-legibility question no longer governs the design. → [tray-icon-rendering.md](../findings/tray-icon-rendering.md), revises [ADR-0003](0003-windows-tray-constraints.md) |
 | ~~Is a third-party tray library required?~~ | **No** — `System.Windows.Forms.NotifyIcon` is first-party and sufficient. → [ADR-0005](0005-native-tray-integration.md) |
 | ~~Where does Claude Code Desktop store its OAuth token on Windows?~~ | **Moot for v1.** Claude Desktop caches session/weekly % to `%APPDATA%\Claude\plan-usage-history.json`, so no token is needed. → [ADR-0007](0007-plan-history-primary-provider.md), [findings](../findings/plan-usage-history.md) |
 | ~~Can reset times be obtained without the OAuth endpoint?~~ | **Yes** — `fh` drops mark resets, measured exactly 5.00014 h apart; anchor and extrapolate. |

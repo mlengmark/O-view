@@ -52,7 +52,7 @@ First visible output.
 
 **Build**
 - `ITrayHost` over first-party `System.Windows.Forms.NotifyIcon` ([ADR-0005](adr/0005-native-tray-integration.md)) — no third-party tray package
-- `IconRenderer` — 2 digits, no ring, auto-fitted font, colour by threshold ([findings](findings/tray-icon-rendering.md))
+- `IconRenderer` — brand mark: colour-coded ring gauge + centre pupil, no digits, colour by threshold ([findings](findings/tray-icon-rendering.md))
 - Single-instance mutex; `TaskbarCreated` re-registration; tooltip ≤127 chars
 - Polling scheduler, default 60 s (local file reads are cheap)
 
