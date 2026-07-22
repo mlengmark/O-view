@@ -45,9 +45,13 @@ When operating on fallback data the UI shows a visible **"local estimate"** badg
 
 ## Install and run
 
-**Users:** download `O-view.Tray.exe` from the latest release and run it. It is self-contained — no .NET install required. The icon lands in the taskbar overflow flyout (the `^` chevron) by default; drag it onto the taskbar to pin it. Left-click opens the panel, right-click the menu.
+**Recommended — the installer.** Download `O-view-Setup.exe` from the [latest release](https://github.com/mlengmark/O-view/releases/latest) and run it. It installs per-user (no admin rights), adds an **O-view** entry to the Start Menu so you can relaunch it any time, and offers a "start automatically when I sign in" option so it survives reboots. It appears in *Settings → Apps* for a clean uninstall. See [ADR-0008](docs/adr/0008-installer-distribution.md).
 
-> **SmartScreen, honestly:** the executable is not code-signed — a certificate costs more than a free tool justifies. Windows SmartScreen will warn on first run ("Windows protected your PC"); *More info → Run anyway* proceeds. The source is in this repository, and the release binary is built from it by the GitHub Actions workflow — verify rather than trust.
+**Portable alternative.** Prefer not to install? Download the standalone `O-view.Tray.exe` and run it from anywhere — it is self-contained, no .NET required. Note there is then no Start Menu entry; use the right-click **Run at startup** toggle if you want it to persist.
+
+Either way: the icon lands in the taskbar overflow flyout (the `^` chevron) by default; drag it onto the taskbar to pin it. Left-click opens the panel, right-click the menu.
+
+> **SmartScreen, honestly:** neither the installer nor the executable is code-signed — a certificate costs more than a free tool justifies, which is also why there is no MSIX package (MSIX cannot install unsigned). Windows SmartScreen will warn on first run ("Windows protected your PC"); *More info → Run anyway* proceeds. The source is in this repository, and both the installer and the binary are built from it by the GitHub Actions workflow — verify rather than trust.
 
 **Building from source:**
 
