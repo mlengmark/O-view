@@ -1,0 +1,27 @@
+<svg width="560" height="200" viewBox="0 0 560 200" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="O-view logo">
+  <defs>
+    <linearGradient id="arc" x1="40" y1="40" x2="176" y2="176" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F4A17A"/>
+      <stop offset="1" stop-color="#D9603A"/>
+    </linearGradient>
+    <radialGradient id="pupil" cx="0.4" cy="0.35" r="0.75">
+      <stop offset="0" stop-color="#F5A57F"/>
+      <stop offset="1" stop-color="#D0532F"/>
+    </radialGradient>
+  </defs>
+
+  <!-- mark -->
+  <g transform="translate(28 28) scale(0.5625)">
+    <circle cx="128" cy="128" r="74" fill="none" stroke="#8A8A8A" stroke-opacity="0.30" stroke-width="20" stroke-linecap="round"/>
+    <circle cx="128" cy="128" r="74" fill="none" stroke="url(#arc)" stroke-width="20" stroke-linecap="round"
+            stroke-dasharray="335 465" transform="rotate(-90 128 128)"/>
+    <circle cx="128" cy="128" r="30" fill="url(#pupil)"/>
+    <circle cx="118" cy="118" r="8" fill="#FBE3D6" fill-opacity="0.9"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="196" y="118" font-family="'Segoe UI', system-ui, -apple-system, sans-serif" font-size="76" font-weight="600" letter-spacing="-1">
+    <tspan fill="#D9603A">O</tspan><tspan fill="#2A2C34" dx="2">-view</tspan>
+  </text>
+  <text x="200" y="152" font-family="'Segoe UI', system-ui, sans-serif" font-size="19" font-weight="500" letter-spacing="3" fill="#8A8F9C">CLAUDE USAGE</text>
+</svg>

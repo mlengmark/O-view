@@ -49,7 +49,7 @@ Tray integration uses the **first-party `System.Windows.Forms.NotifyIcon`** (`<U
 
 `Bitmap.GetHicon()` allocates an unmanaged GDI handle that `Icon` does not own. **Call `DestroyIcon` on every icon refresh** or the process leaks a handle per update — a slow leak in an app designed to run for days.
 
-**Icon design (measured, not assumed):** 2 digits, **no ring gauge**. The ring starves the digits of space at 16 px. Auto-fit the font per icon size rather than hard-coding — a fixed size clips at some DPI scales. See [findings/tray-icon-rendering.md](docs/findings/tray-icon-rendering.md).
+**Icon design (measured, not assumed):** the tray icon is the O-view **brand mark** — a colour-coded **ring gauge with a centre pupil** (the "eye"), **no digits**. Colour carries urgency (green <50, amber 50–69, red ≥70; `OView.Core.UsageLevels`), the exact number lives in the tooltip. The history: digits alone were the spike's winner, but a ring *plus* digits starved each other at 16 px, so when product direction required a graph the digits were dropped and the ring kept (GitHub issue #1). The pupil (added 2026-07-22 to unify the tray icon with the exe icon) is **not** a second signal — it carries no number and takes the arc's colour, so it coexists with the ring where digits could not. Scale the geometry to the icon size — never hard-code, a fixed size clips at some DPI scales. See [findings/tray-icon-rendering.md](docs/findings/tray-icon-rendering.md) and [IconRenderer.cs](src/O-view.Tray/Tray/IconRenderer.cs).
 
 ### 6. Never fabricate a number
 
