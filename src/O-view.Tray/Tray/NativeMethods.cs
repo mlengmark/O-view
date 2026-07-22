@@ -28,4 +28,15 @@ internal static class NativeMethods
     internal static extern int GetSystemMetrics(int nIndex);
 
     internal const int SM_CXSMICON = 49;
+
+    /// <summary>
+    /// A WPF ContextMenu opened from a tray icon will not dismiss on an outside
+    /// click unless its popup window is the foreground window: a tray-resident app
+    /// has no activated window of its own, so the StaysOpen=false menu never
+    /// receives the deactivation that closes it (issue #11). Foreground the popup's
+    /// own HWND immediately after opening so an off-menu click deactivates it.
+    /// </summary>
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetForegroundWindow(nint hWnd);
 }
