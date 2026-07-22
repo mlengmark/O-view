@@ -83,4 +83,29 @@ public class RollupStoreTests : IDisposable
 
         Assert.Equal(DateTimeOffset.Parse("2026-07-21T12:00:00Z"), _store.LatestActivityUtc());
     }
+
+    [Fact]
+    public void CorruptDatabase_IsBackedUpAndRebuilt()
+    {
+        // issue #16: a malformed usage.db threw SQLITE_CORRUPT on every query and blanked
+        // the whole usage display. A rebuildable cache must self-heal, not stay fatal.
+        var path = Path.Combine(_dir, "corrupt.db");
+        var bytes = new byte[4096];
+        // Valid SQLite magic + page size 4096, then garbage — a malformed file (not merely
+        // "not a database"), which is what real on-disk corruption looks like.
+        System.Text.Encoding.ASCII.GetBytes("SQLite format 3\0").CopyTo(bytes, 0);
+        bytes[16] = 0x10; bytes[17] = 0x00;
+        for (var i = 100; i < bytes.Length; i++) bytes[i] = 0xEE;
+        File.WriteAllBytes(path, bytes);
+
+        using (var store = new RollupStore(path))
+        {
+            // A rebuilt, empty, healthy store — usable, with no leftover rows.
+            store.Ingest([Record("r1", "2026-07-20", "claude-opus-4-8", 100)]);
+            Assert.Single(store.GetDailyRollups(new DateOnly(2026, 7, 20), new DateOnly(2026, 7, 20)));
+        }
+
+        // The corrupt original was preserved for post-mortem, not silently destroyed.
+        Assert.NotEmpty(Directory.GetFiles(_dir, "corrupt.db.corrupt-*"));
+    }
 }

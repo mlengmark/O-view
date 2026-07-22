@@ -20,12 +20,39 @@ public class PlanHistoryProviderTests : IDisposable
         return path;
     }
 
+    private sealed class ThrowingResetLog : IWeeklyResetLog
+    {
+        public void RecordResets(IEnumerable<DateTimeOffset> resets) =>
+            throw new InvalidOperationException("reset log unavailable (e.g. corrupt store)");
+        public IReadOnlyList<DateTimeOffset> GetResets() =>
+            throw new InvalidOperationException("reset log unavailable (e.g. corrupt store)");
+    }
+
     [Fact]
     public void MissingFile_ReturnsNone()
     {
         var provider = new PlanHistoryProvider(Path.Combine(_dir, "absent.json"));
 
         Assert.Equal(UsageSnapshot.None, provider.GetSnapshot(Now));
+    }
+
+    [Fact]
+    public void FailingResetLog_StillReportsPrimaryData()
+    {
+        // issue #16: a corrupt rollup DB throws from the weekly-reset log, but the
+        // session/weekly percentages come from the plan-history file, not the DB, and
+        // must survive. The weekly RESET degrades to unknown (null); nothing else does.
+        var path = WriteSamples(
+            (Now.AddMinutes(-10), "org-a", 40, 7),
+            (Now.AddMinutes(-5), "org-a", 47, 8));
+        var provider = new PlanHistoryProvider(path, weeklyResetLog: new ThrowingResetLog());
+
+        var snapshot = provider.GetSnapshot(Now);
+
+        Assert.Equal(DataSource.Live, snapshot.Source);
+        Assert.Equal(47, snapshot.SessionPercent);
+        Assert.Equal(8, snapshot.WeeklyPercent);
+        Assert.Null(snapshot.WeeklyResetAtUtc);
     }
 
     [Fact]

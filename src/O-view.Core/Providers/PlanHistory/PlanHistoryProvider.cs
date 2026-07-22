@@ -89,8 +89,19 @@ public sealed class PlanHistoryProvider : IUsageProvider
         DateTimeOffset? weeklyReset = null;
         if (_weeklyResetLog is not null)
         {
-            _weeklyResetLog.RecordResets(WeeklyResetDetector.FindResets(samples));
-            weeklyReset = WeeklyResetDetector.PredictNextReset(_weeklyResetLog.GetResets(), utcNow);
+            try
+            {
+                _weeklyResetLog.RecordResets(WeeklyResetDetector.FindResets(samples));
+                weeklyReset = WeeklyResetDetector.PredictNextReset(_weeklyResetLog.GetResets(), utcNow);
+            }
+            catch (Exception)
+            {
+                // The weekly-reset log is a bonus feature; a failure inside it — e.g. a
+                // corrupt rollup DB (issue #16) — must never take down the primary
+                // plan-history percentages, which don't depend on it. Degrade the weekly
+                // reset to unknown and return the snapshot regardless.
+                weeklyReset = null;
+            }
         }
 
         return new UsageSnapshot(

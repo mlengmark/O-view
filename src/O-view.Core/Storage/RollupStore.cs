@@ -26,19 +26,89 @@ public sealed class RollupStore : IWeeklyResetLog, IDisposable
         "O-view",
         "usage.db");
 
-    private readonly SqliteConnection _connection;
+    private readonly string _path;
+    private SqliteConnection _connection;
 
     public RollupStore(string? dbPath = null)
     {
-        var path = dbPath ?? DefaultPath;
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        _path = dbPath ?? DefaultPath;
+        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
 
+        _connection = Connect(_path);
+
+        // The rollup store is a derived cache — rebuildable from JSONL and the plan
+        // history — so a corrupt file must never be fatal. A malformed DB otherwise
+        // throws SQLITE_CORRUPT on every query, and because the snapshot path touches
+        // the store that blanks the ENTIRE usage display, not just history (issue #16).
+        // Detect corruption up front and rebuild from empty, keeping the bad file.
+        if (!IsHealthy(_connection))
+        {
+            RebuildFromCorrupt();
+        }
+
+        EnsureSchema(_connection);
+    }
+
+    private static SqliteConnection Connect(string path)
+    {
         // Pooling off: the store owns one long-lived connection, and pooled handles
         // keep the file locked after Dispose (breaks tests and uninstall).
-        _connection = new SqliteConnection($"Data Source={path};Pooling=False");
-        _connection.Open();
+        var connection = new SqliteConnection($"Data Source={path};Pooling=False");
+        connection.Open();
+        return connection;
+    }
 
-        using var cmd = _connection.CreateCommand();
+    /// <summary>
+    /// Whole-database integrity probe. Returns false on a malformed file — either
+    /// quick_check reports errors, or the read itself throws SQLITE_CORRUPT/NOTADB.
+    /// </summary>
+    private static bool IsHealthy(SqliteConnection connection)
+    {
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "PRAGMA quick_check;";
+            using var reader = cmd.ExecuteReader();
+            return reader.Read() && reader.GetString(0) == "ok";
+        }
+        catch (SqliteException)
+        {
+            return false;
+        }
+    }
+
+    private void RebuildFromCorrupt()
+    {
+        _connection.Dispose();
+        BackUpCorruptFiles(_path);
+        _connection = Connect(_path);   // originals moved aside → a fresh, empty DB
+    }
+
+    /// <summary>
+    /// Move the malformed DB (and its WAL/SHM sidecars) aside rather than deleting them,
+    /// so the corruption can still be examined. Best-effort: a file that cannot be moved
+    /// is deleted instead, and even a total failure leaves a usable empty DB behind.
+    /// </summary>
+    private static void BackUpCorruptFiles(string path)
+    {
+        var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
+        foreach (var file in new[] { path, path + "-wal", path + "-shm" })
+        {
+            if (!File.Exists(file)) continue;
+            try
+            {
+                File.Move(file, $"{file}.corrupt-{stamp}", overwrite: true);
+            }
+            catch (IOException)
+            {
+                try { File.Delete(file); } catch (IOException) { }
+            }
+        }
+    }
+
+    private static void EnsureSchema(SqliteConnection connection)
+    {
+        using var cmd = connection.CreateCommand();
         cmd.CommandText = """
             PRAGMA journal_mode = WAL;
             CREATE TABLE IF NOT EXISTS ingested_requests (
