@@ -21,7 +21,7 @@ public sealed class CompositeUsageProvider : IUsageProvider
 
     public UsageSnapshot GetSnapshot(DateTimeOffset utcNow)
     {
-        var snapshots = _providers.Select(p => p.GetSnapshot(utcNow)).ToList();
+        var snapshots = _providers.Select(p => SafeGetSnapshot(p, utcNow)).ToList();
 
         foreach (var tier in new[] { DataSource.Live, DataSource.Stale, DataSource.Estimate })
         {
@@ -32,5 +32,22 @@ public sealed class CompositeUsageProvider : IUsageProvider
         }
 
         return UsageSnapshot.None;
+    }
+
+    /// <summary>
+    /// A provider that throws (e.g. one backed by a corrupt local store — issue #16)
+    /// must not blank the whole display. Treat its failure as "no data" so the chain
+    /// falls through to the next source instead of propagating.
+    /// </summary>
+    private static UsageSnapshot SafeGetSnapshot(IUsageProvider provider, DateTimeOffset utcNow)
+    {
+        try
+        {
+            return provider.GetSnapshot(utcNow);
+        }
+        catch (Exception)
+        {
+            return UsageSnapshot.None;
+        }
     }
 }

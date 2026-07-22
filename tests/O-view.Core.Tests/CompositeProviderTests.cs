@@ -12,6 +12,12 @@ public class CompositeProviderTests
         public UsageSnapshot GetSnapshot(DateTimeOffset utcNow) => snapshot;
     }
 
+    private sealed class Throws : IUsageProvider
+    {
+        public UsageSnapshot GetSnapshot(DateTimeOffset utcNow) =>
+            throw new InvalidOperationException("provider blew up (e.g. corrupt store)");
+    }
+
     private static UsageSnapshot Snap(DataSource source, int? session = null) =>
         new(source, session, null, null, Now);
 
@@ -68,5 +74,28 @@ public class CompositeProviderTests
     public void NoProviders_YieldsNone()
     {
         Assert.Equal(UsageSnapshot.None, new CompositeUsageProvider().GetSnapshot(Now));
+    }
+
+    [Fact]
+    public void ThrowingProvider_DoesNotBlankTheChain()
+    {
+        // issue #16: a provider backed by a corrupt store throws; the composite must
+        // fall through to the next source rather than propagating and showing "no data".
+        var composite = new CompositeUsageProvider(
+            new Throws(),
+            new Fixed(Snap(DataSource.Live, 47)));
+
+        var result = composite.GetSnapshot(Now);
+
+        Assert.Equal(DataSource.Live, result.Source);
+        Assert.Equal(47, result.SessionPercent);
+    }
+
+    [Fact]
+    public void AllProvidersThrow_YieldsNone()
+    {
+        var composite = new CompositeUsageProvider(new Throws(), new Throws());
+
+        Assert.Equal(UsageSnapshot.None, composite.GetSnapshot(Now));
     }
 }
