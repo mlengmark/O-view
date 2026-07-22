@@ -251,6 +251,18 @@ public partial class App : System.Windows.Application
             _menu.Items.Add(notify);
             _menu.Items.Add(new System.Windows.Controls.Separator());
             _menu.Items.Add(exit);
+
+            // A tray app has no activated window, so a StaysOpen=false menu never gets
+            // the deactivation that dismisses it on an outside click — it lingers until
+            // an item is chosen (issue #11). Foreground the popup's own window once it
+            // is up, so clicking off the menu deactivates and closes it.
+            _menu.Opened += (_, _) =>
+            {
+                if (PresentationSource.FromVisual(_menu) is System.Windows.Interop.HwndSource source)
+                {
+                    NativeMethods.SetForegroundWindow(source.Handle);
+                }
+            };
         }
 
         // Re-read on every open: the value can change externally (another instance,
