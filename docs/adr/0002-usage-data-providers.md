@@ -60,7 +60,7 @@ IUsageProvider
 |---|---|
 | **OAuth only** | Single point of failure on an undocumented, rate-limited endpoint, blocked behind an unresolved token-storage question. One upstream change and the product is dead. |
 | **JSONL only** | Cannot report true percentage-of-limit or authoritative reset times — the core requirement. Simpler and lower-risk, but the wrong product. Retained as the contingency if the token spike fails. |
-| **Scrape browser cookies** (CodexBar's approach for some providers) | Chrome/Edge now combine DPAPI with App-Bound Encryption; extracting cookies means defeating a security control. Rejected on both fragility and propriety. |
+| **Scrape browser cookies** (an approach some existing usage monitors take) | Chrome/Edge now combine DPAPI with App-Bound Encryption; extracting cookies means defeating a security control. Rejected on both fragility and propriety. |
 | **Ask the user for an API key** | Console API keys measure a different billing surface than Claude Code subscription limits. Wrong data, plus needless credential handling. |
 
 ## Consequences
