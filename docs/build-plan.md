@@ -106,7 +106,7 @@ Run-at-startup (`HKCU\...\Run`), settings, threshold notifications, `/security-r
 ## Rules for every phase
 
 1. **Windows-only.** No cross-platform abstractions. Watch for macOS patterns leaking in — the nearest prior art is a Mac app.
-2. **Clean-room.** Never read ReferenceApp source, especially when stuck.
+2. **Clean-room.** Never read the source of any existing AI usage-monitor app, especially when stuck.
 3. **No new dependencies** without an ADR. Current set: `Microsoft.Data.Sqlite`, xUnit. That is all.
 4. **Never fabricate a number.** Unknown is a valid, honest state.
 5. **Commit at the end of each phase** with the acceptance evidence in the message.
