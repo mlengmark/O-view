@@ -28,9 +28,9 @@ A balloon notification fires once per session-window crossing of the threshold (
 
 ## Provenance — clean-room
 
-O-view is inspired by the *product concept* of [CodexBar](https://github.com/steipete/codexbar), a macOS menu-bar usage monitor.
+O-view is inspired by the *product concept* of macOS menu-bar apps that track AI token usage.
 
-**No CodexBar code has been read, copied, adapted, or consulted.** CodexBar is a macOS/Swift application; O-view is an independent Windows/.NET implementation written from scratch against Windows platform APIs and locally observed data formats. See [ADR-0004](docs/adr/0004-clean-room-provenance.md) for the full policy and its practical rules.
+**No third-party usage-monitor code has been read, copied, adapted, or consulted.** Those reference apps are macOS/Swift; O-view is an independent Windows/.NET implementation written from scratch against Windows platform APIs and locally observed data formats. See [ADR-0004](docs/adr/0004-clean-room-provenance.md) for the full policy and its practical rules.
 
 ## Data sources
 

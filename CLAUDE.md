@@ -25,11 +25,11 @@ Watch for macOS assumptions leaking in from AI training data, because the closes
 | `NSPopover` anchors itself | Position manually via `Shell_NotifyIconGetRect` + work area |
 | Menu bar item always visible | Windows 11 hides new tray icons in the overflow flyout |
 
-### 2. Clean-room — do not read CodexBar
+### 2. Clean-room — do not read existing usage monitors
 
-This project was inspired by [CodexBar](https://github.com/steipete/codexbar) (macOS/Swift). **Do not read, clone, fetch, or browse its source code**, and do not reproduce its naming or file layout. If asked "how does CodexBar do X", decline and reason from Windows/.NET documentation instead. Full policy: [ADR-0004](docs/adr/0004-clean-room-provenance.md).
+This project was inspired by the *product concept* of existing macOS menu-bar apps that track AI token usage (macOS/Swift). **Do not read, clone, fetch, or browse the source code** of any such app, and do not reproduce its naming or file layout. If asked "how does [an existing usage monitor] do X", decline and reason from Windows/.NET documentation instead. Full policy: [ADR-0004](docs/adr/0004-clean-room-provenance.md).
 
-Its macOS design is not merely encumbered — it is *incorrect* for this platform.
+Those macOS designs are not merely encumbered — they are *incorrect* for this platform.
 
 ### 3. v1 handles no credentials — keep it that way
 
