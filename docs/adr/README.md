@@ -14,6 +14,7 @@ These are **decided, not drafts.** To change one, add a new ADR that supersedes 
 | [0006](0006-local-rollup-store.md) | Local rollup store for usage history | Accepted | SQLite daily aggregates. Claude Code deletes transcripts at 30 days, so 31-day figures need our own store. |
 | [0007](0007-plan-history-primary-provider.md) | `PlanHistoryProvider` becomes the primary usage source | Accepted | Claude Desktop caches session/weekly % locally. **No token, no network, no rate limits in v1.** |
 | [0008](0008-installer-distribution.md) | Per-user installer for distribution and relaunch | Accepted | Inno Setup per-user installer: Start Menu entry, optional autostart, clean uninstall. Resolves #7; MSIX rejected (needs signing). |
+| [0009](0009-auto-update.md) | In-app auto-update via GitHub release + existing installer | Accepted | Check `releases/latest`, download `O-view-Setup.exe`, silent in-place upgrade + relaunch. Resolves #18; no new dependency; Squirrel/Velopack/MSIX rejected. |
 
 ## Findings
 

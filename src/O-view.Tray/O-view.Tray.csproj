@@ -6,6 +6,10 @@
     <OutputType>WinExe</OutputType>
     <TargetFramework>net10.0-windows</TargetFramework>
     <RootNamespace>OView.Tray</RootNamespace>
+    <!-- Stamped so the running build knows its own version for the update check (ADR-0009).
+         Local/dev builds keep 0.0.0 (older than any release, so they never nag to update);
+         the release workflow overrides it with the tag via -p:Version=<tag>. -->
+    <Version>0.0.0</Version>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>

@@ -16,17 +16,24 @@ jobs:
         with:
           dotnet-version: "10.0.x"
       - run: dotnet test -c Release
+      - name: Compute version from tag
+        id: ver
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          "version=$version" >> $env:GITHUB_OUTPUT
       - name: Publish single-file self-contained exe
         run: >
           dotnet publish src/O-view.Tray -c Release -r win-x64 --self-contained
           -p:PublishSingleFile=true
+          -p:Version=${{ steps.ver.outputs.version }}
           -o publish
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
       - name: Build installer
         shell: pwsh
         run: |
-          $version = "${{ github.ref_name }}".TrimStart('v')
+          $version = "${{ steps.ver.outputs.version }}"
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           & $iscc "/DAppVersion=$version" installer\O-view.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
