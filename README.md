@@ -18,7 +18,7 @@ O-view sits in the Windows 11 notification area and answers two questions at a g
 | Tray icon | 2 digits + a proportional % fill bar (e.g. `47` over a half-full bar), colour-coded green → amber → red; full-ring `!` at 100% |
 | Tooltip | `5h: 47% · resets 16:32 · 7d: 61%` |
 | Popup panel | Session/weekly bars, token counts, estimated API-equivalent value, 31-day usage graph, data-source badge. Docks to the taskbar corner like a system flyout. |
-| Right-click menu | Run at startup · threshold notification toggle · exit |
+| Right-click menu | Run at startup · threshold notification toggle · check for updates · exit |
 
 A balloon notification fires once per session-window crossing of the threshold (default 85%).
 
@@ -51,13 +51,15 @@ When operating on fallback data the UI shows a visible **"local estimate"** badg
 
 Either way: the icon lands in the taskbar overflow flyout (the `^` chevron) by default; drag it onto the taskbar to pin it. Left-click opens the panel, right-click the menu.
 
+**Staying up to date.** O-view checks GitHub for a newer release in the background and shows a one-time balloon when one is available; right-click → **Check for updates…** at any time. For an installed copy it downloads `O-view-Setup.exe`, upgrades in place, and relaunches — all after a single confirmation. Portable copies are pointed at the release page. See [ADR-0009](docs/adr/0009-auto-update.md).
+
 > **SmartScreen, honestly:** neither the installer nor the executable is code-signed — a certificate costs more than a free tool justifies, which is also why there is no MSIX package (MSIX cannot install unsigned). Windows SmartScreen will warn on first run ("Windows protected your PC"); *More info → Run anyway* proceeds. The source is in this repository, and both the installer and the binary are built from it by the GitHub Actions workflow — verify rather than trust.
 
 **Building from source:**
 
 ```
 dotnet build          # requires .NET 10 SDK 10.0.302+
-dotnet test           # 72 tests
+dotnet test           # 151 tests
 dotnet publish src/O-view.Tray -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 ```
 

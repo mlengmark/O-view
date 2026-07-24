@@ -1,14 +1,17 @@
 using System.Globalization;
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 using OView.Core.Models;
 using OView.Core.Providers;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Core.Storage;
+using OView.Core.Updates;
 using OView.Tray.Diagnostics;
 using OView.Tray.Popup;
 using OView.Tray.Tray;
+using OView.Tray.Updates;
 
 namespace OView.Tray;
 
@@ -31,6 +34,10 @@ public partial class App : System.Windows.Application
     private PlanHistoryProvider? _planHistory;
     private bool _offPlanNotified;
     private string? _simulateDivergence;
+    private UpdateService? _updates;
+    private DispatcherTimer? _updateTimer;
+    private bool _updateFlowActive;
+    private string? _notifiedUpdateTag;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -90,9 +97,21 @@ public partial class App : System.Windows.Application
         log?.Write($"startup interval={interval.TotalSeconds}s");
         _controller.Start();
 
+        // Auto-update (ADR-0009): a quiet background check surfaces a newer release as a
+        // balloon; the actual download-and-install is only ever done from the menu, with
+        // the user's confirmation.
+        _updates = new UpdateService(log);
+        StartUpdateChecks();
+
         if (args.ContainsKey("--test-notify"))
         {
             _trayHost.ShowNotification("Claude usage", "Test notification (--test-notify).");
+        }
+
+        // Verification hook: force an interactive update check (as if from the menu).
+        if (args.ContainsKey("--check-updates"))
+        {
+            _ = CheckForUpdatesInteractiveAsync();
         }
 
         // Verification hooks for the startup-registration round trip.
@@ -243,6 +262,10 @@ public partial class App : System.Windows.Application
                 _settings.Save();
             };
 
+            // "Check for updates" sits directly above Exit, as requested in issue #18.
+            var checkUpdates = new System.Windows.Controls.MenuItem { Header = "Check for updates…" };
+            checkUpdates.Click += async (_, _) => await CheckForUpdatesInteractiveAsync();
+
             var exit = new System.Windows.Controls.MenuItem { Header = "Exit O-view" };
             exit.Click += (_, _) => Shutdown();
 
@@ -250,6 +273,7 @@ public partial class App : System.Windows.Application
             _menu.Items.Add(startup);
             _menu.Items.Add(notify);
             _menu.Items.Add(new System.Windows.Controls.Separator());
+            _menu.Items.Add(checkUpdates);
             _menu.Items.Add(exit);
 
             // A tray app has no activated window, so a StaysOpen=false menu never gets
@@ -273,8 +297,132 @@ public partial class App : System.Windows.Application
         _menu.IsOpen = true;
     }
 
+    /// <summary>
+    /// Background update cadence: one check ~30 s after launch (so it neither slows startup
+    /// nor races the first refresh), then daily. A DispatcherTimer keeps every callback on
+    /// the UI thread, so surfacing a balloon or a dialog needs no marshalling.
+    /// </summary>
+    private void StartUpdateChecks()
+    {
+        var initial = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        initial.Tick += (_, _) =>
+        {
+            initial.Stop();
+            _ = BackgroundCheckAsync();
+        };
+        initial.Start();
+
+        _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromHours(24) };
+        _updateTimer.Tick += (_, _) => _ = BackgroundCheckAsync();
+        _updateTimer.Start();
+    }
+
+    /// <summary>
+    /// Quiet check: only *notifies* when a newer release exists, and only once per version
+    /// (re-notifying every day would be nagging). It never downloads or installs anything —
+    /// that stays behind the explicit menu action and its confirmation.
+    /// </summary>
+    private async Task BackgroundCheckAsync()
+    {
+        if (_updates is null || _trayHost is null || _updateFlowActive)
+        {
+            return;
+        }
+
+        var result = await _updates.CheckAsync();
+        if (result is { Outcome: UpdateOutcome.UpdateAvailable, Available: { } update }
+            && _notifiedUpdateTag != update.Tag)
+        {
+            _notifiedUpdateTag = update.Tag;
+            _trayHost.ShowNotification("O-view update available",
+                $"Version {update.Version} is available (you have {UpdateService.CurrentVersion}). " +
+                "Right-click the icon → Check for updates to install.");
+        }
+    }
+
+    /// <summary>
+    /// The menu action: always reports an outcome (up to date, available, or unreachable),
+    /// and offers to install when a newer release exists.
+    /// </summary>
+    private async Task CheckForUpdatesInteractiveAsync()
+    {
+        if (_updates is null || _trayHost is null || _updateFlowActive)
+        {
+            return;
+        }
+
+        var result = await _updates.CheckAsync();
+        switch (result.Outcome)
+        {
+            case UpdateOutcome.UpToDate:
+                _trayHost.ShowNotification("O-view is up to date",
+                    $"You have the latest version ({UpdateService.CurrentVersion}).");
+                break;
+
+            case UpdateOutcome.UpdateAvailable when result.Available is { } update:
+                await OfferUpdateAsync(update);
+                break;
+
+            default:
+                _trayHost.ShowNotification("Couldn't check for updates",
+                    "O-view couldn't reach GitHub to check for a newer version. Please try again later.");
+                break;
+        }
+    }
+
+    /// <summary>
+    /// Confirms with the user, then — for an installed build — downloads the installer and
+    /// hands off to it (the app exits so the installer can replace the exe and relaunch it).
+    /// A portable build cannot replace its own running exe, so it is sent to the release page.
+    /// </summary>
+    private async Task OfferUpdateAsync(AvailableUpdate update)
+    {
+        if (_updates is null || _trayHost is null)
+        {
+            return;
+        }
+
+        if (!UpdateService.IsInstalled)
+        {
+            if (ConfirmUpdate(update, "Open the download page for the new version?"))
+            {
+                _updates.OpenInBrowser(UpdateService.ReleasePageUrl(update));
+            }
+            return;
+        }
+
+        if (!ConfirmUpdate(update,
+            "Download and install it now? O-view will close briefly and reopen automatically."))
+        {
+            return;
+        }
+
+        _updateFlowActive = true;
+        try
+        {
+            var installer = await _updates.DownloadInstallerAsync(update);
+            _updates.LaunchInstaller(installer);
+            Shutdown();  // release the exe lock so the installer can replace it and relaunch
+        }
+        catch (Exception)
+        {
+            _updateFlowActive = false;
+            _trayHost.ShowNotification("Update failed",
+                "O-view couldn't download the update. Opening the releases page so you can download it manually.");
+            _updates.OpenInBrowser(UpdateService.ReleasePageUrl(update));
+        }
+    }
+
+    private static bool ConfirmUpdate(AvailableUpdate update, string question) =>
+        System.Windows.MessageBox.Show(
+            $"O-view {update.Version} is available (you have {UpdateService.CurrentVersion}).\n\n{question}",
+            "O-view update",
+            System.Windows.MessageBoxButton.YesNo,
+            System.Windows.MessageBoxImage.Information) == System.Windows.MessageBoxResult.Yes;
+
     protected override void OnExit(ExitEventArgs e)
     {
+        _updateTimer?.Stop();
         _controller?.Dispose();
         _trayHost?.Dispose();
         _store?.Dispose();

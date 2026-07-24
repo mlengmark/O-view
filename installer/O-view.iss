@@ -91,6 +91,19 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName} now"; \
     Flags: nowait postinstall skipifsilent
+; In-app auto-update relaunch (ADR-0009). When O-view's own updater runs this installer it
+; passes "/SILENT /update=1"; the postinstall entry above is skipped in silent mode, so this
+; entry (not a postinstall action, therefore it runs even silently) relaunches the app once
+; the upgrade is applied. A normal user install does not pass /update, so WantsRelaunch is
+; false and this is skipped — no double launch.
+Filename: "{app}\{#AppExeName}"; Flags: nowait; Check: WantsRelaunch
+
+[Code]
+// True only when launched by the in-app updater as "...\O-view-Setup.exe /update=1".
+function WantsRelaunch(): Boolean;
+begin
+  Result := ExpandConstant('{param:update|0}') = '1';
+end;
 
 [UninstallRun]
 ; The tray process holds the exe open; end it before the uninstaller deletes files.
