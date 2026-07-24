@@ -18,7 +18,7 @@ Written by the **Claude Desktop** application. Present and populated on the dev 
   "version": 2,
   "samples": [
     { "t": 1784535700086,
-      "org": "24a70d0b-…",
+      "org": "00000000-0000-0000-0000-000000000000",
       "u": { "fh": 5, "sd": 3 } }
   ]
 }

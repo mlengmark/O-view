@@ -45,8 +45,8 @@ public class PlanHistoryFileTests : IDisposable
         // Shape verified against the real file, docs/findings/plan-usage-history.md.
         var path = WriteFile("""
             {"version":2,"samples":[
-              {"t":1784535700086,"org":"24a70d0b-57ac-4caa-b135-ec53b76ad6a5","u":{"fh":0,"sd":2}},
-              {"t":1784535999973,"org":"24a70d0b-57ac-4caa-b135-ec53b76ad6a5","u":{"fh":5,"sd":3}}
+              {"t":1784535700086,"org":"00000000-0000-0000-0000-000000000000","u":{"fh":0,"sd":2}},
+              {"t":1784535999973,"org":"00000000-0000-0000-0000-000000000000","u":{"fh":5,"sd":3}}
             ]}
             """);
 
@@ -57,7 +57,7 @@ public class PlanHistoryFileTests : IDisposable
         Assert.Equal(0, samples[0].FiveHourPercent);
         Assert.Equal(2, samples[0].SevenDayPercent);
         Assert.Equal(5, samples[1].FiveHourPercent);
-        Assert.Equal("24a70d0b-57ac-4caa-b135-ec53b76ad6a5", samples[1].OrgUuid);
+        Assert.Equal("00000000-0000-0000-0000-000000000000", samples[1].OrgUuid);
     }
 
     [Fact]
