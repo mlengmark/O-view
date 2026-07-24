@@ -17,7 +17,7 @@ public class ClaudeAccountTests : IDisposable
         File.WriteAllText(path, """
             {"oauthAccount":{"displayName":"Maximilian","emailAddress":"m@example.com",
              "organizationType":"claude_pro","seatTier":"","userRateLimitTier":"",
-             "organizationUuid":"24a70d0b-57ac-4caa-b135-ec53b76ad6a5"}}
+             "organizationUuid":"00000000-0000-0000-0000-000000000000"}}
             """);
 
         var account = ClaudeAccount.TryRead(path);
@@ -26,7 +26,7 @@ public class ClaudeAccountTests : IDisposable
         Assert.Equal("claude_pro", account.Tier);
         Assert.Equal("Maximilian", account.DisplayName);
         Assert.Equal("m@example.com", account.Email);
-        Assert.Equal("24a70d0b-57ac-4caa-b135-ec53b76ad6a5", account.OrganizationUuid);
+        Assert.Equal("00000000-0000-0000-0000-000000000000", account.OrganizationUuid);
     }
 
     [Fact]

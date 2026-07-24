@@ -40,7 +40,7 @@ Filter to `type == "assistant"`. Do not assume this list is exhaustive; unknown 
 | Field | Example | Notes |
 |---|---|---|
 | `timestamp` | `2026-07-20T12:58:16.640Z` | **ISO-8601 UTC.** Do window arithmetic in UTC; convert to local only for display. |
-| `requestId` | `req_011CdDMBPWfm8pCmLVuMyRzv` | **De-duplication key — see below** |
+| `requestId` | `req_011ExampleRequestId000` | **De-duplication key — see below** |
 | `message.model` | `claude-opus-4-8` | For per-model breakdown |
 | `message.usage.input_tokens` | `2` | |
 | `message.usage.cache_creation_input_tokens` | `14226` | |
