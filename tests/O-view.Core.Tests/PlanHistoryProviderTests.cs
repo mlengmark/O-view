@@ -122,13 +122,42 @@ public class PlanHistoryProviderTests : IDisposable
     }
 
     [Fact]
-    public void OrgFilterMatchingNothing_ReturnsNone()
+    public void SingleOrgFile_IsShown_EvenWhenAccountOrgDiffers()
     {
-        var path = WriteSamples((Now.AddMinutes(-5), "org-a", 40, 7));
-        var provider = new PlanHistoryProvider(path, orgUuid: "org-c");
+        // The regression that blanked new users' panels: Claude Code (~/.claude.json) and
+        // Claude Desktop (plan-usage-history.json) signed into different accounts, so the
+        // account org matched no Desktop sample. The old filter returned nothing; the file
+        // holds one org's perfectly good usage and must be shown.
+        var path = WriteSamples(
+            (Now.AddMinutes(-10), "org-desktop", 40, 7),
+            (Now.AddMinutes(-5), "org-desktop", 47, 8));
+        var provider = new PlanHistoryProvider(path, orgUuid: "org-from-claude-code");
 
-        Assert.Equal(UsageSnapshot.None, provider.GetSnapshot(Now));
+        var snapshot = provider.GetSnapshot(Now);
+
+        Assert.Equal(DataSource.Live, snapshot.Source);
+        Assert.Equal(47, snapshot.SessionPercent);
+        Assert.Equal(8, snapshot.WeeklyPercent);
     }
+
+    [Fact]
+    public void MultiOrgFile_AccountMatchesNone_FallsBackToMostRecentOrg()
+    {
+        // A genuinely interleaved file whose orgs match neither the account: don't blank —
+        // resolve to the most-recently-active org (one org, still de-interleaved).
+        var path = WriteSamples(
+            (Now.AddMinutes(-15), "org-old", 90, 60),
+            (Now.AddMinutes(-10), "org-old", 92, 61),
+            (Now.AddMinutes(-5), "org-recent", 33, 9));
+        var provider = new PlanHistoryProvider(path, orgUuid: "org-unrelated");
+
+        var snapshot = provider.GetSnapshot(Now);
+
+        Assert.Equal(33, snapshot.SessionPercent);
+        Assert.Equal(9, snapshot.WeeklyPercent);
+        Assert.Equal(Now.AddMinutes(-5), snapshot.CapturedAtUtc);
+    }
+
 
     [Fact]
     public void CrossOrgSequence_DoesNotFakeADrop()
