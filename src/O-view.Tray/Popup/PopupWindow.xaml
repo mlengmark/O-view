@@ -47,6 +47,18 @@
                 </StackPanel>
             </Border>
 
+            <!-- Why the figures read "unknown". A blank panel with no explanation cost
+                 four rounds of support to diagnose; the app should state the reason. -->
+            <Border x:Name="NoDataBanner" Background="{DynamicResource WarnBg}" CornerRadius="6"
+                    Padding="10,8" Margin="0,0,0,12" Visibility="Collapsed">
+                <StackPanel>
+                    <TextBlock x:Name="NoDataTitle" FontSize="12" FontWeight="SemiBold"
+                               Foreground="{DynamicResource WarnText}" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="NoDataDetail" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"
+                               Foreground="{DynamicResource TextSecondary}"/>
+                </StackPanel>
+            </Border>
+
             <!-- Session bar -->
             <Grid>
                 <TextBlock Text="Current session" FontSize="12" FontWeight="SemiBold"

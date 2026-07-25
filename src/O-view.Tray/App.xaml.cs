@@ -154,7 +154,10 @@ public partial class App : System.Windows.Application
         }
 
         _controller.Refresh();  // fresh data on open; local reads are cheap
-        EnsurePopup().ShowNearTrayIcon(
+        var popup = EnsurePopup();
+        // Inspected on open (not cached) so the banner reflects the file as it is now.
+        popup.DataReport = PlanHistoryDiagnostics.Inspect();
+        popup.ShowNearTrayIcon(
             _controller.Latest,
             BuildStatistics(),
             ClaudeAccount.TryRead());
@@ -262,6 +265,12 @@ public partial class App : System.Windows.Application
                 _settings.Save();
             };
 
+            // One-click support bundle: a blank panel is otherwise indistinguishable from
+            // "Desktop missing", "unexpected file format", or "file unreadable", and asking
+            // users to run PowerShell by hand is not a diagnosis path.
+            var copyDiagnostics = new System.Windows.Controls.MenuItem { Header = "Copy diagnostics" };
+            copyDiagnostics.Click += (_, _) => CopyDiagnostics();
+
             // "Check for updates" sits directly above Exit, as requested in issue #18.
             var checkUpdates = new System.Windows.Controls.MenuItem { Header = "Check for updates…" };
             checkUpdates.Click += async (_, _) => await CheckForUpdatesInteractiveAsync();
@@ -273,6 +282,7 @@ public partial class App : System.Windows.Application
             _menu.Items.Add(startup);
             _menu.Items.Add(notify);
             _menu.Items.Add(new System.Windows.Controls.Separator());
+            _menu.Items.Add(copyDiagnostics);
             _menu.Items.Add(checkUpdates);
             _menu.Items.Add(exit);
 
@@ -295,6 +305,55 @@ public partial class App : System.Windows.Application
 
         _menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
         _menu.IsOpen = true;
+    }
+
+    /// <summary>
+    /// Puts a support bundle on the clipboard: what the app reads, from where, and what it
+    /// found. Covers both usage sources — the plan-history file (session/weekly %) and the
+    /// JSONL transcripts (token tiles) — plus whether account info resolved, because which
+    /// of those are blank narrows the cause immediately. Contains no token and no
+    /// conversation content; the org UUID is included as it is the documented filter key.
+    /// </summary>
+    private void CopyDiagnostics()
+    {
+        var report = PlanHistoryDiagnostics.Inspect();
+        var account = ClaudeAccount.TryRead();
+
+        var text = new System.Text.StringBuilder();
+        text.Append(report.ToClipboardText(UpdateService.CurrentVersion));
+        text.AppendLine($"  installed     : {UpdateService.IsInstalled}");
+        text.AppendLine($"  account file  : {(account is null ? "not readable" : "read ok")}"
+                        + $" (org {account?.OrganizationUuid ?? "n/a"}, tier {account?.Tier ?? "n/a"})");
+
+        // The token tiles come from the JSONL transcripts, a different source entirely —
+        // if those are blank too, the cause is broader than plan-history.
+        var projects = ClaudeProjectsLocator.DefaultRoot;
+        var transcripts = 0;
+        try
+        {
+            transcripts = Directory.Exists(projects)
+                ? Directory.GetFiles(projects, "*.jsonl", SearchOption.AllDirectories).Length
+                : 0;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Count is diagnostic only.
+        }
+        text.AppendLine($"  transcripts   : {transcripts} .jsonl under {projects}");
+        text.AppendLine($"  latest source : {_controller?.Latest.Source.ToString() ?? "n/a"}");
+
+        try
+        {
+            System.Windows.Clipboard.SetText(text.ToString());
+            _trayHost?.ShowNotification("Diagnostics copied",
+                "Paste them into your bug report. No tokens or conversation content are included.");
+        }
+        catch (Exception)
+        {
+            // The clipboard can be locked by another process; failing to copy must not crash.
+            _trayHost?.ShowNotification("Couldn't copy diagnostics",
+                "The clipboard was unavailable. Please try again.");
+        }
     }
 
     /// <summary>

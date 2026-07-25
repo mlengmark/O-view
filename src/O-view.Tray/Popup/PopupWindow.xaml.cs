@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using OView.Core.Models;
+using OView.Core.Providers.PlanHistory;
 using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
 using ColorConverter = System.Windows.Media.ColorConverter;
@@ -37,6 +38,12 @@ public partial class PopupWindow : Window
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) Hide(); };
     }
 
+    /// <summary>
+    /// Why plan data is unavailable, surfaced when the figures read "unknown". Null skips
+    /// the banner entirely (nothing to explain).
+    /// </summary>
+    public PlanHistoryReport? DataReport { get; set; }
+
     public void ShowNearTrayIcon(UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account)
     {
         ApplyTheme(ThemeOverride ?? IsAppsLightTheme());
@@ -68,6 +75,21 @@ public partial class PopupWindow : Window
         TierText.Text = account?.Tier ?? "tier unknown";
 
         var authoritative = snapshot.Source is DataSource.Live or DataSource.Stale;
+
+        // Explain a blank panel rather than leaving the user to guess (rule 6: if data is
+        // unavailable, say so). Only shown when the figures are actually unavailable.
+        var explanation = !authoritative ? DataReport?.Explain() : null;
+        if (explanation is { Length: > 0 })
+        {
+            NoDataTitle.Text = "No usage data";
+            NoDataDetail.Text = explanation;
+            NoDataBanner.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            NoDataBanner.Visibility = Visibility.Collapsed;
+        }
+
         PopulateBar(SessionPctText, SessionBar, SessionBarFill,
             authoritative ? snapshot.SessionPercent : null);
         SessionResetText.Text = snapshot.SessionResetAtUtc is { } reset
