@@ -11,11 +11,14 @@ namespace OView.Core.Providers.PlanHistory;
 /// </summary>
 public static class PlanHistoryFile
 {
-    /// <summary>Default location, resolved per-user.</summary>
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "Claude",
-        "plan-usage-history.json");
+    /// <summary>
+    /// Where the file actually is on this machine — the canonical
+    /// <c>%APPDATA%\Claude</c> location when it exists, otherwise a packaged Claude
+    /// Desktop's redirected store (<see cref="PlanHistoryLocator"/>). Falls back to the
+    /// canonical path when nothing is found, so error messages name the expected location.
+    /// </summary>
+    public static string DefaultPath =>
+        PlanHistoryLocator.Locate() ?? PlanHistoryLocator.CanonicalPath;
 
     /// <summary>
     /// Parse the file into validated samples ordered by time. Returns an empty list on

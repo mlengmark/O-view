@@ -42,6 +42,15 @@ public sealed record PlanHistoryReport(
     TimeSpan? LatestSampleAge,
     string? Detail)
 {
+    /// <summary>Every location searched, in priority order — the evidence behind a "not found".</summary>
+    public IReadOnlyList<string> Searched { get; init; } = [];
+
+    /// <summary>What the Claude data folder beside the canonical path holds, when it exists.</summary>
+    public IReadOnlyList<string> CanonicalFolderFiles { get; init; } = [];
+
+    public int SearchedCount => Searched.Count == 0 ? 1 : Searched.Count;
+
+
     /// <summary>
     /// Short user-facing explanation for the popup when figures read "unknown".
     /// States what O-view observed — never what it assumes about the user's setup. The
@@ -52,11 +61,16 @@ public sealed record PlanHistoryReport(
     /// </summary>
     public string Explain() => Status switch
     {
+        // Deliberately offers no single remedy. An earlier version told users to restart
+        // O-view; a user whose file genuinely does not exist followed that and nothing
+        // changed, because the advice fitted a different failure. Say what was searched
+        // and hand over to diagnostics rather than guessing which case this is.
         PlanDataStatus.FileMissing =>
-            $"O-view could not find Claude Desktop's usage file at {Path} — it is the source of "
-            + "session and weekly %. If Claude Desktop is not running, start it and reopen this "
-            + "panel. If it IS running, exit O-view and start it again from the Start Menu: an "
-            + "instance that cannot see this file does not recover on its own.",
+            $"O-view searched {SearchedCount} location(s) for Claude Desktop's usage file — the "
+            + $"source of session and weekly % — and found none. Last checked: {Path}. "
+            + "If Claude Desktop is not running, start it and reopen this panel. If it is "
+            + "running, use Copy diagnostics from the tray menu: O-view may be looking in the "
+            + "wrong place for how Claude Desktop is installed on this machine.",
         PlanDataStatus.Unreadable =>
             $"O-view could not read {Path}. Right-click the tray icon → Copy diagnostics to report this.",
         PlanDataStatus.NoValidSamples =>
@@ -84,6 +98,17 @@ public sealed record PlanHistoryReport(
         {
             sb.AppendLine($"  detail        : {Detail}");
         }
+
+        // The search trail is the whole point when the answer is "not found": it shows
+        // whether O-view even considered the location this machine actually uses.
+        foreach (var (candidate, i) in Searched.Select((c, i) => (c, i)))
+        {
+            sb.AppendLine($"  searched [{i}]  : {candidate}{(File.Exists(candidate) ? "  <-- exists" : "")}");
+        }
+        if (CanonicalFolderFiles.Count > 0)
+        {
+            sb.AppendLine($"  claude folder : {string.Join(", ", CanonicalFolderFiles)}");
+        }
         return sb.ToString();
     }
 }
@@ -101,9 +126,17 @@ public static class PlanHistoryDiagnostics
         var target = path ?? PlanHistoryFile.DefaultPath;
         var window = freshness ?? PlanHistoryProvider.DefaultFreshness;
 
+        // Only meaningful when resolving the real machine location, not a test path.
+        var searched = path is null ? PlanHistoryLocator.Candidates() : [target];
+        var folderFiles = path is null ? CanonicalFolderContents() : [];
+
         if (!File.Exists(target))
         {
-            return new PlanHistoryReport(PlanDataStatus.FileMissing, target, false, 0, 0, 0, [], null, null);
+            return new PlanHistoryReport(PlanDataStatus.FileMissing, target, false, 0, 0, 0, [], null, null)
+            {
+                Searched = searched,
+                CanonicalFolderFiles = folderFiles,
+            };
         }
 
         long bytes = 0;
@@ -151,6 +184,30 @@ public static class PlanHistoryDiagnostics
 
         var age = DateTimeOffset.UtcNow - valid[^1].AtUtc;
         var status = age <= window ? PlanDataStatus.Ok : PlanDataStatus.Stale;
-        return new PlanHistoryReport(status, target, true, bytes, raw, valid.Count, orgs, age, detail);
+        return new PlanHistoryReport(status, target, true, bytes, raw, valid.Count, orgs, age, detail)
+        {
+            Searched = searched,
+            CanonicalFolderFiles = folderFiles,
+        };
+    }
+
+    /// <summary>
+    /// Names of files in the canonical Claude folder. Distinguishes "Claude Desktop keeps
+    /// data here but no usage file" from "there is no Claude folder here at all" — the two
+    /// need different answers, and a bare missing-file result cannot tell them apart.
+    /// </summary>
+    private static IReadOnlyList<string> CanonicalFolderContents()
+    {
+        try
+        {
+            var dir = Path.GetDirectoryName(PlanHistoryLocator.CanonicalPath);
+            return dir is not null && Directory.Exists(dir)
+                ? Directory.EnumerateFiles(dir).Select(Path.GetFileName).OfType<string>().Take(25).ToList()
+                : [];
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
     }
 }
