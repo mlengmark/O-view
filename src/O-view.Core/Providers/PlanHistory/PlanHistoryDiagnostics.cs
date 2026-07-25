@@ -54,8 +54,9 @@ public sealed record PlanHistoryReport(
     {
         PlanDataStatus.FileMissing =>
             $"O-view could not find Claude Desktop's usage file at {Path} — it is the source of "
-            + "session and weekly %. If Claude Desktop is running, use Copy diagnostics from the "
-            + "tray menu to report this; otherwise start Claude Desktop and reopen this panel.",
+            + "session and weekly %. If Claude Desktop is not running, start it and reopen this "
+            + "panel. If it IS running, exit O-view and start it again from the Start Menu: an "
+            + "instance that cannot see this file does not recover on its own.",
         PlanDataStatus.Unreadable =>
             $"O-view could not read {Path}. Right-click the tray icon → Copy diagnostics to report this.",
         PlanDataStatus.NoValidSamples =>
