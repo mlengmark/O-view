@@ -55,11 +55,13 @@ Tray integration uses the **first-party `System.Windows.Forms.NotifyIcon`** (`<U
 
 If data is unavailable, show a neutral icon and explain in the popup. If data is estimated (JSONL-derived), label it **"local estimate"**. A monitoring tool that confidently displays a wrong number is worse than one that admits uncertainty.
 
-Three specific applications of this rule:
+Five specific applications of this rule:
 
 - **"Est. value" tiles are not money charged.** Within plan limits the marginal cost is £0; these figures price tokens at public API rates. Always prefix `Est.`
 - **Partial history must state its coverage** — `3 of 31 days recorded`. A small 31-day number without that caveat reads as low usage rather than short history.
 - **Days before install have no data, not zero data.** Never render them as zero-height bars in the graph.
+- **An unpriced model yields a labelled partial, not a blank tile.** `CostEstimator` has no rate for a model Anthropic released after the table was last updated, so `PanelStatistics` sums what it *can* price and names the rest in `UnpricedModels` (`excludes claude-x (no published rate)`); it returns null only when **nothing** was priceable. Do **not** "restore" the older rule of nulling the whole total on any unpriced model — that blanked both Est. tiles for every user the moment one new model id appeared (it did, for `claude-opus-5`), with no explanation. And never invent a rate to fill the gap: look it up, or leave it labelled. `<synthetic>` is not a model — it is Claude Code's marker for locally generated messages, so it is **free (0)**, not unpriced.
+- **Never assert something about the user's machine that O-view hasn't observed.** The "no usage data" banner once read *"Install and run the Claude Desktop app"* at a user who had it open — a file O-view cannot read is not evidence the app is absent. State the observation and the path checked ([ADR-0010](docs/adr/0010-post-update-relaunch.md)).
 
 ### 7. Ingestion must be idempotent
 
