@@ -90,15 +90,21 @@ public class PanelStatisticsTests : IDisposable
     }
 
     [Fact]
-    public void UnpricedModel_MakesEstimateNull_NeverPartial()
+    public void UnpricedModel_YieldsLabelledPartial_NotABlankTile()
     {
+        // Supersedes the original "any unpriced model ⇒ null" rule. That rule blanked
+        // both Est. tiles the moment one unrecognised model id appeared (claude-opus-5,
+        // in the real report) — the user saw "unknown" with no way to know why. The
+        // principle behind rule 6 is "don't mislead", which a partial sum satisfies as
+        // long as the exclusion is stated: UnpricedModels drives that caption.
         Seed("r1", "2026-07-21", 1_000_000);
         Seed("r2", "2026-07-21", 1_000_000, model: "claude-hypothetical-9");
 
         var stats = PanelStatistics.Build(_store, Now);
 
-        Assert.Null(stats.EstTodayUsd);   // not a partial sum shown as a total
-        Assert.Equal(2_000_000, stats.TokensToday);  // token counts still honest
+        Assert.Equal(25.00m, stats.EstTodayUsd);       // the priced portion, reported
+        Assert.Contains("claude-hypothetical-9", stats.UnpricedModels);  // and labelled
+        Assert.Equal(2_000_000, stats.TokensToday);    // token counts still honest
     }
 
     [Fact]
@@ -148,5 +154,45 @@ public class PanelStatisticsTests : IDisposable
         var stats = PanelStatistics.Build(_store, Now);
 
         Assert.Equal(400_000, stats.CreditTokens31Days);
+    }
+
+    [Fact]
+    public void OneUnpricedModel_NoLongerBlanksTheWholeEstimate()
+    {
+        // The reported bug: tokens showed but both "Est. value" tiles read "unknown",
+        // because a single model with no published rate voided the entire total.
+        Seed("a", "2026-07-21", 1_000_000, "claude-opus-4-8");
+        Seed("b", "2026-07-21", 1_000_000, "claude-brand-new-9");
+
+        var stats = PanelStatistics.Build(_store, Now);
+
+        Assert.NotNull(stats.Est31DaysUsd);              // priced portion still reported
+        Assert.Equal(25.00m, stats.Est31DaysUsd);        // 1M Opus output @ $25/MTok
+        Assert.Contains("claude-brand-new-9", stats.UnpricedModels);
+    }
+
+    [Fact]
+    public void SyntheticRecords_DoNotCountAsUnpriced()
+    {
+        Seed("a", "2026-07-21", 1_000_000, "claude-opus-4-8");
+        Seed("b", "2026-07-21", 5_000, "<synthetic>");
+
+        var stats = PanelStatistics.Build(_store, Now);
+
+        Assert.Equal(25.00m, stats.Est31DaysUsd);
+        Assert.Empty(stats.UnpricedModels);
+    }
+
+    [Fact]
+    public void NothingPriceable_IsStillUnknown_NotZero()
+    {
+        // If not one row can be priced there is no basis for a figure — show unknown
+        // rather than a $0.00 that reads as "you spent nothing" (rule 6).
+        Seed("a", "2026-07-21", 1_000_000, "claude-brand-new-9");
+
+        var stats = PanelStatistics.Build(_store, Now);
+
+        Assert.Null(stats.Est31DaysUsd);
+        Assert.Contains("claude-brand-new-9", stats.UnpricedModels);
     }
 }

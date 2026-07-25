@@ -30,6 +30,14 @@ public sealed record PanelStatistics(
     DivergenceResult? Divergence = null,
     decimal? EstOffPlanUsd = null)
 {
+    /// <summary>
+    /// Model IDs seen in the window that have no published rate, so their tokens are
+    /// excluded from the Est. figures. Surfaced in the UI rather than silently dropped —
+    /// and, crucially, they no longer void the whole total: a single unrecognised model
+    /// (a newly released Claude, say) used to blank both "Est. value" tiles entirely.
+    /// </summary>
+    public IReadOnlyList<string> UnpricedModels { get; init; } = [];
+
     public bool HasPartialHistory => RecordedDays < WindowDays;
 
     /// <summary>True when work in the current session window is not drawing from the plan.</summary>
@@ -89,30 +97,55 @@ public sealed record PanelStatistics(
         // inferred, not read, and what it can miss.
         var creditRollups = rollups.Where(r => CreditBilledModels.IsCreditBilled(r.Model)).ToList();
 
+        var est31 = EstimateTotal(rollups, out var unpriced);
+
         return new PanelStatistics(
             todayRollups.Sum(r => r.TotalTokens),
             EstimateTotal(todayRollups),
             rollups.Sum(r => r.TotalTokens),
-            EstimateTotal(rollups),
+            est31,
             store.CountRecordedDays(windowStart, today),
             windowDays,
             series,
             creditRollups.Sum(r => r.TotalTokens),
-            EstimateTotal(creditRollups));
+            EstimateTotal(creditRollups))
+        {
+            UnpricedModels = unpriced,
+        };
     }
 
-    /// <summary>Null when any contributing model is unpriced — never a partial sum.</summary>
-    private static decimal? EstimateTotal(IReadOnlyList<DailyRollup> rollups)
+    /// <summary>
+    /// Sums the priced rollups. Null only when there was something to price and NOTHING
+    /// could be priced — an honest "unknown". Otherwise it returns the priced subtotal and
+    /// reports the excluded models via <paramref name="unpriced"/>, so the UI can state the
+    /// gap instead of blanking. Previously any single unpriced model returned null, which
+    /// meant one unrecognised model id voided both Est. tiles even when 99% of the tokens
+    /// were priceable (CLAUDE.md rule 6 is "explain the uncertainty", not "show nothing").
+    /// </summary>
+    private static decimal? EstimateTotal(IReadOnlyList<DailyRollup> rollups, out IReadOnlyList<string> unpriced)
     {
         decimal total = 0;
+        var priced = 0;
+        var missing = new List<string>();
+
         foreach (var r in rollups)
         {
-            if (CostEstimator.EstimateUsd(r.Model, r.InputTokens, r.CacheCreationTokens, r.CacheReadTokens, r.OutputTokens) is not { } usd)
+            if (CostEstimator.EstimateUsd(r.Model, r.InputTokens, r.CacheCreationTokens, r.CacheReadTokens, r.OutputTokens) is { } usd)
             {
-                return null;
+                total += usd;
+                priced++;
             }
-            total += usd;
+            else if (!missing.Contains(r.Model, StringComparer.OrdinalIgnoreCase))
+            {
+                missing.Add(r.Model);
+            }
         }
-        return total;
+
+        unpriced = missing;
+        return rollups.Count > 0 && priced == 0 ? null : total;
     }
+
+    /// <summary>Overload for callers that don't surface the excluded-model list.</summary>
+    private static decimal? EstimateTotal(IReadOnlyList<DailyRollup> rollups) =>
+        EstimateTotal(rollups, out _);
 }

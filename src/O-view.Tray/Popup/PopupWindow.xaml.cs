@@ -119,10 +119,17 @@ public partial class PopupWindow : Window
         PopulateDivergence(stats);
 
         // Partial history states its coverage — a small number without this caveat
-        // reads as low usage rather than short history (ADR-0006).
+        // reads as low usage rather than short history (ADR-0006). An unpriced model is
+        // the same class of caveat: the total is real but incomplete, so say which model
+        // is missing rather than letting the figure read as the whole picture.
         var coverage = stats.HasPartialHistory
             ? $"{stats.RecordedDays} of {stats.WindowDays} days recorded"
             : "";
+        if (stats.UnpricedModels.Count > 0)
+        {
+            var excluded = $"excludes {string.Join(", ", stats.UnpricedModels)} (no published rate)";
+            coverage = coverage.Length > 0 ? $"{coverage} · {excluded}" : excluded;
+        }
         TileCoverage31.Text = coverage;
         TileCoverage31b.Text = coverage;
 

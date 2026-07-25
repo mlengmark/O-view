@@ -41,4 +41,31 @@ public class CostEstimatorTests
         Assert.Equal(1.00m, haiku);
         Assert.Equal(10.00m, fable);
     }
+
+    [Fact]
+    public void Opus5_IsPriced_AtPublishedRate()
+    {
+        // claude-opus-5 appeared in real transcripts but had no entry, so every "Est.
+        // value" tile that included it blanked. Published rate: $5 in / $25 out per MTok.
+        Assert.Equal(5.00m, CostEstimator.EstimateUsd("claude-opus-5", 1_000_000, 0, 0, 0));
+        Assert.Equal(25.00m, CostEstimator.EstimateUsd("claude-opus-5", 0, 0, 0, 1_000_000));
+        // A dated snapshot of the same model must resolve via the prefix.
+        Assert.Equal(5.00m, CostEstimator.EstimateUsd("claude-opus-5-20260501", 1_000_000, 0, 0, 0));
+    }
+
+    [Fact]
+    public void Opus5_DoesNotCollideWithOpus4Prefixes()
+    {
+        Assert.Equal(5.00m, CostEstimator.EstimateUsd("claude-opus-4-8", 1_000_000, 0, 0, 0));
+        Assert.Equal(5.00m, CostEstimator.EstimateUsd("claude-opus-5", 1_000_000, 0, 0, 0));
+    }
+
+    [Fact]
+    public void SyntheticRecords_AreFree_NotUnpriced()
+    {
+        // Claude Code's placeholder for locally generated messages — no API call happened,
+        // so the value is zero, not unknown. Returning null here voided whole-day totals.
+        Assert.True(CostEstimator.IsNonBillable("<synthetic>"));
+        Assert.Equal(0m, CostEstimator.EstimateUsd("<synthetic>", 5_000, 0, 0, 5_000));
+    }
 }
