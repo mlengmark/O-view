@@ -42,19 +42,27 @@ public sealed record PlanHistoryReport(
     TimeSpan? LatestSampleAge,
     string? Detail)
 {
-    /// <summary>Short user-facing explanation for the popup when figures read "unknown".</summary>
+    /// <summary>
+    /// Short user-facing explanation for the popup when figures read "unknown".
+    /// States what O-view observed — never what it assumes about the user's setup. The
+    /// first version of this text told users to "install and run the Claude Desktop app",
+    /// which was flatly wrong for a user who had it open at the time: a file O-view cannot
+    /// read is not evidence that Desktop is absent. Report the observation and the path,
+    /// and let the reader draw the conclusion (CLAUDE.md rule 6).
+    /// </summary>
     public string Explain() => Status switch
     {
         PlanDataStatus.FileMissing =>
-            "Claude Desktop usage data not found — it is the source of session and weekly %. "
-            + "Install and run the Claude Desktop app, then reopen this panel.",
+            $"O-view could not find Claude Desktop's usage file at {Path} — it is the source of "
+            + "session and weekly %. If Claude Desktop is running, use Copy diagnostics from the "
+            + "tray menu to report this; otherwise start Claude Desktop and reopen this panel.",
         PlanDataStatus.Unreadable =>
-            "Claude Desktop's usage file could not be read. Right-click the tray icon → Copy diagnostics to report this.",
+            $"O-view could not read {Path}. Right-click the tray icon → Copy diagnostics to report this.",
         PlanDataStatus.NoValidSamples =>
-            "Claude Desktop's usage file is in an unexpected format, so no usage could be read. "
+            $"O-view read {Path} but found no usage entries in the expected format. "
             + "Right-click the tray icon → Copy diagnostics to report this.",
         PlanDataStatus.Stale =>
-            "Claude Desktop has not recorded usage recently — figures may lag until it is running again.",
+            "Claude Desktop has not recorded usage recently — figures may lag until it records again.",
         _ => "",
     };
 
