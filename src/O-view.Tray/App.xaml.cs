@@ -51,6 +51,17 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        // Writes the same report as the Copy diagnostics menu item and exits. Handled
+        // BEFORE the single-instance mutex so it can be run against a machine where
+        // O-view is already running, without disturbing the live instance — the case
+        // where a "no usage data" report actually needs diagnosing.
+        if (args.TryGetValue("--diagnose", out var diagnoseTo))
+        {
+            WriteDiagnostics(diagnoseTo);
+            Shutdown();
+            return;
+        }
+
         // Two instances would mean two icons and double polling (ADR-0003 item 7).
         _instanceMutex = new Mutex(initiallyOwned: true, "OView.Tray.SingleInstance", out var isFirstInstance);
         if (!isFirstInstance)
@@ -316,11 +327,46 @@ public partial class App : System.Windows.Application
     /// </summary>
     private void CopyDiagnostics()
     {
+        try
+        {
+            System.Windows.Clipboard.SetText(BuildDiagnostics());
+            _trayHost?.ShowNotification("Diagnostics copied",
+                "Paste them into your bug report. No tokens or conversation content are included.");
+        }
+        catch (Exception)
+        {
+            // The clipboard can be locked by another process; failing to copy must not crash.
+            _trayHost?.ShowNotification("Couldn't copy diagnostics",
+                "The clipboard was unavailable. Please try again.");
+        }
+    }
+
+    /// <summary>Writes the diagnostics report to a file (the --diagnose hook).</summary>
+    private static void WriteDiagnostics(string? path)
+    {
+        var target = path is { Length: > 0 } p ? p : "oview-diagnostics.txt";
+        try
+        {
+            File.WriteAllText(target, BuildDiagnostics());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Diagnostic hook — a failure here must not surface as a crash dialog.
+        }
+    }
+
+    private static string BuildDiagnostics()
+    {
         var report = PlanHistoryDiagnostics.Inspect();
         var account = ClaudeAccount.TryRead();
 
         var text = new System.Text.StringBuilder();
         text.Append(report.ToClipboardText(UpdateService.CurrentVersion));
+        // The resolved roots matter: if SpecialFolder resolution ever returns something
+        // unexpected, the path above is wrong and every other field is a consequence.
+        text.AppendLine($"  appdata root  : {Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)}");
+        text.AppendLine($"  user profile  : {Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)}");
+        text.AppendLine($"  process       : {Environment.ProcessPath}");
         text.AppendLine($"  installed     : {UpdateService.IsInstalled}");
         text.AppendLine($"  account file  : {(account is null ? "not readable" : "read ok")}"
                         + $" (org {account?.OrganizationUuid ?? "n/a"}, tier {account?.Tier ?? "n/a"})");
@@ -340,20 +386,7 @@ public partial class App : System.Windows.Application
             // Count is diagnostic only.
         }
         text.AppendLine($"  transcripts   : {transcripts} .jsonl under {projects}");
-        text.AppendLine($"  latest source : {_controller?.Latest.Source.ToString() ?? "n/a"}");
-
-        try
-        {
-            System.Windows.Clipboard.SetText(text.ToString());
-            _trayHost?.ShowNotification("Diagnostics copied",
-                "Paste them into your bug report. No tokens or conversation content are included.");
-        }
-        catch (Exception)
-        {
-            // The clipboard can be locked by another process; failing to copy must not crash.
-            _trayHost?.ShowNotification("Couldn't copy diagnostics",
-                "The clipboard was unavailable. Please try again.");
-        }
+        return text.ToString();
     }
 
     /// <summary>

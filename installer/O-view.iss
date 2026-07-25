@@ -96,7 +96,18 @@ Filename: "{app}\{#AppExeName}"; Description: "Launch {#AppName} now"; \
 ; entry (not a postinstall action, therefore it runs even silently) relaunches the app once
 ; the upgrade is applied. A normal user install does not pass /update, so WantsRelaunch is
 ; false and this is skipped — no double launch.
-Filename: "{app}\{#AppExeName}"; Flags: nowait; Check: WantsRelaunch
+;
+; Launched THROUGH EXPLORER, not directly. A process started as a child of the installer
+; inherits the installer's token and environment; an instance relaunched that way was
+; observed to be permanently unable to read %APPDATA%\Claude\plan-usage-history.json —
+; File.Exists returned false for a path that was correct, present, and readable by every
+; other process of the same user, and it never recovered across hours of 60 s polls. A
+; freshly launched instance of the same exe read it immediately. Handing the launch to
+; explorer.exe re-parents the app to the shell, so it starts with the ordinary interactive
+; user context instead of whatever it inherits mid-install. Explorer returns at once, hence
+; nowait and no window flash.
+Filename: "{win}\explorer.exe"; Parameters: """{app}\{#AppExeName}"""; \
+    Flags: nowait; Check: WantsRelaunch
 
 [Code]
 // True only when launched by the in-app updater as "...\O-view-Setup.exe /update=1".

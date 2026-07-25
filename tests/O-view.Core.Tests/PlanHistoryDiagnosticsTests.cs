@@ -51,7 +51,21 @@ public class PlanHistoryDiagnosticsTests : IDisposable
         Assert.Equal(PlanDataStatus.NoValidSamples, report.Status);
         Assert.Equal(1, report.RawSampleCount);
         Assert.Equal(0, report.ValidSampleCount);
-        Assert.Contains("unexpected format", report.Explain());
+        Assert.Contains("expected format", report.Explain());
+    }
+
+    [Fact]
+    public void Explanations_state_the_observation_not_an_assumption()
+    {
+        // A user with Claude Desktop open was told to "install and run the Claude Desktop
+        // app" — an assertion O-view had no basis for. Every explanation must name the
+        // path it actually looked at, and must not claim Desktop is absent.
+        var missing = PlanHistoryDiagnostics.Inspect(Path.Combine(_dir, "absent.json"));
+        Assert.Contains("absent.json", missing.Explain());
+        Assert.DoesNotContain("Install and run", missing.Explain(), StringComparison.OrdinalIgnoreCase);
+
+        var unreadable = PlanHistoryDiagnostics.Inspect(Write("not json"));
+        Assert.Contains("plan-usage-history.json", unreadable.Explain());
     }
 
     [Fact]
