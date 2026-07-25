@@ -133,6 +133,23 @@ public partial class PopupWindow : Window
         TileCoverage31.Text = coverage;
         TileCoverage31b.Text = coverage;
 
+        // Nothing recorded at all, while the plan meters show real usage: the tiles are
+        // measuring a source this user does not feed, not measuring zero usage. Say which
+        // source, so the 0 is interpretable instead of looking broken.
+        if (stats.RecordedDays == 0 && authoritative && snapshot.SessionPercent is > 0)
+        {
+            TokenScopeNote.Text =
+                "No Claude Code usage recorded. Token counts and Est. value are read from Claude Code "
+                + "transcripts (%USERPROFILE%\\.claude\\projects) — chats in the Claude Desktop app do "
+                + "not produce these, so they are not counted here. The session and weekly bars above "
+                + "come from Claude Desktop itself and do cover all of your usage.";
+            TokenScopeNote.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            TokenScopeNote.Visibility = Visibility.Collapsed;
+        }
+
         // BuildGraph is deferred to ShowNearTrayIcon (needs post-layout ActualWidth).
     }
 

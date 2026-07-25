@@ -371,21 +371,33 @@ public partial class App : System.Windows.Application
         text.AppendLine($"  account file  : {(account is null ? "not readable" : "read ok")}"
                         + $" (org {account?.OrganizationUuid ?? "n/a"}, tier {account?.Tier ?? "n/a"})");
 
-        // The token tiles come from the JSONL transcripts, a different source entirely —
-        // if those are blank too, the cause is broader than plan-history.
+        // The token tiles come from Claude Code transcripts, a different source entirely.
+        // Size and recency matter as much as the count: four empty or long-stale files
+        // produce a legitimate zero, whereas fat, freshly written files pointing at a zero
+        // total would mean ingestion is broken. A bare count cannot tell those apart.
         var projects = ClaudeProjectsLocator.DefaultRoot;
-        var transcripts = 0;
-        try
+        var files = ClaudeProjectsLocator.FindTranscripts(projects);
+        long bytes = 0;
+        DateTime newest = DateTime.MinValue;
+        foreach (var f in files)
         {
-            transcripts = Directory.Exists(projects)
-                ? Directory.GetFiles(projects, "*.jsonl", SearchOption.AllDirectories).Length
-                : 0;
+            try
+            {
+                var info = new FileInfo(f);
+                bytes += info.Length;
+                if (info.LastWriteTimeUtc > newest)
+                {
+                    newest = info.LastWriteTimeUtc;
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                // Per-file stat is diagnostic only.
+            }
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // Count is diagnostic only.
-        }
-        text.AppendLine($"  transcripts   : {transcripts} .jsonl under {projects}");
+
+        text.AppendLine($"  transcripts   : {files.Count} .jsonl, {bytes:N0} bytes total under {projects}");
+        text.AppendLine($"  newest transcript: {(newest == DateTime.MinValue ? "n/a" : $"{(DateTime.UtcNow - newest).TotalHours:0.0} h old")}");
         return text.ToString();
     }
 

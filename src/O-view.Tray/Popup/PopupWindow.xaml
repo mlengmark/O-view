@@ -121,6 +121,14 @@
                 </Border>
             </UniformGrid>
 
+            <!-- Scope note. The bars above and the tiles here measure DIFFERENT things:
+                 the plan meters cover all Claude usage, the token tiles only usage that
+                 leaves a Claude Code transcript. A Desktop-only user therefore sees a
+                 non-zero session % beside 0 tokens, and a bare "0" reads as "you used
+                 nothing" rather than "this counts something else". -->
+            <TextBlock x:Name="TokenScopeNote" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"
+                       Foreground="{DynamicResource TextSecondary}" Visibility="Collapsed"/>
+
             <!-- Usage graph: daily bars, calendar-week gridlines, blue-by-week intensity,
                  vertical date labels, hover tooltips (issues #4, #5) -->
             <TextBlock Text="Usage · last 31 days" FontSize="12" FontWeight="SemiBold" Margin="0,14,0,6"
