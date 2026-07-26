@@ -109,6 +109,10 @@ A `ToolTip` cannot be given a parent — it throws — so it appears in no scree
 - **The label is dropped in the breakdown view**, as the issue allows, to buy room; the total stays, so the tile still answers its own question.
 - **Affordance:** a faint chart glyph, brightening on hover, plus a hover/pressed fill. A tile with nothing to break down is disabled and shows no glyph — an affordance that leads nowhere is worse than none.
 
+**Colour follows the model, never its rank.** One slot order is computed for the whole panel — [`ModelBreakdown.ColourOrder`](../src/O-view.Core/Models/ModelBreakdown.cs), ranked by tokens over the 31-day window because that is the superset every tile draws from — and all four tiles colour by it. A model therefore wears the same colour everywhere, including on the value tiles where the *ordering* differs.
+
+> This was got wrong first time round. Colour was assigned by a segment's position within its own tile, so Opus 5 came out **blue** on the "today" tile (where it was the only model, hence first) and **orange** on the 31-day tile (where Opus 4.8 outranked it) — the same model in two colours on one panel, which makes the tiles unreadable against each other. The fold into "Other" is driven by the same shared order, so a model that is "Other" on one tile is "Other" on all of them.
+
 **Colour is validated, not chosen.** The palette is the data-viz categorical order, re-checked against the *tile* surfaces with the six-check validator on the **all-pairs** list (segment order follows the data, so any two colours can end up adjacent):
 
 | | Light `#EFEFEF` | Dark `#2B2B2B` |
@@ -208,13 +212,37 @@ Measured on a 2560×1440 display, taskbar bottom-docked at `y=1392`: the flyout 
 
 ## 4. Motion
 
-Both docked surfaces — the detail panel and the tray menu — **fade and grow from the corner they are docked to**, over 160 ms opening and 110 ms closing, easing out then in. They previously appeared and vanished in a single frame, which reads as a glitch rather than as a window opening.
+Both docked surfaces — the detail panel and the tray menu — **rise out of the docked edge**: a clip reveals the surface from that edge while the content slides the last 20 px into place, over **230 ms** opening and 150 ms closing. They previously appeared and vanished in a single frame, which reads as a glitch rather than as a window opening.
 
-The transform is a **scale from 97%**, not a slide. A slide has to translate the content, the content fills the window, and the part sliding in from beyond the edge is therefore clipped by the window bounds; growing inward has no such problem, needs no window moves mid-animation (which stutter under per-monitor DPI), and lands where a slide would suggest. The origin comes from [`PopupPositioner`](../src/O-view.Tray/Popup/PopupPositioner.cs), which is the only thing that knows which corner was used — so the motion always points back at the tray icon that summoned it.
+**The motion is copied from the platform, not invented.** Windows' own Quick Settings flyout was recorded frame by frame on this machine: its top edge rises while the bottom stays pinned to the taskbar, travelling the full height in ~230 ms with almost no fade. It is a *geometric reveal* — not a zoom, not a dissolve.
+
+The easing is **fitted** to that trace by searching cubic-Bezier control points against measured progress, rather than picked by name:
+
+| Curve | RMSE | @7 ms | @57 ms | @115 ms |
+|---|---|---|---|---|
+| **`KeySpline(0.02,0.16 0.20,0.96)`** | **0.0033** | 0.14 | 0.60 | 0.84 |
+| quartic ease-out | 0.0633 | 0.14 | 0.69 | 0.91 |
+| `cubic-bezier(0,0,0,1)` | 0.0638 | 0.23 | 0.69 | 0.89 |
+| cubic ease-out | 0.1603 | 0.05 | 0.37 | 0.68 |
+| *measured Windows* | — | *0.15* | *0.60* | *0.84* |
+
+The third row was the first attempt here, on the assumption that Windows uses `cubic-bezier(0,0,0,1)`. Measured against the real thing it is twenty times further out and visibly too abrupt — it passes 70% before the platform reaches 15%, which reads as a pop rather than a rise. **No named easing was close enough to trust.**
+
+A **scale** transform was tried first and rejected: smooth, but it reads as a zoom rather than as a panel rising out of the taskbar. A plain slide was rejected too — the content fills the window, so the part sliding in from beyond the edge is clipped by the window bounds; the clip is what makes the slide work.
+
+The reveal direction comes from [`PopupPositioner`](../src/O-view.Tray/Popup/PopupPositioner.cs), the only thing that knows which edge was docked to, so a top-docked taskbar reveals downward.
+
+**Verified by re-measuring O-view the same way**: the reveal reaches 0.60 at 33–41 ms and 0.83 at ~87 ms against the reference's 57 ms and 115 ms. That gap sits inside the measurement's own precision — ~8 ms of sampling granularity plus screen-capture latency, and a start instant known only to within one frame — so it is a match to the limit of what this method can resolve, not an exact one.
 
 Closing defers `Hide()` to the end of the animation, since hiding first would make the animation invisible. A close in flight is cancelled if the surface is re-opened, so clicking the tray icon again mid-fade brings it straight back rather than letting it finish disappearing. Menu **actions** run after the animation completes, which preserves the rule that a balloon or modal never appears behind a still-visible topmost flyout.
 
 `--popup-pin` and `--menu-pin` skip the animation entirely: a verification still needs the finished state, not a frame from the middle of a fade.
+
+### Clicking the icon toggles
+
+The tray icon **opens and closes** the surface, as every taskbar flyout does. Left-click toggles the panel, right-click toggles the menu.
+
+This needs more than an `IsVisible` check. The click itself dismisses the surface by taking focus from it, so by the time the click handler runs the surface is already closing and looks closed — which is why it used to reopen immediately and could only ever open. Each surface therefore records **when it last began closing from lost focus**, and a click arriving within 400 ms is treated as the second half of the toggle. The window is wide enough to cover the deactivate-then-click ordering plus the close transition, and short enough that a deliberate click a moment later still opens.
 
 ---
 

@@ -38,12 +38,38 @@ public partial class PopupWindow : Window
     /// <summary>Guards the close transition against a re-open landing mid-fade.</summary>
     private bool _closing;
 
+    /// <summary>
+    /// When the panel last began closing because it lost focus. Clicking the tray icon
+    /// while the panel is open deactivates it — so by the time the click arrives the
+    /// panel is already closing, and re-showing it would make the icon impossible to
+    /// toggle with. <see cref="ClosedByClickAway"/> lets the caller tell the two cases
+    /// apart.
+    /// </summary>
+    private DateTimeOffset _closedAt = DateTimeOffset.MinValue;
+
+    /// <summary>
+    /// True if the panel dismissed itself a moment ago, which for a tray click means the
+    /// click was the dismissal — so it should NOT reopen.
+    ///
+    /// The window is generous enough to cover the deactivate-then-click ordering and the
+    /// close transition, and short enough that a deliberate second click a moment later
+    /// still opens the panel.
+    /// </summary>
+    public bool ClosedByClickAway =>
+        DateTimeOffset.UtcNow - _closedAt < TimeSpan.FromMilliseconds(400);
+
     public PopupWindow()
     {
         InitializeComponent();
         Deactivated += (_, _) => { if (!PinForVerification) BeginClose(); };
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) BeginClose(); };
     }
+
+    /// <summary>
+    /// Closes the panel from outside — the tray icon completing a toggle. Idempotent, so
+    /// a click that arrives while the panel is already closing changes nothing.
+    /// </summary>
+    public void DismissNow() => BeginClose();
 
     /// <summary>
     /// Fades and shrinks back into the docked corner, then hides. The Hide() is deferred
@@ -58,6 +84,7 @@ public partial class PopupWindow : Window
         }
 
         _closing = true;
+        _closedAt = DateTimeOffset.UtcNow;
         FlyoutAnimation.Close(this, _dockOrigin, () =>
         {
             // Re-checked because 110ms is long enough for the tray icon to be clicked
@@ -214,24 +241,24 @@ public partial class PopupWindow : Window
         TileTokensToday.FormatSlice = s => FormatTokens(s.Tokens);
         TileTokensToday.Populate(
             "Tokens today", FormatTokens(stats.TokensToday), "",
-            stats.ModelsToday, BreakdownMeasure.Tokens);
+            stats.ModelsToday, BreakdownMeasure.Tokens, stats.ModelColourOrder);
 
         TileEstToday.FormatSlice = s => FormatUsd(s.EstUsd);
         TileEstToday.Populate(
             offPlan ? "Est. spend today" : "Est. value today",
             FormatUsd(stats.EstTodayUsd),
             offPlan ? "incl. off-plan usage" : "",
-            stats.ModelsToday, BreakdownMeasure.EstValue);
+            stats.ModelsToday, BreakdownMeasure.EstValue, stats.ModelColourOrder);
 
         TileTokens31.FormatSlice = s => FormatTokens(s.Tokens);
         TileTokens31.Populate(
             "Tokens · 31 days", FormatTokens(stats.Tokens31Days), coverage,
-            stats.Models31Days, BreakdownMeasure.Tokens);
+            stats.Models31Days, BreakdownMeasure.Tokens, stats.ModelColourOrder);
 
         TileEst31.FormatSlice = s => FormatUsd(s.EstUsd);
         TileEst31.Populate(
             "Est. value · 31 days", FormatUsd(stats.Est31DaysUsd), coverage,
-            stats.Models31Days, BreakdownMeasure.EstValue);
+            stats.Models31Days, BreakdownMeasure.EstValue, stats.ModelColourOrder);
     }
 
     /// <summary>
