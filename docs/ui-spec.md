@@ -109,7 +109,7 @@ A notification fires once per onset (edge-triggered, re-armed when it clears). W
 
 - Shows **estimated credit spend over 31 days**, the API-rate value of usage on credit-billed models ([`CreditBilledModels`](../src/O-view.Core/Models/CreditBilledModels.cs) — currently Fable, the one case verified against billing).
 - **Why not a lookback classifier:** there is no per-request billing-tier field (`service_tier` is uniformly `"standard"`, even on requests known to have billed to credits), and the plan meter's short retention makes retroactive divergence impossible. So the 31-day figure is a per-model estimate, not a per-request fact — hence the explicit "models billed as extra usage (Fable)" caption.
-- Carries the same coverage caveat as the other 31-day tiles (`N of 31 days recorded`) and the standard caveats: published API rates, deduplicated locally, an upper bound (bundles discount up to 30%), balance unreadable — check billing for exact.
+- Carries the same coverage caveat as the other 31-day tiles (`N of 31 days recorded`) and, since [issue #32](https://github.com/mlengmark/O-view/issues/32), a **two-clause** caption: published API rates, balance unreadable — check billing for exact. The mechanics that used to be spelled out here (deduplicated locally; an upper bound, as bundles discount up to 30%) were cut for space — they described *how* the estimate is built, whereas the two clauses kept are the ones that stop the figure being read as money charged, which is what rule 6 actually requires.
 
 The two registers are independent by design: the 31-day figure shows even when the current session is on-plan, and the live banner shows even before any credit spend has accrued.
 

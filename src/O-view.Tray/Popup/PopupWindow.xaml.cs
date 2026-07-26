@@ -196,8 +196,10 @@ public partial class PopupWindow : Window
             CreditsCoverage.Text = stats.HasPartialHistory
                 ? $"{stats.RecordedDays} of {stats.WindowDays} days recorded"
                 : "";
-            CreditsNote.Text = $"Estimated at published API rates for models billed as extra usage ({CreditBilledModels.DisplayList}), "
-                + "deduplicated from local transcripts. An upper bound — usage bundles discount up to 30%. "
+            // Issue #32: trimmed to two clauses. What remains still carries the rule-6
+            // caveat — "Estimated at published API rates" and "check your billing page for
+            // exact figures" both say this is not the charged number.
+            CreditsNote.Text = $"Estimated at published API rates for models billed as extra usage ({CreditBilledModels.DisplayList}). "
                 + "O-view cannot read your credit balance; check your billing page for exact figures.";
         }
         else
