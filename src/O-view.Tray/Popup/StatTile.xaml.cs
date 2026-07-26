@@ -314,6 +314,10 @@ public partial class StatTile : UserControl
     {
         var content = new StackPanel { MaxWidth = 220 };
 
+        // Swatch beside the figure, with no name above it. The friendly name was a third
+        // line saying what the line below already says, and it made a card that only
+        // carries two facts look heavy. The swatch stays: it is what ties a card floating
+        // clear of the bar back to the colour actually being pointed at.
         var heading = new StackPanel { Orientation = Orientation.Horizontal };
         heading.Children.Add(new Border
         {
@@ -325,8 +329,8 @@ public partial class StatTile : UserControl
         });
         heading.Children.Add(new TextBlock
         {
-            Text = slice.DisplayName,
-            FontSize = 11,
+            Text = FormatSlice(slice),
+            FontSize = 15,
             FontWeight = FontWeights.SemiBold,
             Margin = new Thickness(6, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
@@ -334,31 +338,20 @@ public partial class StatTile : UserControl
         });
         content.Children.Add(heading);
 
+        // Always shown, now that it is the only text naming the row. It used to be
+        // suppressed when it matched the friendly name — which is exactly the case for
+        // an UNRECOGNISED model, where DisplayName IS the raw id. Dropping the title
+        // without this would have left those cards showing a number and nothing else.
         content.Children.Add(new TextBlock
         {
-            Text = FormatSlice(slice),
-            FontSize = 15,
-            FontWeight = FontWeights.SemiBold,
+            Text = slice.DisplayName == ModelDisplayName.Other
+                ? $"{slice.Model} models"
+                : slice.Model,
+            FontSize = 10,
             Margin = new Thickness(0, 3, 0, 0),
-            Foreground = (Brush)FindResource("TextPrimary"),
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)FindResource("TextMuted"),
         });
-
-        // What the row actually is: the raw model id, or — for the folded bucket — how
-        // many models it stands for, so "Other" is never an unexplained slice.
-        var detail = slice.DisplayName == ModelDisplayName.Other
-            ? $"{slice.Model} models"
-            : slice.Model;
-        if (detail != slice.DisplayName)
-        {
-            content.Children.Add(new TextBlock
-            {
-                Text = detail,
-                FontSize = 10,
-                Margin = new Thickness(0, 2, 0, 0),
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = (Brush)FindResource("TextMuted"),
-            });
-        }
 
         return new ToolTip
         {

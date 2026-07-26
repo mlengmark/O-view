@@ -84,7 +84,11 @@ Every tile is clickable and flips in place between its total and a **stacked bar
 
 **The hover card is styled, not system chrome.** A default WPF tooltip is a pale rectangle with a hard border and nothing to do with the rest of the app, so the template is replaced outright: the panel's rounded 6px card, its palette, its type. It sits on its own `TooltipBg` / `TooltipBorder` step — brighter than the panel in light, lighter than the tile in dark — so it reads as floating *above* the tile rather than as part of it, with a soft drop shadow for the same reason.
 
-The card carries a **colour swatch, the model name, the figure**, and the raw model id beneath (or `N more models` for the folded bucket, so "Other" is never an unexplained slice). The swatch is the load-bearing part: a floating card otherwise loses its connection to the exact colour being pointed at.
+The card carries two lines only: a **colour swatch beside the figure**, and the **raw model id** beneath (or `N more models` for the folded bucket, so "Other" is never an unexplained slice). There is deliberately no friendly-name heading — it restated the line below it and made a card holding two facts look heavy.
+
+The swatch is the load-bearing part and stays: a card floating clear of the bar otherwise loses its connection to the exact colour being pointed at.
+
+> The id line is **always** rendered. It used to be suppressed when it matched the friendly name — which is precisely the case for an **unrecognised** model, where `ModelDisplayName` returns the raw id unchanged. Dropping the heading without this would have left exactly those cards showing a number and nothing identifying it.
 
 A `ToolTip` cannot be given a parent — it throws — so it appears in no screenshot of the panel and cannot be laid out inside one. `--tile-samples` therefore renders the cards standalone to `hover-cards-<theme>.png`, with the palette written into each card's own resources so its `DynamicResource` lookups resolve with no tree above them to walk.
 

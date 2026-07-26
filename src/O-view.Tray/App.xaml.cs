@@ -702,6 +702,10 @@ public partial class App : System.Windows.Application
                         pending[6].Tile.BuildSampleTooltip(0),   // 5-models: named model, tokens
                         pending[6].Tile.BuildSampleTooltip(2),   // 5-models: folded "Other"
                         pending[7].Tile.BuildSampleTooltip(0),   // 5-models: named model, est. value
+                        // An UNRECOGNISED model, where the friendly name is the raw id.
+                        // Included because that is the case where dropping the card's
+                        // title could have left nothing naming the row at all.
+                        pending[8].Tile.BuildSampleTooltip(1),
                     ]);
                 }
 
