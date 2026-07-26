@@ -1,0 +1,140 @@
+<Window x:Class="OView.Tray.Popup.MenuWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="272" SizeToContent="Height"
+        WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False"
+        Topmost="True" AllowsTransparency="True" Background="Transparent"
+        TextOptions.TextFormattingMode="Display">
+
+    <Window.Resources>
+        <!-- Brand arc gradient, lifted from brand/o-view-mark.svg so the flyout's mark
+             matches the tray icon and the exe icon rather than approximating them. -->
+        <LinearGradientBrush x:Key="BrandArc" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#F4A17A" Offset="0"/>
+            <GradientStop Color="#D9603A" Offset="1"/>
+        </LinearGradientBrush>
+
+        <!-- One row = one Button. Buttons rather than bare Borders so rows keep keyboard
+             focus, Space/Enter activation and the pressed state for free; the template
+             strips the chrome down to a rounded hover fill. -->
+        <Style x:Key="MenuRow" TargetType="Button">
+            <Setter Property="Height" Value="34"/>
+            <Setter Property="Padding" Value="8,0"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="6" Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter VerticalAlignment="Center"
+                                              HorizontalAlignment="Stretch"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background"
+                                        Value="{DynamicResource RowHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bd" Property="Background"
+                                        Value="{DynamicResource RowHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background"
+                                        Value="{DynamicResource RowPressed}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Checkmark drawn as a Path, not a font glyph: Segoe Fluent Icons is not on
+             every supported build and a missing glyph renders as tofu. -->
+        <Style x:Key="RowCheck" TargetType="Path">
+            <Setter Property="Data" Value="M0,4.4 L3.5,7.9 L9.8,1.1"/>
+            <Setter Property="Stroke" Value="{StaticResource BrandArc}"/>
+            <Setter Property="StrokeThickness" Value="1.9"/>
+            <Setter Property="StrokeStartLineCap" Value="Round"/>
+            <Setter Property="StrokeEndLineCap" Value="Round"/>
+            <Setter Property="StrokeLineJoin" Value="Round"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+        </Style>
+
+        <Style x:Key="RowLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+        </Style>
+    </Window.Resources>
+
+    <Border Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource PanelBorder}"
+            BorderThickness="1" CornerRadius="10" Padding="6">
+        <!-- StackPanel + SizeToContent="Height": adding a row needs no measurement
+             anywhere else, and the docked placement re-reads ActualHeight on every
+             open, so a taller menu still clears the taskbar (issue #33). -->
+        <StackPanel>
+
+            <!-- Header. The flyout opens in a fixed corner rather than under the cursor,
+                 so it says what it is: detached placement without a label reads as a
+                 stray window. -->
+            <Grid Margin="8,4,8,7">
+                <StackPanel Orientation="Horizontal">
+                    <Grid Width="15" Height="15" VerticalAlignment="Center">
+                        <Ellipse Width="15" Height="15" Stroke="{StaticResource BrandArc}"
+                                 StrokeThickness="2.4"/>
+                        <Ellipse Width="5" Height="5" Fill="{StaticResource BrandArc}"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Grid>
+                    <TextBlock Text="O-view" FontSize="12" FontWeight="SemiBold" Margin="8,0,0,0"
+                               VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
+                </StackPanel>
+                <TextBlock x:Name="VersionText" FontSize="10" HorizontalAlignment="Right"
+                           VerticalAlignment="Center" Foreground="{DynamicResource TextMuted}"/>
+            </Grid>
+
+            <Button x:Name="StartupRow" Style="{StaticResource MenuRow}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="22"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Path x:Name="StartupCheck" Grid.Column="0" Style="{StaticResource RowCheck}"/>
+                    <TextBlock Grid.Column="1" Text="Run at startup" Style="{StaticResource RowLabel}"/>
+                </Grid>
+            </Button>
+
+            <Button x:Name="NotifyRow" Style="{StaticResource MenuRow}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="22"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Path x:Name="NotifyCheck" Grid.Column="0" Style="{StaticResource RowCheck}"/>
+                    <TextBlock x:Name="NotifyLabel" Grid.Column="1" Style="{StaticResource RowLabel}"/>
+                </Grid>
+            </Button>
+
+            <Border Height="1" Background="{DynamicResource PanelBorder}" Margin="8,5,8,5"/>
+
+            <Button x:Name="DiagnosticsRow" Style="{StaticResource MenuRow}">
+                <TextBlock Text="Copy diagnostics" Style="{StaticResource RowLabel}" Margin="22,0,0,0"/>
+            </Button>
+
+            <Button x:Name="UpdatesRow" Style="{StaticResource MenuRow}">
+                <TextBlock Text="Check for updates…" Style="{StaticResource RowLabel}" Margin="22,0,0,0"/>
+            </Button>
+
+            <Button x:Name="ExitRow" Style="{StaticResource MenuRow}">
+                <TextBlock Text="Exit O-view" Style="{StaticResource RowLabel}" Margin="22,0,0,0"/>
+            </Button>
+
+        </StackPanel>
+    </Border>
+</Window>

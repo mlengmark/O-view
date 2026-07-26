@@ -2,7 +2,7 @@
 
 **Agreed:** 2026-07-20 · Supersedes the informal layout sketch in the README.
 
-Two surfaces: the always-visible **tray icon**, and the **popup panel** shown when it is clicked.
+Three surfaces: the always-visible **tray icon**, the **popup panel** shown when it is left-clicked, and the **tray menu** flyout shown when it is right-clicked.
 
 ---
 
@@ -118,6 +118,36 @@ The two registers are independent by design: the 31-day figure shows even when t
 Exact credit *balances* remain deferred (no local or API source found). What the section shows is estimated **spend**, not remaining balance.
 
 `Limit Reset Credits` from the original spec could not be mapped to a documented concept and needs clarification.
+
+---
+
+## 3. Tray menu
+
+The right-click surface. Rebuilt as a **docked flyout window** ([GitHub issue #33](https://github.com/mlengmark/O-view/issues/33)), replacing a WPF `ContextMenu` placed at `PlacementMode.MousePoint`.
+
+**Why the cursor placement had to go.** The menu opened wherever the pointer was when the tray icon was hit — and the tray icon sits *inside* the taskbar, so that is reliably the one place a menu cannot fully fit. It clipped into the taskbar and off the screen edge, leaving items unclickable, and every item added made it worse.
+
+**Placement.** The flyout ignores the cursor for positioning and docks to the work-area corner adjacent to the taskbar, through the same [`PopupPositioner`](../src/O-view.Tray/Popup/PopupPositioner.cs) the detail panel uses — one placement model for both surfaces, matching the system flyouts (volume, network, calendar). The work area **excludes the taskbar by definition**, so clearing it is structural, not a margin that happens to be large enough. The cursor still selects which monitor.
+
+**Scaling.** A `StackPanel` under `SizeToContent="Height"`, with `ActualHeight` re-measured on every open. Adding a row needs no change to the placement code, and a taller menu still docks above the taskbar.
+
+**Design.** Roughly 272 px wide, on the panel's own palette ([`PanelTheme`](../src/O-view.Tray/Popup/PanelTheme.cs) — shared with the detail panel so the two surfaces cannot drift apart), rounded 10 px card, 34 px rows with a 6 px rounded hover fill, and a compact header carrying the brand mark and version. The header exists because the flyout appears in a fixed corner rather than under the cursor: detached placement without a label reads as a stray window.
+
+| Row | Kind | Notes |
+|---|---|---|
+| Run at startup | toggle | Re-read from `HKCU\...\Run` on every open |
+| Notify at *N*% session usage | toggle | *N* from settings |
+| Copy diagnostics | action | Support bundle to clipboard |
+| Check for updates… | action | Directly above Exit ([issue #18](https://github.com/mlengmark/O-view/issues/18)) |
+| Exit O-view | action | |
+
+**Toggles leave the flyout open** so the tick confirms the change; **actions close it first**, so a balloon or a modal never appears behind a topmost window.
+
+A tick shows the state as it **actually stands after the write**, not the state requested — a registry write can fail, and a tick claiming otherwise would be a fabricated fact about the machine (rule 6). Checkmarks are drawn as vector `Path` geometry rather than Segoe Fluent Icons glyphs, which are not present on every supported build and would render as tofu.
+
+Rows are `Button`s, so Tab/Space/Enter work; Up/Down is wired explicitly to match the menu behaviour it replaces. Dismissal is Esc or an outside click — the flyout foregrounds its own HWND on open, because a tray-resident app owns no activated window and would otherwise never receive the deactivation that closes it ([issue #11](https://github.com/mlengmark/O-view/issues/11)).
+
+`--menu-samples <dir>` renders the flyout in both themes for visual review. Like `--diagnose`, it is handled **before** the single-instance mutex, so it can be run on a machine where O-view is already running.
 
 ---
 

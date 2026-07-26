@@ -8,7 +8,6 @@ using OView.Core.Models;
 using OView.Core.Providers.PlanHistory;
 using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
-using ColorConverter = System.Windows.Media.ColorConverter;
 using Rectangle = System.Windows.Shapes.Rectangle;
 
 namespace OView.Tray.Popup;
@@ -46,7 +45,7 @@ public partial class PopupWindow : Window
 
     public void ShowNearTrayIcon(UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account)
     {
-        ApplyTheme(ThemeOverride ?? IsAppsLightTheme());
+        PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
         Populate(snapshot, stats, account);
 
         // SizeToContent height is unknown until measured: lay out off-screen, then place.
@@ -373,39 +372,7 @@ public partial class PopupWindow : Window
         ? "$" + v.ToString("0.00", CultureInfo.InvariantCulture)
         : "unknown";
 
-    // ── theming ────────────────────────────────────────────────────────────────
-
-    private static bool IsAppsLightTheme()
-    {
-        try
-        {
-            return Microsoft.Win32.Registry.GetValue(
-                @"HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize",
-                "AppsUseLightTheme", 1) is 1;
-        }
-        catch (Exception ex) when (ex is System.Security.SecurityException or System.IO.IOException)
-        {
-            return true;
-        }
-    }
-
-    private void ApplyTheme(bool light)
-    {
-        SetBrush("PanelBg", light ? "#F9F9F9" : "#202020");
-        SetBrush("PanelBorder", light ? "#D6D6D6" : "#383838");
-        SetBrush("TextPrimary", light ? "#1A1A1A" : "#F0F0F0");
-        SetBrush("TextSecondary", light ? "#555555" : "#B5B5B5");
-        SetBrush("TextMuted", light ? "#8A8A8A" : "#8A8A8A");
-        SetBrush("TileBg", light ? "#EFEFEF" : "#2B2B2B");
-        SetBrush("BarTrack", light ? "#DDDDDD" : "#3A3A3A");
-        SetBrush("BadgeBg", light ? "#E4DCF5" : "#3A3355");
-        SetBrush("BadgeText", light ? "#4A3A85" : "#C7BDEB");
-        SetBrush("WarnBg", light ? "#F7EBD4" : "#453A22");
-        SetBrush("WarnText", light ? "#8A5D00" : "#E3B858");
-    }
-
-    private void SetBrush(string key, string hex) =>
-        Resources[key] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+    // Theming lives in PanelTheme, shared with the tray menu flyout (issue #33).
 }
 
 /// <summary>Bar fill width = track ActualWidth × percent.</summary>
