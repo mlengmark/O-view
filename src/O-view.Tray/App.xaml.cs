@@ -165,6 +165,19 @@ public partial class App : System.Windows.Application
             _simulateDivergence = args.TryGetValue("--simulate-divergence", out var sim) ? sim ?? "diverging" : null;
             ShowPopup();
         }
+
+        // The same for the menu flyout (issue #33). --menu-samples renders it in
+        // isolation; this opens the real thing on the real desktop, which is the only
+        // way to verify the docked placement against a live taskbar and work area.
+        if (args.ContainsKey("--show-menu"))
+        {
+            _menu = CreateMenu();
+            _menu.PinForVerification = args.ContainsKey("--menu-pin");
+            _menu.ThemeOverride = args.TryGetValue("--menu-theme", out var menuTheme)
+                ? menuTheme == "light"
+                : null;
+            ShowMenu();
+        }
     }
 
     private void ShowPopup()

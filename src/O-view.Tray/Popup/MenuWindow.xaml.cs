@@ -110,10 +110,54 @@ public partial class MenuWindow : Window
         // guaranteed the foreground — and without it the flyout never receives the
         // deactivation that dismisses it on an outside click (issue #11, which the old
         // ContextMenu hit for the same reason). Foreground the HWND explicitly.
-        var hwnd = new WindowInteropHelper(this).Handle;
-        if (hwnd != 0)
+        ForceForeground(new WindowInteropHelper(this).Handle);
+    }
+
+    /// <summary>
+    /// Takes the foreground, falling back to AttachThreadInput when the plain request is
+    /// refused.
+    ///
+    /// This is not belt-and-braces. Windows grants SetForegroundWindow only to a process
+    /// that already holds the foreground or received the last input event, and a
+    /// tray-resident app frequently holds neither. Losing that race is not a cosmetic
+    /// failure: the flyout is shown but never activated, so it never fires Deactivated,
+    /// so it stays on screen with no way to dismiss it — a strictly worse bug than the
+    /// clipping this all set out to fix. That was reproduced on the dev machine, not
+    /// theorised. Sharing an input queue with the current foreground thread for the
+    /// duration of the call makes the grant succeed.
+    /// </summary>
+    private static void ForceForeground(nint hwnd)
+    {
+        if (hwnd == 0 || NativeMethods.SetForegroundWindow(hwnd) && NativeMethods.GetForegroundWindow() == hwnd)
+        {
+            return;
+        }
+
+        var foreground = NativeMethods.GetForegroundWindow();
+        if (foreground == 0)
+        {
+            return;
+        }
+
+        var foregroundThread = NativeMethods.GetWindowThreadProcessId(foreground, 0);
+        var ownThread = NativeMethods.GetCurrentThreadId();
+        if (foregroundThread == 0 || foregroundThread == ownThread)
+        {
+            return;
+        }
+
+        if (!NativeMethods.AttachThreadInput(ownThread, foregroundThread, true))
+        {
+            return;
+        }
+
+        try
         {
             NativeMethods.SetForegroundWindow(hwnd);
+        }
+        finally
+        {
+            NativeMethods.AttachThreadInput(ownThread, foregroundThread, false);
         }
     }
 

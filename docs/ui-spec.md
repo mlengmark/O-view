@@ -145,9 +145,13 @@ The right-click surface. Rebuilt as a **docked flyout window** ([GitHub issue #3
 
 A tick shows the state as it **actually stands after the write**, not the state requested — a registry write can fail, and a tick claiming otherwise would be a fabricated fact about the machine (rule 6). Checkmarks are drawn as vector `Path` geometry rather than Segoe Fluent Icons glyphs, which are not present on every supported build and would render as tofu.
 
-Rows are `Button`s, so Tab/Space/Enter work; Up/Down is wired explicitly to match the menu behaviour it replaces. Dismissal is Esc or an outside click — the flyout foregrounds its own HWND on open, because a tray-resident app owns no activated window and would otherwise never receive the deactivation that closes it ([issue #11](https://github.com/mlengmark/O-view/issues/11)).
+Rows are `Button`s, so Tab/Space/Enter work; Up/Down is wired explicitly to match the menu behaviour it replaces.
 
-`--menu-samples <dir>` renders the flyout in both themes for visual review. Like `--diagnose`, it is handled **before** the single-instance mutex, so it can be run on a machine where O-view is already running.
+**Dismissal is Esc or an outside click, and taking the foreground is not optional.** A tray-resident app owns no activated window, so the flyout must foreground its own HWND on open or it never receives the deactivation that closes it ([issue #11](https://github.com/mlengmark/O-view/issues/11)). `SetForegroundWindow` alone is **not sufficient**: Windows grants it only to a process that already holds the foreground or received the last input event, and a tray app frequently holds neither. Losing that race is not cosmetic — the flyout is shown but never activated, so it never fires `Deactivated` and **stays on screen with no way to dismiss it**, which is strictly worse than the clipping this replaced. That was reproduced on a live desktop, then fixed with an `AttachThreadInput` fallback: share an input queue with the current foreground thread for the duration of the call, and the grant succeeds.
+
+**Verification hooks.** `--menu-samples <dir>` renders the flyout in both themes for visual review; `--show-menu` (with optional `--menu-pin`, `--menu-theme`) opens the real thing on the real desktop, which is the only way to check the docked placement against a live taskbar. Like `--diagnose`, `--menu-samples` is handled **before** the single-instance mutex, so it runs on a machine already running O-view.
+
+Measured on a 2560×1440 display, taskbar bottom-docked at `y=1392`: the flyout lands at `2276,1159–2548,1380` — 272×221, inside the work area, 12 px clear of the taskbar and 12 px from the screen edge.
 
 ---
 

@@ -40,4 +40,26 @@ internal static class NativeMethods
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool SetForegroundWindow(nint hWnd);
+
+    /// <summary>
+    /// SetForegroundWindow is not guaranteed: Windows only grants the foreground to a
+    /// process that already holds it or received the last input event, and refuses
+    /// otherwise. A menu that loses that race stays on screen with no way to dismiss it,
+    /// which is <em>worse</em> than the clipping issue #33 set out to fix — verified by
+    /// reproducing it. AttachThreadInput to the current foreground thread makes the two
+    /// threads share an input queue, at which point the grant succeeds; detach again
+    /// immediately. The documented workaround for exactly this case.
+    /// </summary>
+    [DllImport("user32.dll")]
+    internal static extern nint GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    internal static extern uint GetWindowThreadProcessId(nint hWnd, nint processId);
+
+    [DllImport("kernel32.dll")]
+    internal static extern uint GetCurrentThreadId();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool AttachThreadInput(uint attachTo, uint attachFrom, [MarshalAs(UnmanagedType.Bool)] bool attach);
 }
