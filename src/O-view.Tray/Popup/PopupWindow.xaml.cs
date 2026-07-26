@@ -10,6 +10,7 @@ using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
 using ColorConverter = System.Windows.Media.ColorConverter;
 using Rectangle = System.Windows.Shapes.Rectangle;
+using Size = System.Windows.Size;
 
 namespace OView.Tray.Popup;
 
@@ -250,6 +251,10 @@ public partial class PopupWindow : Window
     /// gridlines at Monday boundaries, vertical date labels, and a per-bar hover
     /// tooltip. Pre-install days are blank columns (no bar) — with the date axis, an
     /// empty column reads as "no data" without needing the old caption.
+    ///
+    /// Bar and label are both placed from <see cref="BarCentre"/> (issue #31) so a date
+    /// always sits under the bar it describes; with 31 columns in ~344 px a few pixels
+    /// of drift is enough to make a label read against its neighbour.
     /// </summary>
     private void BuildGraph(PanelStatistics stats)
     {
@@ -300,34 +305,61 @@ public partial class PopupWindow : Window
             {
                 var intensity = day.TotalTokens / (double)weekMax[WeekStart(day.DateUtc)];
                 var height = Math.Max(2, barAreaHeight * day.TotalTokens / globalMax);
+                var barWidth = Math.Max(2, col - 2);
                 var bar = new Rectangle
                 {
-                    Width = Math.Max(2, col - 2),
+                    Width = barWidth,
                     Height = height,
                     Fill = new SolidColorBrush(Lerp(GraphBlueLo, GraphBlueHi, intensity)),
                     RadiusX = 1,
                     RadiusY = 1,
                     ToolTip = $"{day.DateUtc:ddd d MMM} · {FormatTokens(day.TotalTokens)} tokens",
                 };
-                Canvas.SetLeft(bar, x + 1);
+                // Placed from the column centre, like the label below it, so the two
+                // cannot drift apart as the gutter or column width changes (issue #31).
+                Canvas.SetLeft(bar, BarCentre(x, col) - barWidth / 2);
                 Canvas.SetTop(bar, barAreaHeight - height);
                 GraphHost.Children.Add(bar);
             }
 
-            // Vertical date label under every column (rotated, small but legible).
+            // Vertical date label under every column (rotated, small but legible),
+            // centred on its own bar (issue #31).
+            //
+            // A RenderTransform does not move the element's LAYOUT box, so Canvas.SetLeft
+            // still positions the un-rotated text while the ink lands somewhere else
+            // entirely: at 90° the box [0,w]×[0,h] maps to [-h,0]×[0,w], i.e. the label
+            // hangs to the LEFT of its anchor by one line height. The old code
+            // compensated with a constant +3, which stood in for half a line and was ~2 px
+            // short of an 8 pt one — a fifth of a column at 31 days, and what made the
+            // dates read as offset from their bars.
+            //
+            // Ask the transform for the rendered bounds rather than re-deriving them: the
+            // line height moves with font, DPI and the OS text-scaling setting, and this
+            // stays correct if the angle is ever changed.
+            var rotation = new RotateTransform(90);
             var label = new TextBlock
             {
                 Text = day.DateUtc.ToString("d MMM", CultureInfo.InvariantCulture),
                 FontSize = 8,
                 Foreground = labelBrush,
-                RenderTransform = new RotateTransform(90),
+                RenderTransform = rotation,
                 Opacity = day.PreInstall ? 0.5 : 1.0,
             };
-            Canvas.SetLeft(label, x + col / 2 + 3);
-            Canvas.SetTop(label, labelTop);
+            // Parent first, so the font properties measured are the inherited ones.
             GraphHost.Children.Add(label);
+            label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            var ink = rotation.TransformBounds(new Rect(label.DesiredSize));
+            Canvas.SetLeft(label, BarCentre(x, col) - ink.Left - ink.Width / 2);
+            Canvas.SetTop(label, labelTop - ink.Top);
         }
     }
+
+    /// <summary>
+    /// Horizontal centre of the column starting at <paramref name="x"/>. The single
+    /// anchor the bar and its date label are both placed from (issue #31) — the label
+    /// was previously offset by a constant that no longer matched the bar.
+    /// </summary>
+    private static double BarCentre(double x, double col) => x + col / 2;
 
     /// <summary>Monday of the ISO week containing the date.</summary>
     private static DateOnly WeekStart(DateOnly date) =>
