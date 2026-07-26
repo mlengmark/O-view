@@ -665,9 +665,12 @@ public partial class App : System.Windows.Application
                     pair.Children.Add(valueTile);
                     rows.Children.Add(pair);
 
-                    pending.Add((tokensTile, "Tokens today",
+                    // Carry the coverage caveat on the samples too: it has to survive
+                    // into the breakdown view, and a sample that never shows one cannot
+                    // catch it going missing (it did).
+                    pending.Add((tokensTile, "Tokens · 31 days",
                         FormatSampleTokens(slices.Sum(s => s.Tokens)), slices, BreakdownMeasure.Tokens));
-                    pending.Add((valueTile, "Est. value today",
+                    pending.Add((valueTile, "Est. value · 31 days",
                         SumSampleUsd(slices), slices, BreakdownMeasure.EstValue));
                 }
 
@@ -688,7 +691,7 @@ public partial class App : System.Windows.Application
                 // tiles are declared in XAML and the theme is applied before Populate.
                 foreach (var (tile, label, value, slices, _) in pending)
                 {
-                    tile.Populate(label, value, "", slices, tile.SplitBy);
+                    tile.Populate(label, value, "8 of 31 days recorded", slices, tile.SplitBy);
                     tile.SetExpanded(expanded);
                 }
 

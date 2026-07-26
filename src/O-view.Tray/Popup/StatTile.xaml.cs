@@ -72,6 +72,9 @@ public partial class StatTile : UserControl
         NoteText.Text = note;
         NoteText.Visibility = note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         BreakdownTotal.Text = value;
+        // Same caveat, both views — see the XAML for why it is not treated as chrome.
+        BreakdownNote.Text = note;
+        BreakdownNote.Visibility = note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         _slices = slices;
         _measure = measure;
