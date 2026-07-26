@@ -695,6 +695,16 @@ public partial class App : System.Windows.Application
                     tile.SetExpanded(expanded);
                 }
 
+                if (expanded)
+                {
+                    RenderHoverCards(dir, light,
+                    [
+                        pending[6].Tile.BuildSampleTooltip(0),   // 5-models: named model, tokens
+                        pending[6].Tile.BuildSampleTooltip(2),   // 5-models: folded "Other"
+                        pending[7].Tile.BuildSampleTooltip(0),   // 5-models: named model, est. value
+                    ]);
+                }
+
                 host.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
                 host.Arrange(new Rect(host.DesiredSize));
                 host.UpdateLayout();
@@ -732,6 +742,78 @@ public partial class App : System.Windows.Application
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Renders the hover cards to their own PNG. They need their own pass because a
+    /// ToolTip cannot be given a parent — it throws — so it can neither be laid out
+    /// inside the sample panel nor appear in a screenshot of the panel itself. Measured,
+    /// arranged and rendered standalone instead, with the palette written into each
+    /// card's own resources so its DynamicResource lookups resolve without a tree above
+    /// it to walk.
+    /// </summary>
+    private static void RenderHoverCards(string dir, bool light, System.Windows.Controls.ToolTip?[] tips)
+    {
+        const double scale = 2.0;
+        const double gap = 12;
+
+        var rendered = new List<System.Windows.Media.Imaging.BitmapSource>();
+        foreach (var tip in tips)
+        {
+            if (tip is null)
+            {
+                continue;
+            }
+
+            PanelTheme.Apply(tip.Resources, light);
+            tip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            tip.Arrange(new Rect(tip.DesiredSize));
+            tip.UpdateLayout();
+
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                (int)Math.Ceiling(tip.DesiredSize.Width * scale),
+                (int)Math.Ceiling(tip.DesiredSize.Height * scale),
+                96 * scale, 96 * scale, System.Windows.Media.PixelFormats.Pbgra32);
+            bitmap.Render(tip);
+            rendered.Add(bitmap);
+        }
+
+        if (rendered.Count == 0)
+        {
+            return;
+        }
+
+        var totalWidth = rendered.Sum(b => b.PixelWidth / scale) + gap * (rendered.Count + 1);
+        var totalHeight = rendered.Max(b => b.PixelHeight / scale) + 2 * gap;
+
+        var visual = new System.Windows.Media.DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            // Over the tile surface the cards actually float above, so the elevation
+            // step reads the way it will in the app.
+            dc.DrawRectangle(
+                new System.Windows.Media.SolidColorBrush(light
+                    ? System.Windows.Media.Color.FromRgb(0xEF, 0xEF, 0xEF)
+                    : System.Windows.Media.Color.FromRgb(0x2B, 0x2B, 0x2B)),
+                null, new Rect(0, 0, totalWidth, totalHeight));
+
+            var x = gap;
+            foreach (var card in rendered)
+            {
+                dc.DrawImage(card, new Rect(x, gap, card.PixelWidth / scale, card.PixelHeight / scale));
+                x += card.PixelWidth / scale + gap;
+            }
+        }
+
+        var composed = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            (int)Math.Ceiling(totalWidth * scale), (int)Math.Ceiling(totalHeight * scale),
+            96 * scale, 96 * scale, System.Windows.Media.PixelFormats.Pbgra32);
+        composed.Render(visual);
+
+        var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(composed));
+        using var stream = File.Create(Path.Combine(dir, $"hover-cards-{(light ? "light" : "dark")}.png"));
+        png.Save(stream);
     }
 
     private static StatTile NewSampleTile(BreakdownMeasure measure) =>

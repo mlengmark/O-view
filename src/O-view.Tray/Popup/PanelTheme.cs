@@ -59,6 +59,12 @@ internal static class PanelTheme
         Set(resources, "TileHover", light ? "#E5E5E5" : "#343434");
         Set(resources, "TilePressed", light ? "#DADADA" : "#3E3E3E");
 
+        // Hover cards float ABOVE both the panel and the tiles, so they step away from
+        // each rather than matching either — otherwise a card over a tile reads as part
+        // of it. Light goes brighter than the panel, dark goes lighter than the tile.
+        Set(resources, "TooltipBg", light ? "#FFFFFF" : "#333333");
+        Set(resources, "TooltipBorder", light ? "#CFCFCF" : "#4A4A4A");
+
         // ── categorical series, for the per-model tile charts (issue #37) ─────────
         //
         // Not decoration and not free choice: these are validated, and the dark column

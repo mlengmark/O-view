@@ -82,6 +82,12 @@ Any tile whose window exceeds recorded history shows coverage: `3 of 31 days rec
 
 Every tile is clickable and flips in place between its total and a **stacked bar split by model**. Clicking again flips back, as often as you like.
 
+**The hover card is styled, not system chrome.** A default WPF tooltip is a pale rectangle with a hard border and nothing to do with the rest of the app, so the template is replaced outright: the panel's rounded 6px card, its palette, its type. It sits on its own `TooltipBg` / `TooltipBorder` step — brighter than the panel in light, lighter than the tile in dark — so it reads as floating *above* the tile rather than as part of it, with a soft drop shadow for the same reason.
+
+The card carries a **colour swatch, the model name, the figure**, and the raw model id beneath (or `N more models` for the folded bucket, so "Other" is never an unexplained slice). The swatch is the load-bearing part: a floating card otherwise loses its connection to the exact colour being pointed at.
+
+A `ToolTip` cannot be given a parent — it throws — so it appears in no screenshot of the panel and cannot be laid out inside one. `--tile-samples` therefore renders the cards standalone to `hover-cards-<theme>.png`, with the palette written into each card's own resources so its `DynamicResource` lookups resolve with no tree above them to walk.
+
 **Where the figures live.** On hover, nowhere else. The bar is a thin, unlabelled mark and the legend carries model **names only**; pointing at a segment — or at its legend entry — reveals that model and its exact figure. Two earlier attempts are worth not repeating: figures printed beside the names in the legend wrapped it to two lines, and figures printed *inside* the segments made the bar look cluttered and forced it 6px taller to hold the text.
 
 **Hover timing.** Applied to **each** element that carries a tooltip, in `StatTile.ApplyHoverTiming`. Setting these once on the control and relying on property inheritance looks right and silently does not work — the bar segments resolved to framework values instead. That is invisible in a screenshot, which is why `--tile-samples` writes a `hover-timing.txt` reporting what actually resolves on a segment.

@@ -4,6 +4,7 @@ using System.Windows.Media;
 using OView.Core.Models;
 using Brush = System.Windows.Media.Brush;
 using Orientation = System.Windows.Controls.Orientation;
+using ToolTip = System.Windows.Controls.ToolTip;
 using UserControl = System.Windows.Controls.UserControl;
 
 namespace OView.Tray.Popup;
@@ -166,6 +167,22 @@ public partial class StatTile : UserControl
                 ToolTipService.GetShowDuration(segment));
     }
 
+    /// <summary>
+    /// A fresh hover card for one segment, unattached, so verification renders can show
+    /// it. Built through the same path the real cards use — a hand-made copy would prove
+    /// nothing about what actually appears on hover.
+    /// </summary>
+    internal ToolTip? BuildSampleTooltip(int segmentIndex)
+    {
+        var segments = ModelBreakdown.Segments(_slices, _measure);
+        if (segmentIndex >= segments.Count)
+        {
+            return null;
+        }
+
+        return SliceTooltip(segments[segmentIndex], SeriesBrushes(segments)[segmentIndex]);
+    }
+
     /// <summary>Forces the view for verification renders (the --tile-samples hook).</summary>
     internal void SetExpanded(bool expanded)
     {
@@ -219,7 +236,7 @@ public partial class StatTile : UserControl
                 CornerRadius = last
                     ? new CornerRadius(0, DataEndRadius, DataEndRadius, 0)
                     : new CornerRadius(0),
-                ToolTip = SliceTooltip(segments[i]),
+                ToolTip = SliceTooltip(segments[i], brushes[i]),
             };
             ApplyHoverTiming(segment);
             Grid.SetColumn(segment, BarHost.ColumnDefinitions.Count - 1);
@@ -241,8 +258,8 @@ public partial class StatTile : UserControl
             ? $"excl. {unpriced.Count} unpriced"
             : "by model";
         BreakdownCaption.ToolTip = unpriced.Count > 0
-            ? $"No published rate for {string.Join(", ", unpriced)} — excluded from this chart, "
-              + "so the total shown is only the part O-view can price."
+            ? TextTooltip($"No published rate for {string.Join(", ", unpriced)} — excluded from this "
+                          + "chart, so the total shown is only the part O-view can price.")
             : null;
         ApplyHoverTiming(BreakdownCaption);
     }
@@ -253,7 +270,7 @@ public partial class StatTile : UserControl
         {
             Orientation = Orientation.Horizontal,
             Margin = new Thickness(0, 0, last ? 0 : 8, 0),
-            ToolTip = SliceTooltip(slice),
+            ToolTip = SliceTooltip(slice, brush),
         };
         ApplyHoverTiming(panel);
 
@@ -284,17 +301,86 @@ public partial class StatTile : UserControl
     }
 
     /// <summary>
-    /// Exact figures for one segment. This is the tile's table view — the relief the
-    /// colour rules require where a series sits below 3:1 on the light surface, and
-    /// where the folded "Other" bucket says how many models it stands for.
+    /// The hover card for one segment: swatch and model name, the figure below it, and
+    /// the raw model id underneath. This is the tile's table view — the relief the
+    /// colour rules require where a series sits below 3:1 on the light surface — so it
+    /// is built as a small piece of the panel's own design rather than left as a line of
+    /// system-chrome text.
+    ///
+    /// The swatch matters beyond decoration: it ties the card to the exact colour being
+    /// pointed at, which is the one thing a floating card otherwise loses.
     /// </summary>
-    private string SliceTooltip(ModelSlice slice)
+    private ToolTip SliceTooltip(ModelSlice slice, Brush swatch)
     {
-        var name = slice.DisplayName == ModelDisplayName.Other
-            ? $"{ModelDisplayName.Other} ({slice.Model})"
-            : slice.DisplayName;
-        return $"{name} · {FormatSlice(slice)}";
+        var content = new StackPanel { MaxWidth = 220 };
+
+        var heading = new StackPanel { Orientation = Orientation.Horizontal };
+        heading.Children.Add(new Border
+        {
+            Width = 8,
+            Height = 8,
+            CornerRadius = new CornerRadius(2),
+            Background = swatch,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        heading.Children.Add(new TextBlock
+        {
+            Text = slice.DisplayName,
+            FontSize = 11,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(6, 0, 0, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Brush)FindResource("TextPrimary"),
+        });
+        content.Children.Add(heading);
+
+        content.Children.Add(new TextBlock
+        {
+            Text = FormatSlice(slice),
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 3, 0, 0),
+            Foreground = (Brush)FindResource("TextPrimary"),
+        });
+
+        // What the row actually is: the raw model id, or — for the folded bucket — how
+        // many models it stands for, so "Other" is never an unexplained slice.
+        var detail = slice.DisplayName == ModelDisplayName.Other
+            ? $"{slice.Model} models"
+            : slice.Model;
+        if (detail != slice.DisplayName)
+        {
+            content.Children.Add(new TextBlock
+            {
+                Text = detail,
+                FontSize = 10,
+                Margin = new Thickness(0, 2, 0, 0),
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = (Brush)FindResource("TextMuted"),
+            });
+        }
+
+        return new ToolTip
+        {
+            Content = content,
+            Style = (Style)FindResource("PanelTooltip"),
+        };
     }
+
+    /// <summary>A styled hover card carrying a sentence — used for the caption's caveat.</summary>
+    private ToolTip TextTooltip(string text) =>
+        new()
+        {
+            Content = new TextBlock
+            {
+                Text = text,
+                FontSize = 11,
+                MaxWidth = 240,
+                TextWrapping = TextWrapping.Wrap,
+                Foreground = (Brush)FindResource("TextSecondary"),
+            },
+            Style = (Style)FindResource("PanelTooltip"),
+        };
 
     /// <summary>
     /// Colour by position in the validated order, except the folded remainder, which
