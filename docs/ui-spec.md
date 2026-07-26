@@ -84,13 +84,13 @@ Every tile is clickable and flips in place between its total and a **stacked bar
 
 **Where the figures live.** On hover, nowhere else. The bar is a thin, unlabelled mark and the legend carries model **names only**; pointing at a segment — or at its legend entry — reveals that model and its exact figure. Two earlier attempts are worth not repeating: figures printed beside the names in the legend wrapped it to two lines, and figures printed *inside* the segments made the bar look cluttered and forced it 6px taller to hold the text.
 
-**Hover timing** (set once on the control; `ToolTipService` properties are inheritable, so every segment and legend entry picks them up):
+**Hover timing.** Applied to **each** element that carries a tooltip, in `StatTile.ApplyHoverTiming`. Setting these once on the control and relying on property inheritance looks right and silently does not work — the bar segments resolved to framework values instead. That is invisible in a screenshot, which is why `--tile-samples` writes a `hover-timing.txt` reporting what actually resolves on a segment.
 
-| Property | Value | Why |
-|---|---|---|
-| `InitialShowDelay` | **400 ms** | The Windows convention. The delay exists to require *lingering* — the pointer crosses this bar on its way elsewhere, and anything shorter makes tooltips flash during ordinary movement. |
-| `BetweenShowDelay` | **3000 ms** | The one that matters most here. Within this window of the last tooltip, the next shows with **no** delay, so sliding along the segments reads as one continuous reveal. WPF's 100 ms default makes traversing a segmented bar feel broken. |
-| `ShowDuration` | **20 s** | Far past WPF's 5 s default, which snatches the figure away mid-read while the pointer is still on the segment. WCAG 1.4.13 (Content on Hover or Focus) calls that out: hover content should persist until the pointer leaves, not time out under the reader. |
+| Property | Value | Measured unset | Why |
+|---|---|---|---|
+| `InitialShowDelay` | **400 ms** | 1000 ms | The Windows convention; 1 s reads as sluggish for a deliberate point-at. The delay still exists to require *lingering* — the pointer crosses this bar on its way elsewhere, and much shorter makes tooltips flash during ordinary movement. |
+| `BetweenShowDelay` | **3000 ms** | 100 ms | The one that matters most here. Within this window of the last tooltip, the next shows with **no** delay, so sliding along the segments reads as one continuous reveal instead of re-waiting per colour. |
+| `ShowDuration` | **20 s** | `int.MaxValue` | Set for **determinism, not extension** — note the measured baseline was effectively unlimited, so this is a deliberate cap, though the documented WPF default is 5 s. 20 s far outlasts reading a two-field tooltip, so WCAG 1.4.13 (Content on Hover or Focus) holds in practice while the behaviour is the same on a machine whose default really is 5 s. |
 
 **Not tunable:** WPF dismisses a tooltip the instant the pointer leaves the element, and that grace period is not exposed. For this bar that is the wanted behaviour anyway — leaving the bar should dismiss — and the case that actually needed smoothing was moving *between* segments, which `BetweenShowDelay` covers.
 

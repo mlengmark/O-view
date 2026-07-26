@@ -707,9 +707,29 @@ public partial class App : System.Windows.Application
 
                 var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
                 png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
-                using var stream = File.Create(Path.Combine(dir,
-                    $"tiles-{(expanded ? "breakdown" : "summary")}-{(light ? "light" : "dark")}.png"));
-                png.Save(stream);
+                using (var stream = File.Create(Path.Combine(dir,
+                    $"tiles-{(expanded ? "breakdown" : "summary")}-{(light ? "light" : "dark")}.png")))
+                {
+                    png.Save(stream);
+                }
+
+                // Hover timing cannot be seen in a still, and the part that can silently
+                // break is the inheritance from the control down to the segments — a
+                // segment that missed it would fall back to WPF's defaults and look
+                // identical. Report the resolved values so they are checked, not assumed.
+                if (expanded && pending.FirstOrDefault().Tile?.ResolvedHoverTiming() is { } timing)
+                {
+                    // Intended values only — no "framework default" annotations. The
+                    // unset baseline measured on the dev machine (1000 / 100 /
+                    // int.MaxValue) did not match the documented defaults, so printing
+                    // documented figures beside measured ones would assert something
+                    // unverified.
+                    File.WriteAllText(Path.Combine(dir, "hover-timing.txt"),
+                        $"resolved on a bar segment ({(light ? "light" : "dark")}):{Environment.NewLine}" +
+                        $"  InitialShowDelay : {timing.InitialShowDelay} ms (intended 400){Environment.NewLine}" +
+                        $"  BetweenShowDelay : {timing.BetweenShowDelay} ms (intended 3000){Environment.NewLine}" +
+                        $"  ShowDuration     : {timing.ShowDuration} ms (intended 20000){Environment.NewLine}");
+                }
             }
         }
     }

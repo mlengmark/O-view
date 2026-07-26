@@ -1,33 +1,11 @@
 <UserControl x:Class="OView.Tray.Popup.StatTile"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             ToolTipService.InitialShowDelay="400"
-             ToolTipService.BetweenShowDelay="3000"
-             ToolTipService.ShowDuration="20000">
-    <!-- Hover timing for the per-model figures. These are inheritable attached
-         properties, so every segment and legend entry below picks them up.
-
-         InitialShowDelay 400ms — the Windows convention, and the point of a delay is to
-         require *lingering*: the pointer crosses this bar on its way elsewhere, and a
-         shorter delay makes tooltips flash during ordinary movement.
-
-         BetweenShowDelay 3000ms — the one that matters most for a segmented bar. Within
-         this window of the last tooltip, the next appears with NO delay, so sliding
-         along the segments reads as one continuous reveal instead of re-waiting 400ms
-         per colour. WPF's 100ms default makes traversing the bar feel broken.
-
-         ShowDuration 20s — deliberately far past WPF's 5s default. 5s snatches the
-         figure away mid-read while the pointer is still on the segment, which WCAG
-         1.4.13 (Content on Hover or Focus) calls out: hover content should persist
-         until the pointer leaves, not time out under the reader. 20s is effectively
-         "as long as you're pointing at it" without leaving a tooltip stranded forever
-         if focus is lost.
-
-         What is NOT tunable here: WPF dismisses a tooltip the moment the pointer leaves
-         the element, and that grace period is not exposed. For this bar that is the
-         behaviour you want anyway — leaving the bar entirely should dismiss, and the
-         case that needed smoothing was moving BETWEEN segments, which BetweenShowDelay
-         covers. -->
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Hover timing is applied per element in code (StatTile.ApplyHoverTiming), NOT set
+         here. Setting the ToolTipService properties on this root looks like it should
+         work and does nothing: the values did not reach the bar segments, which resolved
+         to the framework defaults instead. Verified, not assumed: the hover-timing.txt
+         report written by the tile-samples hook exists to catch exactly that. -->
 
     <UserControl.Resources>
         <!-- The tile is a Button so it keeps keyboard focus, Space/Enter activation and

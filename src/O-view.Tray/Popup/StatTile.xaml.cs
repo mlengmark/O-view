@@ -30,6 +30,49 @@ public partial class StatTile : UserControl
     /// <summary>Rounding on the bar's data end; the baseline end stays square.</summary>
     private const double DataEndRadius = 4;
 
+    // ── hover timing for the per-model figures ────────────────────────────────────
+    //
+    // Applied to every element that carries a tooltip. Setting these once on the control
+    // and relying on property inheritance LOOKS right and silently does not work — the
+    // segments resolved to the framework defaults instead, which is invisible in a
+    // screenshot and was only caught by reporting the values (--tile-samples writes
+    // hover-timing.txt for exactly this reason).
+
+    /// <summary>
+    /// 400 ms — the Windows convention, and a real change: the unset value measured on
+    /// this machine was 1000 ms, which reads as sluggish for a deliberate point-at.
+    /// The delay still exists to require *lingering*, since the pointer crosses this bar
+    /// on its way elsewhere and anything much shorter flashes tooltips during ordinary
+    /// movement.
+    /// </summary>
+    private const int HoverInitialDelayMs = 400;
+
+    /// <summary>
+    /// 3 s — the one that matters most for a segmented bar. Within this window of the
+    /// last tooltip the next shows with NO delay, so sliding along the segments reads as
+    /// one continuous reveal rather than re-waiting per colour. The 100 ms default makes
+    /// traversing the bar feel broken.
+    /// </summary>
+    private const int HoverBetweenDelayMs = 3000;
+
+    /// <summary>
+    /// 20 s — set for determinism, not to extend anything. The documented WPF default is
+    /// 5 s, but the unset value measured here was int.MaxValue, i.e. effectively
+    /// unlimited; so this is a deliberate CAP rather than the extension it might look
+    /// like. 20 s still far outlasts reading a two-field tooltip, so WCAG 1.4.13
+    /// (Content on Hover or Focus) is satisfied in practice — the figure is never taken
+    /// away mid-read — while the same behaviour is guaranteed on a machine whose default
+    /// really is 5 s.
+    /// </summary>
+    private const int HoverDurationMs = 20_000;
+
+    private static void ApplyHoverTiming(DependencyObject element)
+    {
+        ToolTipService.SetInitialShowDelay(element, HoverInitialDelayMs);
+        ToolTipService.SetBetweenShowDelay(element, HoverBetweenDelayMs);
+        ToolTipService.SetShowDuration(element, HoverDurationMs);
+    }
+
     private IReadOnlyList<ModelSlice> _slices = [];
     private BreakdownMeasure _measure = BreakdownMeasure.Tokens;
     private bool _expanded;
@@ -103,6 +146,26 @@ public partial class StatTile : UserControl
         ApplyView();
     }
 
+    /// <summary>
+    /// The hover timing as it actually resolves on a bar segment. The values are set on
+    /// the control and reach the segments by property inheritance, which is the part that
+    /// can silently fail — a segment built in code and parented at the wrong moment would
+    /// quietly fall back to WPF's defaults (400/100/5000) and nothing would look wrong.
+    /// Reported by --tile-samples so the inheritance is checked rather than assumed.
+    /// </summary>
+    internal (int InitialShowDelay, int BetweenShowDelay, int ShowDuration)? ResolvedHoverTiming()
+    {
+        if (BarHost.Children.Count == 0)
+        {
+            return null;
+        }
+
+        var segment = (FrameworkElement)BarHost.Children[0];
+        return (ToolTipService.GetInitialShowDelay(segment),
+                ToolTipService.GetBetweenShowDelay(segment),
+                ToolTipService.GetShowDuration(segment));
+    }
+
     /// <summary>Forces the view for verification renders (the --tile-samples hook).</summary>
     internal void SetExpanded(bool expanded)
     {
@@ -158,6 +221,7 @@ public partial class StatTile : UserControl
                     : new CornerRadius(0),
                 ToolTip = SliceTooltip(segments[i]),
             };
+            ApplyHoverTiming(segment);
             Grid.SetColumn(segment, BarHost.ColumnDefinitions.Count - 1);
             BarHost.Children.Add(segment);
 
@@ -180,6 +244,7 @@ public partial class StatTile : UserControl
             ? $"No published rate for {string.Join(", ", unpriced)} — excluded from this chart, "
               + "so the total shown is only the part O-view can price."
             : null;
+        ApplyHoverTiming(BreakdownCaption);
     }
 
     private UIElement LegendEntry(ModelSlice slice, Brush brush, bool last)
@@ -190,6 +255,7 @@ public partial class StatTile : UserControl
             Margin = new Thickness(0, 0, last ? 0 : 8, 0),
             ToolTip = SliceTooltip(slice),
         };
+        ApplyHoverTiming(panel);
 
         panel.Children.Add(new Border
         {
