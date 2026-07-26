@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using Point = System.Windows.Point;
 
 namespace OView.Tray.Popup;
@@ -74,7 +75,8 @@ internal static class FlyoutAnimation
 
         // Barely a fade: the trace showed the flyout at near-full intensity from its
         // first visible frame, so opacity only takes the edge off the first instant.
-        Fade(window, 0, 1, new Duration(TimeSpan.FromMilliseconds(90)), Decelerate);
+        window.BeginAnimation(UIElement.OpacityProperty,
+            BuildFade(0, 1, new Duration(TimeSpan.FromMilliseconds(90)), Decelerate));
     }
 
     /// <summary>
@@ -104,8 +106,42 @@ internal static class FlyoutAnimation
         Reveal(clip, new Rect(0, 0, w, h), closed, CloseDuration, Accelerate);
         Slide(slide, 0, fromBottom ? SlideDistance : -SlideDistance, CloseDuration, Accelerate);
 
-        var fade = Fade(window, window.Opacity, 0, CloseDuration, Accelerate);
-        fade.Completed += (_, _) => onClosed();
+        // Exactly once, however the transition ends.
+        var finished = false;
+        void Finish()
+        {
+            if (finished)
+            {
+                return;
+            }
+
+            finished = true;
+            onClosed();
+        }
+
+        // Completed MUST be attached before BeginAnimation. WPF takes its own copy of the
+        // timeline when the animation starts, so a handler added afterwards is attached to
+        // an object nothing will ever raise — which is precisely what broke the toggle:
+        // Hide() never ran, the window sat visible at zero opacity, and every later click
+        // saw it as "open" and tried to close it again. The icon looked dead.
+        var fade = BuildFade(window.Opacity, 0, CloseDuration, Accelerate);
+        fade.Completed += (_, _) => Finish();
+        window.BeginAnimation(UIElement.OpacityProperty, fade);
+
+        // Backstop. The symptom of a missed completion is not a dropped frame, it is a
+        // permanently unresponsive tray icon, so the hide does not depend on the event
+        // alone. Firing twice is harmless — Finish() is idempotent and the caller
+        // re-checks whether it still wants to be hidden.
+        var guard = new DispatcherTimer
+        {
+            Interval = CloseDuration.TimeSpan + TimeSpan.FromMilliseconds(150),
+        };
+        guard.Tick += (_, _) =>
+        {
+            guard.Stop();
+            Finish();
+        };
+        guard.Start();
     }
 
     /// <summary>
@@ -183,13 +219,16 @@ internal static class FlyoutAnimation
         slide.BeginAnimation(TranslateTransform.YProperty, animation);
     }
 
-    private static DoubleAnimationUsingKeyFrames Fade(
-        Window window, double from, double to, Duration duration, KeySpline spline)
+    /// <summary>
+    /// Builds the fade without starting it, so a caller can attach Completed first —
+    /// which is mandatory, not stylistic. See <see cref="Close"/>.
+    /// </summary>
+    private static DoubleAnimationUsingKeyFrames BuildFade(
+        double from, double to, Duration duration, KeySpline spline)
     {
         var animation = new DoubleAnimationUsingKeyFrames { Duration = duration };
         animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(from, KeyTime.FromPercent(0)));
         animation.KeyFrames.Add(new SplineDoubleKeyFrame(to, KeyTime.FromPercent(1), spline));
-        window.BeginAnimation(UIElement.OpacityProperty, animation);
         return animation;
     }
 }
