@@ -30,7 +30,7 @@ public partial class App : System.Windows.Application
     private PopupWindow? _popup;
     private TraySettings _settings = new();
     private ThresholdWatcher? _watcher;
-    private System.Windows.Controls.ContextMenu? _menu;
+    private MenuWindow? _menu;
     private PlanHistoryProvider? _planHistory;
     private bool _offPlanNotified;
     private string? _simulateDivergence;
@@ -47,6 +47,16 @@ public partial class App : System.Windows.Application
         if (args.TryGetValue("--samples", out var samplesDir))
         {
             RenderSamples(samplesDir!);
+            Shutdown();
+            return;
+        }
+
+        // The menu's equivalent of --samples, and handled before the mutex for the same
+        // reason --diagnose is: the flyout can then be reviewed on a machine where O-view
+        // is already running, without disturbing the live instance.
+        if (args.TryGetValue("--menu-samples", out var menuSamplesDir))
+        {
+            RenderMenuSamples(menuSamplesDir!);
             Shutdown();
             return;
         }
@@ -155,6 +165,19 @@ public partial class App : System.Windows.Application
             _simulateDivergence = args.TryGetValue("--simulate-divergence", out var sim) ? sim ?? "diverging" : null;
             ShowPopup();
         }
+
+        // The same for the menu flyout (issue #33). --menu-samples renders it in
+        // isolation; this opens the real thing on the real desktop, which is the only
+        // way to verify the docked placement against a live taskbar and work area.
+        if (args.ContainsKey("--show-menu"))
+        {
+            _menu = CreateMenu();
+            _menu.PinForVerification = args.ContainsKey("--menu-pin");
+            _menu.ThemeOverride = args.TryGetValue("--menu-theme", out var menuTheme)
+                ? menuTheme == "light"
+                : null;
+            ShowMenu();
+        }
     }
 
     private void ShowPopup()
@@ -245,77 +268,53 @@ public partial class App : System.Windows.Application
     private PopupWindow EnsurePopup() => _popup ??= new PopupWindow();
 
     /// <summary>
-    /// Right-click menu. WPF ContextMenu, not WinForms ContextMenuStrip — WinForms
-    /// stays confined to NotifyIcon itself (CLAUDE.md rule 5).
+    /// Right-click menu — a docked flyout window, not a ContextMenu (issue #33; see
+    /// <see cref="MenuWindow"/> for why the cursor-placed menu had to go). Still no
+    /// WinForms: that stays confined to NotifyIcon itself (CLAUDE.md rule 5).
     /// </summary>
     private void ShowMenu()
     {
-        if (_menu is null)
+        _menu ??= CreateMenu();
+
+        // State is passed on every open, never cached: both settings can change
+        // externally (another instance, a manual registry edit, Task Manager's
+        // startup page).
+        _menu.ShowDocked(
+            runAtStartup: StartupRegistration.IsEnabled(),
+            notifyOnThreshold: _settings.NotifyOnThreshold,
+            thresholdPercent: _settings.ThresholdPercent,
+            version: UpdateService.CurrentVersion);
+    }
+
+    private MenuWindow CreateMenu()
+    {
+        var menu = new MenuWindow
         {
-            var startup = new System.Windows.Controls.MenuItem
+            // Both setters return the state as it actually stands afterwards, not the
+            // state that was requested — a registry write can fail, and a tick that
+            // claims otherwise would be a fabricated fact about the machine.
+            SetRunAtStartup = enable =>
             {
-                Header = "Run at startup",
-                IsCheckable = true,
-                IsChecked = StartupRegistration.IsEnabled(),
-            };
-            startup.Click += (_, _) =>
+                var ok = enable ? StartupRegistration.Enable() : StartupRegistration.Disable();
+                return ok ? enable : StartupRegistration.IsEnabled();
+            },
+            SetNotifyOnThreshold = enable =>
             {
-                var ok = startup.IsChecked ? StartupRegistration.Enable() : StartupRegistration.Disable();
-                startup.IsChecked = ok ? startup.IsChecked : StartupRegistration.IsEnabled();
-            };
-
-            var notify = new System.Windows.Controls.MenuItem
-            {
-                Header = $"Notify at {_settings.ThresholdPercent}% session usage",
-                IsCheckable = true,
-                IsChecked = _settings.NotifyOnThreshold,
-            };
-            notify.Click += (_, _) =>
-            {
-                _settings = _settings with { NotifyOnThreshold = notify.IsChecked };
+                _settings = _settings with { NotifyOnThreshold = enable };
                 _settings.Save();
-            };
+                return _settings.NotifyOnThreshold;
+            },
+        };
 
-            // One-click support bundle: a blank panel is otherwise indistinguishable from
-            // "Desktop missing", "unexpected file format", or "file unreadable", and asking
-            // users to run PowerShell by hand is not a diagnosis path.
-            var copyDiagnostics = new System.Windows.Controls.MenuItem { Header = "Copy diagnostics" };
-            copyDiagnostics.Click += (_, _) => CopyDiagnostics();
+        // One-click support bundle: a blank panel is otherwise indistinguishable from
+        // "Desktop missing", "unexpected file format", or "file unreadable", and asking
+        // users to run PowerShell by hand is not a diagnosis path.
+        menu.CopyDiagnosticsRequested += (_, _) => CopyDiagnostics();
+        // "Check for updates" sits directly above Exit, as requested in issue #18.
+        menu.CheckForUpdatesRequested += async (_, _) => await CheckForUpdatesInteractiveAsync();
+        menu.ExitRequested += (_, _) => Shutdown();
 
-            // "Check for updates" sits directly above Exit, as requested in issue #18.
-            var checkUpdates = new System.Windows.Controls.MenuItem { Header = "Check for updates…" };
-            checkUpdates.Click += async (_, _) => await CheckForUpdatesInteractiveAsync();
-
-            var exit = new System.Windows.Controls.MenuItem { Header = "Exit O-view" };
-            exit.Click += (_, _) => Shutdown();
-
-            _menu = new System.Windows.Controls.ContextMenu { StaysOpen = false };
-            _menu.Items.Add(startup);
-            _menu.Items.Add(notify);
-            _menu.Items.Add(new System.Windows.Controls.Separator());
-            _menu.Items.Add(copyDiagnostics);
-            _menu.Items.Add(checkUpdates);
-            _menu.Items.Add(exit);
-
-            // A tray app has no activated window, so a StaysOpen=false menu never gets
-            // the deactivation that dismisses it on an outside click — it lingers until
-            // an item is chosen (issue #11). Foreground the popup's own window once it
-            // is up, so clicking off the menu deactivates and closes it.
-            _menu.Opened += (_, _) =>
-            {
-                if (PresentationSource.FromVisual(_menu) is System.Windows.Interop.HwndSource source)
-                {
-                    NativeMethods.SetForegroundWindow(source.Handle);
-                }
-            };
-        }
-
-        // Re-read on every open: the value can change externally (another instance,
-        // manual registry edit, Task Manager's startup page).
-        ((System.Windows.Controls.MenuItem)_menu.Items[0]).IsChecked = StartupRegistration.IsEnabled();
-
-        _menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
-        _menu.IsOpen = true;
+        return menu;
     }
 
     /// <summary>
@@ -547,6 +546,59 @@ public partial class App : System.Windows.Application
             }
         }
         return result;
+    }
+
+    /// <summary>
+    /// Renders the tray-menu flyout in both themes, with the toggles on and off, over a
+    /// desktop-ish backdrop so the rounded card and its border are actually visible
+    /// (issue #33). Visual verification only — nothing here runs in normal operation.
+    /// </summary>
+    private static void RenderMenuSamples(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        const double scale = 2.0;
+        const double pad = 16;
+
+        foreach (var light in new[] { true, false })
+        {
+            foreach (var (name, startup, notify) in new (string, bool, bool)[]
+            {
+                ("both-on", true, true),
+                ("both-off", false, false),
+            })
+            {
+                var menu = new MenuWindow { ThemeOverride = light };
+                menu.Populate(startup, notify, 70, UpdateService.CurrentVersion);
+                var card = menu.RenderToBitmap(scale);
+
+                // The flyout is a transparent-cornered window; composited over a flat
+                // backdrop, the corner radius and border read the way they will on screen.
+                var w = card.PixelWidth / scale;
+                var h = card.PixelHeight / scale;
+                var visual = new System.Windows.Media.DrawingVisual();
+                using (var dc = visual.RenderOpen())
+                {
+                    dc.DrawRectangle(
+                        new System.Windows.Media.SolidColorBrush(light
+                            ? System.Windows.Media.Color.FromRgb(0xDE, 0xDE, 0xDE)
+                            : System.Windows.Media.Color.FromRgb(0x10, 0x10, 0x10)),
+                        null,
+                        new System.Windows.Rect(0, 0, w + 2 * pad, h + 2 * pad));
+                    dc.DrawImage(card, new System.Windows.Rect(pad, pad, w, h));
+                }
+
+                var composed = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                    (int)((w + 2 * pad) * scale), (int)((h + 2 * pad) * scale),
+                    96 * scale, 96 * scale, System.Windows.Media.PixelFormats.Pbgra32);
+                composed.Render(visual);
+
+                var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(composed));
+                using var stream = File.Create(
+                    Path.Combine(dir, $"menu-{name}-{(light ? "light" : "dark")}.png"));
+                png.Save(stream);
+            }
+        }
     }
 
     /// <summary>Renders every icon state at 100% and 150% scaling sizes for visual verification.</summary>

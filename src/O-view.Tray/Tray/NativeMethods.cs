@@ -30,13 +30,36 @@ internal static class NativeMethods
     internal const int SM_CXSMICON = 49;
 
     /// <summary>
-    /// A WPF ContextMenu opened from a tray icon will not dismiss on an outside
-    /// click unless its popup window is the foreground window: a tray-resident app
-    /// has no activated window of its own, so the StaysOpen=false menu never
-    /// receives the deactivation that closes it (issue #11). Foreground the popup's
-    /// own HWND immediately after opening so an off-menu click deactivates it.
+    /// A menu opened from a tray icon will not dismiss on an outside click unless its
+    /// window is the foreground window: a tray-resident app owns no activated window,
+    /// so it never receives the deactivation that closes the menu (issue #11).
+    /// Foreground its HWND immediately after opening so an off-menu click dismisses it.
+    /// Applied by MenuWindow after Show(); Activate() alone is not guaranteed to take
+    /// foreground for a process that does not already hold it.
     /// </summary>
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static extern bool SetForegroundWindow(nint hWnd);
+
+    /// <summary>
+    /// SetForegroundWindow is not guaranteed: Windows only grants the foreground to a
+    /// process that already holds it or received the last input event, and refuses
+    /// otherwise. A menu that loses that race stays on screen with no way to dismiss it,
+    /// which is <em>worse</em> than the clipping issue #33 set out to fix — verified by
+    /// reproducing it. AttachThreadInput to the current foreground thread makes the two
+    /// threads share an input queue, at which point the grant succeeds; detach again
+    /// immediately. The documented workaround for exactly this case.
+    /// </summary>
+    [DllImport("user32.dll")]
+    internal static extern nint GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    internal static extern uint GetWindowThreadProcessId(nint hWnd, nint processId);
+
+    [DllImport("kernel32.dll")]
+    internal static extern uint GetCurrentThreadId();
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool AttachThreadInput(uint attachTo, uint attachFrom, [MarshalAs(UnmanagedType.Bool)] bool attach);
 }
