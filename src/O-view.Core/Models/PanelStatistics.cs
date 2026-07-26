@@ -38,6 +38,17 @@ public sealed record PanelStatistics(
     /// </summary>
     public IReadOnlyList<string> UnpricedModels { get; init; } = [];
 
+    /// <summary>
+    /// Per-model split behind <see cref="TokensToday"/> and <see cref="EstTodayUsd"/>
+    /// (GitHub issue #37). The rollup store already keeps its ledger at (UTC date ×
+    /// model) grain, so this costs one extra grouping over rollups already in hand —
+    /// no second query, and nothing to fetch when a tile is clicked.
+    /// </summary>
+    public IReadOnlyList<ModelSlice> ModelsToday { get; init; } = [];
+
+    /// <summary>Per-model split behind the 31-day figures. See <see cref="ModelsToday"/>.</summary>
+    public IReadOnlyList<ModelSlice> Models31Days { get; init; } = [];
+
     public bool HasPartialHistory => RecordedDays < WindowDays;
 
     /// <summary>True when work in the current session window is not drawing from the plan.</summary>
@@ -111,8 +122,31 @@ public sealed record PanelStatistics(
             EstimateTotal(creditRollups))
         {
             UnpricedModels = unpriced,
+            ModelsToday = SliceByModel(todayRollups),
+            Models31Days = SliceByModel(rollups),
         };
     }
+
+    /// <summary>
+    /// Collapses rollups to one row per model. The store's grain is already (date ×
+    /// model), so this only drops the date — the model dimension was being discarded
+    /// at the very last step, not missing.
+    ///
+    /// A model's estimate is null only when NOTHING of its usage could be priced, which
+    /// for a single model means its rate is unknown. That is deliberately the same rule
+    /// <see cref="EstimateTotal"/> applies to the whole window: unknown stays unknown and
+    /// gets named, rather than being folded in as a zero that would understate the total.
+    /// </summary>
+    private static IReadOnlyList<ModelSlice> SliceByModel(IReadOnlyList<DailyRollup> rollups) =>
+        rollups
+            .GroupBy(r => r.Model, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new ModelSlice(
+                g.Key,
+                ModelDisplayName.For(g.Key),
+                g.Sum(r => r.TotalTokens),
+                EstimateTotal(g.ToList())))
+            .OrderByDescending(s => s.Tokens)
+            .ToList();
 
     /// <summary>
     /// Sums the priced rollups. Null only when there was something to price and NOTHING

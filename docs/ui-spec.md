@@ -78,6 +78,57 @@ Percentages come from the OAuth provider. On JSONL fallback they are estimates a
 
 Any tile whose window exceeds recorded history shows coverage: `3 of 31 days recorded`.
 
+#### Per-model breakdown ([GitHub issue #37](https://github.com/mlengmark/O-view/issues/37))
+
+Every tile is clickable and flips in place between its total and a **stacked bar split by model**. Clicking again flips back, as often as you like.
+
+**The hover card is styled, not system chrome.** A default WPF tooltip is a pale rectangle with a hard border and nothing to do with the rest of the app, so the template is replaced outright: the panel's rounded 6px card, its palette, its type. It sits on its own `TooltipBg` / `TooltipBorder` step — brighter than the panel in light, lighter than the tile in dark — so it reads as floating *above* the tile rather than as part of it, with a soft drop shadow for the same reason.
+
+The card carries two lines only: a **colour swatch beside the figure**, and the **raw model id** beneath (or `N more models` for the folded bucket, so "Other" is never an unexplained slice). There is deliberately no friendly-name heading — it restated the line below it and made a card holding two facts look heavy.
+
+The swatch is the load-bearing part and stays: a card floating clear of the bar otherwise loses its connection to the exact colour being pointed at.
+
+> The id line is **always** rendered. It used to be suppressed when it matched the friendly name — which is precisely the case for an **unrecognised** model, where `ModelDisplayName` returns the raw id unchanged. Dropping the heading without this would have left exactly those cards showing a number and nothing identifying it.
+
+A `ToolTip` cannot be given a parent — it throws — so it appears in no screenshot of the panel and cannot be laid out inside one. `--tile-samples` therefore renders the cards standalone to `hover-cards-<theme>.png`, with the palette written into each card's own resources so its `DynamicResource` lookups resolve with no tree above them to walk.
+
+**Where the figures live.** On hover, nowhere else. The bar is a thin, unlabelled mark and the legend carries model **names only**; pointing at a segment — or at its legend entry — reveals that model and its exact figure. Two earlier attempts are worth not repeating: figures printed beside the names in the legend wrapped it to two lines, and figures printed *inside* the segments made the bar look cluttered and forced it 6px taller to hold the text.
+
+**Hover timing.** Applied to **each** element that carries a tooltip, in `StatTile.ApplyHoverTiming`. Setting these once on the control and relying on property inheritance looks right and silently does not work — the bar segments resolved to framework values instead. That is invisible in a screenshot, which is why `--tile-samples` writes a `hover-timing.txt` reporting what actually resolves on a segment.
+
+| Property | Value | Measured unset | Why |
+|---|---|---|---|
+| `InitialShowDelay` | **400 ms** | 1000 ms | The Windows convention; 1 s reads as sluggish for a deliberate point-at. The delay still exists to require *lingering* — the pointer crosses this bar on its way elsewhere, and much shorter makes tooltips flash during ordinary movement. |
+| `BetweenShowDelay` | **3000 ms** | 100 ms | The one that matters most here. Within this window of the last tooltip, the next shows with **no** delay, so sliding along the segments reads as one continuous reveal instead of re-waiting per colour. |
+| `ShowDuration` | **20 s** | `int.MaxValue` | Set for **determinism, not extension** — note the measured baseline was effectively unlimited, so this is a deliberate cap, though the documented WPF default is 5 s. 20 s far outlasts reading a two-field tooltip, so WCAG 1.4.13 (Content on Hover or Focus) holds in practice while the behaviour is the same on a machine whose default really is 5 s. |
+
+**Not tunable:** WPF dismisses a tooltip the instant the pointer leaves the element, and that grace period is not exposed. For this bar that is the wanted behaviour anyway — leaving the bar should dismiss — and the case that actually needed smoothing was moving *between* segments, which `BetweenShowDelay` covers.
+
+- **No I/O on click.** The rollup store's ledger is already at `(UTC date × model)` grain, so the split was being discarded at the last step, not missing. It arrives on the `PanelStatistics` the panel opened with, and the flip is a re-render.
+- **The tile never changes size.** Both views live in one `Grid` and the inactive one is `Hidden`, not `Collapsed` — and the breakdown is built during `Populate`, not on first click, because a `Hidden` element only reserves the space its *content* needs. Built lazily, the tile visibly grew the first time it was opened.
+- **The label is dropped in the breakdown view**, as the issue allows, to buy room; the total stays, so the tile still answers its own question.
+- **Affordance:** a faint chart glyph, brightening on hover, plus a hover/pressed fill. A tile with nothing to break down is disabled and shows no glyph — an affordance that leads nowhere is worse than none.
+
+**Colour is validated, not chosen.** The palette is the data-viz categorical order, re-checked against the *tile* surfaces with the six-check validator on the **all-pairs** list (segment order follows the data, so any two colours can end up adjacent):
+
+| | Light `#EFEFEF` | Dark `#2B2B2B` |
+|---|---|---|
+| CVD separation (target ≥ 8) | **9.2** | **9.4** |
+| Normal-vision floor (≥ 15) | **17.3** | **16.5** |
+
+Two consequences are load-bearing and should not be "tidied up" later:
+
+- **Never add a fourth chromatic slot.** The next hue in the validated order is yellow, which fails the all-pairs floors beside the orange slot. That is *why* a fourth model folds into "Other" rather than getting its own colour.
+- **The cap tiers at three.** Up to three models each keep a colour; four or more collapse to **two named models plus a neutral "Other"**. No grey exists that is both inside the dark lightness band and separable from the third (aqua) slot for deuteranopes — the sweep bottoms out at ΔE 3.0 — because grey has no hue to separate on and sits at the same lightness. Dropping to two named models is the price of showing an honest remainder at all.
+
+On the light surface two series sit below 3:1 against the tile. That is a documented **relief** case, not a dismissable warning, which is why the legend is mandatory rather than decorative and every segment carries a tooltip with exact figures. Legend text wears text tokens; the swatch beside it carries identity, never the text colour.
+
+> **Known limitation:** per-model figures are reachable by hover only, so they are not available to keyboard or touch. This is a deliberate trade for a clean bar, taken twice over after printed figures were tried in the legend and then in the segments. What is *not* behind the pointer: the legend names every model, the tile's total shows in both views, and every rule-6 caveat — coverage, unpriced — is rendered text. Only the per-model split needs a pointer.
+
+**Rule 6 in the breakdown.** An unpriced model has an *unknown* value, not a zero, so it cannot be placed on the value chart — it is excluded and the tile says `excl. N unpriced`, with the tooltip naming them. A folded "Other" that contains any unpriced model reports its own value as unknown rather than quietly summing the priced remainder. `<synthetic>` is `Local`: real tokens, genuinely zero value, so it appears in the token split and not the value split. An unrecognised model id renders **as-is** — inferring a friendly name from the pattern would be a fabricated fact.
+
+`--tile-samples <dir>` renders the tiles across 1, 2, 3, 5-model and unpriced cases, in both themes and both views. Handled before the single-instance mutex, like `--diagnose`.
+
 ### Usage graph
 
 Daily token totals across the trailing 31 days, from the rollup store ([ADR-0006](adr/0006-local-rollup-store.md)). Enhanced per [issues #4 and #5](https://github.com/mlengmark/O-view/issues/4):

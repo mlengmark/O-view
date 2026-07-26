@@ -12,6 +12,10 @@ using OView.Tray.Diagnostics;
 using OView.Tray.Popup;
 using OView.Tray.Tray;
 using OView.Tray.Updates;
+using Border = System.Windows.Controls.Border;
+using Size = System.Windows.Size;
+using StackPanel = System.Windows.Controls.StackPanel;
+using TextBlock = System.Windows.Controls.TextBlock;
 
 namespace OView.Tray;
 
@@ -57,6 +61,16 @@ public partial class App : System.Windows.Application
         if (args.TryGetValue("--menu-samples", out var menuSamplesDir))
         {
             RenderMenuSamples(menuSamplesDir!);
+            Shutdown();
+            return;
+        }
+
+        // Tile breakdowns across the model counts that change the chart's shape
+        // (issue #37). Also before the mutex — the interesting cases are ones this
+        // machine's real data may never produce, so they are built, not waited for.
+        if (args.TryGetValue("--tile-samples", out var tileSamplesDir))
+        {
+            RenderTileSamples(tileSamplesDir!);
             Shutdown();
             return;
         }
@@ -600,6 +614,232 @@ public partial class App : System.Windows.Application
             }
         }
     }
+
+    /// <summary>
+    /// Renders the stat tiles across the model counts that change the chart's shape,
+    /// in both themes and both views (issue #37). The cases that matter — a folded
+    /// "Other", an unpriced model — are ones a given machine's real data may never
+    /// produce, so they are constructed rather than waited for.
+    /// </summary>
+    private static void RenderTileSamples(string dir)
+    {
+        Directory.CreateDirectory(dir);
+
+        ModelSlice S(string model, long tokens, decimal? usd) =>
+            new(model, ModelDisplayName.For(model), tokens, usd);
+
+        var cases = new (string Name, ModelSlice[] Slices)[]
+        {
+            ("1-model", [S("claude-opus-5", 20_500_000, 41.20m)]),
+            ("2-models", [S("claude-opus-5", 15_000_000, 30.00m), S("claude-fable-5", 5_000_000, 33.50m)]),
+            ("3-models", [S("claude-opus-5", 15_000_000, 30.00m), S("claude-fable-5", 5_000_000, 33.50m),
+                          S("claude-sonnet-5", 500_000, 1.20m)]),
+            ("5-models-other", [S("claude-opus-5", 15_000_000, 30.00m), S("claude-fable-5", 5_000_000, 33.50m),
+                                S("claude-sonnet-5", 500_000, 1.20m), S("claude-haiku-4-5", 300_000, 0.40m),
+                                S("<synthetic>", 120_000, 0m)]),
+            ("unpriced", [S("claude-opus-5", 15_000_000, 30.00m), S("claude-brandnew-9", 4_000_000, null)]),
+        };
+
+        foreach (var light in new[] { true, false })
+        {
+            foreach (var expanded in new[] { false, true })
+            {
+                var rows = new StackPanel { Margin = new Thickness(16) };
+                var pending = new List<(StatTile Tile, string Label, string Value, ModelSlice[] Slices, BreakdownMeasure Measure)>();
+                foreach (var (name, slices) in cases)
+                {
+                    rows.Children.Add(new TextBlock
+                    {
+                        Text = name,
+                        FontSize = 11,
+                        Margin = new Thickness(0, 6, 0, 3),
+                        Foreground = new System.Windows.Media.SolidColorBrush(light
+                            ? System.Windows.Media.Color.FromRgb(0x33, 0x33, 0x33)
+                            : System.Windows.Media.Color.FromRgb(0xCC, 0xCC, 0xCC)),
+                    });
+
+                    var pair = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+                    var tokensTile = NewSampleTile(BreakdownMeasure.Tokens);
+                    var valueTile = NewSampleTile(BreakdownMeasure.EstValue);
+                    pair.Children.Add(tokensTile);
+                    pair.Children.Add(valueTile);
+                    rows.Children.Add(pair);
+
+                    // Carry the coverage caveat on the samples too: it has to survive
+                    // into the breakdown view, and a sample that never shows one cannot
+                    // catch it going missing (it did).
+                    pending.Add((tokensTile, "Tokens · 31 days",
+                        FormatSampleTokens(slices.Sum(s => s.Tokens)), slices, BreakdownMeasure.Tokens));
+                    pending.Add((valueTile, "Est. value · 31 days",
+                        SumSampleUsd(slices), slices, BreakdownMeasure.EstValue));
+                }
+
+                // The tiles resolve their colours through DynamicResource, so the palette
+                // has to live on a host they are parented to.
+                var host = new Border
+                {
+                    Child = rows,
+                    Background = new System.Windows.Media.SolidColorBrush(light
+                        ? System.Windows.Media.Color.FromRgb(0xF9, 0xF9, 0xF9)
+                        : System.Windows.Media.Color.FromRgb(0x20, 0x20, 0x20)),
+                };
+                PanelTheme.Apply(host.Resources, light);
+
+                // Only now: the breakdown resolves its series colours through the
+                // logical tree, so a tile populated before it is parented and themed has
+                // nowhere to find them. The real panel gets this ordering for free — its
+                // tiles are declared in XAML and the theme is applied before Populate.
+                foreach (var (tile, label, value, slices, _) in pending)
+                {
+                    tile.Populate(label, value, "8 of 31 days recorded", slices, tile.SplitBy);
+                    tile.SetExpanded(expanded);
+                }
+
+                if (expanded)
+                {
+                    RenderHoverCards(dir, light,
+                    [
+                        pending[6].Tile.BuildSampleTooltip(0),   // 5-models: named model, tokens
+                        pending[6].Tile.BuildSampleTooltip(2),   // 5-models: folded "Other"
+                        pending[7].Tile.BuildSampleTooltip(0),   // 5-models: named model, est. value
+                        // An UNRECOGNISED model, where the friendly name is the raw id.
+                        // Included because that is the case where dropping the card's
+                        // title could have left nothing naming the row at all.
+                        pending[8].Tile.BuildSampleTooltip(1),
+                    ]);
+                }
+
+                host.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                host.Arrange(new Rect(host.DesiredSize));
+                host.UpdateLayout();
+
+                const double scale = 2.0;
+                var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                    (int)Math.Ceiling(host.ActualWidth * scale), (int)Math.Ceiling(host.ActualHeight * scale),
+                    96 * scale, 96 * scale, System.Windows.Media.PixelFormats.Pbgra32);
+                bitmap.Render(host);
+
+                var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+                using (var stream = File.Create(Path.Combine(dir,
+                    $"tiles-{(expanded ? "breakdown" : "summary")}-{(light ? "light" : "dark")}.png")))
+                {
+                    png.Save(stream);
+                }
+
+                // Hover timing cannot be seen in a still, and the part that can silently
+                // break is the inheritance from the control down to the segments — a
+                // segment that missed it would fall back to WPF's defaults and look
+                // identical. Report the resolved values so they are checked, not assumed.
+                if (expanded && pending.FirstOrDefault().Tile?.ResolvedHoverTiming() is { } timing)
+                {
+                    // Intended values only — no "framework default" annotations. The
+                    // unset baseline measured on the dev machine (1000 / 100 /
+                    // int.MaxValue) did not match the documented defaults, so printing
+                    // documented figures beside measured ones would assert something
+                    // unverified.
+                    File.WriteAllText(Path.Combine(dir, "hover-timing.txt"),
+                        $"resolved on a bar segment ({(light ? "light" : "dark")}):{Environment.NewLine}" +
+                        $"  InitialShowDelay : {timing.InitialShowDelay} ms (intended 400){Environment.NewLine}" +
+                        $"  BetweenShowDelay : {timing.BetweenShowDelay} ms (intended 3000){Environment.NewLine}" +
+                        $"  ShowDuration     : {timing.ShowDuration} ms (intended 20000){Environment.NewLine}");
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Renders the hover cards to their own PNG. They need their own pass because a
+    /// ToolTip cannot be given a parent — it throws — so it can neither be laid out
+    /// inside the sample panel nor appear in a screenshot of the panel itself. Measured,
+    /// arranged and rendered standalone instead, with the palette written into each
+    /// card's own resources so its DynamicResource lookups resolve without a tree above
+    /// it to walk.
+    /// </summary>
+    private static void RenderHoverCards(string dir, bool light, System.Windows.Controls.ToolTip?[] tips)
+    {
+        const double scale = 2.0;
+        const double gap = 12;
+
+        var rendered = new List<System.Windows.Media.Imaging.BitmapSource>();
+        foreach (var tip in tips)
+        {
+            if (tip is null)
+            {
+                continue;
+            }
+
+            PanelTheme.Apply(tip.Resources, light);
+            tip.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            tip.Arrange(new Rect(tip.DesiredSize));
+            tip.UpdateLayout();
+
+            var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                (int)Math.Ceiling(tip.DesiredSize.Width * scale),
+                (int)Math.Ceiling(tip.DesiredSize.Height * scale),
+                96 * scale, 96 * scale, System.Windows.Media.PixelFormats.Pbgra32);
+            bitmap.Render(tip);
+            rendered.Add(bitmap);
+        }
+
+        if (rendered.Count == 0)
+        {
+            return;
+        }
+
+        var totalWidth = rendered.Sum(b => b.PixelWidth / scale) + gap * (rendered.Count + 1);
+        var totalHeight = rendered.Max(b => b.PixelHeight / scale) + 2 * gap;
+
+        var visual = new System.Windows.Media.DrawingVisual();
+        using (var dc = visual.RenderOpen())
+        {
+            // Over the tile surface the cards actually float above, so the elevation
+            // step reads the way it will in the app.
+            dc.DrawRectangle(
+                new System.Windows.Media.SolidColorBrush(light
+                    ? System.Windows.Media.Color.FromRgb(0xEF, 0xEF, 0xEF)
+                    : System.Windows.Media.Color.FromRgb(0x2B, 0x2B, 0x2B)),
+                null, new Rect(0, 0, totalWidth, totalHeight));
+
+            var x = gap;
+            foreach (var card in rendered)
+            {
+                dc.DrawImage(card, new Rect(x, gap, card.PixelWidth / scale, card.PixelHeight / scale));
+                x += card.PixelWidth / scale + gap;
+            }
+        }
+
+        var composed = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            (int)Math.Ceiling(totalWidth * scale), (int)Math.Ceiling(totalHeight * scale),
+            96 * scale, 96 * scale, System.Windows.Media.PixelFormats.Pbgra32);
+        composed.Render(visual);
+
+        var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
+        png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(composed));
+        using var stream = File.Create(Path.Combine(dir, $"hover-cards-{(light ? "light" : "dark")}.png"));
+        png.Save(stream);
+    }
+
+    private static StatTile NewSampleTile(BreakdownMeasure measure) =>
+        new()
+        {
+            Width = 180,
+            Margin = new Thickness(0, 0, 8, 0),
+            SplitBy = measure,
+            FormatSlice = measure == BreakdownMeasure.Tokens
+                ? s => FormatSampleTokens(s.Tokens)
+                : s => s.EstUsd is { } v ? "$" + v.ToString("0.00", CultureInfo.InvariantCulture) : "unknown",
+        };
+
+    private static string FormatSampleTokens(long tokens) => tokens switch
+    {
+        >= 1_000_000 => string.Create(CultureInfo.InvariantCulture, $"{tokens / 1_000_000.0:0.0}M"),
+        >= 1_000 => string.Create(CultureInfo.InvariantCulture, $"{tokens / 1_000.0:0.0}K"),
+        _ => tokens.ToString(CultureInfo.InvariantCulture),
+    };
+
+    private static string SumSampleUsd(ModelSlice[] slices) =>
+        "$" + slices.Sum(s => s.EstUsd ?? 0m).ToString("0.00", CultureInfo.InvariantCulture);
 
     /// <summary>Renders every icon state at 100% and 150% scaling sizes for visual verification.</summary>
     private static void RenderSamples(string dir)

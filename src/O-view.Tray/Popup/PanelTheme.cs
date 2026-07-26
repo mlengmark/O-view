@@ -53,6 +53,45 @@ internal static class PanelTheme
         // separation Windows 11's own flyouts use for list rows.
         Set(resources, "RowHover", light ? "#ECECEC" : "#2E2E2E");
         Set(resources, "RowPressed", light ? "#E0E0E0" : "#3A3A3A");
+
+        // Clickable stat tiles (issue #37): same one-step/two-step separation off
+        // TileBg, so "this responds to a click" reads the same way everywhere.
+        Set(resources, "TileHover", light ? "#E5E5E5" : "#343434");
+        Set(resources, "TilePressed", light ? "#DADADA" : "#3E3E3E");
+
+        // Hover cards float ABOVE both the panel and the tiles, so they step away from
+        // each rather than matching either — otherwise a card over a tile reads as part
+        // of it. Light goes brighter than the panel, dark goes lighter than the tile.
+        Set(resources, "TooltipBg", light ? "#FFFFFF" : "#333333");
+        Set(resources, "TooltipBorder", light ? "#CFCFCF" : "#4A4A4A");
+
+        // ── categorical series, for the per-model tile charts (issue #37) ─────────
+        //
+        // Not decoration and not free choice: these are validated, and the dark column
+        // is the same three hues re-stepped for the dark surface, not an auto-flip.
+        // Checked with the six-check validator against THESE surfaces (TileBg), on the
+        // all-pairs list — segment order follows the data, so any two can end up
+        // adjacent:
+        //
+        //   light #EFEFEF : CVD ΔE 9.2 (target 8) · normal-vision ΔE 17.3 (floor 15)
+        //   dark  #2B2B2B : CVD ΔE 9.4            · normal-vision ΔE 16.5
+        //
+        // On the LIGHT surface, Series2 (2.78:1), Series3 (2.45:1) and SeriesOther
+        // (3.00:1) sit at or below the 3:1 contrast line. That is a documented relief
+        // case, not a dismissable warning: the tile MUST ship visible labels, which is
+        // why the breakdown always draws a legend naming each model and its value, and
+        // a tooltip carrying every model exactly. Identity never rests on hue alone.
+        //
+        // Do not add a fourth chromatic slot. The next hue in the validated order is
+        // yellow, which fails the all-pairs floors beside Series2's orange — that is
+        // exactly why ModelBreakdown folds a fourth model into "Other" instead.
+        Set(resources, "Series1", light ? "#2A78D6" : "#3987E5");
+        Set(resources, "Series2", light ? "#EB6834" : "#D95926");
+        Set(resources, "Series3", light ? "#1BAF7A" : "#199E70");
+        // Neutral by design — it is a residual bucket, not an identity, so it is the one
+        // slot deliberately below the chroma floor. Its separation IS still verified:
+        // worst CVD ΔE 11.0 light / 12.2 dark against the two named slots it appears with.
+        Set(resources, "SeriesOther", "#8A8A8A");
     }
 
     private static void Set(ResourceDictionary resources, string key, string hex) =>

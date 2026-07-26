@@ -1,0 +1,140 @@
+<UserControl x:Class="OView.Tray.Popup.StatTile"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Hover timing is applied per element in code (StatTile.ApplyHoverTiming), NOT set
+         here. Setting the ToolTipService properties on this root looks like it should
+         work and does nothing: the values did not reach the bar segments, which resolved
+         to the framework defaults instead. Verified, not assumed: the hover-timing.txt
+         report written by the tile-samples hook exists to catch exactly that. -->
+
+    <UserControl.Resources>
+        <!-- The tile is a Button so it keeps keyboard focus, Space/Enter activation and
+             a pressed state; the template strips the chrome to the rounded card the
+             panel already used, plus hover and focus fills. -->
+        <Style x:Key="TileButton" TargetType="Button">
+            <Setter Property="Background" Value="{DynamicResource TileBg}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="10,8"/>
+            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="VerticalContentAlignment" Value="Stretch"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                CornerRadius="6" Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <!-- IsEnabled is false when there is nothing to break down,
+                                 so a tile that cannot expand never offers the affordance. -->
+                            <MultiTrigger>
+                                <MultiTrigger.Conditions>
+                                    <Condition Property="IsEnabled" Value="True"/>
+                                    <Condition Property="IsMouseOver" Value="True"/>
+                                </MultiTrigger.Conditions>
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TileHover}"/>
+                            </MultiTrigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TileHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TilePressed}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- Hover card. The default WPF tooltip is system chrome — a pale rectangle with
+             a hard border that looks nothing like the rest of the panel. This replaces
+             the template outright: same rounded card, same palette, same type as every
+             other surface in the app, on its own elevated background so it reads as
+             floating above the tile rather than as part of it. -->
+        <Style x:Key="PanelTooltip" TargetType="ToolTip">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="HasDropShadow" Value="False"/>
+            <Setter Property="OverridesDefaultStyle" Value="True"/>
+            <Setter Property="HorizontalOffset" Value="8"/>
+            <Setter Property="VerticalOffset" Value="8"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToolTip">
+                        <!-- The outer margin is the shadow's room to breathe: the popup
+                             clips to its own bounds, so an effect drawn hard against the
+                             edge would be cut off. -->
+                        <Border Margin="6" Background="{DynamicResource TooltipBg}"
+                                BorderBrush="{DynamicResource TooltipBorder}"
+                                BorderThickness="1" CornerRadius="6" Padding="9,7">
+                            <Border.Effect>
+                                <DropShadowEffect BlurRadius="8" ShadowDepth="1"
+                                                  Direction="270" Opacity="0.22" Color="#FF000000"/>
+                            </Border.Effect>
+                            <ContentPresenter/>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <Button x:Name="Root" Style="{StaticResource TileButton}" Cursor="Hand">
+        <!-- Both views live in the same Grid and the inactive one is Hidden, never
+             Collapsed: the Grid therefore always measures to the taller of the two, so
+             the tile is the same size before and after a click and the panel never
+             jumps (issue #37 asks for the breakdown to reuse the same space). -->
+        <Grid>
+
+            <!-- Summary -->
+            <StackPanel x:Name="SummaryView">
+                <TextBlock x:Name="LabelText" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+                <TextBlock x:Name="ValueText" FontSize="17" FontWeight="SemiBold"
+                           Foreground="{DynamicResource TextPrimary}" Margin="0,2,0,0"/>
+                <TextBlock x:Name="NoteText" FontSize="10" TextWrapping="Wrap"
+                           Foreground="{DynamicResource WarnText}"/>
+            </StackPanel>
+
+            <!-- Breakdown. The label is dropped here, as the issue allows, to buy the
+                 room for the chart; the total stays so the tile still answers its own
+                 question at a glance. -->
+            <StackPanel x:Name="BreakdownView" Visibility="Hidden">
+                <Grid>
+                    <TextBlock x:Name="BreakdownTotal" FontSize="13" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimary}"/>
+                    <!-- Right margin keeps the caption clear of the expand glyph, which
+                         sits in the same horizontal band at the tile's edge. -->
+                    <TextBlock x:Name="BreakdownCaption" FontSize="9" HorizontalAlignment="Right"
+                               VerticalAlignment="Center" Margin="0,0,13,0"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource TextMuted}"/>
+                </Grid>
+                <!-- Thin. The figures are revealed on hover rather than printed inside
+                     the segments, so the bar carries no text and does not need the
+                     height for it — it reads as a cleaner mark this way. -->
+                <Grid x:Name="BarHost" Height="10" Margin="0,5,0,0" SnapsToDevicePixels="True"/>
+                <!-- The legend is mandatory, not optional polish: on the light surface
+                     two series sit below 3:1 against the tile, which the colour rules
+                     allow only when visible labels ship alongside. It is also the
+                     colour-blind fallback — identity never rests on hue alone. -->
+                <WrapPanel x:Name="LegendHost" Margin="0,5,0,0" Orientation="Horizontal"/>
+                <!-- The coverage caveat repeats here. The tile's LABEL is expendable in
+                     this view; its caveat is not — "465.3M" without "8 of 31 days
+                     recorded" reads as low usage rather than short history, which is the
+                     exact misreading rule 6 exists to prevent. -->
+                <TextBlock x:Name="BreakdownNote" FontSize="10" TextWrapping="Wrap"
+                           Margin="0,3,0,0" Foreground="{DynamicResource WarnText}"/>
+            </StackPanel>
+
+            <!-- Affordance: a small chart glyph, faint until hover, so the tile reads as
+                 clickable before the pointer is over it. -->
+            <Path x:Name="ExpandGlyph" HorizontalAlignment="Right" VerticalAlignment="Top"
+                  Data="M0,7 L0,10 M3,4 L3,10 M6,0 L6,10"
+                  Stroke="{DynamicResource TextMuted}" StrokeThickness="1.6"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                  Opacity="0.35" Margin="0,1,0,0"/>
+        </Grid>
+    </Button>
+</UserControl>
