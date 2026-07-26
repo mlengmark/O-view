@@ -111,27 +111,8 @@ public partial class PopupWindow : Window
             WeeklyResetText.Visibility = Visibility.Collapsed;
         }
 
-        TileTokensToday.Text = FormatTokens(stats.TokensToday);
-        TileEstToday.Text = FormatUsd(stats.EstTodayUsd);
-        TileTokens31.Text = FormatTokens(stats.Tokens31Days);
-        TileEst31.Text = FormatUsd(stats.Est31DaysUsd);
-
+        PopulateTiles(stats);
         PopulateDivergence(stats);
-
-        // Partial history states its coverage — a small number without this caveat
-        // reads as low usage rather than short history (ADR-0006). An unpriced model is
-        // the same class of caveat: the total is real but incomplete, so say which model
-        // is missing rather than letting the figure read as the whole picture.
-        var coverage = stats.HasPartialHistory
-            ? $"{stats.RecordedDays} of {stats.WindowDays} days recorded"
-            : "";
-        if (stats.UnpricedModels.Count > 0)
-        {
-            var excluded = $"excludes {string.Join(", ", stats.UnpricedModels)} (no published rate)";
-            coverage = coverage.Length > 0 ? $"{coverage} · {excluded}" : excluded;
-        }
-        TileCoverage31.Text = coverage;
-        TileCoverage31b.Text = coverage;
 
         // Nothing recorded at all, while the plan meters show real usage: the tiles are
         // measuring a source this user does not feed, not measuring zero usage. Say which
@@ -154,6 +135,57 @@ public partial class PopupWindow : Window
     }
 
     /// <summary>
+    /// Fills the four statistics tiles, each with the per-model split behind its total
+    /// (issue #37). The split is passed in, not fetched: it is already on the
+    /// PanelStatistics the panel was opened with, so a click costs no I/O.
+    ///
+    /// Both today tiles share ModelsToday and both 31-day tiles share Models31Days —
+    /// one list per window, split two ways, because a token breakdown and a value
+    /// breakdown of the same usage are the same rows measured differently.
+    /// </summary>
+    private void PopulateTiles(PanelStatistics stats)
+    {
+        // Partial history states its coverage — a small number without this caveat
+        // reads as low usage rather than short history (ADR-0006). An unpriced model is
+        // the same class of caveat: the total is real but incomplete, so say which model
+        // is missing rather than letting the figure read as the whole picture.
+        var coverage = stats.HasPartialHistory
+            ? $"{stats.RecordedDays} of {stats.WindowDays} days recorded"
+            : "";
+        if (stats.UnpricedModels.Count > 0)
+        {
+            var excluded = $"excludes {string.Join(", ", stats.UnpricedModels)} (no published rate)";
+            coverage = coverage.Length > 0 ? $"{coverage} · {excluded}" : excluded;
+        }
+
+        // The "not money charged" framing is only true for plan usage. Off-plan work
+        // bills at API rates, so the label has to flip with it.
+        var offPlan = stats.IsOffPlan;
+
+        TileTokensToday.FormatSlice = s => FormatTokens(s.Tokens);
+        TileTokensToday.Populate(
+            "Tokens today", FormatTokens(stats.TokensToday), "",
+            stats.ModelsToday, BreakdownMeasure.Tokens);
+
+        TileEstToday.FormatSlice = s => FormatUsd(s.EstUsd);
+        TileEstToday.Populate(
+            offPlan ? "Est. spend today" : "Est. value today",
+            FormatUsd(stats.EstTodayUsd),
+            offPlan ? "incl. off-plan usage" : "",
+            stats.ModelsToday, BreakdownMeasure.EstValue);
+
+        TileTokens31.FormatSlice = s => FormatTokens(s.Tokens);
+        TileTokens31.Populate(
+            "Tokens · 31 days", FormatTokens(stats.Tokens31Days), coverage,
+            stats.Models31Days, BreakdownMeasure.Tokens);
+
+        TileEst31.FormatSlice = s => FormatUsd(s.EstUsd);
+        TileEst31.Populate(
+            "Est. value · 31 days", FormatUsd(stats.Est31DaysUsd), coverage,
+            stats.Models31Days, BreakdownMeasure.EstValue);
+    }
+
+    /// <summary>
     /// Surfaces off-plan usage in two distinct registers:
     ///   • a live banner + tile relabel for what is happening in the CURRENT session
     ///     window (the divergence detector's real-time signal), and
@@ -170,10 +202,8 @@ public partial class PopupWindow : Window
         // ── live, session-scoped signal ──────────────────────────────────────────
         DivergenceBanner.Visibility = offPlan ? Visibility.Visible : Visibility.Collapsed;
 
-        // The "not money charged" framing is only true for plan usage. Off-plan work
-        // bills at API rates, so the label has to flip with it.
-        TileEstTodayLabel.Text = offPlan ? "Est. spend today" : "Est. value today";
-        TileEstTodayNote.Text = offPlan ? "incl. off-plan usage" : "";
+        // The Est.-today tile's label and note also flip with off-plan state; that now
+        // happens in PopulateTiles, which owns everything the tiles show.
 
         if (offPlan && d is not null)
         {

@@ -12,6 +12,10 @@ using OView.Tray.Diagnostics;
 using OView.Tray.Popup;
 using OView.Tray.Tray;
 using OView.Tray.Updates;
+using Border = System.Windows.Controls.Border;
+using Size = System.Windows.Size;
+using StackPanel = System.Windows.Controls.StackPanel;
+using TextBlock = System.Windows.Controls.TextBlock;
 
 namespace OView.Tray;
 
@@ -57,6 +61,16 @@ public partial class App : System.Windows.Application
         if (args.TryGetValue("--menu-samples", out var menuSamplesDir))
         {
             RenderMenuSamples(menuSamplesDir!);
+            Shutdown();
+            return;
+        }
+
+        // Tile breakdowns across the model counts that change the chart's shape
+        // (issue #37). Also before the mutex — the interesting cases are ones this
+        // machine's real data may never produce, so they are built, not waited for.
+        if (args.TryGetValue("--tile-samples", out var tileSamplesDir))
+        {
+            RenderTileSamples(tileSamplesDir!);
             Shutdown();
             return;
         }
@@ -600,6 +614,123 @@ public partial class App : System.Windows.Application
             }
         }
     }
+
+    /// <summary>
+    /// Renders the stat tiles across the model counts that change the chart's shape,
+    /// in both themes and both views (issue #37). The cases that matter — a folded
+    /// "Other", an unpriced model — are ones a given machine's real data may never
+    /// produce, so they are constructed rather than waited for.
+    /// </summary>
+    private static void RenderTileSamples(string dir)
+    {
+        Directory.CreateDirectory(dir);
+
+        ModelSlice S(string model, long tokens, decimal? usd) =>
+            new(model, ModelDisplayName.For(model), tokens, usd);
+
+        var cases = new (string Name, ModelSlice[] Slices)[]
+        {
+            ("1-model", [S("claude-opus-5", 20_500_000, 41.20m)]),
+            ("2-models", [S("claude-opus-5", 15_000_000, 30.00m), S("claude-fable-5", 5_000_000, 33.50m)]),
+            ("3-models", [S("claude-opus-5", 15_000_000, 30.00m), S("claude-fable-5", 5_000_000, 33.50m),
+                          S("claude-sonnet-5", 500_000, 1.20m)]),
+            ("5-models-other", [S("claude-opus-5", 15_000_000, 30.00m), S("claude-fable-5", 5_000_000, 33.50m),
+                                S("claude-sonnet-5", 500_000, 1.20m), S("claude-haiku-4-5", 300_000, 0.40m),
+                                S("<synthetic>", 120_000, 0m)]),
+            ("unpriced", [S("claude-opus-5", 15_000_000, 30.00m), S("claude-brandnew-9", 4_000_000, null)]),
+        };
+
+        foreach (var light in new[] { true, false })
+        {
+            foreach (var expanded in new[] { false, true })
+            {
+                var rows = new StackPanel { Margin = new Thickness(16) };
+                var pending = new List<(StatTile Tile, string Label, string Value, ModelSlice[] Slices, BreakdownMeasure Measure)>();
+                foreach (var (name, slices) in cases)
+                {
+                    rows.Children.Add(new TextBlock
+                    {
+                        Text = name,
+                        FontSize = 11,
+                        Margin = new Thickness(0, 6, 0, 3),
+                        Foreground = new System.Windows.Media.SolidColorBrush(light
+                            ? System.Windows.Media.Color.FromRgb(0x33, 0x33, 0x33)
+                            : System.Windows.Media.Color.FromRgb(0xCC, 0xCC, 0xCC)),
+                    });
+
+                    var pair = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
+                    var tokensTile = NewSampleTile(BreakdownMeasure.Tokens);
+                    var valueTile = NewSampleTile(BreakdownMeasure.EstValue);
+                    pair.Children.Add(tokensTile);
+                    pair.Children.Add(valueTile);
+                    rows.Children.Add(pair);
+
+                    pending.Add((tokensTile, "Tokens today",
+                        FormatSampleTokens(slices.Sum(s => s.Tokens)), slices, BreakdownMeasure.Tokens));
+                    pending.Add((valueTile, "Est. value today",
+                        SumSampleUsd(slices), slices, BreakdownMeasure.EstValue));
+                }
+
+                // The tiles resolve their colours through DynamicResource, so the palette
+                // has to live on a host they are parented to.
+                var host = new Border
+                {
+                    Child = rows,
+                    Background = new System.Windows.Media.SolidColorBrush(light
+                        ? System.Windows.Media.Color.FromRgb(0xF9, 0xF9, 0xF9)
+                        : System.Windows.Media.Color.FromRgb(0x20, 0x20, 0x20)),
+                };
+                PanelTheme.Apply(host.Resources, light);
+
+                // Only now: the breakdown resolves its series colours through the
+                // logical tree, so a tile populated before it is parented and themed has
+                // nowhere to find them. The real panel gets this ordering for free — its
+                // tiles are declared in XAML and the theme is applied before Populate.
+                foreach (var (tile, label, value, slices, _) in pending)
+                {
+                    tile.Populate(label, value, "", slices, tile.SplitBy);
+                    tile.SetExpanded(expanded);
+                }
+
+                host.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                host.Arrange(new Rect(host.DesiredSize));
+                host.UpdateLayout();
+
+                const double scale = 2.0;
+                var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                    (int)Math.Ceiling(host.ActualWidth * scale), (int)Math.Ceiling(host.ActualHeight * scale),
+                    96 * scale, 96 * scale, System.Windows.Media.PixelFormats.Pbgra32);
+                bitmap.Render(host);
+
+                var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+                using var stream = File.Create(Path.Combine(dir,
+                    $"tiles-{(expanded ? "breakdown" : "summary")}-{(light ? "light" : "dark")}.png"));
+                png.Save(stream);
+            }
+        }
+    }
+
+    private static StatTile NewSampleTile(BreakdownMeasure measure) =>
+        new()
+        {
+            Width = 180,
+            Margin = new Thickness(0, 0, 8, 0),
+            SplitBy = measure,
+            FormatSlice = measure == BreakdownMeasure.Tokens
+                ? s => FormatSampleTokens(s.Tokens)
+                : s => s.EstUsd is { } v ? "$" + v.ToString("0.00", CultureInfo.InvariantCulture) : "unknown",
+        };
+
+    private static string FormatSampleTokens(long tokens) => tokens switch
+    {
+        >= 1_000_000 => string.Create(CultureInfo.InvariantCulture, $"{tokens / 1_000_000.0:0.0}M"),
+        >= 1_000 => string.Create(CultureInfo.InvariantCulture, $"{tokens / 1_000.0:0.0}K"),
+        _ => tokens.ToString(CultureInfo.InvariantCulture),
+    };
+
+    private static string SumSampleUsd(ModelSlice[] slices) =>
+        "$" + slices.Sum(s => s.EstUsd ?? 0m).ToString("0.00", CultureInfo.InvariantCulture);
 
     /// <summary>Renders every icon state at 100% and 150% scaling sizes for visual verification.</summary>
     private static void RenderSamples(string dir)

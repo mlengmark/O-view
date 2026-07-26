@@ -78,6 +78,33 @@ Percentages come from the OAuth provider. On JSONL fallback they are estimates a
 
 Any tile whose window exceeds recorded history shows coverage: `3 of 31 days recorded`.
 
+#### Per-model breakdown ([GitHub issue #37](https://github.com/mlengmark/O-view/issues/37))
+
+Every tile is clickable and flips in place between its total and a **stacked bar split by model**, with a legend naming each model and its figure. Clicking again flips back, as often as you like.
+
+- **No I/O on click.** The rollup store's ledger is already at `(UTC date × model)` grain, so the split was being discarded at the last step, not missing. It arrives on the `PanelStatistics` the panel opened with, and the flip is a re-render.
+- **The tile never changes size.** Both views live in one `Grid` and the inactive one is `Hidden`, not `Collapsed` — and the breakdown is built during `Populate`, not on first click, because a `Hidden` element only reserves the space its *content* needs. Built lazily, the tile visibly grew the first time it was opened.
+- **The label is dropped in the breakdown view**, as the issue allows, to buy room; the total stays, so the tile still answers its own question.
+- **Affordance:** a faint chart glyph, brightening on hover, plus a hover/pressed fill. A tile with nothing to break down is disabled and shows no glyph — an affordance that leads nowhere is worse than none.
+
+**Colour is validated, not chosen.** The palette is the data-viz categorical order, re-checked against the *tile* surfaces with the six-check validator on the **all-pairs** list (segment order follows the data, so any two colours can end up adjacent):
+
+| | Light `#EFEFEF` | Dark `#2B2B2B` |
+|---|---|---|
+| CVD separation (target ≥ 8) | **9.2** | **9.4** |
+| Normal-vision floor (≥ 15) | **17.3** | **16.5** |
+
+Two consequences are load-bearing and should not be "tidied up" later:
+
+- **Never add a fourth chromatic slot.** The next hue in the validated order is yellow, which fails the all-pairs floors beside the orange slot. That is *why* a fourth model folds into "Other" rather than getting its own colour.
+- **The cap tiers at three.** Up to three models each keep a colour; four or more collapse to **two named models plus a neutral "Other"**. No grey exists that is both inside the dark lightness band and separable from the third (aqua) slot for deuteranopes — the sweep bottoms out at ΔE 3.0 — because grey has no hue to separate on and sits at the same lightness. Dropping to two named models is the price of showing an honest remainder at all.
+
+On the light surface two series sit below 3:1 against the tile. That is a documented **relief** case, not a dismissable warning, which is why the legend is mandatory rather than decorative and every segment carries a tooltip with exact figures. Legend text wears text tokens; the swatch beside it carries identity, never the text colour.
+
+**Rule 6 in the breakdown.** An unpriced model has an *unknown* value, not a zero, so it cannot be placed on the value chart — it is excluded and the tile says `excl. N unpriced`, with the tooltip naming them. A folded "Other" that contains any unpriced model reports its own value as unknown rather than quietly summing the priced remainder. `<synthetic>` is `Local`: real tokens, genuinely zero value, so it appears in the token split and not the value split. An unrecognised model id renders **as-is** — inferring a friendly name from the pattern would be a fabricated fact.
+
+`--tile-samples <dir>` renders the tiles across 1, 2, 3, 5-model and unpriced cases, in both themes and both views. Handled before the single-instance mutex, like `--diagnose`.
+
 ### Usage graph
 
 Daily token totals across the trailing 31 days, from the rollup store ([ADR-0006](adr/0006-local-rollup-store.md)). Enhanced per [issues #4 and #5](https://github.com/mlengmark/O-view/issues/4):
