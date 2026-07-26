@@ -3,9 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using OView.Core.Models;
 using Brush = System.Windows.Media.Brush;
-using Brushes = System.Windows.Media.Brushes;
 using Orientation = System.Windows.Controls.Orientation;
-using Size = System.Windows.Size;
 using UserControl = System.Windows.Controls.UserControl;
 
 namespace OView.Tray.Popup;
@@ -31,9 +29,6 @@ public partial class StatTile : UserControl
 
     /// <summary>Rounding on the bar's data end; the baseline end stays square.</summary>
     private const double DataEndRadius = 4;
-
-    /// <summary>Clear space required either side of a figure drawn inside its segment.</summary>
-    private const double SegmentLabelPadding = 3;
 
     private IReadOnlyList<ModelSlice> _slices = [];
     private BreakdownMeasure _measure = BreakdownMeasure.Tokens;
@@ -162,9 +157,7 @@ public partial class StatTile : UserControl
                     ? new CornerRadius(0, DataEndRadius, DataEndRadius, 0)
                     : new CornerRadius(0),
                 ToolTip = SliceTooltip(segments[i]),
-                Child = SegmentLabel(segments[i], brushes[i]),
             };
-            segment.SizeChanged += (s, _) => RevealLabelIfItFits((Border)s);
             Grid.SetColumn(segment, BarHost.ColumnDefinitions.Count - 1);
             BarHost.Children.Add(segment);
 
@@ -187,81 +180,6 @@ public partial class StatTile : UserControl
             ? $"No published rate for {string.Join(", ", unpriced)} — excluded from this chart, "
               + "so the total shown is only the part O-view can price."
             : null;
-    }
-
-    /// <summary>
-    /// The figure, drawn inside its own segment, and shown only where it genuinely fits.
-    ///
-    /// Star-sized columns mean the segment's pixel width is unknown until layout, so the
-    /// fit test runs on SizeChanged rather than here. A label is revealed only when the
-    /// segment can hold it with padding on both sides: clipping it, or letting it spill
-    /// over the neighbouring colour, would be worse than not drawing it — a half-read
-    /// "$18…" is a misread number, not a truncated one. Segments too narrow stay bare and
-    /// the tooltip carries their figure, which is what the hover is for.
-    /// </summary>
-    private TextBlock SegmentLabel(ModelSlice slice, Brush fill)
-    {
-        var label = new TextBlock
-        {
-            Text = FormatSlice(slice),
-            FontSize = 9,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Center,
-            VerticalAlignment = System.Windows.VerticalAlignment.Center,
-            // The one place text may wear a colour tied to the mark: it sits ON the fill,
-            // so it takes whichever of ink or white actually clears contrast against it.
-            Foreground = InkOn(fill),
-            IsHitTestVisible = false,   // the segment owns the hover, not its label
-        };
-
-        // Measure while it is still visible and unconstrained, and keep the answer: a
-        // Collapsed element reports a DesiredSize of zero, so a fit test that read
-        // DesiredSize later would compare against 0, always "fit", and show the label
-        // clipped inside a segment far too narrow for it. That is exactly what happened
-        // — a 18px "Other" segment rendering a cropped "0.".
-        label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-        label.Tag = label.DesiredSize.Width;
-        label.Visibility = Visibility.Collapsed;
-        return label;
-    }
-
-    /// <summary>
-    /// Shows a segment's label only if the laid-out segment can hold it with padding
-    /// either side. Runs on every size change, so the right labels survive a DPI or
-    /// text-scaling change without anything being recomputed by hand.
-    /// </summary>
-    private static void RevealLabelIfItFits(Border segment)
-    {
-        // Tag holds the width the text needs, captured before it was collapsed.
-        if (segment.Child is not TextBlock { Tag: double needed } label)
-        {
-            return;
-        }
-
-        var fits = segment.ActualWidth >= needed + 2 * SegmentLabelPadding;
-        label.Visibility = fits ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    /// <summary>
-    /// White or near-black over the given fill, by WCAG contrast — the fill is a
-    /// validated series colour, so which one wins differs per slot and per theme.
-    /// </summary>
-    private static Brush InkOn(Brush fill)
-    {
-        if (fill is not SolidColorBrush { Color: var c })
-        {
-            return Brushes.White;
-        }
-
-        static double Channel(byte v)
-        {
-            var s = v / 255.0;
-            return s <= 0.04045 ? s / 12.92 : Math.Pow((s + 0.055) / 1.055, 2.4);
-        }
-
-        var luminance = 0.2126 * Channel(c.R) + 0.7152 * Channel(c.G) + 0.0722 * Channel(c.B);
-        var onWhite = 1.05 / (luminance + 0.05);
-        var onBlack = (luminance + 0.05) / 0.05;
-        return onWhite >= onBlack ? Brushes.White : Brushes.Black;
     }
 
     private UIElement LegendEntry(ModelSlice slice, Brush brush, bool last)

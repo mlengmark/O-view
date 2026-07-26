@@ -82,11 +82,17 @@ Any tile whose window exceeds recorded history shows coverage: `3 of 31 days rec
 
 Every tile is clickable and flips in place between its total and a **stacked bar split by model**. Clicking again flips back, as often as you like.
 
-**Where the figures live.** Inside the bar, not beside it. Each segment carries its own figure; the legend below carries only the model names. That keeps every legend entry short enough to stay on one line, which is the vertical space this buys back, and puts each number on the colour it belongs to.
+**Where the figures live.** On hover, nowhere else. The bar is a thin, unlabelled mark and the legend carries model **names only**; pointing at a segment — or at its legend entry — reveals that model and its exact figure. Two earlier attempts are worth not repeating: figures printed beside the names in the legend wrapped it to two lines, and figures printed *inside* the segments made the bar look cluttered and forced it 6px taller to hold the text.
 
-A segment's figure is drawn **only when the laid-out segment can hold it** with 3px clear either side — measured on `SizeChanged`, since star-sized columns mean the pixel width isn't known until layout. Segments too narrow stay bare and their figure lives on **hover**. This is not a nicety: a clipped figure is a *misread* number, not a truncated one, and an early build rendered a cropped `0.` inside an 18px "Other" segment. The measurement must use the width captured before the label was collapsed — a `Collapsed` element reports a desired size of zero, so a naive fit test compares against 0, always "fits", and clips.
+**Hover timing** (set once on the control; `ToolTipService` properties are inheritable, so every segment and legend entry picks them up):
 
-Figures inside a segment are the one place text may wear a colour tied to its mark: white or near-black, chosen per fill by WCAG contrast, so they clear the threshold on every slot in both themes. Hover on a segment — or on its legend entry — gives the model and its exact figure.
+| Property | Value | Why |
+|---|---|---|
+| `InitialShowDelay` | **400 ms** | The Windows convention. The delay exists to require *lingering* — the pointer crosses this bar on its way elsewhere, and anything shorter makes tooltips flash during ordinary movement. |
+| `BetweenShowDelay` | **3000 ms** | The one that matters most here. Within this window of the last tooltip, the next shows with **no** delay, so sliding along the segments reads as one continuous reveal. WPF's 100 ms default makes traversing a segmented bar feel broken. |
+| `ShowDuration` | **20 s** | Far past WPF's 5 s default, which snatches the figure away mid-read while the pointer is still on the segment. WCAG 1.4.13 (Content on Hover or Focus) calls that out: hover content should persist until the pointer leaves, not time out under the reader. |
+
+**Not tunable:** WPF dismisses a tooltip the instant the pointer leaves the element, and that grace period is not exposed. For this bar that is the wanted behaviour anyway — leaving the bar should dismiss — and the case that actually needed smoothing was moving *between* segments, which `BetweenShowDelay` covers.
 
 - **No I/O on click.** The rollup store's ledger is already at `(UTC date × model)` grain, so the split was being discarded at the last step, not missing. It arrives on the `PanelStatistics` the panel opened with, and the flip is a re-render.
 - **The tile never changes size.** Both views live in one `Grid` and the inactive one is `Hidden`, not `Collapsed` — and the breakdown is built during `Populate`, not on first click, because a `Hidden` element only reserves the space its *content* needs. Built lazily, the tile visibly grew the first time it was opened.
@@ -107,7 +113,7 @@ Two consequences are load-bearing and should not be "tidied up" later:
 
 On the light surface two series sit below 3:1 against the tile. That is a documented **relief** case, not a dismissable warning, which is why the legend is mandatory rather than decorative and every segment carries a tooltip with exact figures. Legend text wears text tokens; the swatch beside it carries identity, never the text colour.
 
-> **Known limitation:** a figure that doesn't fit its segment is reachable by hover only, so it is not available to keyboard or touch. The legend still names every model, the total stays visible in both views, and every caveat is rendered rather than hovered — so nothing about *correctness* is gated behind the pointer, only the per-model detail.
+> **Known limitation:** per-model figures are reachable by hover only, so they are not available to keyboard or touch. This is a deliberate trade for a clean bar, taken twice over after printed figures were tried in the legend and then in the segments. What is *not* behind the pointer: the legend names every model, the tile's total shows in both views, and every rule-6 caveat — coverage, unpriced — is rendered text. Only the per-model split needs a pointer.
 
 **Rule 6 in the breakdown.** An unpriced model has an *unknown* value, not a zero, so it cannot be placed on the value chart — it is excluded and the tile says `excl. N unpriced`, with the tooltip naming them. A folded "Other" that contains any unpriced model reports its own value as unknown rather than quietly summing the priced remainder. `<synthetic>` is `Local`: real tokens, genuinely zero value, so it appears in the token split and not the value split. An unrecognised model id renders **as-is** — inferring a friendly name from the pattern would be a fabricated fact.
 
