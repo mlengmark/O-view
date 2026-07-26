@@ -4,6 +4,7 @@ using System.Windows.Media;
 using OView.Core.Models;
 using Brush = System.Windows.Media.Brush;
 using Orientation = System.Windows.Controls.Orientation;
+using Point = System.Windows.Point;
 using ToolTip = System.Windows.Controls.ToolTip;
 using UserControl = System.Windows.Controls.UserControl;
 

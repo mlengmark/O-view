@@ -75,6 +75,15 @@ public partial class App : System.Windows.Application
             return;
         }
 
+        // The update dialog, in both themes. It is modal, so it cannot be screenshotted
+        // by the same run that would take the screenshot — it has to be rendered.
+        if (args.TryGetValue("--dialog-samples", out var dialogSamplesDir))
+        {
+            RenderDialogSamples(dialogSamplesDir!);
+            Shutdown();
+            return;
+        }
+
         // Writes the same report as the Copy diagnostics menu item and exits. Handled
         // BEFORE the single-instance mutex so it can be run against a machine where
         // O-view is already running, without disturbing the live instance — the case
@@ -501,15 +510,15 @@ public partial class App : System.Windows.Application
 
         if (!UpdateService.IsInstalled)
         {
-            if (ConfirmUpdate(update, "Open the download page for the new version?"))
+            if (ConfirmUpdate(update, "Open the download page for the new version?", "Open page"))
             {
                 _updates.OpenInBrowser(UpdateService.ReleasePageUrl(update));
             }
             return;
         }
 
-        if (!ConfirmUpdate(update,
-            "Download and install it now? O-view will close briefly and reopen automatically."))
+        if (!ConfirmUpdate(update, "Download and install it now?", "Update now",
+            "O-view will close briefly and reopen automatically."))
         {
             return;
         }
@@ -530,12 +539,20 @@ public partial class App : System.Windows.Application
         }
     }
 
-    private static bool ConfirmUpdate(AvailableUpdate update, string question) =>
-        System.Windows.MessageBox.Show(
-            $"O-view {update.Version} is available (you have {UpdateService.CurrentVersion}).\n\n{question}",
-            "O-view update",
-            System.Windows.MessageBoxButton.YesNo,
-            System.Windows.MessageBoxImage.Information) == System.Windows.MessageBoxResult.Yes;
+    /// <summary>
+    /// The update prompt, on the app's own dialog rather than a system MessageBox — that
+    /// box was raw Win32 chrome with a stock glyph and nothing identifying which app was
+    /// asking. The primary button names the action ("Update now") instead of answering
+    /// "Yes" to a question the user has to re-read to be sure of.
+    /// </summary>
+    private static bool ConfirmUpdate(
+        AvailableUpdate update, string question, string confirmLabel, string detail = "") =>
+        DialogWindow.Confirm(
+            title: "Update available",
+            message: $"O-view {update.Version} is available — you have {UpdateService.CurrentVersion}. {question}",
+            confirmLabel: confirmLabel,
+            cancelLabel: "Not now",
+            detail: detail);
 
     protected override void OnExit(ExitEventArgs e)
     {
@@ -744,6 +761,59 @@ public partial class App : System.Windows.Application
                         $"  BetweenShowDelay : {timing.BetweenShowDelay} ms (intended 3000){Environment.NewLine}" +
                         $"  ShowDuration     : {timing.ShowDuration} ms (intended 20000){Environment.NewLine}");
                 }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Renders the update dialog in both themes and both variants — the installed path
+    /// ("Update now", with the relaunch note) and the portable one ("Open page").
+    /// </summary>
+    private static void RenderDialogSamples(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        const double scale = 2.0;
+        const double pad = 16;
+
+        var variants = new (string Name, string Message, string Confirm, string Detail)[]
+        {
+            ("installed", "O-view 0.5.1 is available — you have 0.5.0. Download and install it now?",
+                "Update now", "O-view will close briefly and reopen automatically."),
+            ("portable", "O-view 0.5.1 is available — you have 0.5.0. Open the download page for the new version?",
+                "Open page", ""),
+        };
+
+        foreach (var light in new[] { true, false })
+        {
+            foreach (var (name, message, confirm, detail) in variants)
+            {
+                var dialog = new DialogWindow { ThemeOverride = light };
+                dialog.Populate("Update available", message, confirm, "Not now", detail);
+                var card = dialog.RenderToBitmap(scale);
+
+                var w = card.PixelWidth / scale;
+                var h = card.PixelHeight / scale;
+                var visual = new System.Windows.Media.DrawingVisual();
+                using (var dc = visual.RenderOpen())
+                {
+                    dc.DrawRectangle(
+                        new System.Windows.Media.SolidColorBrush(light
+                            ? System.Windows.Media.Color.FromRgb(0xDE, 0xDE, 0xDE)
+                            : System.Windows.Media.Color.FromRgb(0x10, 0x10, 0x10)),
+                        null, new Rect(0, 0, w + 2 * pad, h + 2 * pad));
+                    dc.DrawImage(card, new Rect(pad, pad, w, h));
+                }
+
+                var composed = new System.Windows.Media.Imaging.RenderTargetBitmap(
+                    (int)((w + 2 * pad) * scale), (int)((h + 2 * pad) * scale),
+                    96 * scale, 96 * scale, System.Windows.Media.PixelFormats.Pbgra32);
+                composed.Render(visual);
+
+                var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(composed));
+                using var stream = File.Create(Path.Combine(dir,
+                    $"dialog-{name}-{(light ? "light" : "dark")}.png"));
+                png.Save(stream);
             }
         }
     }

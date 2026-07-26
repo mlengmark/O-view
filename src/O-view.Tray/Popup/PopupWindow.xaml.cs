@@ -8,6 +8,7 @@ using OView.Core.Models;
 using OView.Core.Providers.PlanHistory;
 using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
+using Point = System.Windows.Point;
 using Rectangle = System.Windows.Shapes.Rectangle;
 using Size = System.Windows.Size;
 
@@ -31,11 +32,43 @@ public partial class PopupWindow : Window
     /// <summary>Disables auto-hide for verification screenshots.</summary>
     public bool PinForVerification { get; set; }
 
+    /// <summary>Corner the panel is docked to, so it grows from the tray rather than the middle.</summary>
+    private Point _dockOrigin = new(1, 1);
+
+    /// <summary>Guards the close transition against a re-open landing mid-fade.</summary>
+    private bool _closing;
+
     public PopupWindow()
     {
         InitializeComponent();
-        Deactivated += (_, _) => { if (!PinForVerification) Hide(); };
-        PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) Hide(); };
+        Deactivated += (_, _) => { if (!PinForVerification) BeginClose(); };
+        PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) BeginClose(); };
+    }
+
+    /// <summary>
+    /// Fades and shrinks back into the docked corner, then hides. The Hide() is deferred
+    /// to the end of the transition — hiding first would make the animation invisible,
+    /// which is the whole point of having one.
+    /// </summary>
+    private void BeginClose()
+    {
+        if (_closing)
+        {
+            return;
+        }
+
+        _closing = true;
+        FlyoutAnimation.Close(this, _dockOrigin, () =>
+        {
+            // Re-checked because 110ms is long enough for the tray icon to be clicked
+            // again: if the panel was re-opened while this was running, the flag is
+            // already clear and hiding now would undo that.
+            if (_closing)
+            {
+                _closing = false;
+                Hide();
+            }
+        });
     }
 
     /// <summary>
@@ -49,7 +82,13 @@ public partial class PopupWindow : Window
         PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
         Populate(snapshot, stats, account);
 
+        // Cancels a close still in flight, so clicking the tray icon again mid-fade
+        // brings the panel straight back instead of letting it finish disappearing.
+        _closing = false;
+
         // SizeToContent height is unknown until measured: lay out off-screen, then place.
+        // Opacity starts at 0 so the off-screen frame never flashes at the final spot.
+        Opacity = 0;
         Left = -10_000;
         Top = -10_000;
         Show();
@@ -57,8 +96,18 @@ public partial class PopupWindow : Window
         // The chart is a Canvas — its ActualWidth is only known after layout, so it is
         // drawn here rather than in Populate.
         BuildGraph(stats);
-        (Left, Top) = PopupPositioner.Place(ActualWidth, ActualHeight);
+        (Left, Top, _dockOrigin) = PopupPositioner.Place(ActualWidth, ActualHeight);
         Activate();
+
+        if (PinForVerification)
+        {
+            // Stills need the finished state, not a frame from the middle of a fade.
+            FlyoutAnimation.Reset(this);
+        }
+        else
+        {
+            FlyoutAnimation.Open(this, _dockOrigin);
+        }
     }
 
     // ── data ───────────────────────────────────────────────────────────────────

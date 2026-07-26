@@ -2,7 +2,7 @@
 
 **Agreed:** 2026-07-20 · Supersedes the informal layout sketch in the README.
 
-Three surfaces: the always-visible **tray icon**, the **popup panel** shown when it is left-clicked, and the **tray menu** flyout shown when it is right-clicked.
+Three surfaces: the always-visible **tray icon**, the **popup panel** shown when it is left-clicked, and the **tray menu** flyout shown when it is right-clicked — plus the app's **dialogs** and its **setup wizard**, which carry the same brand.
 
 ---
 
@@ -203,6 +203,56 @@ Rows are `Button`s, so Tab/Space/Enter work; Up/Down is wired explicitly to matc
 **Verification hooks.** `--menu-samples <dir>` renders the flyout in both themes for visual review; `--show-menu` (with optional `--menu-pin`, `--menu-theme`) opens the real thing on the real desktop, which is the only way to check the docked placement against a live taskbar. Like `--diagnose`, `--menu-samples` is handled **before** the single-instance mutex, so it runs on a machine already running O-view.
 
 Measured on a 2560×1440 display, taskbar bottom-docked at `y=1392`: the flyout lands at `2276,1159–2548,1380` — 272×221, inside the work area, 12 px clear of the taskbar and 12 px from the screen edge.
+
+---
+
+## 4. Motion
+
+Both docked surfaces — the detail panel and the tray menu — **fade and grow from the corner they are docked to**, over 160 ms opening and 110 ms closing, easing out then in. They previously appeared and vanished in a single frame, which reads as a glitch rather than as a window opening.
+
+The transform is a **scale from 97%**, not a slide. A slide has to translate the content, the content fills the window, and the part sliding in from beyond the edge is therefore clipped by the window bounds; growing inward has no such problem, needs no window moves mid-animation (which stutter under per-monitor DPI), and lands where a slide would suggest. The origin comes from [`PopupPositioner`](../src/O-view.Tray/Popup/PopupPositioner.cs), which is the only thing that knows which corner was used — so the motion always points back at the tray icon that summoned it.
+
+Closing defers `Hide()` to the end of the animation, since hiding first would make the animation invisible. A close in flight is cancelled if the surface is re-opened, so clicking the tray icon again mid-fade brings it straight back rather than letting it finish disappearing. Menu **actions** run after the animation completes, which preserves the rule that a balloon or modal never appears behind a still-visible topmost flyout.
+
+`--popup-pin` and `--menu-pin` skip the animation entirely: a verification still needs the finished state, not a frame from the middle of a fade.
+
+---
+
+## 5. Dialogs
+
+O-view asks questions on **its own window**, not a `MessageBox`. The system box was the one surface that gave the app away — raw Win32 chrome, a stock blue "i" glyph, Yes/No buttons, and no room for a mark, so nothing on it said which application was asking.
+
+[`DialogWindow`](../src/O-view.Tray/Popup/DialogWindow.xaml) carries the same mark, palette and type as the menu and the panel: rounded card, brand mark beside the title, message, an optional muted detail line.
+
+- **The two answers have different weight** — an accent-filled primary and an outlined secondary — rather than two identical buttons the user must read both of to tell apart.
+- **The primary button names the action** (`Update now`, `Open page`) instead of answering "Yes" to a question that has to be re-read to be sure of.
+- Esc cancels; Enter takes the primary action.
+- It takes the foreground through the same [`ForegroundWindow`](../src/O-view.Tray/Tray/ForegroundWindow.cs) helper the tray menu uses. A dialog that opens *behind* another window is worse than a flyout doing so: it is modal, so the app appears to have frozen.
+
+**Accent colour is measured, not picked.** The mark's own `#D9603A` gives white label text only 3.69:1, short of the 4.5 a 12 px label needs, so the fill is stepped darker. Each step has to clear white text *and* stay distinguishable from whichever panel it sits on:
+
+| | White label | Light panel | Dark panel |
+|---|---|---|---|
+| `AccentBg` `#BE4E29` | 4.87:1 | 4.63:1 | 3.34:1 |
+| `AccentHover` `#B84A27` | 5.19:1 | 4.93:1 | 3.14:1 |
+
+Do not darken the hover further for emphasis: the next step (`#B44726`) lands on exactly 3.00:1 against the dark panel, and past it the button stops reading as a button in dark mode.
+
+`--dialog-samples <dir>` renders both variants in both themes. A modal cannot be screenshotted by the run that would take the screenshot, so it has to be rendered.
+
+---
+
+## 6. Setup
+
+The installer is branded too ([O-view.iss](../installer/O-view.iss)): a terracotta wizard panel carrying the mark and wordmark, the mark in the header of every other page, the O-view icon on `Setup.exe` itself, and welcome/finish copy in the app's own voice rather than Inno's defaults.
+
+Images are generated from `brand/o-view-mark.svg` into `installer/brand/` as BMP (what Inno takes), at 1× and 2× so a high-DPI display gets a crisp image rather than an upscale.
+
+**`DisableWelcomePage=no` is deliberate.** The large image only appears on the Welcome and Finished pages, and modern wizard style suppresses Welcome by default — so without it the branding would first appear only *after* the install had finished. One extra click on a first-time install buys a setup that identifies itself; the auto-update path runs `/SILENT` and never sees that page.
+
+### The surface that cannot be branded
+
+**Balloon notifications are drawn by Windows.** They come from `Shell_NotifyIcon` via `NotifyIcon.ShowBalloonTip` (ADR-0005) and take the system's own chrome — O-view supplies only a title, a body and an icon. There is no styling hook. Branding them would mean replacing them with custom toast windows, which is a different feature, not a coat of paint.
 
 ---
 

@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Point = System.Windows.Point;
 
 namespace OView.Tray.Popup;
 
@@ -13,8 +14,15 @@ namespace OView.Tray.Popup;
 /// </summary>
 internal static class PopupPositioner
 {
-    /// <summary>Placement for a popup of the given DIP size, docked at the tray corner.</summary>
-    public static (double LeftDip, double TopDip) Place(double widthDip, double heightDip)
+    /// <summary>
+    /// Placement for a popup of the given DIP size, docked at the tray corner, plus the
+    /// corner it ended up docked to as a RenderTransformOrigin.
+    ///
+    /// The corner is returned because the open/close animation has to grow FROM the
+    /// docked edge to read as a flyout rather than as a window fading in the middle of
+    /// nowhere — and only this method knows which edge that is.
+    /// </summary>
+    public static (double LeftDip, double TopDip, Point Origin) Place(double widthDip, double heightDip)
     {
         GetCursorPos(out var anchor);
         var monitor = MonitorFromPoint(anchor, MONITOR_DEFAULTTONEAREST);
@@ -43,26 +51,30 @@ internal static class PopupPositioner
         // end of the bar, so dock to the work-area corner nearest it. Auto-hide
         // taskbars leave no inset; bottom-right is the Windows 11 default.
         double left, top;
+        Point origin;
         if (work.Top > mon.Top)                 // taskbar at top
         {
             left = work.Right - margin - widthPx;
             top = work.Top + margin;
+            origin = new Point(1, 0);           // grows down from the top-right
         }
         else if (work.Left > mon.Left)          // taskbar at left
         {
             left = work.Left + margin;
             top = work.Bottom - margin - heightPx;
+            origin = new Point(0, 1);           // grows up from the bottom-left
         }
         else                                    // bottom (default), right, or auto-hide
         {
             left = work.Right - margin - widthPx;
             top = work.Bottom - margin - heightPx;
+            origin = new Point(1, 1);           // grows up from the bottom-right
         }
 
         left = Clamp(left, work.Left + margin, work.Right - margin - widthPx);
         top = Clamp(top, work.Top + margin, work.Bottom - margin - heightPx);
 
-        return (left / scale, top / scale);
+        return (left / scale, top / scale, origin);
     }
 
     private static double Clamp(double value, double min, double max) =>

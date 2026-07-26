@@ -59,6 +59,22 @@ internal static class PanelTheme
         Set(resources, "TileHover", light ? "#E5E5E5" : "#343434");
         Set(resources, "TilePressed", light ? "#DADADA" : "#3E3E3E");
 
+        // Brand accent, for the one primary action on a dialog. Taken from the mark's
+        // gradient (brand/o-view-mark.svg), but stepped darker than its #D9603A end:
+        // that end gives white label text only 3.69:1, short of the 4.5 a 12px label
+        // needs. One pair serves both themes, because each step has to clear white text
+        // AND stay distinguishable from whichever panel it sits on. Measured:
+        //
+        //   #BE4E29  white 4.87:1 · light panel 4.63:1 · dark panel 3.34:1
+        //   #B84A27  white 5.19:1 · light panel 4.93:1 · dark panel 3.14:1
+        //
+        // Do not darken the hover further to make it "more obvious": the next step down
+        // (#B44726) lands on exactly 3.00:1 against the dark panel, and anything past it
+        // fails — the button would stop reading as a button on hover in dark mode.
+        Set(resources, "AccentBg", "#BE4E29");
+        Set(resources, "AccentHover", "#B84A27");
+        Set(resources, "AccentText", "#FFFFFF");
+
         // Hover cards float ABOVE both the panel and the tiles, so they step away from
         // each rather than matching either — otherwise a card over a tile reads as part
         // of it. Light goes brighter than the panel, dark goes lighter than the tile.
