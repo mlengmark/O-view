@@ -5,6 +5,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using OView.Tray.Tray;
 using Path = System.Windows.Shapes.Path;
+using Point = System.Windows.Point;
 using Size = System.Windows.Size;
 
 namespace OView.Tray.Popup;
@@ -37,6 +38,12 @@ public partial class MenuWindow : Window
     /// <summary>Disables auto-hide for verification screenshots.</summary>
     public bool PinForVerification { get; set; }
 
+    /// <summary>Corner the flyout is docked to, so it grows from the tray.</summary>
+    private Point _dockOrigin = new(1, 1);
+
+    /// <summary>Guards the close transition against a re-open landing mid-fade.</summary>
+    private bool _closing;
+
     /// <summary>
     /// Applies the requested "run at startup" state and returns what the state
     /// <em>actually</em> is afterwards. The row renders the return value, not the request:
@@ -56,7 +63,7 @@ public partial class MenuWindow : Window
     {
         InitializeComponent();
 
-        Deactivated += (_, _) => { if (!PinForVerification) Hide(); };
+        Deactivated += (_, _) => { if (!PinForVerification) BeginClose(); };
 
         // Rows are Buttons, so Tab, Space and Enter work already; Up/Down is added back
         // because the ContextMenu this replaces had it and it is how a menu is expected
@@ -66,7 +73,7 @@ public partial class MenuWindow : Window
             switch (e.Key)
             {
                 case Key.Escape:
-                    Hide();
+                    BeginClose();
                     break;
                 case Key.Down:
                     MoveRowFocus(FocusNavigationDirection.Next);
@@ -98,67 +105,33 @@ public partial class MenuWindow : Window
     {
         Populate(runAtStartup, notifyOnThreshold, thresholdPercent, version);
 
+        // Cancels a close still in flight, so re-opening mid-fade brings it straight back.
+        _closing = false;
+
         // SizeToContent height is unknown until measured: lay out off-screen, then place.
+        // Opacity starts at 0 so the off-screen frame never flashes at the final spot.
+        Opacity = 0;
         Left = -10_000;
         Top = -10_000;
         Show();
         UpdateLayout();
-        (Left, Top) = PopupPositioner.Place(ActualWidth, ActualHeight);
+        (Left, Top, _dockOrigin) = PopupPositioner.Place(ActualWidth, ActualHeight);
         Activate();
+
+        if (PinForVerification)
+        {
+            FlyoutAnimation.Reset(this);
+        }
+        else
+        {
+            FlyoutAnimation.Open(this, _dockOrigin);
+        }
 
         // A tray-resident app owns no activated window, so Activate() alone is not
         // guaranteed the foreground — and without it the flyout never receives the
         // deactivation that dismisses it on an outside click (issue #11, which the old
         // ContextMenu hit for the same reason). Foreground the HWND explicitly.
-        ForceForeground(new WindowInteropHelper(this).Handle);
-    }
-
-    /// <summary>
-    /// Takes the foreground, falling back to AttachThreadInput when the plain request is
-    /// refused.
-    ///
-    /// This is not belt-and-braces. Windows grants SetForegroundWindow only to a process
-    /// that already holds the foreground or received the last input event, and a
-    /// tray-resident app frequently holds neither. Losing that race is not a cosmetic
-    /// failure: the flyout is shown but never activated, so it never fires Deactivated,
-    /// so it stays on screen with no way to dismiss it — a strictly worse bug than the
-    /// clipping this all set out to fix. That was reproduced on the dev machine, not
-    /// theorised. Sharing an input queue with the current foreground thread for the
-    /// duration of the call makes the grant succeed.
-    /// </summary>
-    private static void ForceForeground(nint hwnd)
-    {
-        if (hwnd == 0 || NativeMethods.SetForegroundWindow(hwnd) && NativeMethods.GetForegroundWindow() == hwnd)
-        {
-            return;
-        }
-
-        var foreground = NativeMethods.GetForegroundWindow();
-        if (foreground == 0)
-        {
-            return;
-        }
-
-        var foregroundThread = NativeMethods.GetWindowThreadProcessId(foreground, 0);
-        var ownThread = NativeMethods.GetCurrentThreadId();
-        if (foregroundThread == 0 || foregroundThread == ownThread)
-        {
-            return;
-        }
-
-        if (!NativeMethods.AttachThreadInput(ownThread, foregroundThread, true))
-        {
-            return;
-        }
-
-        try
-        {
-            NativeMethods.SetForegroundWindow(hwnd);
-        }
-        finally
-        {
-            NativeMethods.AttachThreadInput(ownThread, foregroundThread, false);
-        }
+        ForegroundWindow.Take(new WindowInteropHelper(this).Handle);
     }
 
     /// <summary>Fills the rows without showing the window (also the verification-render path).</summary>
@@ -182,11 +155,34 @@ public partial class MenuWindow : Window
         SetChecked(check, apply(!IsChecked(check)));
     }
 
-    private void Dismiss(EventHandler? handler)
+    /// <summary>
+    /// Fades and shrinks back into the docked corner, then hides — and only then runs
+    /// <paramref name="after"/>. Waiting the ~110ms costs nothing perceptible and keeps
+    /// the original guarantee that an action's balloon or modal never appears behind a
+    /// still-visible topmost flyout.
+    /// </summary>
+    private void BeginClose(Action? after = null)
     {
-        Hide();
-        handler?.Invoke(this, EventArgs.Empty);
+        if (_closing)
+        {
+            return;
+        }
+
+        _closing = true;
+        FlyoutAnimation.Close(this, _dockOrigin, () =>
+        {
+            // Re-checked: the flyout may have been re-opened while this was running.
+            if (_closing)
+            {
+                _closing = false;
+                Hide();
+            }
+            after?.Invoke();
+        });
     }
+
+    private void Dismiss(EventHandler? handler) =>
+        BeginClose(() => handler?.Invoke(this, EventArgs.Empty));
 
     private void MoveRowFocus(FocusNavigationDirection direction)
     {

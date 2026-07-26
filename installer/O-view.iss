@@ -68,6 +68,29 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 
+; Brand the wizard itself. Setup was the one surface still wearing stock Inno
+; chrome — a grey placeholder panel and no mark — so it did not read as the same
+; product as the app it installs. Generated from brand/o-view-mark.svg; the 2x
+; variants exist so a high-DPI display gets a crisp image rather than an upscale.
+WizardImageFile=brand\wizard-large.bmp,brand\wizard-large-2x.bmp
+WizardSmallImageFile=brand\wizard-small.bmp,brand\wizard-small-2x.bmp
+
+; The large image only appears on the Welcome and Finished pages, and modern style
+; suppresses Welcome by default — so without this the branding would show up only
+; once the install had already finished. One extra click on a first-time install
+; buys a setup that identifies itself; the auto-update path runs /SILENT and never
+; sees this page.
+DisableWelcomePage=no
+
+[Messages]
+; Setup's own copy, in the app's voice rather than Inno's defaults. The stock
+; welcome text says nothing about what is being installed; these two lines do.
+WelcomeLabel1=Install {#AppName}
+WelcomeLabel2=Claude usage and time-to-reset, live in your Windows notification area.%n%nInstalls for your account only — no administrator rights needed, and nothing is written outside your user profile.
+FinishedHeadingLabel={#AppName} is installed
+FinishedLabelNoIcons=Look for the ring icon in the notification area. Left-click it for the detail panel, right-click for settings.
+FinishedLabel=Look for the ring icon in the notification area. Left-click it for the detail panel, right-click for settings.
+
 [Tasks]
 Name: "startup"; Description: "Start {#AppName} automatically when I sign in to Windows"; GroupDescription: "Startup:"
 
