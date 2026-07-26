@@ -74,7 +74,10 @@
                                TextTrimming="CharacterEllipsis"
                                Foreground="{DynamicResource TextMuted}"/>
                 </Grid>
-                <Grid x:Name="BarHost" Height="10" Margin="0,5,0,0" SnapsToDevicePixels="True"/>
+                <!-- 16px rather than 10: the bar now carries the per-model figures
+                     inside its segments, so it has to be tall enough for 9pt text with
+                     padding. Still well under the 24px cap for a bar mark. -->
+                <Grid x:Name="BarHost" Height="16" Margin="0,5,0,0" SnapsToDevicePixels="True"/>
                 <!-- The legend is mandatory, not optional polish: on the light surface
                      two series sit below 3:1 against the tile, which the colour rules
                      allow only when visible labels ship alongside. It is also the

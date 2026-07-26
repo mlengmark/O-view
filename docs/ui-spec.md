@@ -80,7 +80,13 @@ Any tile whose window exceeds recorded history shows coverage: `3 of 31 days rec
 
 #### Per-model breakdown ([GitHub issue #37](https://github.com/mlengmark/O-view/issues/37))
 
-Every tile is clickable and flips in place between its total and a **stacked bar split by model**, with a legend naming each model and its figure. Clicking again flips back, as often as you like.
+Every tile is clickable and flips in place between its total and a **stacked bar split by model**. Clicking again flips back, as often as you like.
+
+**Where the figures live.** Inside the bar, not beside it. Each segment carries its own figure; the legend below carries only the model names. That keeps every legend entry short enough to stay on one line, which is the vertical space this buys back, and puts each number on the colour it belongs to.
+
+A segment's figure is drawn **only when the laid-out segment can hold it** with 3px clear either side — measured on `SizeChanged`, since star-sized columns mean the pixel width isn't known until layout. Segments too narrow stay bare and their figure lives on **hover**. This is not a nicety: a clipped figure is a *misread* number, not a truncated one, and an early build rendered a cropped `0.` inside an 18px "Other" segment. The measurement must use the width captured before the label was collapsed — a `Collapsed` element reports a desired size of zero, so a naive fit test compares against 0, always "fits", and clips.
+
+Figures inside a segment are the one place text may wear a colour tied to its mark: white or near-black, chosen per fill by WCAG contrast, so they clear the threshold on every slot in both themes. Hover on a segment — or on its legend entry — gives the model and its exact figure.
 
 - **No I/O on click.** The rollup store's ledger is already at `(UTC date × model)` grain, so the split was being discarded at the last step, not missing. It arrives on the `PanelStatistics` the panel opened with, and the flip is a re-render.
 - **The tile never changes size.** Both views live in one `Grid` and the inactive one is `Hidden`, not `Collapsed` — and the breakdown is built during `Populate`, not on first click, because a `Hidden` element only reserves the space its *content* needs. Built lazily, the tile visibly grew the first time it was opened.
@@ -100,6 +106,8 @@ Two consequences are load-bearing and should not be "tidied up" later:
 - **The cap tiers at three.** Up to three models each keep a colour; four or more collapse to **two named models plus a neutral "Other"**. No grey exists that is both inside the dark lightness band and separable from the third (aqua) slot for deuteranopes — the sweep bottoms out at ΔE 3.0 — because grey has no hue to separate on and sits at the same lightness. Dropping to two named models is the price of showing an honest remainder at all.
 
 On the light surface two series sit below 3:1 against the tile. That is a documented **relief** case, not a dismissable warning, which is why the legend is mandatory rather than decorative and every segment carries a tooltip with exact figures. Legend text wears text tokens; the swatch beside it carries identity, never the text colour.
+
+> **Known limitation:** a figure that doesn't fit its segment is reachable by hover only, so it is not available to keyboard or touch. The legend still names every model, the total stays visible in both views, and every caveat is rendered rather than hovered — so nothing about *correctness* is gated behind the pointer, only the per-model detail.
 
 **Rule 6 in the breakdown.** An unpriced model has an *unknown* value, not a zero, so it cannot be placed on the value chart — it is excluded and the tile says `excl. N unpriced`, with the tooltip naming them. A folded "Other" that contains any unpriced model reports its own value as unknown rather than quietly summing the priced remainder. `<synthetic>` is `Local`: real tokens, genuinely zero value, so it appears in the token split and not the value split. An unrecognised model id renders **as-is** — inferring a friendly name from the pattern would be a fabricated fact.
 
