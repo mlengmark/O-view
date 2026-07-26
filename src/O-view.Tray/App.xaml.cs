@@ -189,6 +189,14 @@ public partial class App : System.Windows.Application
             ShowPopup();
         }
 
+        // Drives the tray icon's own open → close → open sequence and reports the panel's
+        // state after each step. The toggle regressed in a way that only shows on the
+        // SECOND open, which a single --show-popup run can never catch.
+        if (args.TryGetValue("--toggle-check", out var toggleReport))
+        {
+            RunToggleCheck(toggleReport ?? "toggle-check.txt");
+        }
+
         // The same for the menu flyout (issue #33). --menu-samples renders it in
         // isolation; this opens the real thing on the real desktop, which is the only
         // way to verify the docked placement against a live taskbar and work area.
@@ -201,6 +209,64 @@ public partial class App : System.Windows.Application
                 : null;
             ShowMenu();
         }
+    }
+
+    /// <summary>
+    /// Exercises the tray click the way a user does: open, close, open again — each step
+    /// through the same ShowPopup() the icon calls, spaced far enough apart that the
+    /// close transition and the toggle's grace window have both elapsed. Writes what the
+    /// panel actually is at each point, so a "stopped reacting" report becomes a fact
+    /// rather than a guess.
+    /// </summary>
+    private void RunToggleCheck(string path)
+    {
+        var log = new System.Text.StringBuilder();
+        var step = 0;
+
+        void Record(string label)
+        {
+            var p = _popup;
+            log.AppendLine($"{label,-28} visible={p?.IsVisible} opacity={p?.Opacity:0.00} " +
+                           $"clickAway={p?.ClosedByClickAway} " +
+                           $"size={p?.ActualWidth:0}x{p?.ActualHeight:0} " +
+                           $"left={p?.Left:0} top={p?.Top:0}");
+        }
+
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+        timer.Tick += (_, _) =>
+        {
+            switch (step++)
+            {
+                case 0:
+                    ShowPopup();
+                    break;
+                case 1:
+                    Record("after 1st click (open)");
+                    ShowPopup();          // the second click, while it is open
+                    break;
+                case 2:
+                    Record("after 2nd click (close)");
+                    break;
+                case 3:
+                    ShowPopup();          // the third click — should open again
+                    break;
+                case 4:
+                    Record("after 3rd click (reopen)");
+                    ShowPopup();
+                    break;
+                case 5:
+                    Record("after 4th click (close)");
+                    ShowPopup();
+                    break;
+                case 6:
+                    Record("after 5th click (reopen)");
+                    timer.Stop();
+                    File.WriteAllText(path, log.ToString());
+                    Shutdown();
+                    break;
+            }
+        };
+        timer.Start();
     }
 
     private void ShowPopup()
