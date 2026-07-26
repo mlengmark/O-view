@@ -44,6 +44,19 @@ public partial class MenuWindow : Window
     /// <summary>Guards the close transition against a re-open landing mid-fade.</summary>
     private bool _closing;
 
+    /// <summary>When the flyout last began closing because it lost focus.</summary>
+    private DateTimeOffset _closedAt = DateTimeOffset.MinValue;
+
+    /// <summary>
+    /// True if the flyout dismissed itself a moment ago — for a tray click, that means
+    /// the click WAS the dismissal, so it must not reopen. See the panel's equivalent.
+    /// </summary>
+    public bool ClosedByClickAway =>
+        DateTimeOffset.UtcNow - _closedAt < TimeSpan.FromMilliseconds(400);
+
+    /// <summary>Closes the flyout from outside — a second right-click completing the toggle.</summary>
+    public void DismissNow() => BeginClose();
+
     /// <summary>
     /// Applies the requested "run at startup" state and returns what the state
     /// <em>actually</em> is afterwards. The row renders the return value, not the request:
@@ -169,6 +182,7 @@ public partial class MenuWindow : Window
         }
 
         _closing = true;
+        _closedAt = DateTimeOffset.UtcNow;
         FlyoutAnimation.Close(this, _dockOrigin, () =>
         {
             // Re-checked: the flyout may have been re-opened while this was running.

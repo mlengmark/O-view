@@ -77,6 +77,9 @@ public partial class StatTile : UserControl
 
     private IReadOnlyList<ModelSlice> _slices = [];
     private BreakdownMeasure _measure = BreakdownMeasure.Tokens;
+
+    /// <summary>Panel-wide slot order, so colour follows the model rather than its rank here.</summary>
+    private IReadOnlyList<string> _colourOrder = [];
     private bool _expanded;
 
     public StatTile()
@@ -110,7 +113,8 @@ public partial class StatTile : UserControl
         string value,
         string note,
         IReadOnlyList<ModelSlice> slices,
-        BreakdownMeasure measure)
+        BreakdownMeasure measure,
+        IReadOnlyList<string> colourOrder)
     {
         LabelText.Text = label;
         ValueText.Text = value;
@@ -123,11 +127,12 @@ public partial class StatTile : UserControl
 
         _slices = slices;
         _measure = measure;
+        _colourOrder = colourOrder;
         _expanded = false;
 
         // A tile with nothing to break down must not pretend to be clickable — an
         // affordance that leads nowhere is worse than none.
-        var segments = ModelBreakdown.Segments(slices, measure);
+        var segments = ModelBreakdown.Segments(slices, measure, colourOrder);
         Root.IsEnabled = segments.Count > 0;
         Root.Cursor = segments.Count > 0 ? System.Windows.Input.Cursors.Hand : null;
         ExpandGlyph.Visibility = segments.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
@@ -175,7 +180,7 @@ public partial class StatTile : UserControl
     /// </summary>
     internal ToolTip? BuildSampleTooltip(int segmentIndex)
     {
-        var segments = ModelBreakdown.Segments(_slices, _measure);
+        var segments = ModelBreakdown.Segments(_slices, _measure, _colourOrder);
         if (segmentIndex >= segments.Count)
         {
             return null;
@@ -208,7 +213,7 @@ public partial class StatTile : UserControl
         BarHost.Children.Clear();
         LegendHost.Children.Clear();
 
-        var segments = ModelBreakdown.Segments(_slices, _measure);
+        var segments = ModelBreakdown.Segments(_slices, _measure, _colourOrder);
         if (segments.Count == 0)
         {
             return;
@@ -377,8 +382,13 @@ public partial class StatTile : UserControl
         };
 
     /// <summary>
-    /// Colour by position in the validated order, except the folded remainder, which
-    /// always takes the neutral so it can never impersonate a model.
+    /// Colour by the MODEL, from the panel-wide slot order — never by the segment's
+    /// position in this tile.
+    ///
+    /// Position-based colouring is what made the same model change colour between tiles:
+    /// Opus 5 came out blue where it happened to be largest and orange where it was
+    /// second, so the four tiles could not be read against one another. Anything outside
+    /// the slot order — including the folded remainder — takes the neutral.
     /// </summary>
     private Brush[] SeriesBrushes(IReadOnlyList<ModelSlice> segments)
     {
@@ -391,7 +401,9 @@ public partial class StatTile : UserControl
         var other = (Brush)FindResource("SeriesOther");
 
         return segments
-            .Select((s, i) => s.DisplayName == ModelDisplayName.Other ? other : chromatic[i])
+            .Select(s => ModelBreakdown.SlotFor(s.Model, _colourOrder) is var slot && slot >= 0
+                ? chromatic[slot]
+                : other)
             .ToArray();
     }
 }

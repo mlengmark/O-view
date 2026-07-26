@@ -49,6 +49,13 @@ public sealed record PanelStatistics(
     /// <summary>Per-model split behind the 31-day figures. See <see cref="ModelsToday"/>.</summary>
     public IReadOnlyList<ModelSlice> Models31Days { get; init; } = [];
 
+    /// <summary>
+    /// Which models get their own colour, in slot order — one answer for the whole panel
+    /// so a model wears the same colour on every tile. Derived from the 31-day window
+    /// because it is the superset the other tiles draw from.
+    /// </summary>
+    public IReadOnlyList<string> ModelColourOrder { get; init; } = [];
+
     public bool HasPartialHistory => RecordedDays < WindowDays;
 
     /// <summary>True when work in the current session window is not drawing from the plan.</summary>
@@ -124,6 +131,7 @@ public sealed record PanelStatistics(
             UnpricedModels = unpriced,
             ModelsToday = SliceByModel(todayRollups),
             Models31Days = SliceByModel(rollups),
+            ModelColourOrder = ModelBreakdown.ColourOrder(SliceByModel(rollups)),
         };
     }
 

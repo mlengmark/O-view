@@ -35,8 +35,54 @@ public static class ModelBreakdown
     public const int NamedSlotsBesideOther = 2;
 
     /// <summary>
-    /// Orders by the given measure, largest first, and folds the tail into "Other" when
-    /// there are more models than slots.
+    /// The models that get their own colour, in slot order — computed once for the whole
+    /// panel from the widest window, and used by every tile.
+    ///
+    /// This exists because colour must follow the MODEL, never its rank within one tile.
+    /// Colouring by rank meant Opus 5 was blue where it happened to be the largest and
+    /// orange where it was second, so the same model wore two colours on one panel and
+    /// the four tiles could not be read against each other.
+    ///
+    /// Ranked by tokens over the 31-day window rather than by value, and rather than
+    /// per-tile: it is the superset every other tile draws from, so a model's colour is
+    /// decided once and holds everywhere, including on the value tiles where the ordering
+    /// differs.
+    /// </summary>
+    public static IReadOnlyList<string> ColourOrder(IReadOnlyList<ModelSlice> windowSlices)
+    {
+        var ranked = windowSlices
+            .Where(s => s.Tokens > 0)
+            .OrderByDescending(s => s.Tokens)
+            .ThenBy(s => s.Model, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        // Same tiering as before, now decided once for the panel instead of per tile:
+        // three models each keep a colour, four or more give up the third slot so the
+        // neutral remainder has something it is separable from.
+        var slots = ranked.Count <= MaxChromaticSlots ? MaxChromaticSlots : NamedSlotsBesideOther;
+        return ranked.Take(slots).Select(s => s.Model).ToList();
+    }
+
+    /// <summary>The slot a model's colour comes from, or -1 for the neutral remainder.</summary>
+    public static int SlotFor(string model, IReadOnlyList<string> colourOrder)
+    {
+        for (var i = 0; i < colourOrder.Count; i++)
+        {
+            if (string.Equals(colourOrder[i], model, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    /// <summary>
+    /// Orders by the given measure, largest first, folding anything outside
+    /// <paramref name="colourOrder"/> into the remainder.
+    ///
+    /// The fold is driven by the shared colour order, not by this tile's own ranking, so
+    /// a model that is "Other" on one tile is "Other" on all of them.
     ///
     /// Zero-measure models are dropped: a segment of width zero is invisible but its
     /// legend entry is not, so it reads as a model that contributed nothing to a total
@@ -45,30 +91,34 @@ public static class ModelBreakdown
     /// <see cref="Unpriced"/> so the caller can state the gap (rule 6).
     /// </summary>
     public static IReadOnlyList<ModelSlice> Segments(
-        IReadOnlyList<ModelSlice> slices, BreakdownMeasure measure)
+        IReadOnlyList<ModelSlice> slices, BreakdownMeasure measure, IReadOnlyList<string> colourOrder)
     {
-        var ranked = slices
-            .Where(s => Measure(s, measure) > 0)
+        var present = slices.Where(s => Measure(s, measure) > 0).ToList();
+
+        var named = present
+            .Where(s => SlotFor(s.Model, colourOrder) >= 0)
             .OrderByDescending(s => Measure(s, measure))
             .ThenBy(s => s.DisplayName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        if (ranked.Count <= MaxChromaticSlots)
+        var rest = present.Where(s => SlotFor(s.Model, colourOrder) < 0).ToList();
+        if (rest.Count == 0)
         {
-            return ranked;
+            return named;
         }
 
-        var named = ranked.Take(NamedSlotsBesideOther).ToList();
-        var rest = ranked.Skip(NamedSlotsBesideOther).ToList();
-
-        // The remainder keeps a real summed value in both measures, so the segment's
-        // width is the truth rather than a placeholder. Its Model field carries the
-        // count so the UI can name what was folded in.
-        named.Add(new ModelSlice(
-            Model: $"{rest.Count} more",
-            DisplayName: ModelDisplayName.Other,
-            Tokens: rest.Sum(s => s.Tokens),
-            EstUsd: rest.Any(s => s.EstUsd is null) ? null : rest.Sum(s => s.EstUsd ?? 0m)));
+        // A single leftover keeps its own name — "Other · 1 more models" would be a
+        // clumsy way to say "Haiku 4.5". It still takes the neutral colour, because it is
+        // not one of the panel's coloured models.
+        named.Add(rest.Count == 1
+            ? rest[0]
+            : new ModelSlice(
+                Model: $"{rest.Count} more",
+                DisplayName: ModelDisplayName.Other,
+                Tokens: rest.Sum(s => s.Tokens),
+                // The remainder keeps a real summed value so the segment's width is the
+                // truth — but stays unknown if anything in it was unpriced.
+                EstUsd: rest.Any(s => s.EstUsd is null) ? null : rest.Sum(s => s.EstUsd ?? 0m)));
 
         return named;
     }

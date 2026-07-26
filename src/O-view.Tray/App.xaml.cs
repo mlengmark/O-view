@@ -210,8 +210,20 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        _controller.Refresh();  // fresh data on open; local reads are cheap
         var popup = EnsurePopup();
+
+        // Clicking the tray icon is a TOGGLE, as every taskbar flyout is. The click
+        // itself dismisses the panel by taking focus away from it, so by the time this
+        // runs the panel is already closing — reopening it here made the icon a
+        // one-way switch that could only ever open. Treat a click that lands right
+        // after a dismissal as the second half of that toggle and leave it closed.
+        if (popup.IsVisible || popup.ClosedByClickAway)
+        {
+            popup.DismissNow();
+            return;
+        }
+
+        _controller.Refresh();  // fresh data on open; local reads are cheap
         // Inspected on open (not cached) so the banner reflects the file as it is now.
         popup.DataReport = PlanHistoryDiagnostics.Inspect();
         popup.ShowNearTrayIcon(
@@ -298,6 +310,13 @@ public partial class App : System.Windows.Application
     private void ShowMenu()
     {
         _menu ??= CreateMenu();
+
+        // Right-click toggles too, for the same reason the left-click does.
+        if (_menu.IsVisible || _menu.ClosedByClickAway)
+        {
+            _menu.DismissNow();
+            return;
+        }
 
         // State is passed on every open, never cached: both settings can change
         // externally (another instance, a manual registry edit, Task Manager's
@@ -645,16 +664,28 @@ public partial class App : System.Windows.Application
         ModelSlice S(string model, long tokens, decimal? usd) =>
             new(model, ModelDisplayName.For(model), tokens, usd);
 
+        // The 31-day window, and the tiles that draw from it. Deliberately shaped like
+        // the reported case: "today" contains ONLY Opus 5, which used to make Opus 5 the
+        // first segment there and therefore blue, while the 31-day tile ranked Opus 4.8
+        // first and painted Opus 5 orange. One colour order, derived from the window,
+        // is what stops that — so the samples share one, exactly as the panel does.
+        ModelSlice[] window =
+        [
+            S("claude-opus-4-8", 350_000_000, 250.00m),
+            S("claude-opus-5", 180_000_000, 120.00m),
+            S("claude-fable-5", 40_000_000, 50.00m),
+            S("claude-haiku-4-5", 5_900_000, 5.21m),
+        ];
+        var colourOrder = ModelBreakdown.ColourOrder(window);
+
         var cases = new (string Name, ModelSlice[] Slices)[]
         {
-            ("1-model", [S("claude-opus-5", 20_500_000, 41.20m)]),
-            ("2-models", [S("claude-opus-5", 15_000_000, 30.00m), S("claude-fable-5", 5_000_000, 33.50m)]),
-            ("3-models", [S("claude-opus-5", 15_000_000, 30.00m), S("claude-fable-5", 5_000_000, 33.50m),
-                          S("claude-sonnet-5", 500_000, 1.20m)]),
-            ("5-models-other", [S("claude-opus-5", 15_000_000, 30.00m), S("claude-fable-5", 5_000_000, 33.50m),
-                                S("claude-sonnet-5", 500_000, 1.20m), S("claude-haiku-4-5", 300_000, 0.40m),
-                                S("<synthetic>", 120_000, 0m)]),
-            ("unpriced", [S("claude-opus-5", 15_000_000, 30.00m), S("claude-brandnew-9", 4_000_000, null)]),
+            ("today — Opus 5 only (was blue here, orange below)", [S("claude-opus-5", 155_400_000, 91.44m)]),
+            ("31 days — all four models", window),
+            ("two of the window's models", [window[0], window[2]]),
+            ("three models, no remainder", [.. window.Take(3)]),
+            ("unpriced model present",
+                [S("claude-opus-4-8", 150_000_000, 30.00m), S("claude-brandnew-9", 4_000_000, null)]),
         };
 
         foreach (var light in new[] { true, false })
@@ -708,7 +739,7 @@ public partial class App : System.Windows.Application
                 // tiles are declared in XAML and the theme is applied before Populate.
                 foreach (var (tile, label, value, slices, _) in pending)
                 {
-                    tile.Populate(label, value, "8 of 31 days recorded", slices, tile.SplitBy);
+                    tile.Populate(label, value, "8 of 31 days recorded", slices, tile.SplitBy, colourOrder);
                     tile.SetExpanded(expanded);
                 }
 
