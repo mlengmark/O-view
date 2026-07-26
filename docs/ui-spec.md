@@ -85,7 +85,7 @@ Daily token totals across the trailing 31 days, from the rollup store ([ADR-0006
 - **One bar per day**, height by absolute daily tokens.
 - **Colour: light → dark blue by intensity within each calendar week** (issue #5) — each Mon–Sun week is its own gradient scale, so the busiest day of a week is darkest. The absolute weekly token limit is unknown, so this is *relative* intensity, not a fraction of a limit.
 - **Dotted vertical gridlines at Monday boundaries** (issue #5), giving weekly context. The plan's true weekly reset isn't derivable, so calendar weeks (Mon–Sun) are the anchor — a clean visual reference, not a claim about the plan boundary.
-- **Vertical date labels under every column** (issue #4), small but legible.
+- **Vertical date labels under every column** (issue #4), small but legible, and **centred on their own bar** ([issue #31](https://github.com/mlengmark/O-view/issues/31)). Bar and label are placed from a single column-centre anchor rather than each carrying its own offset. A rotated `TextBlock` renders one line height to the *left* of its `Canvas.Left` (a `RenderTransform` doesn't move the layout box), so the anchor is derived from `RotateTransform.TransformBounds` — measured, not a constant, since line height moves with font, DPI and OS text scaling. The former constant left labels 2.3 px adrift, a fifth of a column at 31 days.
 - **Hover tooltip** per bar: date and exact token count (issue #5).
 
 Days before install are **blank columns** (no bar) with their date still labelled — with the date axis, an empty column reads as "no data" on its own, so the earlier "before O-view install" caption was **removed to save space** (issue #4). They are never rendered as zero-height bars, which would misread as idle days.
