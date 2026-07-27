@@ -113,7 +113,7 @@ Resolution: fresh plan-history → OAuth if it ever exists → JSONL (labelled e
 
 Deliberately **not** in order of importance — in order of ascending unknowns:
 
-1. ~~Icon rasterisation spike~~ — **done.** Digits legible at 16 px; ring dropped. See [findings](docs/findings/tray-icon-rendering.md).
+1. ~~Icon rasterisation spike~~ — **done, and its conclusion has since been superseded twice.** The shipped icon carries **no digits**: it is the ring-gauge brand mark (ring + pupil) with the number in the tooltip. Rule 5 above is the current design. The spike's "digits only" result is history — digits were dropped when product direction required the icon to show a graph (issue #1). See [findings](docs/findings/tray-icon-rendering.md), whose later sections are marked historical for the same reason.
 2. ~~Token-discovery spike~~ — **no longer needed.** Superseded by `PlanHistoryProvider` ([ADR-0007](docs/adr/0007-plan-history-primary-provider.md)).
 2b. **`PlanHistoryProvider`** — parse `%APPDATA%\Claude\plan-usage-history.json`, plus the reset-drop detector. This is the primary source; build it first.
 3. **`JsonlUsageProvider`** — no auth, no network, fully testable. First test is the `requestId` de-duplication test.

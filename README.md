@@ -2,29 +2,44 @@
 
 A Windows notification-area (system tray) app that displays your Claude AI token usage and the time remaining until your next usage-limit reset.
 
-> **Status:** Working. All five build phases are complete — tray icon, popup panel, usage history, notifications, and publish pipeline. See [`docs/adr/`](docs/adr/) for the decisions that shaped the build.
+> **Status:** Shipped and in use — current release [v0.5.4](https://github.com/mlengmark/O-view/releases/latest). All five build phases are complete; work since then has been feature and polish work on the panel, the tray flyouts, and off-plan detection. See [`docs/adr/`](docs/adr/) for the decisions that shaped the build.
 
 ---
 
 ## What it does
 
-O-view sits in the Windows 11 notification area and answers two questions at a glance:
+O-view sits in the Windows 11 notification area and answers three questions at a glance:
 
 1. **How much of my Claude usage limit have I consumed?** (5-hour rolling window, and 7-day window)
 2. **When does it reset?**
+3. **Is my work actually drawing from the plan, or billing as extra usage?**
 
 | Surface | Shows |
 |---|---|
-| Tray icon | 2 digits + a proportional % fill bar (e.g. `47` over a half-full bar), colour-coded green → amber → red; full-ring `!` at 100% |
-| Tooltip | `5h: 47% · resets 16:32 · 7d: 61%` |
-| Popup panel | Session/weekly bars, token counts, estimated API-equivalent value, 31-day usage graph, data-source badge. Docks to the taskbar corner like a system flyout. |
-| Right-click menu | Run at startup · threshold notification toggle · check for updates · exit |
+| Tray icon | A **ring gauge** filled in proportion to 5-hour usage, with the brand "eye" pupil at its centre — no digits. Colour-coded green (<50%) → amber (50–69%) → red (≥70%). A grey, unfilled ring means no authoritative data rather than a fabricated 0%. Geometry scales to the icon size, and the palette switches for a light or dark taskbar. |
+| Tooltip | `5h: 47% · resets 16:32 · 7d: 61%` — the exact number lives here, since the icon carries no text. Degrades honestly: `(as of 14:05)` when the data is stale, `local estimate · usage % unknown` on fallback data, `no usage data` when there is none. |
+| Detail panel | Left-click. Account header, session/weekly bars with reset times, four clickable stat tiles, a 31-day usage graph, and an off-plan section. Details below. |
+| Menu | Right-click. Run at startup · notify-at-threshold toggle · Copy diagnostics · Check for updates… · Exit. Rendered as an on-brand flyout docked to the taskbar corner, not a Win32 context menu, so it matches the panel. |
 
-A balloon notification fires once per session-window crossing of the threshold (default 85%).
+A balloon notification fires once per session window when usage crosses the threshold — **70% by default**, the point at which the gauge turns red, so the notification and the colour never disagree.
+
+### The detail panel
+
+Both flyouts dock to the taskbar corner like a system flyout, follow the Windows light/dark app theme (re-read on every open — no restart), and animate open and closed.
+
+- **Account header** — display name, email, and plan-tier badge, read from `~/.claude.json`. No token, no network call.
+- **Session and weekly bars** — percentage, proportional fill in the same colour bands as the icon, and the derived reset time for each. Reset times are *derived from observed drops*, not reported by any API; before a drop has been seen the panel says the reset time is unknown rather than guessing.
+- **Four stat tiles** — tokens today, Est. value today, tokens over 31 days, Est. value over 31 days. **Click any tile to flip it to a per-model breakdown**: a segmented bar with a consistent colour per model across the whole panel, and per-model token and cost figures on hover. Nothing is fetched on click; the split is already in hand.
+- **Usage graph — last 31 days** — daily bars with calendar-week gridlines and hover tooltips. Days before O-view's first recorded day are drawn as an explicit empty region, never as zero-height bars, because "no data" and "no usage" are different claims.
+- **Off-plan usage — last 31 days** — the estimated API-rate value of usage on models that bill as extra usage (currently Fable) rather than drawing from the plan window.
+- **Off-plan warning banner** — appears when the live divergence detector sees substantial local work against a flat plan meter, or when the plan window is exhausted. This exists because the tray once read a comfortable green 6% while ~€86 of credit usage was being billed; see [findings/credit-usage-divergence.md](docs/findings/credit-usage-divergence.md).
+- **"No usage data" banner** — when the figures read unknown, the panel states *what* O-view checked and *what it observed*, rather than asserting anything about your machine it hasn't verified.
+
+Figures labelled **Est.** price tokens at published API rates. They are not money charged — within plan limits the marginal cost is zero. Where a model has no published rate, O-view sums what it can price and names the rest (`excludes claude-x (no published rate)`) instead of blanking the tile.
 
 ## Platform
 
-**Windows 11 only.** This is a deliberate constraint, not a temporary one — see [ADR-0003](docs/adr/0003-windows-tray-constraints.md). The app targets Windows-native APIs (Shell notification area, DPAPI, per-monitor DPI, registry startup) and there is no macOS or Linux target.
+**Windows 11 only.** This is a deliberate constraint, not a temporary one — see [ADR-0003](docs/adr/0003-windows-tray-constraints.md). The app targets Windows-native APIs (Shell notification area, per-monitor DPI, registry startup) and there is no macOS or Linux target.
 
 ## Provenance — clean-room
 
@@ -34,14 +49,27 @@ O-view is inspired by the *product concept* of macOS menu-bar apps that track AI
 
 ## Data sources
 
-O-view reads usage from two independent providers and falls back gracefully:
+O-view handles **no credentials and makes no API calls for usage data.** Everything comes from files Claude's own apps already keep on disk. It reads from two independent providers and falls back gracefully:
 
-| Provider | Role | Gives | Notes |
+| Provider | Role | Reads | Gives |
 |---|---|---|---|
-| `OAuthUsageProvider` | Primary | Authoritative % utilisation + reset timestamps | Undocumented endpoint; aggressively rate-limited |
-| `JsonlUsageProvider` | Fallback | Token counts from local `~/.claude` logs | Always available, offline, no auth |
+| `PlanHistoryProvider` | Primary | `%APPDATA%\Claude\plan-usage-history.json` (read-only — the file belongs to Claude Desktop) | Authoritative 5-hour and 7-day % utilisation, plus reset times derived from observed drops |
+| `JsonlUsageProvider` | Fallback | Claude Code transcripts under `%USERPROFILE%\.claude\projects` | Token counts and per-model breakdown, de-duplicated by `requestId` |
 
-When operating on fallback data the UI shows a visible **"local estimate"** badge. See [ADR-0002](docs/adr/0002-usage-data-providers.md).
+`CompositeUsageProvider` resolves between them by information value rather than list position: any live snapshot beats a stale one, and stale authoritative percentages beat an estimate carrying no percentages at all. The winning snapshot keeps its own label, so the UI shows a visible **"local estimate"** badge whenever it is running on fallback data. A provider that throws is treated as "no data" and the chain falls through rather than blanking the display.
+
+> **The two measure different things,** and the panel says so. The plan bars cover *all* Claude usage; the token tiles only cover usage that leaves a Claude Code transcript. A Desktop-only user therefore sees a non-zero session % beside 0 tokens.
+
+`OAuthUsageProvider` appears in some earlier design docs as the intended primary source. It was **deferred out of v1 and has not been built** — the local file solves the problem without a token ([ADR-0007](docs/adr/0007-plan-history-primary-provider.md)). ADR-0002 is superseded on this point.
+
+O-view polls every 60 seconds (the underlying file only updates every ~300 s), with a fast 3-second warm-up cadence for the first two minutes after launch so a start that beats Claude Desktop to the punch still fills the bars within seconds.
+
+### What O-view writes
+
+Only to its own directory, `%LOCALAPPDATA%\O-view\`:
+
+- `usage.db` — SQLite daily rollups per model. Claude Code deletes transcripts at 30 days, so the 31-day figures need their own store ([ADR-0006](docs/adr/0006-local-rollup-store.md)). Ingestion is idempotent.
+- `settings.json` — notification preferences. Run-at-startup is not stored here; the registry `Run` key is its single source of truth.
 
 ## Install and run
 
@@ -49,19 +77,35 @@ When operating on fallback data the UI shows a visible **"local estimate"** badg
 
 **Portable alternative.** Prefer not to install? Download the standalone `O-view.Tray.exe` and run it from anywhere — it is self-contained, no .NET required. Note there is then no Start Menu entry; use the right-click **Run at startup** toggle if you want it to persist.
 
-Either way: the icon lands in the taskbar overflow flyout (the `^` chevron) by default; drag it onto the taskbar to pin it. Left-click opens the panel, right-click the menu.
+Either way: the icon lands in the taskbar overflow flyout (the `^` chevron) by default; drag it onto the taskbar to pin it. Left-click opens the panel, right-click the menu; clicking the icon again closes what is open.
 
-**Staying up to date.** O-view checks GitHub for a newer release in the background and shows a one-time balloon when one is available; right-click → **Check for updates…** at any time. For an installed copy it downloads `O-view-Setup.exe`, upgrades in place, and relaunches — all after a single confirmation. Portable copies are pointed at the release page. See [ADR-0009](docs/adr/0009-auto-update.md).
+**Staying up to date.** O-view checks GitHub for a newer release in the background and shows a one-time balloon when one is available; right-click → **Check for updates…** at any time. For an installed copy it downloads `O-view-Setup.exe`, upgrades in place, and relaunches — all after a single confirmation. Portable copies are pointed at the release page. See [ADR-0009](docs/adr/0009-auto-update.md) and [ADR-0010](docs/adr/0010-post-update-relaunch.md).
 
 > **SmartScreen, honestly:** neither the installer nor the executable is code-signed — a certificate costs more than a free tool justifies, which is also why there is no MSIX package (MSIX cannot install unsigned). Windows SmartScreen will warn on first run ("Windows protected your PC"); *More info → Run anyway* proceeds. The source is in this repository, and both the installer and the binary are built from it by the GitHub Actions workflow — verify rather than trust.
 
-**Building from source:**
+## Troubleshooting
 
+If the panel reads "no usage data", it will state which path it checked and what it found there. Right-click → **Copy diagnostics** puts the same report on the clipboard for a bug report. The report can also be written without disturbing a running instance:
+
+```bash
+O-view.Tray.exe --diagnose report.txt
 ```
-dotnet build          # requires .NET 10 SDK 10.0.302+
-dotnet test           # 151 tests
+
+## Building from source
+
+```bash
+dotnet build
+```
+
+```bash
+dotnet test
+```
+
+```bash
 dotnet publish src/O-view.Tray -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 ```
+
+Requires the .NET 10 SDK (10.0.302+). The test suite is 203 xUnit tests over `O-view.Core`; CI runs build and test on every push and pull request, and tagging `v*` publishes the single-file exe and the Inno Setup installer to a GitHub release.
 
 Runtime prerequisites: Windows 11, and Claude data present locally — [Claude Desktop](https://claude.ai/download) for authoritative percentages, and/or Claude Code transcripts under `%USERPROFILE%\.claude\` for token counts.
 
@@ -69,6 +113,8 @@ Runtime prerequisites: Windows 11, and Claude data present locally — [Claude D
 
 - [Architecture Decision Records](docs/adr/) — why the stack, providers, and constraints are what they are
 - [Findings](docs/findings/) — empirical observations about local data formats
+- [UI spec](docs/ui-spec.md) — the panel contract
+- [CLAUDE.md](CLAUDE.md) — the rules any contributor (human or AI) works under
 
 ## Licence
 
