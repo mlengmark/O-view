@@ -116,7 +116,9 @@ public class IncrementalReadTests : IDisposable
         File.WriteAllText(path, Line("req_A", 10) + "\n" + Line("req_B", 20) + "\n");
 
         using var incremental = new RollupStore(Path.Combine(_dir, "inc.db"));
-        var provider = new JsonlUsageProvider(incremental, Path.Combine(_dir, "projects"));
+        // coworkRoot: null — this test measures the projects root only, and a machine
+        // default here would pull in the developer's real Cowork history.
+        var provider = new JsonlUsageProvider(incremental, Path.Combine(_dir, "projects"), null);
         provider.GetSnapshot(DateTimeOffset.UtcNow);
         File.AppendAllText(path, Line("req_C", 30) + "\n");
         provider.GetSnapshot(DateTimeOffset.UtcNow);

@@ -43,6 +43,8 @@ If OAuth is ever built: never log the token, persist it, include it in exception
 
 Non-negotiable, and the single easiest way to ship a silently broken app. Assistant records are written multiple times as responses stream; the sample file had **28 records for 12 distinct `requestId`s** — a naive sum overcounts by ~2.3×. Group by `requestId`, keep the last occurrence. Details: [docs/findings/jsonl-schema.md](docs/findings/jsonl-schema.md).
 
+**The id has two spellings.** Claude Code transcripts write `requestId`; **Cowork** audit logs write `request_id` on an otherwise identical record. Reading only one spelling ingests *nothing* from the other source — no error, just an empty tile. See rule 9.
+
 ### 5. No third-party tray library — and free the GDI handle
 
 Tray integration uses the **first-party `System.Windows.Forms.NotifyIcon`** (`<UseWPF>` + `<UseWindowsForms>` together). Do not add H.NotifyIcon or any other tray package; the dependency was evaluated and deliberately dropped ([ADR-0005](docs/adr/0005-native-tray-integration.md)). WinForms is for `NotifyIcon` **only** — no WinForms controls, forms, or `Application.Run`.
@@ -70,6 +72,23 @@ The rollup store ([ADR-0006](docs/adr/0006-local-rollup-store.md)) is re-fed fro
 ### 8. Read the fields that actually hold data
 
 Account info comes from `~/.claude.json` → `oauthAccount` (no token, no network). **Tier is `organizationType`** (e.g. `claude_pro`). `seatTier` and `userRateLimitTier` are empty strings on the dev account — the obvious-looking fields are the wrong ones and silently render a blank badge.
+
+### 9. Tokens come from two places, and chat is neither
+
+Local token counts have **two** sources, and scanning one of them is the historical bug ([findings/cowork-audit-logs.md](docs/findings/cowork-audit-logs.md), issue #44):
+
+| Surface | Transcript |
+|---|---|
+| Claude Code (CLI **and** hosted in Desktop) | `%USERPROFILE%\.claude\projects\**\*.jsonl` |
+| **Cowork** | `%APPDATA%\Claude\local-agent-mode-sessions\…\<session>\audit.jsonl` |
+| Chat | **none — no local usage record exists** |
+
+Two traps, both silent:
+
+- Each Cowork sandbox contains a `.claude\projects` directory that is **always empty**. Its presence makes a projects-only scan look like it succeeded.
+- That tree contains a **broken directory junction**. `Directory.GetFiles(..., AllDirectories)` aborts the entire walk on it and `DirectoryNotFoundException` derives from `IOException`, so the usual catch turns one bad folder into "no transcripts on this machine". Always enumerate per-directory — use `TranscriptFileScan`, don't hand-roll it again.
+
+"Claude Desktop" is **not** the dividing line — Claude Code sessions hosted in Desktop write to the normal user-profile location. Cowork is the odd one out, and chat is the one that genuinely cannot be measured. Don't write UI copy that blames "Desktop".
 
 ## Prerequisites
 
@@ -101,7 +120,7 @@ Keep `Core` free of UI and Win32 dependencies so the accounting logic stays test
 IUsageProvider
  ├─ PlanHistoryProvider  (primary)   → session/weekly %, derived reset times
  ├─ OAuthUsageProvider   (deferred)  → post-v1 enhancement only
- ├─ JsonlUsageProvider   (fallback)  → local token counts, offline
+ ├─ JsonlUsageProvider   (fallback)  → local token counts, offline (Claude Code + Cowork)
  └─ CompositeUsageProvider           → resolution, caching, source labelling
 ```
 

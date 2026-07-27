@@ -10,16 +10,54 @@ namespace OView.Core.Providers.Jsonl;
 /// token allowance is unpublished, so no true percentage-of-limit can be derived from
 /// token counts, and fabricating a denominator would violate CLAUDE.md rule 6. Token
 /// figures for the stats tiles come from the <see cref="RollupStore"/> directly.
+///
+/// Scans **both** local transcript sources — Claude Code and Cowork. Chat remains out of
+/// reach at any price: claude.ai persists conversation content locally but no usage
+/// accounting at all, so there is nothing to read (issue #44).
 /// </summary>
 public sealed class JsonlUsageProvider : IUsageProvider
 {
     private readonly RollupStore _store;
-    private readonly string _projectsRoot;
+    private readonly string? _projectsRoot;
+    private readonly string? _coworkRoot;
 
-    public JsonlUsageProvider(RollupStore store, string? projectsRoot = null)
+    /// <summary>The real machine layout: both transcript roots.</summary>
+    public JsonlUsageProvider(RollupStore store)
+        : this(store, ClaudeProjectsLocator.DefaultRoot, CoworkAuditLocator.DefaultRoot)
+    {
+    }
+
+    /// <summary>
+    /// Explicit roots. A null root skips that source outright and never falls back to the
+    /// machine default — naming one root while the other silently resolved to a real
+    /// directory made a test ingest this developer's actual Cowork history (it expected
+    /// 60 tokens and got 3,807). Both roots are stated or neither is.
+    /// </summary>
+    public JsonlUsageProvider(RollupStore store, string? projectsRoot, string? coworkRoot)
     {
         _store = store;
-        _projectsRoot = projectsRoot ?? ClaudeProjectsLocator.DefaultRoot;
+        _projectsRoot = projectsRoot;
+        _coworkRoot = coworkRoot;
+    }
+
+    /// <summary>
+    /// Every local transcript, across both places Claude writes them: Claude Code under
+    /// %USERPROFILE%\.claude\projects, and Cowork under its sandboxed session root. The
+    /// downstream pipeline is keyed by file path and request id, so a second source needs
+    /// no other change — offsets, de-duplication and idempotent upserts all still hold,
+    /// including for a request id that appears in both (issue #44).
+    /// </summary>
+    private IEnumerable<string> FindAllTranscripts()
+    {
+        IEnumerable<string> transcripts = _projectsRoot is null
+            ? []
+            : ClaudeProjectsLocator.FindTranscripts(_projectsRoot);
+
+        IEnumerable<string> audits = _coworkRoot is null
+            ? []
+            : CoworkAuditLocator.FindAuditLogs(_coworkRoot);
+
+        return transcripts.Concat(audits);
     }
 
     public UsageSnapshot GetSnapshot(DateTimeOffset utcNow)
@@ -40,7 +78,7 @@ public sealed class JsonlUsageProvider : IUsageProvider
     /// </summary>
     private void Sync()
     {
-        foreach (var file in ClaudeProjectsLocator.FindTranscripts(_projectsRoot))
+        foreach (var file in FindAllTranscripts())
         {
             long length;
             try

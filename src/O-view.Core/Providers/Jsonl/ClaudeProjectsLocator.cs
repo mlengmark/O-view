@@ -14,20 +14,11 @@ public static class ClaudeProjectsLocator
 
     /// <summary>
     /// All transcript files under the root. Empty if the root does not exist.
+    /// Delegates to <see cref="TranscriptFileScan"/> so one unreadable directory costs
+    /// that directory rather than every transcript on the machine (issue #44).
     /// </summary>
-    public static IReadOnlyList<string> FindTranscripts(string root)
-    {
-        try
-        {
-            return Directory.Exists(root)
-                ? Directory.GetFiles(root, "*.jsonl", SearchOption.AllDirectories)
-                : [];
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return [];
-        }
-    }
+    public static IReadOnlyList<string> FindTranscripts(string root) =>
+        TranscriptFileScan.Find(root, "*.jsonl");
 
     /// <summary>
     /// Windows path mangling as Claude Code applies it to project directory names:

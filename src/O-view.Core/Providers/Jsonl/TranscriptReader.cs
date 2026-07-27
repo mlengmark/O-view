@@ -5,10 +5,13 @@ using System.Text.Json;
 namespace OView.Core.Providers.Jsonl;
 
 /// <summary>
-/// Reads Claude Code JSONL transcripts (docs/findings/jsonl-schema.md). Claude Code
-/// appends while we read, so files open with FileShare.ReadWrite and a partially
-/// flushed final line is normal, not corruption. Malformed lines and unknown record
-/// types are skipped silently; one bad line must never fail a scan.
+/// Reads Claude agent JSONL transcripts (docs/findings/jsonl-schema.md) — both Claude
+/// Code transcripts and Cowork audit logs, whose assistant records carry the identical
+/// usage schema and differ only in how the request id is spelled (see
+/// <see cref="ReadRequestId"/>). Claude appends while we read, so files open with
+/// FileShare.ReadWrite and a partially flushed final line is normal, not corruption.
+/// Malformed lines and unknown record types are skipped silently; one bad line must
+/// never fail a scan.
 /// </summary>
 public static class TranscriptReader
 {
@@ -95,9 +98,7 @@ public static class TranscriptReader
                 return null;
             }
 
-            if (!root.TryGetProperty("requestId", out var reqId) ||
-                reqId.ValueKind != JsonValueKind.String ||
-                reqId.GetString() is not { Length: > 0 } requestId)
+            if (ReadRequestId(root) is not { } requestId)
             {
                 return null;
             }
@@ -142,6 +143,31 @@ public static class TranscriptReader
             // Truncated final line or malformed content — skip, never fatal.
             return null;
         }
+    }
+
+    /// <summary>
+    /// The request id under either spelling. Claude Code transcripts write
+    /// <c>requestId</c>; Cowork audit logs write <c>request_id</c> with an otherwise
+    /// identical record. Reading only the camelCase name ingested nothing at all from
+    /// Cowork — no error, no partial total, just permanently empty tiles (issue #44).
+    /// </summary>
+    private static string? ReadRequestId(JsonElement root)
+    {
+        if (root.TryGetProperty("requestId", out var camel) &&
+            camel.ValueKind == JsonValueKind.String &&
+            camel.GetString() is { Length: > 0 } fromCamel)
+        {
+            return fromCamel;
+        }
+
+        if (root.TryGetProperty("request_id", out var snake) &&
+            snake.ValueKind == JsonValueKind.String &&
+            snake.GetString() is { Length: > 0 } fromSnake)
+        {
+            return fromSnake;
+        }
+
+        return null;
     }
 
     /// <summary>Absent token fields mean none reported; zero, not an error.</summary>
