@@ -113,7 +113,7 @@ Resolution: fresh plan-history → OAuth if it ever exists → JSONL (labelled e
 
 Deliberately **not** in order of importance — in order of ascending unknowns:
 
-1. ~~Icon rasterisation spike~~ — **done.** Digits legible at 16 px; ring dropped. See [findings](docs/findings/tray-icon-rendering.md).
+1. ~~Icon rasterisation spike~~ — **done.** Digits proved legible at 16 px, but the *digits* were dropped and the ring kept once a graph was required (issue #1) — see rule 5 and [findings](docs/findings/tray-icon-rendering.md).
 2. ~~Token-discovery spike~~ — **no longer needed.** Superseded by `PlanHistoryProvider` ([ADR-0007](docs/adr/0007-plan-history-primary-provider.md)).
 2b. **`PlanHistoryProvider`** — parse `%APPDATA%\Claude\plan-usage-history.json`, plus the reset-drop detector. This is the primary source; build it first.
 3. **`JsonlUsageProvider`** — no auth, no network, fully testable. First test is the `requestId` de-duplication test.
