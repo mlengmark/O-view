@@ -10,16 +10,63 @@ namespace OView.Core.Providers.Jsonl;
 /// token allowance is unpublished, so no true percentage-of-limit can be derived from
 /// token counts, and fabricating a denominator would violate CLAUDE.md rule 6. Token
 /// figures for the stats tiles come from the <see cref="RollupStore"/> directly.
+///
+/// Scans **both** local transcript sources — Claude Code and Cowork. Chat remains out of
+/// reach at any price: claude.ai persists conversation content locally but no usage
+/// accounting at all, so there is nothing to read (issue #44).
 /// </summary>
 public sealed class JsonlUsageProvider : IUsageProvider
 {
     private readonly RollupStore _store;
-    private readonly string _projectsRoot;
+    private readonly string? _projectsRoot;
+    private readonly IReadOnlyList<string> _coworkRoots;
 
-    public JsonlUsageProvider(RollupStore store, string? projectsRoot = null)
+    /// <summary>The real machine layout: every transcript root on this machine.</summary>
+    public JsonlUsageProvider(RollupStore store)
+        : this(store, ClaudeProjectsLocator.DefaultRoot, CoworkAuditLocator.DefaultRoots)
+    {
+    }
+
+    /// <summary>
+    /// Explicit roots: a null projects root and an empty Cowork list each skip that
+    /// source outright, and neither falls back to a machine default. Naming one root
+    /// while the other silently resolved to a real directory made a test ingest this
+    /// developer's actual Cowork history (it expected 60 tokens and got 3,807), so every
+    /// source is stated or absent by choice.
+    ///
+    /// Cowork takes a list rather than an optional single root because a machine can
+    /// have more than one Claude data root (canonical plus MSIX package stores). An
+    /// overload pair would have made a bare <c>null</c> argument ambiguous at every call
+    /// site, so there is deliberately one constructor here, not two.
+    /// </summary>
+    public JsonlUsageProvider(RollupStore store, string? projectsRoot, IReadOnlyList<string> coworkRoots)
     {
         _store = store;
-        _projectsRoot = projectsRoot ?? ClaudeProjectsLocator.DefaultRoot;
+        _projectsRoot = projectsRoot;
+        _coworkRoots = coworkRoots;
+    }
+
+    /// <summary>
+    /// Every local transcript, across both places Claude writes them: Claude Code under
+    /// %USERPROFILE%\.claude\projects, and Cowork under its sandboxed session root. The
+    /// downstream pipeline is keyed by file path and request id, so a second source needs
+    /// no other change — offsets, de-duplication and idempotent upserts all still hold,
+    /// including for a request id that appears in both (issue #44).
+    /// </summary>
+    private IEnumerable<string> FindAllTranscripts()
+    {
+        IEnumerable<string> transcripts = _projectsRoot is null
+            ? []
+            : ClaudeProjectsLocator.FindTranscripts(_projectsRoot);
+
+        // Distinct by path: the same root can appear twice through MSIX redirection, and
+        // re-reading one file per poll is pointless work even though ingestion would
+        // de-duplicate its records anyway.
+        IEnumerable<string> audits = CoworkAuditLocator
+            .FindAuditLogs(_coworkRoots)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        return transcripts.Concat(audits);
     }
 
     public UsageSnapshot GetSnapshot(DateTimeOffset utcNow)
@@ -40,7 +87,7 @@ public sealed class JsonlUsageProvider : IUsageProvider
     /// </summary>
     private void Sync()
     {
-        foreach (var file in ClaudeProjectsLocator.FindTranscripts(_projectsRoot))
+        foreach (var file in FindAllTranscripts())
         {
             long length;
             try

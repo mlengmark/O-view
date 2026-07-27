@@ -46,27 +46,13 @@ public static class PlanHistoryLocator
         var paths = new List<string> { Path.Combine(appDataRoot, "Claude", FileName) };
 
         // Packaged (MSIX) Claude Desktop redirects %APPDATA% into its own LocalCache.
-        // The package family name carries a publisher hash, so it is matched, not assumed.
-        var packages = Path.Combine(localAppDataRoot, "Packages");
-        try
-        {
-            if (Directory.Exists(packages))
-            {
-                var packaged = Directory.EnumerateDirectories(packages)
-                    .Where(d => Path.GetFileName(d).Contains("Claude", StringComparison.OrdinalIgnoreCase)
-                             || Path.GetFileName(d).Contains("Anthropic", StringComparison.OrdinalIgnoreCase))
-                    .Select(d => Path.Combine(d, "LocalCache", "Roaming", "Claude", FileName))
-                    .Where(File.Exists)
-                    // Newest first: a machine can carry an old package's leftovers.
-                    .OrderByDescending(LastWriteUtcOrMin);
-
-                paths.AddRange(packaged);
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // Enumeration is best-effort; the canonical path is still returned.
-        }
+        // Root discovery is shared with Cowork ingestion (ClaudeDataRoots); the ordering
+        // below is this caller's own — newest file first, because a machine can carry an
+        // old package's leftovers and a stale file must never shadow the live one.
+        paths.AddRange(ClaudeDataRoots.Packaged(localAppDataRoot)
+            .Select(root => Path.Combine(root, FileName))
+            .Where(File.Exists)
+            .OrderByDescending(LastWriteUtcOrMin));
 
         return paths;
     }
