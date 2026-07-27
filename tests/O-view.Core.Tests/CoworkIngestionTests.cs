@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using OView.Core.Providers;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Storage;
 
@@ -115,7 +116,7 @@ public class CoworkIngestionTests : IDisposable
         ]);
         WriteCoworkSession("local_a", AuditLine("req_cowork", "2026-07-20T12:00:00.000Z", output: 120));
 
-        var provider = new JsonlUsageProvider(_store, Path.Combine(_dir, "projects"), CoworkRoot);
+        var provider = new JsonlUsageProvider(_store, Path.Combine(_dir, "projects"), [CoworkRoot]);
         provider.GetSnapshot(DateTimeOffset.Parse("2026-07-20T13:00:00Z"));
 
         Assert.Equal(620, TotalOutputTokens());
@@ -125,7 +126,7 @@ public class CoworkIngestionTests : IDisposable
     public void Provider_ReScan_DoesNotDoubleCountCoworkUsage()
     {
         WriteCoworkSession("local_a", AuditLine("req_A", "2026-07-20T12:00:00.000Z", output: 120));
-        var provider = new JsonlUsageProvider(_store, Path.Combine(_dir, "no-projects"), CoworkRoot);
+        var provider = new JsonlUsageProvider(_store, Path.Combine(_dir, "no-projects"), [CoworkRoot]);
 
         provider.GetSnapshot(DateTimeOffset.Parse("2026-07-20T13:00:00Z"));
         provider.GetSnapshot(DateTimeOffset.Parse("2026-07-20T13:01:00Z"));
@@ -192,5 +193,58 @@ public class CoworkIngestionTests : IDisposable
     {
         // A user who has never opened Cowork is the normal case.
         Assert.Empty(CoworkAuditLocator.FindAuditLogs(Path.Combine(_dir, "does-not-exist")));
+    }
+
+    // ── The packaged-install trap ──────────────────────────────────────────────
+    // Claude Desktop ships as MSIX, and Windows redirects its %APPDATA% writes into a
+    // per-package store. On a machine where only the package store is populated, a
+    // canonical-path-only locator finds nothing and the whole fix silently does nothing.
+
+    [Fact]
+    public void PackagedDataRoot_IsDiscovered_AlongsideCanonical()
+    {
+        var localAppData = Path.Combine(_dir, "LocalAppData");
+        var packageRoot = Path.Combine(
+            localAppData, "Packages", "Claude_pzs8sxrjxfjjc", "LocalCache", "Roaming", "Claude");
+        Directory.CreateDirectory(packageRoot);
+
+        var packaged = ClaudeDataRoots.Packaged(localAppData);
+
+        Assert.Single(packaged);
+        Assert.Equal(packageRoot, packaged[0]);
+        Assert.Equal(ClaudeDataRoots.Canonical, ClaudeDataRoots.All(localAppData)[0]);
+    }
+
+    [Fact]
+    public void NoPackagesDirectory_YieldsCanonicalRootOnly()
+    {
+        var roots = ClaudeDataRoots.All(Path.Combine(_dir, "no-local-appdata"));
+
+        Assert.Equal([ClaudeDataRoots.Canonical], roots);
+    }
+
+    [Fact]
+    public void SameSessionThroughTwoRoots_IsCountedOnce()
+    {
+        // MSIX redirection can expose one set of files through both the canonical and
+        // packaged paths — observed on the dev machine, identical session ids and totals.
+        // Scanning both must not double the tokens.
+        var mirrorA = Path.Combine(_dir, "rootA");
+        var mirrorB = Path.Combine(_dir, "rootB");
+        foreach (var root in new[] { mirrorA, mirrorB })
+        {
+            var session = Path.Combine(root, "org", "user", "local_a");
+            Directory.CreateDirectory(session);
+            File.WriteAllLines(
+                Path.Combine(session, CoworkAuditLocator.AuditFileName),
+                [AuditLine("req_A", "2026-07-20T12:00:00.000Z", output: 120)]);
+        }
+
+        Assert.Equal(2, CoworkAuditLocator.FindAuditLogs([mirrorA, mirrorB]).Count);
+
+        var provider = new JsonlUsageProvider(_store, null, [mirrorA, mirrorB]);
+        provider.GetSnapshot(DateTimeOffset.Parse("2026-07-20T13:00:00Z"));
+
+        Assert.Equal(120, TotalOutputTokens());
     }
 }

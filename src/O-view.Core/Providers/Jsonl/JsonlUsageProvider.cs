@@ -19,25 +19,31 @@ public sealed class JsonlUsageProvider : IUsageProvider
 {
     private readonly RollupStore _store;
     private readonly string? _projectsRoot;
-    private readonly string? _coworkRoot;
+    private readonly IReadOnlyList<string> _coworkRoots;
 
-    /// <summary>The real machine layout: both transcript roots.</summary>
+    /// <summary>The real machine layout: every transcript root on this machine.</summary>
     public JsonlUsageProvider(RollupStore store)
-        : this(store, ClaudeProjectsLocator.DefaultRoot, CoworkAuditLocator.DefaultRoot)
+        : this(store, ClaudeProjectsLocator.DefaultRoot, CoworkAuditLocator.DefaultRoots)
     {
     }
 
     /// <summary>
-    /// Explicit roots. A null root skips that source outright and never falls back to the
-    /// machine default — naming one root while the other silently resolved to a real
-    /// directory made a test ingest this developer's actual Cowork history (it expected
-    /// 60 tokens and got 3,807). Both roots are stated or neither is.
+    /// Explicit roots: a null projects root and an empty Cowork list each skip that
+    /// source outright, and neither falls back to a machine default. Naming one root
+    /// while the other silently resolved to a real directory made a test ingest this
+    /// developer's actual Cowork history (it expected 60 tokens and got 3,807), so every
+    /// source is stated or absent by choice.
+    ///
+    /// Cowork takes a list rather than an optional single root because a machine can
+    /// have more than one Claude data root (canonical plus MSIX package stores). An
+    /// overload pair would have made a bare <c>null</c> argument ambiguous at every call
+    /// site, so there is deliberately one constructor here, not two.
     /// </summary>
-    public JsonlUsageProvider(RollupStore store, string? projectsRoot, string? coworkRoot)
+    public JsonlUsageProvider(RollupStore store, string? projectsRoot, IReadOnlyList<string> coworkRoots)
     {
         _store = store;
         _projectsRoot = projectsRoot;
-        _coworkRoot = coworkRoot;
+        _coworkRoots = coworkRoots;
     }
 
     /// <summary>
@@ -53,9 +59,12 @@ public sealed class JsonlUsageProvider : IUsageProvider
             ? []
             : ClaudeProjectsLocator.FindTranscripts(_projectsRoot);
 
-        IEnumerable<string> audits = _coworkRoot is null
-            ? []
-            : CoworkAuditLocator.FindAuditLogs(_coworkRoot);
+        // Distinct by path: the same root can appear twice through MSIX redirection, and
+        // re-reading one file per poll is pointless work even though ingestion would
+        // de-duplicate its records anyway.
+        IEnumerable<string> audits = CoworkAuditLocator
+            .FindAuditLogs(_coworkRoots)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
 
         return transcripts.Concat(audits);
     }

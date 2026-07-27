@@ -7,7 +7,7 @@ Verified 2026-07-27 on the dev machine (GitHub issue #44).
 Cowork runs each session in a **sandboxed Claude home**:
 
 ```
-%APPDATA%\Claude\local-agent-mode-sessions\<org>\<user>\<session>\
+<claude-data-root>\local-agent-mode-sessions\<org>\<user>\<session>\
 ├── .claude\
 │   ├── projects\        ← exists, ALWAYS EMPTY
 │   └── ...
@@ -25,6 +25,36 @@ sessions **hosted inside the Desktop app**. Those are recorded under
 metadata (`sessionId`, `cliSessionId`, `cwd`, `model`, `title`); its `cliSessionId`
 names a transcript in the normal user-profile location. Verified 9 of 9 on this
 machine. So "Desktop" is not the distinction — **Cowork** is.
+
+## There is more than one Claude data root
+
+`<claude-data-root>` is **not** always `%APPDATA%\Claude`. Claude Desktop ships as an
+MSIX package, and Windows redirects a packaged app's `%APPDATA%` writes into
+`%LOCALAPPDATA%\Packages\<family>\LocalCache\Roaming\Claude`. This is the same hazard
+`PlanHistoryLocator` already exists to handle — it was written after O-view reported
+"no usage data" on a machine where Desktop was open and working.
+
+The dev machine has **both**, and they expose the *same* three sessions — identical
+session ids, identical totals:
+
+```
+C:\Users\<u>\AppData\Roaming\Claude\local-agent-mode-sessions
+C:\Users\<u>\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\local-agent-mode-sessions
+```
+
+So the union must be scanned (a canonical-only locator finds nothing on a machine where
+only the package store is populated), and overlap must be harmless. It is: request-id
+de-duplication collapses the mirror. Measured across the union of both roots —
+
+```
+audit logs found     : 6
+naive sum over union : 46,217,846   <- streaming duplicates + mirroring
+deduped by requestId : 13,696,086   <- what the store records
+distinct requests    : 155
+```
+
+Root discovery is shared with plan history via `ClaudeDataRoots`, so the package-family
+matching rule is written once.
 
 ## The record format
 
@@ -77,6 +107,18 @@ Deduplicated, across three Cowork sessions on one machine:
 |---|---|---|
 | Claude Code | 1,723 | 647,635,028 |
 | **Cowork (was invisible)** | **155** | **13,696,086** |
+
+## Open question: multi-iteration usage
+
+Some `usage` objects carry an `iterations` array alongside the top-level token fields.
+Ingestion reads the **top-level** fields only.
+
+Across all 15 local files on this machine, **no record has more than one iteration**, and
+where a single iteration exists the top-level values match it exactly. So whether the
+top-level fields aggregate several iterations or mirror only the last one is **untested,
+not confirmed**. If a multi-iteration record ever appears and the top-level value is
+*not* the sum, ingestion would undercount. Worth re-checking against a record that
+actually has two.
 
 ## What is still not measurable
 

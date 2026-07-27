@@ -32,14 +32,9 @@ public static class TranscriptFileScan
     {
         var results = new List<string>();
 
-        try
-        {
-            if (!Directory.Exists(root))
-            {
-                return results;
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        // Directory.Exists swallows its own errors and returns false, so it needs no
+        // guard here; the per-directory try blocks below are what make the walk safe.
+        if (!Directory.Exists(root))
         {
             return results;
         }

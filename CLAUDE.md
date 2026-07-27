@@ -80,10 +80,12 @@ Local token counts have **two** sources, and scanning one of them is the histori
 | Surface | Transcript |
 |---|---|
 | Claude Code (CLI **and** hosted in Desktop) | `%USERPROFILE%\.claude\projects\**\*.jsonl` |
-| **Cowork** | `%APPDATA%\Claude\local-agent-mode-sessions\…\<session>\audit.jsonl` |
+| **Cowork** | `<claude-data-root>\local-agent-mode-sessions\…\<session>\audit.jsonl` |
 | Chat | **none — no local usage record exists** |
 
-Two traps, both silent:
+Three traps, all silent:
+
+- **`<claude-data-root>` is not always `%APPDATA%\Claude`.** Desktop ships as MSIX and Windows redirects it into `%LOCALAPPDATA%\Packages\<family>\LocalCache\Roaming\Claude`. Use `ClaudeDataRoots` — never hard-code the canonical path, which is how O-view once reported "no usage data" at a user running Desktop. Roots can mirror each other; scanning the union is safe because ingestion de-duplicates on request id.
 
 - Each Cowork sandbox contains a `.claude\projects` directory that is **always empty**. Its presence makes a projects-only scan look like it succeeded.
 - That tree contains a **broken directory junction**. `Directory.GetFiles(..., AllDirectories)` aborts the entire walk on it and `DirectoryNotFoundException` derives from `IOException`, so the usual catch turns one bad folder into "no transcripts on this machine". Always enumerate per-directory — use `TranscriptFileScan`, don't hand-roll it again.
