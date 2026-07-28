@@ -899,6 +899,13 @@ public partial class App : System.Windows.Application
 
         foreach (var light in new[] { true, false })
         {
+            // The graph's hover cards, rendered standalone — a ToolTip cannot be given a
+            // parent, so it appears in no screenshot of the panel and hover is otherwise
+            // the only way to see one.
+            RenderHoverCards(dir, light,
+                [.. new PopupWindow { ThemeOverride = light }.BuildSampleHoverCards(light)],
+                "graph-hover-cards");
+
             foreach (var (name, snapshot) in cases)
             {
                 var popup = new PopupWindow { ThemeOverride = light };
@@ -1172,7 +1179,7 @@ public partial class App : System.Windows.Application
     /// card's own resources so its DynamicResource lookups resolve without a tree above
     /// it to walk.
     /// </summary>
-    private static void RenderHoverCards(string dir, bool light, System.Windows.Controls.ToolTip?[] tips)
+    private static void RenderHoverCards(string dir, bool light, System.Windows.Controls.ToolTip?[] tips, string name = "hover-cards")
     {
         const double scale = 2.0;
         const double gap = 12;
@@ -1232,7 +1239,7 @@ public partial class App : System.Windows.Application
 
         var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
         png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(composed));
-        using var stream = File.Create(Path.Combine(dir, $"hover-cards-{(light ? "light" : "dark")}.png"));
+        using var stream = File.Create(Path.Combine(dir, $"{name}-{(light ? "light" : "dark")}.png"));
         png.Save(stream);
     }
 

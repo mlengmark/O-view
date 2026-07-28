@@ -34,46 +34,14 @@ public partial class StatTile : UserControl
 
     // ── hover timing for the per-model figures ────────────────────────────────────
     //
-    // Applied to every element that carries a tooltip. Setting these once on the control
-    // and relying on property inheritance LOOKS right and silently does not work — the
-    // segments resolved to the framework defaults instead, which is invisible in a
-    // screenshot and was only caught by reporting the values (--tile-samples writes
-    // hover-timing.txt for exactly this reason).
+    // The values and the reasoning behind them now live in HoverCard, shared with every
+    // other tooltip in the panel. Still applied to every element that carries one:
+    // setting them once on the control and relying on property inheritance LOOKS right
+    // and silently does not work — the segments resolved to the framework defaults
+    // instead, which is invisible in a screenshot and was only caught by reporting the
+    // values (--tile-samples writes hover-timing.txt for exactly this reason).
 
-    /// <summary>
-    /// 400 ms — the Windows convention, and a real change: the unset value measured on
-    /// this machine was 1000 ms, which reads as sluggish for a deliberate point-at.
-    /// The delay still exists to require *lingering*, since the pointer crosses this bar
-    /// on its way elsewhere and anything much shorter flashes tooltips during ordinary
-    /// movement.
-    /// </summary>
-    private const int HoverInitialDelayMs = 400;
-
-    /// <summary>
-    /// 3 s — the one that matters most for a segmented bar. Within this window of the
-    /// last tooltip the next shows with NO delay, so sliding along the segments reads as
-    /// one continuous reveal rather than re-waiting per colour. The 100 ms default makes
-    /// traversing the bar feel broken.
-    /// </summary>
-    private const int HoverBetweenDelayMs = 3000;
-
-    /// <summary>
-    /// 20 s — set for determinism, not to extend anything. The documented WPF default is
-    /// 5 s, but the unset value measured here was int.MaxValue, i.e. effectively
-    /// unlimited; so this is a deliberate CAP rather than the extension it might look
-    /// like. 20 s still far outlasts reading a two-field tooltip, so WCAG 1.4.13
-    /// (Content on Hover or Focus) is satisfied in practice — the figure is never taken
-    /// away mid-read — while the same behaviour is guaranteed on a machine whose default
-    /// really is 5 s.
-    /// </summary>
-    private const int HoverDurationMs = 20_000;
-
-    private static void ApplyHoverTiming(DependencyObject element)
-    {
-        ToolTipService.SetInitialShowDelay(element, HoverInitialDelayMs);
-        ToolTipService.SetBetweenShowDelay(element, HoverBetweenDelayMs);
-        ToolTipService.SetShowDuration(element, HoverDurationMs);
-    }
+    private static void ApplyHoverTiming(DependencyObject element) => HoverCard.ApplyTiming(element);
 
     private IReadOnlyList<ModelSlice> _slices = [];
     private BreakdownMeasure _measure = BreakdownMeasure.Tokens;
@@ -316,70 +284,22 @@ public partial class StatTile : UserControl
     /// The swatch matters beyond decoration: it ties the card to the exact colour being
     /// pointed at, which is the one thing a floating card otherwise loses.
     /// </summary>
-    private ToolTip SliceTooltip(ModelSlice slice, Brush swatch)
-    {
-        var content = new StackPanel { MaxWidth = 220 };
-
-        // Swatch beside the figure, with no name above it. The friendly name was a third
-        // line saying what the line below already says, and it made a card that only
-        // carries two facts look heavy. The swatch stays: it is what ties a card floating
-        // clear of the bar back to the colour actually being pointed at.
-        var heading = new StackPanel { Orientation = Orientation.Horizontal };
-        heading.Children.Add(new Border
-        {
-            Width = 8,
-            Height = 8,
-            CornerRadius = new CornerRadius(2),
-            Background = swatch,
-            VerticalAlignment = VerticalAlignment.Center,
-        });
-        heading.Children.Add(new TextBlock
-        {
-            Text = FormatSlice(slice),
-            FontSize = 15,
-            FontWeight = FontWeights.SemiBold,
-            Margin = new Thickness(6, 0, 0, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            Foreground = (Brush)FindResource("TextPrimary"),
-        });
-        content.Children.Add(heading);
-
-        // Always shown, now that it is the only text naming the row. It used to be
-        // suppressed when it matched the friendly name — which is exactly the case for
-        // an UNRECOGNISED model, where DisplayName IS the raw id. Dropping the title
-        // without this would have left those cards showing a number and nothing else.
-        content.Children.Add(new TextBlock
-        {
-            Text = slice.DisplayName == ModelDisplayName.Other
-                ? $"{slice.Model} models"
-                : slice.Model,
-            FontSize = 10,
-            Margin = new Thickness(0, 3, 0, 0),
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = (Brush)FindResource("TextMuted"),
-        });
-
-        return new ToolTip
-        {
-            Content = content,
-            Style = (Style)FindResource("PanelTooltip"),
-        };
-    }
+    private ToolTip SliceTooltip(ModelSlice slice, Brush swatch) =>
+        // Figure first, model id beneath, swatch alongside — the shared card shape, which
+        // this one defined before the graph needed it too.
+        //
+        // The id line is ALWAYS rendered. It used to be suppressed when it matched the
+        // friendly name — which is exactly the case for an UNRECOGNISED model, where
+        // DisplayName IS the raw id — so those cards would have shown a number and
+        // nothing identifying it.
+        HoverCard.Figure(
+            this,
+            FormatSlice(slice),
+            slice.DisplayName == ModelDisplayName.Other ? $"{slice.Model} models" : slice.Model,
+            swatch);
 
     /// <summary>A styled hover card carrying a sentence — used for the caption's caveat.</summary>
-    private ToolTip TextTooltip(string text) =>
-        new()
-        {
-            Content = new TextBlock
-            {
-                Text = text,
-                FontSize = 11,
-                MaxWidth = 240,
-                TextWrapping = TextWrapping.Wrap,
-                Foreground = (Brush)FindResource("TextSecondary"),
-            },
-            Style = (Style)FindResource("PanelTooltip"),
-        };
+    private ToolTip TextTooltip(string text) => HoverCard.Text(this, text);
 
     /// <summary>
     /// Colour by the MODEL, from the panel-wide slot order — never by the segment's

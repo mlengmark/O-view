@@ -40,6 +40,12 @@ public class ReleaseVersionTests
         Assert.True(Parse("0.10.0") > Parse("0.9.0"));
         Assert.True(Parse("1.0.0") > Parse("0.99.99"));
         Assert.True(Parse("0.4.3") > Parse("0.4.2"));
+        // The PATCH component crossing into two digits, which v0.5.10 is the first release
+        // to exercise. Lexicographically "0.5.10" < "0.5.9", so a string comparison would
+        // leave every user on 0.5.9 never offered the update — and silently, since the check
+        // would report "up to date" rather than fail.
+        Assert.True(Parse("0.5.10") > Parse("0.5.9"));
+        Assert.True(Parse("0.5.11") > Parse("0.5.10"));
         Assert.True(Parse("0.4.2") == Parse("0.4.2"));
         Assert.False(Parse("0.4.2") > Parse("0.4.2"));
     }

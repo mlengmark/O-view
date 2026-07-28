@@ -99,6 +99,12 @@ Every tile is clickable and flips in place between its total and a **stacked bar
 
 **The hover card is styled, not system chrome.** A default WPF tooltip is a pale rectangle with a hard border and nothing to do with the rest of the app, so the template is replaced outright: the panel's rounded 6px card, its palette, its type. It sits on its own `TooltipBg` / `TooltipBorder` step — brighter than the panel in light, lighter than the tile in dark — so it reads as floating *above* the tile rather than as part of it, with a soft drop shadow for the same reason.
 
+> **Every tooltip in the app is this card.** The template and the timing live in [`HoverCard.xaml`](../src/O-view.Tray/Popup/HoverCard.xaml) / [`HoverCard.cs`](../src/O-view.Tray/Popup/HoverCard.cs), merged into both the panel and the tile. They used to be declared *inside* `StatTile`, which meant only the tiles had them — the usage graph's bars kept raw WPF chrome, so the panel showed two unrelated tooltip designs depending on where the pointer landed. A bare `ToolTip = "some string"` anywhere in this codebase is that bug returning; build the card instead.
+>
+> Two shapes cover everything: **`Figure`** leads with the number and names it in a muted line beneath — the reading order for *what am I pointing at, and how much* — with an optional colour swatch where the card floats clear of a coloured mark and would otherwise lose its tie to it. **`Text`** carries a sentence, for caveats and explanations. A third shape should be resisted.
+>
+> `--popup-samples` renders the graph's cards standalone as `graph-hover-cards-<theme>.png`, for the same reason `--tile-samples` does: a `ToolTip` cannot be given a parent, so it appears in no screenshot of the panel, and hover is the only way to reach one in the running app.
+
 The card carries two lines only: a **colour swatch beside the figure**, and the **raw model id** beneath (or `N more models` for the folded bucket, so "Other" is never an unexplained slice). There is deliberately no friendly-name heading — it restated the line below it and made a card holding two facts look heavy.
 
 The swatch is the load-bearing part and stays: a card floating clear of the bar otherwise loses its connection to the exact colour being pointed at.
@@ -164,7 +170,7 @@ Daily token totals across the trailing 31 days, from the rollup store ([ADR-0006
 
 `--popup-samples <dir>` renders the whole panel offscreen in both themes, across the states that change what it asserts about the weekly window (derived boundaries vs. awaiting the first reset). Handled before the single-instance mutex, like `--menu-samples`. It exists because the alternative — opening the real panel — needs the mutex and a free display, and **silently fails when anything is running fullscreen**, which is exactly when the gridlines needed checking.
 - **Vertical date labels under every column** (issue #4), small but legible, and **centred on their own bar** ([issue #31](https://github.com/mlengmark/O-view/issues/31)). Bar and label are placed from a single column-centre anchor rather than each carrying its own offset. A rotated `TextBlock` renders one line height to the *left* of its `Canvas.Left` (a `RenderTransform` doesn't move the layout box), so the anchor is derived from `RotateTransform.TransformBounds` — measured, not a constant, since line height moves with font, DPI and OS text scaling. The former constant left labels 2.3 px adrift, a fifth of a column at 31 days.
-- **Hover tooltip** per bar: date and exact token count (issue #5).
+- **Hover card** per bar — exact token count, with the full date beneath — and one per gridline giving the reset time. Both use the panel's shared card (see *Per-model breakdown* above), not system chrome.
 
 Days before install are **blank columns** (no bar) with their date still labelled — with the date axis, an empty column reads as "no data" on its own, so the earlier "before O-view install" caption was **removed to save space** (issue #4). They are never rendered as zero-height bars, which would misread as idle days.
 

@@ -7,6 +7,12 @@
         Topmost="True" AllowsTransparency="True" Background="Transparent"
         TextOptions.TextFormattingMode="Display">
 
+    <Window.Resources>
+        <!-- The shared hover card, so the graph's bars and gridlines carry the same
+             branding as the tiles instead of falling back to system chrome. -->
+        <ResourceDictionary Source="HoverCard.xaml"/>
+    </Window.Resources>
+
     <Border Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource PanelBorder}"
             BorderThickness="1" CornerRadius="10" Padding="16">
         <StackPanel>
