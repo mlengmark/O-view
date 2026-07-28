@@ -64,8 +64,19 @@ public partial class DialogWindow : Window
         // A tray app owns no activated window, so the same foreground problem the flyouts
         // have applies here — except a dialog that opens behind another window is worse:
         // it is modal, so the user is left with an app that appears to have frozen.
-        dialog.SourceInitialized += (_, _) =>
+        //
+        // This MUST run after the window is on screen. It used to be attached to
+        // SourceInitialized, which fires while the HWND exists but is still WS_VISIBLE-less
+        // — and SetForegroundWindow silently fails on an invisible window, so the whole
+        // AttachThreadInput fallback was being spent on a no-op. The failure only shows on a
+        // long-running instance, because a process that was just launched still holds
+        // foreground rights and gets activated anyway; that is exactly why it survived
+        // testing. ContentRendered is the first point the window is genuinely visible.
+        dialog.ContentRendered += (_, _) =>
+        {
             ForegroundWindow.Take(new WindowInteropHelper(dialog).Handle);
+            dialog.Activate();
+        };
 
         dialog.ShowDialog();
         return dialog._confirmed;
