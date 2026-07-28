@@ -24,6 +24,11 @@ namespace OView.Core.Models;
 /// qualifies the time in that case rather than overstating it. Null alongside
 /// <paramref name="WeeklyResetAtUtc"/>.
 /// </param>
+/// <param name="WeeklyResetPeriod">
+/// Cadence between weekly resets, as derived. Carried so the usage graph can step back from
+/// <paramref name="WeeklyResetAtUtc"/> to draw past week boundaries on exactly the cadence
+/// the countdown uses. Null alongside <paramref name="WeeklyResetAtUtc"/>.
+/// </param>
 public sealed record UsageSnapshot(
     DataSource Source,
     int? SessionPercent,
@@ -31,7 +36,8 @@ public sealed record UsageSnapshot(
     DateTimeOffset? SessionResetAtUtc,
     DateTimeOffset? CapturedAtUtc,
     DateTimeOffset? WeeklyResetAtUtc = null,
-    TimeSpan? WeeklyResetUncertainty = null)
+    TimeSpan? WeeklyResetUncertainty = null,
+    TimeSpan? WeeklyResetPeriod = null)
 {
     /// <summary>The canonical "no data" snapshot.</summary>
     public static UsageSnapshot None { get; } = new(DataSource.None, null, null, null, null);

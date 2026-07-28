@@ -122,7 +122,7 @@ public partial class PopupWindow : Window
         UpdateLayout();
         // The chart is a Canvas — its ActualWidth is only known after layout, so it is
         // drawn here rather than in Populate.
-        BuildGraph(stats);
+        BuildGraph(stats, snapshot);
         (Left, Top, _dockOrigin) = PopupPositioner.Place(ActualWidth, ActualHeight);
         Activate();
 
@@ -396,7 +396,7 @@ public partial class PopupWindow : Window
     /// always sits under the bar it describes; with 31 columns in ~344 px a few pixels
     /// of drift is enough to make a label read against its neighbour.
     /// </summary>
-    private void BuildGraph(PanelStatistics stats)
+    private void BuildGraph(PanelStatistics stats, UsageSnapshot snapshot)
     {
         GraphHost.Children.Clear();
 
@@ -412,38 +412,62 @@ public partial class PopupWindow : Window
         var col = width / series.Count;
         var globalMax = Math.Max(1, series.Max(d => d.TotalTokens));
 
-        // Per-calendar-week peak, so colour intensity is normalised within each week.
+        var weeks = PlanWeeks.ForSeries(series, snapshot);
+
+        // Per-week peak, so colour intensity is normalised within each week. The week is
+        // the PLAN's week wherever it is known, so the shading and the gridlines below
+        // always describe the same bands — they used to be able to disagree.
         var weekMax = series
             .Where(d => !d.PreInstall)
-            .GroupBy(d => WeekStart(d.DateUtc))
+            .GroupBy(weeks.IndexOf)
             .ToDictionary(g => g.Key, g => Math.Max(1, g.Max(d => d.TotalTokens)));
 
         var gridBrush = (Brush)FindResource("TextMuted");
         var labelBrush = (Brush)FindResource("TextMuted");
+
+        // Week boundaries. A plan reset happens at an instant, not at midnight, so the line
+        // is placed at its true fractional position inside the day it falls in — snapping it
+        // to the nearest column edge would claim a boundary the data does not have. The
+        // calendar-week fallback lands exactly on a column edge because midnight is one.
+        var columnOf = series
+            .Select((day, index) => (day.DateUtc, index))
+            .ToDictionary(t => t.DateUtc, t => t.index);
+
+        foreach (var boundary in weeks.Boundaries)
+        {
+            if (!columnOf.TryGetValue(boundary.DayUtc, out var index))
+            {
+                continue;   // outside the plotted range
+            }
+
+            var x = (index + boundary.FractionOfDay) * col;
+            if (x <= 0)
+            {
+                continue;   // exactly on the left edge, where a line reads as a border
+            }
+
+            GraphHost.Children.Add(new Line
+            {
+                X1 = x, X2 = x, Y1 = 0, Y2 = barAreaHeight + 3,
+                Stroke = gridBrush,
+                StrokeThickness = 1,
+                StrokeDashArray = [1, 2],
+                Opacity = 0.7,
+                ToolTip = weeks.IsPlanDerived
+                    ? $"Weekly limit reset · {TimeZoneInfo.ConvertTime(boundary.AtUtc, TimeZoneInfo.Local):ddd d MMM HH:mm}"
+                    : "Start of the calendar week (Monday) — O-view hasn't observed a weekly reset yet",
+            });
+        }
 
         for (var i = 0; i < series.Count; i++)
         {
             var day = series[i];
             var x = i * col;
 
-            // Monday gridline (skip index 0 — the left edge needs no line).
-            if (i > 0 && day.DateUtc.DayOfWeek == DayOfWeek.Monday)
-            {
-                var line = new Line
-                {
-                    X1 = x, X2 = x, Y1 = 0, Y2 = barAreaHeight + 3,
-                    Stroke = gridBrush,
-                    StrokeThickness = 1,
-                    StrokeDashArray = [1, 2],
-                    Opacity = 0.7,
-                };
-                GraphHost.Children.Add(line);
-            }
-
             // Bar — height by absolute tokens, colour by within-week intensity.
             if (!day.PreInstall && day.TotalTokens > 0)
             {
-                var intensity = day.TotalTokens / (double)weekMax[WeekStart(day.DateUtc)];
+                var intensity = day.TotalTokens / (double)weekMax[weeks.IndexOf(day)];
                 var height = Math.Max(2, barAreaHeight * day.TotalTokens / globalMax);
                 var barWidth = Math.Max(2, col - 2);
                 var bar = new Rectangle
@@ -504,6 +528,88 @@ public partial class PopupWindow : Window
     /// <summary>Monday of the ISO week containing the date.</summary>
     private static DateOnly WeekStart(DateOnly date) =>
         date.AddDays(-(((int)date.DayOfWeek + 6) % 7));
+
+    /// <summary>
+    /// Where one week boundary lands on the chart: the day column it falls in, and how far
+    /// through that column, since a plan reset happens at a time of day rather than at
+    /// midnight.
+    /// </summary>
+    private readonly record struct WeekBoundary(DateTimeOffset AtUtc)
+    {
+        public DateOnly DayUtc => DateOnly.FromDateTime(AtUtc.UtcDateTime);
+        public double FractionOfDay => AtUtc.UtcDateTime.TimeOfDay / TimeSpan.FromDays(1);
+    }
+
+    /// <summary>
+    /// The week bands the 31-day graph is divided into.
+    ///
+    /// <para>Originally these were calendar weeks (Mon–Sun) with a stated reason: the plan's
+    /// true weekly boundary was not derivable, so Monday was an honest visual reference
+    /// rather than a claim about the plan. That premise no longer holds — ADR-0011 derives
+    /// the weekly reset — so the bands now follow the plan's own boundary wherever it is
+    /// known, which is what the graph was always trying to convey. Mondays remain the
+    /// fallback, and say so on hover, because until a reset has been observed the real
+    /// boundary is still genuinely unknown (rule 6).</para>
+    ///
+    /// <para>Boundaries are derived by stepping the cadence back from the predicted next
+    /// reset, so they cover the whole window including days before O-view was installed —
+    /// the log only holds resets it was running for.</para>
+    /// </summary>
+    private sealed class PlanWeeks
+    {
+        private readonly IReadOnlyList<DateTimeOffset> _boundaries;
+
+        private PlanWeeks(IReadOnlyList<DateTimeOffset> boundaries, bool isPlanDerived)
+        {
+            _boundaries = boundaries;
+            IsPlanDerived = isPlanDerived;
+        }
+
+        /// <summary>False when these are calendar weeks standing in for an unknown plan week.</summary>
+        public bool IsPlanDerived { get; }
+
+        public IEnumerable<WeekBoundary> Boundaries => _boundaries.Select(b => new WeekBoundary(b));
+
+        public static PlanWeeks ForSeries(IReadOnlyList<DayUsage> series, UsageSnapshot snapshot)
+        {
+            var fromUtc = new DateTimeOffset(series[0].DateUtc.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+            var toUtc = new DateTimeOffset(series[^1].DateUtc.ToDateTime(TimeOnly.MaxValue), TimeSpan.Zero);
+
+            if (snapshot.WeeklyResetAtUtc is { } next && snapshot.WeeklyResetPeriod is { } period)
+            {
+                return new PlanWeeks(
+                    WeeklyResetDetector.BoundariesWithin(next, period, fromUtc, toUtc),
+                    isPlanDerived: true);
+            }
+
+            // Fallback: midnight at the start of each Monday in range.
+            var mondays = series
+                .Select(d => d.DateUtc)
+                .Where(d => d.DayOfWeek == DayOfWeek.Monday)
+                .Select(d => new DateTimeOffset(d.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero))
+                .ToList();
+            return new PlanWeeks(mondays, isPlanDerived: false);
+        }
+
+        /// <summary>
+        /// Which band a day belongs to — the number of boundaries at or before the day's
+        /// start. A day containing a boundary is counted in the band it opens in, since that
+        /// is where most of a reset day's usage sits relative to the previous limit.
+        /// </summary>
+        public int IndexOf(DayUsage day)
+        {
+            var start = new DateTimeOffset(day.DateUtc.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+            var index = 0;
+            foreach (var boundary in _boundaries)
+            {
+                if (boundary <= start)
+                {
+                    index++;
+                }
+            }
+            return index;
+        }
+    }
 
     private static Color Lerp(Color a, Color b, double t)
     {

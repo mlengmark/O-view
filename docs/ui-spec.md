@@ -153,8 +153,12 @@ On the light surface two series sit below 3:1 against the tile. That is a docume
 Daily token totals across the trailing 31 days, from the rollup store ([ADR-0006](adr/0006-local-rollup-store.md)). Enhanced per [issues #4 and #5](https://github.com/mlengmark/O-view/issues/4):
 
 - **One bar per day**, height by absolute daily tokens.
-- **Colour: light → dark blue by intensity within each calendar week** (issue #5) — each Mon–Sun week is its own gradient scale, so the busiest day of a week is darkest. The absolute weekly token limit is unknown, so this is *relative* intensity, not a fraction of a limit.
-- **Dotted vertical gridlines at Monday boundaries** (issue #5), giving weekly context. The plan's true weekly reset isn't derivable, so calendar weeks (Mon–Sun) are the anchor — a clean visual reference, not a claim about the plan boundary.
+- **Colour: light → dark blue by intensity within each week** (issue #5) — each week is its own gradient scale, so the busiest day of a week is darkest. The absolute weekly token limit is unknown, so this is *relative* intensity, not a fraction of a limit.
+- **Dotted vertical gridlines at the weekly limit reset**, giving weekly context, with the reset time on hover.
+
+> **These follow the plan's own week, not the calendar's.** They were originally drawn at Monday boundaries for a stated reason: the plan's true weekly reset was not derivable, so Mon–Sun was an honest visual reference rather than a claim about the plan. [ADR-0011](adr/0011-weekly-reset-derivation.md) removed that constraint, so the gridlines — and the colour bands, which use the same boundaries so the two can never disagree — now sit on the real reset. Past boundaries are **derived** by stepping the cadence back from the predicted next reset, not looked up, because the log only holds resets O-view was running for while the graph covers 31 days.
+>
+> A reset happens at a time of day, not at midnight, so a gridline sits at its **true fractional position inside the day column** it falls in. Snapping it to the nearest column edge would assert a midnight boundary the data does not have. Until a reset has been observed the line falls back to Monday midnight and says so on hover — the honest blank, not a silent substitution.
 - **Vertical date labels under every column** (issue #4), small but legible, and **centred on their own bar** ([issue #31](https://github.com/mlengmark/O-view/issues/31)). Bar and label are placed from a single column-centre anchor rather than each carrying its own offset. A rotated `TextBlock` renders one line height to the *left* of its `Canvas.Left` (a `RenderTransform` doesn't move the layout box), so the anchor is derived from `RotateTransform.TransformBounds` — measured, not a constant, since line height moves with font, DPI and OS text scaling. The former constant left labels 2.3 px adrift, a fifth of a column at 31 days.
 - **Hover tooltip** per bar: date and exact token count (issue #5).
 

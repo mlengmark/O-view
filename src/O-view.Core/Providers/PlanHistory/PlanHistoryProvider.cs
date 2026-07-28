@@ -127,7 +127,8 @@ public sealed class PlanHistoryProvider : IUsageProvider
             nextReset,
             latest.AtUtc,
             weeklyReset?.AtUtc,
-            weeklyReset?.Uncertainty);
+            weeklyReset?.Uncertainty,
+            weeklyReset?.Period);
     }
 
     /// <summary>
