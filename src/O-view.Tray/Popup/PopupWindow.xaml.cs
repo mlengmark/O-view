@@ -467,42 +467,7 @@ public partial class PopupWindow : Window
             .GroupBy(weeks.IndexOf)
             .ToDictionary(g => g.Key, g => Math.Max(1, g.Max(d => d.TotalTokens)));
 
-        var gridBrush = (Brush)FindResource("TextMuted");
         var labelBrush = (Brush)FindResource("TextMuted");
-
-        // Week boundaries. A plan reset happens at an instant, not at midnight, so the line
-        // is placed at its true fractional position inside the day it falls in — snapping it
-        // to the nearest column edge would claim a boundary the data does not have. The
-        // calendar-week fallback lands exactly on a column edge because midnight is one.
-        var columnOf = series
-            .Select((day, index) => (day.DateUtc, index))
-            .ToDictionary(t => t.DateUtc, t => t.index);
-
-        foreach (var boundary in weeks.Boundaries)
-        {
-            if (!columnOf.TryGetValue(boundary.DayUtc, out var index))
-            {
-                continue;   // outside the plotted range
-            }
-
-            var x = (index + boundary.FractionOfDay) * col;
-            if (x <= 0)
-            {
-                continue;   // exactly on the left edge, where a line reads as a border
-            }
-
-            GraphHost.Children.Add(new Line
-            {
-                X1 = x, X2 = x, Y1 = 0, Y2 = barAreaHeight + 3,
-                Stroke = gridBrush,
-                StrokeThickness = 1,
-                StrokeDashArray = [1, 2],
-                Opacity = 0.7,
-                ToolTip = weeks.IsPlanDerived
-                    ? $"Weekly limit reset · {TimeZoneInfo.ConvertTime(boundary.AtUtc, TimeZoneInfo.Local):ddd d MMM HH:mm}"
-                    : "Start of the calendar week (Monday) — O-view hasn't observed a weekly reset yet",
-            });
-        }
 
         for (var i = 0; i < series.Count; i++)
         {
@@ -560,6 +525,60 @@ public partial class PopupWindow : Window
             var ink = rotation.TransformBounds(new Rect(label.DesiredSize));
             Canvas.SetLeft(label, BarCentre(x, col) - ink.Left - ink.Width / 2);
             Canvas.SetTop(label, labelTop - ink.Top);
+        }
+
+        DrawWeekBoundaries(weeks, series, col, barAreaHeight);
+    }
+
+    /// <summary>
+    /// The week-boundary gridlines, drawn <em>last</em> so they sit above the bars.
+    ///
+    /// <para>A Canvas paints in child order, so these used to be added first and were
+    /// overdrawn by every bar they crossed — which is most of them in a busy week, leaving
+    /// the boundary visible only in the gaps. A reset line that disappears exactly where
+    /// the usage is heaviest is missing the moment it exists to mark.</para>
+    ///
+    /// <para>They wear the panel's note colour (<c>WarnText</c>), the same amber the
+    /// coverage and caveat lines use, rather than the muted grey they shared with the date
+    /// labels: this is an annotation over the data, not another axis decoration, and grey
+    /// on blue at one pixel was not carrying that.</para>
+    ///
+    /// <para>Placement is unchanged. A plan reset happens at an instant, not at midnight,
+    /// so the line sits at its true fractional position inside the day it falls in —
+    /// snapping to the nearest column edge would claim a boundary the data does not have.
+    /// The calendar-week fallback lands on a column edge because midnight is one.</para>
+    /// </summary>
+    private void DrawWeekBoundaries(
+        PlanWeeks weeks, IReadOnlyList<DayUsage> series, double col, double barAreaHeight)
+    {
+        var gridBrush = (Brush)FindResource("WarnText");
+        var columnOf = series
+            .Select((day, index) => (day.DateUtc, index))
+            .ToDictionary(t => t.DateUtc, t => t.index);
+
+        foreach (var boundary in weeks.Boundaries)
+        {
+            if (!columnOf.TryGetValue(boundary.DayUtc, out var index))
+            {
+                continue;   // outside the plotted range
+            }
+
+            var x = (index + boundary.FractionOfDay) * col;
+            if (x <= 0)
+            {
+                continue;   // exactly on the left edge, where a line reads as a border
+            }
+
+            GraphHost.Children.Add(new Line
+            {
+                X1 = x, X2 = x, Y1 = 0, Y2 = barAreaHeight + 3,
+                Stroke = gridBrush,
+                StrokeThickness = 1,
+                StrokeDashArray = [2, 2],
+                ToolTip = weeks.IsPlanDerived
+                    ? $"Weekly limit reset · {TimeZoneInfo.ConvertTime(boundary.AtUtc, TimeZoneInfo.Local):ddd d MMM HH:mm}"
+                    : "Start of the calendar week (Monday) — O-view hasn't observed a weekly reset yet",
+            });
         }
     }
 
