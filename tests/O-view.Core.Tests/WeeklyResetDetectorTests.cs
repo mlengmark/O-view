@@ -194,6 +194,79 @@ public class WeeklyResetDetectorTests
         Assert.Equal(second.LatestUtc.AddDays(7), forecast.AtUtc);
     }
 
+    // ── past boundaries, for the 31-day graph's week gridlines ─────────────────
+
+    [Fact]
+    public void BoundariesAreDerivedBackwards_AcrossTheWholeWindow()
+    {
+        // The log only holds resets O-view was running for, but the graph covers 31 days —
+        // so past boundaries are stepped back from the prediction, not looked up.
+        var next = T0.AddDays(7);
+
+        var boundaries = WeeklyResetDetector.BoundariesWithin(
+            next, TimeSpan.FromDays(7), T0.AddDays(-30), T0);
+
+        Assert.Equal(
+            [T0.AddDays(-28), T0.AddDays(-21), T0.AddDays(-14), T0.AddDays(-7), T0],
+            boundaries);
+    }
+
+    [Fact]
+    public void BoundariesKeepTheResetsTimeOfDay()
+    {
+        // The gridline's whole point is that a plan week does not start at midnight.
+        var next = new DateTimeOffset(2026, 8, 4, 6, 28, 57, TimeSpan.Zero);
+
+        var boundaries = WeeklyResetDetector.BoundariesWithin(
+            next, TimeSpan.FromDays(7), next.AddDays(-21), next.AddDays(-1));
+
+        Assert.All(boundaries, b => Assert.Equal(new TimeSpan(6, 28, 57), b.UtcDateTime.TimeOfDay));
+        Assert.Equal(next.AddDays(-7), boundaries[^1]);
+    }
+
+    [Fact]
+    public void BoundariesRespectAMeasuredPeriod_NotTheConstant()
+    {
+        var next = T0.AddHours(72);
+
+        var boundaries = WeeklyResetDetector.BoundariesWithin(
+            next, TimeSpan.FromHours(72), T0.AddHours(-144), T0);
+
+        Assert.Equal([T0.AddHours(-144), T0.AddHours(-72), T0], boundaries);
+    }
+
+    [Fact]
+    public void APredictionFarBeyondTheWindow_StillYieldsTheWindowsBoundaries()
+    {
+        // The panel can be opened after a long idle stretch, when the next reset has rolled
+        // forward well past the plotted range.
+        var next = T0.AddDays(70);
+
+        var boundaries = WeeklyResetDetector.BoundariesWithin(
+            next, TimeSpan.FromDays(7), T0.AddDays(-10), T0);
+
+        Assert.Equal([T0.AddDays(-7), T0], boundaries);
+    }
+
+    [Fact]
+    public void DegenerateInputsYieldNoBoundaries()
+    {
+        Assert.Empty(WeeklyResetDetector.BoundariesWithin(T0, TimeSpan.Zero, T0.AddDays(-7), T0));
+        Assert.Empty(WeeklyResetDetector.BoundariesWithin(T0, TimeSpan.FromDays(7), T0, T0.AddDays(-7)));
+    }
+
+    [Fact]
+    public void ForecastCarriesThePeriodItSteppedBy()
+    {
+        // So the graph's gridlines and the countdown can never step by different cadences.
+        var sevenDay = WeeklyResetDetector.PredictNextReset([Precise(T0)], T0.AddHours(1));
+        Assert.Equal(TimeSpan.FromDays(7), sevenDay!.Period);
+
+        var measured = WeeklyResetDetector.PredictNextReset(
+            [Precise(T0), Precise(T0.AddHours(72))], T0.AddHours(73));
+        Assert.Equal(TimeSpan.FromHours(72), measured!.Period);
+    }
+
     // ── the measured evidence behind the 7-day constant ────────────────────────
 
     [Fact]

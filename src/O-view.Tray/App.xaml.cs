@@ -24,8 +24,9 @@ namespace OView.Tray;
 /// messages NotifyIcon's hidden window needs. Diagnostic args (all optional):
 /// --interval-ms N, --log path, --stress N (refresh N times, log GDI delta, keep
 /// running), --samples dir (render icon PNGs and exit — legibility verification),
-/// --menu-check path (activate every tray-menu row over repeated open/close cycles and
-/// report what fired — the menu's equivalent of --toggle-check).
+/// --popup-samples dir (render the detail panel offscreen in both themes), --menu-check
+/// path (activate every tray-menu row over repeated open/close cycles and report what
+/// fired — the menu's equivalent of --toggle-check).
 /// </summary>
 public partial class App : System.Windows.Application
 {
@@ -88,6 +89,17 @@ public partial class App : System.Windows.Application
         if (args.TryGetValue("--dialog-samples", out var dialogSamplesDir))
         {
             RenderDialogSamples(dialogSamplesDir!);
+            Shutdown();
+            return;
+        }
+
+        // The detail panel, rendered offscreen in both themes across the states that change
+        // what it asserts. Before the mutex, like the other sample hooks — and unlike
+        // --show-popup it needs no desktop session, so it works while something is running
+        // fullscreen and never covers what the user is doing.
+        if (args.TryGetValue("--popup-samples", out var popupSamplesDir))
+        {
+            RenderPopupSamples(popupSamplesDir!);
             Shutdown();
             return;
         }
@@ -823,6 +835,82 @@ public partial class App : System.Windows.Application
             }
         }
         return result;
+    }
+
+    /// <summary>
+    /// Renders the detail panel offscreen, in both themes, across the states that change
+    /// what it asserts about the weekly window.
+    ///
+    /// The 31-day graph is the reason this exists. Its week gridlines sit on the derived
+    /// weekly reset, and whether they land correctly cannot be judged from unit tests —
+    /// those cover the boundary arithmetic, not where a line ends up on a Canvas. Opening
+    /// the real panel needs the single-instance mutex and a free display, and it silently
+    /// fails when something is running fullscreen.
+    ///
+    /// The data is constructed rather than read from the store: the interesting contrast is
+    /// a plan-derived boundary at 06:28 (which falls INSIDE a day column) against the
+    /// Monday-midnight fallback (which lands on a column edge), and one machine's history
+    /// shows only whichever it happens to be in.
+    /// </summary>
+    private static void RenderPopupSamples(string dir)
+    {
+        Directory.CreateDirectory(dir);
+        const double scale = 2.0;
+
+        // A fixed "today" pins the graph — the part being verified — so a rerun that shows
+        // different gridlines means the rendering changed, not the date. The header clock
+        // and the reset countdowns still read the real time, so the images are not byte-
+        // identical between runs; compare the chart, not the file hash.
+        var today = new DateOnly(2026, 7, 28);
+        var installed = today.AddDays(-9);       // partial history, so pre-install days show
+
+        var series = new List<DayUsage>();
+        for (var offset = 30; offset >= 0; offset--)
+        {
+            var date = today.AddDays(-offset);
+            var preInstall = date < installed;
+            // A shape with visible within-week variation, so the intensity bands are legible.
+            long tokens = preInstall ? 0 : (long)(6_000_000 + 9_000_000 * Math.Abs(Math.Sin(offset * 0.9)));
+            series.Add(new DayUsage(date, tokens, preInstall));
+        }
+
+        var stats = new PanelStatistics(
+            TokensToday: 12_700_000, EstTodayUsd: 9.36m,
+            Tokens31Days: 684_600_000, Est31DaysUsd: 492.52m,
+            RecordedDays: 10, WindowDays: 31,
+            DailySeries: series,
+            CreditTokens31Days: 40_000_000, EstCredit31DaysUsd: 92.75m);
+
+        var capturedAt = new DateTimeOffset(today.ToDateTime(new TimeOnly(10, 47)), TimeSpan.Zero);
+        var account = new ClaudeAccount("Maximilian", "sample@example.com", "claude_pro", "sample-org");
+
+        // The reset the dev machine actually observed: 06:28:57Z, i.e. a boundary a quarter
+        // of the way into its day column rather than on the edge.
+        var nextWeekly = new DateTimeOffset(2026, 8, 4, 6, 28, 57, TimeSpan.Zero);
+
+        var cases = new (string Name, UsageSnapshot Snapshot)[]
+        {
+            ("plan-weeks", new UsageSnapshot(DataSource.Live, 25, 3,
+                capturedAt.AddHours(3), capturedAt, nextWeekly, TimeSpan.FromHours(10), TimeSpan.FromDays(7))),
+            // No reset observed: Monday-midnight gridlines, and "Waiting for first reset…".
+            ("awaiting-first-reset", new UsageSnapshot(DataSource.Live, 25, 3,
+                capturedAt.AddHours(3), capturedAt)),
+        };
+
+        foreach (var light in new[] { true, false })
+        {
+            foreach (var (name, snapshot) in cases)
+            {
+                var popup = new PopupWindow { ThemeOverride = light };
+                var bitmap = popup.RenderToBitmap(snapshot, stats, account, scale);
+
+                var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+                using var stream = File.Create(
+                    Path.Combine(dir, $"panel-{name}-{(light ? "light" : "dark")}.png"));
+                png.Save(stream);
+            }
+        }
     }
 
     /// <summary>

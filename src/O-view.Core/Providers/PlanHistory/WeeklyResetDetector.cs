@@ -32,7 +32,13 @@ public sealed record WeeklyResetObservation(
 /// which is the safe direction for a quota display: it never promises fresh quota
 /// earlier than it actually arrives.
 /// </summary>
-public sealed record WeeklyResetForecast(DateTimeOffset AtUtc, TimeSpan Uncertainty)
+/// <param name="Period">
+/// The cadence this prediction steps by — normally <see cref="WeeklyResetDetector.WindowLength"/>,
+/// but a measured override when the user's own resets contradict it. Carried on the forecast
+/// so anything drawing past boundaries (the usage graph's week gridlines) steps by the same
+/// cadence the countdown does, instead of re-deriving it and drifting.
+/// </param>
+public sealed record WeeklyResetForecast(DateTimeOffset AtUtc, TimeSpan Uncertainty, TimeSpan Period)
 {
     public bool IsPrecise => Uncertainty <= WeeklyResetDetector.PreciseBracket;
 }
@@ -146,7 +152,43 @@ public static class WeeklyResetDetector
             next += period * missed;
         }
 
-        return new WeeklyResetForecast(next, anchor.Uncertainty);
+        return new WeeklyResetForecast(next, anchor.Uncertainty, period);
+    }
+
+    /// <summary>
+    /// Every reset boundary falling in <c>[fromUtc, toUtc]</c>, obtained by stepping the
+    /// known cadence backwards from <paramref name="nextResetUtc"/>.
+    ///
+    /// <para>Past boundaries are derived rather than looked up: only the resets O-view
+    /// happened to be running for are in the log, and the graph covers 31 days. Since the
+    /// cadence is exact, stepping back from the prediction reconstructs the boundaries the
+    /// user actually experienced, including those before O-view was installed.</para>
+    /// </summary>
+    public static IReadOnlyList<DateTimeOffset> BoundariesWithin(
+        DateTimeOffset nextResetUtc, TimeSpan period, DateTimeOffset fromUtc, DateTimeOffset toUtc)
+    {
+        if (period <= TimeSpan.Zero || toUtc < fromUtc)
+        {
+            return [];
+        }
+
+        // Jump straight to the first boundary at or before the end of the range rather than
+        // walking there — the prediction can be a long way past a short window.
+        var overshoot = Math.Max(0, Math.Ceiling((nextResetUtc - toUtc) / period));
+        var cursor = nextResetUtc - period * overshoot;
+
+        var boundaries = new List<DateTimeOffset>();
+        while (cursor >= fromUtc)
+        {
+            if (cursor <= toUtc)
+            {
+                boundaries.Add(cursor);
+            }
+            cursor -= period;
+        }
+
+        boundaries.Reverse();
+        return boundaries;
     }
 
     /// <summary>
