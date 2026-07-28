@@ -137,6 +137,51 @@ public partial class PopupWindow : Window
         }
     }
 
+    /// <summary>
+    /// Renders the panel to a bitmap without showing it — the detail panel's equivalent of
+    /// <see cref="MenuWindow.RenderToBitmap"/>, driving the same <see cref="Populate"/> and
+    /// <see cref="BuildGraph"/> the live path does.
+    ///
+    /// <para>It exists because the panel is otherwise only inspectable by opening it on a
+    /// real desktop, which needs the single-instance mutex, puts a window over whatever the
+    /// user is doing, and simply fails when something is running fullscreen — the case that
+    /// blocked verifying the graph's week gridlines. Rendering offscreen also reaches the
+    /// states this machine's real data may never produce, exactly as
+    /// <c>--tile-samples</c> does for the tiles.</para>
+    ///
+    /// <para>The two layout passes are load-bearing and mirror the live sequence. The chart
+    /// is a <c>Canvas</c>, so its <c>ActualWidth</c> is unknown until the tree has been laid
+    /// out once; the live path gets that from <c>Show()</c> + <c>UpdateLayout()</c> before
+    /// calling <see cref="BuildGraph"/>. Drawing the graph before the first pass silently
+    /// falls back to the hard-coded default width and the gridlines land in the wrong
+    /// places — which is precisely what this hook is meant to catch.</para>
+    /// </summary>
+    internal System.Windows.Media.Imaging.BitmapSource RenderToBitmap(
+        UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account, double scale)
+    {
+        PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
+        Populate(snapshot, stats, account);
+
+        var root = (FrameworkElement)Content;
+        void Layout()
+        {
+            root.Measure(new Size(Width, double.PositiveInfinity));
+            root.Arrange(new Rect(root.DesiredSize));
+            root.UpdateLayout();
+        }
+
+        Layout();
+        BuildGraph(stats, snapshot);
+        Layout();
+
+        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
+            (int)Math.Ceiling(root.ActualWidth * scale),
+            (int)Math.Ceiling(root.ActualHeight * scale),
+            96 * scale, 96 * scale, System.Windows.Media.PixelFormats.Pbgra32);
+        bitmap.Render(root);
+        return bitmap;
+    }
+
     // ── data ───────────────────────────────────────────────────────────────────
 
     private void Populate(UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account)
@@ -592,22 +637,19 @@ public partial class PopupWindow : Window
         }
 
         /// <summary>
-        /// Which band a day belongs to — the number of boundaries at or before the day's
-        /// start. A day containing a boundary is counted in the band it opens in, since that
-        /// is where most of a reset day's usage sits relative to the previous limit.
+        /// Which band a day belongs to, for the purpose of normalising its colour.
+        ///
+        /// <para>A day that contains a boundary genuinely belongs to neither band — its
+        /// tokens are split across two weeks and the rollups are daily, so the split is not
+        /// recoverable. It is assigned to whichever band holds the majority of the day,
+        /// which is what testing the MIDPOINT does. That is an approximation, and the only
+        /// one available at this grain; it affects shading alone, never a stated figure.</para>
         /// </summary>
         public int IndexOf(DayUsage day)
         {
-            var start = new DateTimeOffset(day.DateUtc.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
-            var index = 0;
-            foreach (var boundary in _boundaries)
-            {
-                if (boundary <= start)
-                {
-                    index++;
-                }
-            }
-            return index;
+            var midday = new DateTimeOffset(day.DateUtc.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
+                .AddHours(12);
+            return _boundaries.Count(boundary => boundary <= midday);
         }
     }
 
