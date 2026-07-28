@@ -34,9 +34,9 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// </param>
     /// <param name="freshness">Maximum sample age still labelled <see cref="DataSource.Live"/>.</param>
     /// <param name="weeklyResetLog">
-    /// Persists observed weekly resets so the 7-day reset can be derived over time
-    /// (issue #6). Null disables weekly-reset prediction — fine for tests and for the
-    /// JSONL-only fallback.
+    /// Persists observed weekly resets so the 7-day reset survives the source file's finite
+    /// retention (issue #6, ADR-0011). Null disables weekly-reset prediction — fine for
+    /// tests and for the JSONL-only fallback.
     /// </param>
     public PlanHistoryProvider(string? path = null, string? orgUuid = null, TimeSpan? freshness = null,
         IWeeklyResetLog? weeklyResetLog = null)
@@ -113,25 +113,12 @@ public sealed class PlanHistoryProvider : IUsageProvider
         var lastDrop = ResetDetector.FindLastDrop(samples);
         var nextReset = ResetDetector.PredictNextReset(lastDrop, utcNow);
 
-        // Weekly reset (issue #6): record any clean sd drops seen this poll, then
-        // predict from the full persisted history. Null until the period is measurable.
-        DateTimeOffset? weeklyReset = null;
-        if (_weeklyResetLog is not null)
-        {
-            try
-            {
-                _weeklyResetLog.RecordResets(WeeklyResetDetector.FindResets(samples));
-                weeklyReset = WeeklyResetDetector.PredictNextReset(_weeklyResetLog.GetResets(), utcNow);
-            }
-            catch (Exception)
-            {
-                // The weekly-reset log is a bonus feature; a failure inside it — e.g. a
-                // corrupt rollup DB (issue #16) — must never take down the primary
-                // plan-history percentages, which don't depend on it. Degrade the weekly
-                // reset to unknown and return the snapshot regardless.
-                weeklyReset = null;
-            }
-        }
+        // Weekly reset (issue #6, ADR-0011). This IS the discovery loop: every poll
+        // re-scans the whole retained series for `sd` drops and folds them into the
+        // persisted log, so a reset is picked up on the first poll after it appears in the
+        // file and re-recording an already-known one is a no-op. Prediction then runs off
+        // the full history, not just what this file still holds.
+        var weeklyReset = ForecastWeeklyReset(samples, utcNow);
 
         return new UsageSnapshot(
             source,
@@ -139,6 +126,35 @@ public sealed class PlanHistoryProvider : IUsageProvider
             latest.SevenDayPercent,
             nextReset,
             latest.AtUtc,
-            weeklyReset);
+            weeklyReset?.AtUtc,
+            weeklyReset?.Uncertainty);
+    }
+
+    /// <summary>
+    /// Records this poll's observations and predicts from everything recorded so far.
+    /// Scoped to the org the samples belong to: windows are per-organization, and an
+    /// account that switches org must not have the two sets of resets averaged together.
+    /// </summary>
+    private WeeklyResetForecast? ForecastWeeklyReset(
+        IReadOnlyList<PlanHistorySample> samples, DateTimeOffset utcNow)
+    {
+        if (_weeklyResetLog is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            _weeklyResetLog.Record(WeeklyResetDetector.FindResets(samples));
+            return WeeklyResetDetector.PredictNextReset(
+                _weeklyResetLog.GetObservations(samples[^1].OrgUuid), utcNow);
+        }
+        catch (Exception)
+        {
+            // The weekly-reset log is one part of the panel; a failure inside it — an
+            // unreadable file, a locked directory — must never take down the plan-history
+            // percentages, which do not depend on it. Degrade to unknown and carry on.
+            return null;
+        }
     }
 }

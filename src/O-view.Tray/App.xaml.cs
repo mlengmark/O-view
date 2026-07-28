@@ -110,11 +110,26 @@ public partial class App : System.Windows.Application
             : TimeSpan.FromSeconds(60);
 
         _store = new RollupStore();
-        // The store doubles as the weekly-reset log so the 7-day reset accrues across
-        // runs (issue #6) — plan-history retention alone is far too short.
+
+        // Observed weekly resets accrue in their own durable file, not in the rollup store
+        // (ADR-0011): the store is a rebuildable cache that wipes itself on corruption,
+        // whereas a missed reset costs a week. Older builds kept them in the store, so any
+        // rows it still holds are carried across on the way past — idempotent, so this is
+        // safe to run on every launch.
+        var account = ClaudeAccount.TryRead();
+        var weeklyResets = new WeeklyResetLog();
+        try
+        {
+            weeklyResets.ImportLegacy(_store.GetLegacyWeeklyResets(), account?.OrganizationUuid ?? "");
+        }
+        catch (Exception ex)
+        {
+            log?.Write($"weekly-reset legacy import skipped: {ex.GetType().Name}: {ex.Message}");
+        }
+
         _planHistory = new PlanHistoryProvider(
-            orgUuid: ClaudeAccount.TryRead()?.OrganizationUuid,
-            weeklyResetLog: _store);
+            orgUuid: account?.OrganizationUuid,
+            weeklyResetLog: weeklyResets);
         var provider = new CompositeUsageProvider(
             _planHistory,
             new JsonlUsageProvider(_store));
@@ -505,7 +520,37 @@ public partial class App : System.Windows.Application
 
         text.AppendLine($"  transcripts   : {files.Count} .jsonl, {bytes:N0} bytes total under {projects}");
         text.AppendLine($"  newest transcript: {(newest == DateTime.MinValue ? "n/a" : $"{(DateTime.UtcNow - newest).TotalHours:0.0} h old")}");
+        AppendWeeklyResets(text);
         return text.ToString();
+    }
+
+    /// <summary>
+    /// What the weekly-reset discovery has actually found (ADR-0011). "Weekly says
+    /// waiting" is otherwise undiagnosable from the outside: it looks identical whether no
+    /// reset has occurred yet, the file was never written, or drops are being detected and
+    /// discarded. Listing the observations with their brackets separates those in one
+    /// glance. Timestamps only — no usage figures, nothing identifying.
+    /// </summary>
+    private static void AppendWeeklyResets(System.Text.StringBuilder text)
+    {
+        try
+        {
+            var log = new WeeklyResetLog();
+            var observations = log.GetObservations();
+            text.AppendLine($"  weekly resets : {observations.Count} observed ({WeeklyResetLog.DefaultPath})");
+            foreach (var o in observations.TakeLast(5))
+            {
+                text.AppendLine($"    reset       : by {o.LatestUtc:u} "
+                                + $"(± {o.Uncertainty.TotalMinutes:0} min{(o.IsPrecise ? "" : ", Desktop not sampling")})");
+            }
+
+            var next = WeeklyResetDetector.PredictNextReset(observations, DateTimeOffset.UtcNow);
+            text.AppendLine($"  next weekly   : {(next is null ? "unknown — waiting for first reset" : $"{next.AtUtc:u}")}");
+        }
+        catch (Exception ex)
+        {
+            text.AppendLine($"  weekly resets : unreadable ({ex.GetType().Name})");
+        }
     }
 
     /// <summary>

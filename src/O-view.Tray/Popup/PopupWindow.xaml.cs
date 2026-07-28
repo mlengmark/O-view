@@ -174,18 +174,7 @@ public partial class PopupWindow : Window
 
         PopulateBar(WeeklyPctText, WeeklyBar, WeeklyBarFill,
             authoritative ? snapshot.WeeklyPercent : null);
-        // Issue #6: show the weekly reset only once it has genuinely been derived
-        // (two observed resets). Until then, no line at all — an honest blank beats a
-        // "reset time unknown" that reads as broken.
-        if (snapshot.WeeklyResetAtUtc is { } weeklyReset)
-        {
-            WeeklyResetText.Text = $"Resets in {FormatCountdown(weeklyReset - Now(TimeZoneInfo.Utc))} · {TimeZoneInfo.ConvertTime(weeklyReset, local):ddd HH:mm}";
-            WeeklyResetText.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            WeeklyResetText.Visibility = Visibility.Collapsed;
-        }
+        PopulateWeeklyReset(snapshot, authoritative, local);
 
         PopulateTiles(stats);
         PopulateDivergence(stats);
@@ -208,6 +197,50 @@ public partial class PopupWindow : Window
         }
 
         // BuildGraph is deferred to ShowNearTrayIcon (needs post-layout ActualWidth).
+    }
+
+    /// <summary>
+    /// The weekly reset line, which mirrors the session one (issue #6, ADR-0011). Three
+    /// states, and the middle one is the point of the whole feature:
+    ///
+    /// <list type="bullet">
+    /// <item><b>Derived</b> — same shape as the session line, with the weekday added
+    /// because a reset a week out needs one. A reset that was observed while Claude
+    /// Desktop was closed is only bracketed to within hours, so its time is prefixed
+    /// <c>~</c> and the hover says how wide the bracket is: showing an hour and a minute
+    /// we do not have would be a fabricated number (rule 6).</item>
+    /// <item><b>Waiting</b> — plan data is flowing but no `sd` drop has been seen yet.
+    /// This used to render as nothing at all, which is indistinguishable from a bug; it
+    /// now says what O-view is waiting for and the hover says how long that takes.</item>
+    /// <item><b>No plan data</b> — nothing to wait for yet, and the no-data banner above
+    /// already explains why, so the line is hidden rather than repeating it.</item>
+    /// </list>
+    /// </summary>
+    private void PopulateWeeklyReset(UsageSnapshot snapshot, bool authoritative, TimeZoneInfo local)
+    {
+        if (snapshot.WeeklyResetAtUtc is { } reset)
+        {
+            var bracket = snapshot.WeeklyResetUncertainty ?? TimeSpan.Zero;
+            var approximate = bracket > WeeklyResetDetector.PreciseBracket;
+            var at = TimeZoneInfo.ConvertTime(reset, local);
+
+            WeeklyResetText.Text =
+                $"Resets in {FormatCountdown(reset - Now(TimeZoneInfo.Utc))} · {(approximate ? "~" : "")}{at:ddd HH:mm}";
+            WeeklyResetText.ToolTip = approximate
+                ? $"The weekly reset was observed while Claude Desktop wasn't sampling, so it is "
+                  + $"known to within {FormatCountdown(bracket)}. O-view keeps watching and will "
+                  + "sharpen this if it sees a reset while Desktop is running."
+                : null;
+            WeeklyResetText.Visibility = Visibility.Visible;
+            return;
+        }
+
+        WeeklyResetText.Text = "Waiting for first reset…";
+        WeeklyResetText.ToolTip =
+            "Claude Desktop reports weekly usage as a percentage and never reports when the "
+            + "window resets, so O-view derives it by watching that percentage fall. It checks "
+            + "on every refresh and fills this in on the first reset it sees — within a week.";
+        WeeklyResetText.Visibility = authoritative ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>
@@ -495,11 +528,18 @@ public partial class PopupWindow : Window
         _ => "no data",
     };
 
+    /// <summary>
+    /// Coarsest-two-units countdown. The days branch exists for the weekly window: a
+    /// 7-day reset rendered in the hours format reads "163h 45m", which is technically
+    /// right and useless.
+    /// </summary>
     private static string FormatCountdown(TimeSpan t) => t.TotalMinutes < 1
         ? "under a minute"
-        : t.TotalHours >= 1
-            ? string.Create(CultureInfo.InvariantCulture, $"{(int)t.TotalHours}h {t.Minutes}m")
-            : string.Create(CultureInfo.InvariantCulture, $"{t.Minutes}m");
+        : t.TotalDays >= 1
+            ? string.Create(CultureInfo.InvariantCulture, $"{t.Days}d {t.Hours}h")
+            : t.TotalHours >= 1
+                ? string.Create(CultureInfo.InvariantCulture, $"{(int)t.TotalHours}h {t.Minutes}m")
+                : string.Create(CultureInfo.InvariantCulture, $"{t.Minutes}m");
 
     private static string FormatTokens(long tokens) => tokens switch
     {

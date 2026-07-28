@@ -14,8 +14,15 @@ namespace OView.Core.Models;
 /// </param>
 /// <param name="CapturedAtUtc">When the underlying sample was taken. Drives staleness labels.</param>
 /// <param name="WeeklyResetAtUtc">
-/// Predicted next seven-day window reset. Derived from persisted `sd` drops with a
-/// measured period — null until two resets have been observed (GitHub issue #6).
+/// Predicted next seven-day window reset, derived from persisted `sd` drops — null until
+/// one has been observed, which the UI reports as still waiting rather than as broken
+/// (GitHub issue #6, ADR-0011).
+/// </param>
+/// <param name="WeeklyResetUncertainty">
+/// How wide the bracket around the observed reset was. Claude Desktop stops sampling when
+/// it is closed, so a reset caught overnight is only known to within hours — the display
+/// qualifies the time in that case rather than overstating it. Null alongside
+/// <paramref name="WeeklyResetAtUtc"/>.
 /// </param>
 public sealed record UsageSnapshot(
     DataSource Source,
@@ -23,7 +30,8 @@ public sealed record UsageSnapshot(
     int? WeeklyPercent,
     DateTimeOffset? SessionResetAtUtc,
     DateTimeOffset? CapturedAtUtc,
-    DateTimeOffset? WeeklyResetAtUtc = null)
+    DateTimeOffset? WeeklyResetAtUtc = null,
+    TimeSpan? WeeklyResetUncertainty = null)
 {
     /// <summary>The canonical "no data" snapshot.</summary>
     public static UsageSnapshot None { get; } = new(DataSource.None, null, null, null, null);

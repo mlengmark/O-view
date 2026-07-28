@@ -16,6 +16,7 @@ These are **decided, not drafts.** To change one, add a new ADR that supersedes 
 | [0008](0008-installer-distribution.md) | Per-user installer for distribution and relaunch | Accepted | Inno Setup per-user installer: Start Menu entry, optional autostart, clean uninstall. Resolves #7; MSIX rejected (needs signing). |
 | [0009](0009-auto-update.md) | In-app auto-update via GitHub release + existing installer | Accepted *(relaunch amended by 0010)* | Check `releases/latest`, download `O-view-Setup.exe`, silent in-place upgrade + relaunch. Resolves #18; no new dependency; Squirrel/Velopack/MSIX rejected. |
 | [0010](0010-post-update-relaunch.md) | Relaunch through Explorer after a silent update | Accepted | An installer-parented instance could not read `plan-usage-history.json` and never recovered; `explorer.exe` re-parents to the shell. Amends 0009. Mechanism unproven — trigger and cure reproduced. |
+| [0011](0011-weekly-reset-derivation.md) | Weekly reset — a measured 7-day window and its own durable log | Accepted | The window is **7 days**, measured; 72 h disproved. Gap-crossing drops are real resets recorded as brackets, so one observation now suffices. Amends 0007. Resolves #6. |
 
 ## Findings
 
@@ -32,7 +33,6 @@ Tracked here until resolved by a spike, then folded into an ADR:
 
 | Question | Blocks | Contingency |
 |---|---|---|
-| Is `plan-usage-history.json` capped at ~139 samples, or was that just Desktop's uptime? | Nothing — rollup store persists samples either way | Observe over a longer run |
 | What is the exact response shape of `/api/oauth/usage`? | `OAuthUsageProvider` — **deferred out of v1** | Defensive nullable parsing regardless |
 | Is there any source for a **credit balance**? No local file carries one; the API is untested. *(Partially answered — see Resolved: credit **spend** is estimable locally and divergence is detectable; only the exact **balance** still needs the API.)* | Credits section of the popup | Section shows an explanatory note, not invented figures ([ui-spec](../ui-spec.md)) |
 | Does the calibration hold on other accounts, plans, and models? Thresholds derive from one account and one model. | Detector accuracy elsewhere | Floor set ~10× worst observed case; tune the threshold, not the logic |
@@ -49,6 +49,8 @@ Tracked here until resolved by a spike, then folded into an ADR:
 | ~~Is a third-party tray library required?~~ | **No** — `System.Windows.Forms.NotifyIcon` is first-party and sufficient. → [ADR-0005](0005-native-tray-integration.md) |
 | ~~Where does Claude Code Desktop store its OAuth token on Windows?~~ | **Moot for v1.** Claude Desktop caches session/weekly % to `%APPDATA%\Claude\plan-usage-history.json`, so no token is needed. → [ADR-0007](0007-plan-history-primary-provider.md), [findings](../findings/plan-usage-history.md) |
 | ~~Can reset times be obtained without the OAuth endpoint?~~ | **Yes** — `fh` drops mark resets, measured exactly 5.00014 h apart; anchor and extrapolate. |
+| ~~Is `plan-usage-history.json` capped at ~139 samples, or was that just Desktop's uptime?~~ | **Uptime.** The same file held **1,137 samples over 190 h (7.9 days)** on 2026-07-28. Retention exceeding the 7-day window is what makes weekly-reset discovery reliable. → [ADR-0011](0011-weekly-reset-derivation.md) |
+| ~~Is the weekly window 7 days or 72 hours?~~ | **7 days**, measured from two resets 7 d 0 h 14 m apart. 72 h is disproved by the same file: `sd` rose monotonically through a continuously sampled 2026-07-24, where a 72-hour window would have reset. → [ADR-0011](0011-weekly-reset-derivation.md) |
 | ~~Does the plan window capture all usage?~~ | **No — and this is the project's most consequential finding.** Credit-billed usage bypasses the 5-hour window entirely: the icon read a green 6% while ~€86 was spent off-plan (billing-confirmed). Divergence is detectable from data already on disk. → [credit-usage-divergence.md](../findings/credit-usage-divergence.md) |
 | ~~How to tune divergence detection against the integer-percent rounding floor?~~ | **Calibrated from 20 observed rise events:** median 2,523 output tokens per point, worst case 5,793. Floor set at 50,000 tokens with ≤1 point rise — ~10× worst case, biased toward silence. → [findings](../findings/credit-usage-divergence.md#calibration-spike-2026-07-21) |
 

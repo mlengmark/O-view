@@ -22,10 +22,29 @@ public class PlanHistoryProviderTests : IDisposable
 
     private sealed class ThrowingResetLog : IWeeklyResetLog
     {
-        public void RecordResets(IEnumerable<DateTimeOffset> resets) =>
-            throw new InvalidOperationException("reset log unavailable (e.g. corrupt store)");
-        public IReadOnlyList<DateTimeOffset> GetResets() =>
-            throw new InvalidOperationException("reset log unavailable (e.g. corrupt store)");
+        public void Record(IEnumerable<WeeklyResetObservation> observations) =>
+            throw new InvalidOperationException("reset log unavailable (e.g. unwritable log file)");
+        public IReadOnlyList<WeeklyResetObservation> GetObservations(string? orgUuid = null) =>
+            throw new InvalidOperationException("reset log unavailable (e.g. unwritable log file)");
+    }
+
+    /// <summary>In-memory log, so the provider's discovery loop can be exercised end to end.</summary>
+    private sealed class MemoryResetLog : IWeeklyResetLog
+    {
+        private readonly List<WeeklyResetObservation> _observations = [];
+
+        public IReadOnlyList<WeeklyResetObservation> Recorded => _observations;
+
+        public void Record(IEnumerable<WeeklyResetObservation> observations)
+        {
+            foreach (var o in observations.Where(o => !_observations.Contains(o)))
+            {
+                _observations.Add(o);
+            }
+        }
+
+        public IReadOnlyList<WeeklyResetObservation> GetObservations(string? orgUuid = null) =>
+            orgUuid is null ? _observations : _observations.Where(o => o.OrgUuid == orgUuid).ToList();
     }
 
     [Fact]
@@ -39,9 +58,9 @@ public class PlanHistoryProviderTests : IDisposable
     [Fact]
     public void FailingResetLog_StillReportsPrimaryData()
     {
-        // issue #16: a corrupt rollup DB throws from the weekly-reset log, but the
-        // session/weekly percentages come from the plan-history file, not the DB, and
-        // must survive. The weekly RESET degrades to unknown (null); nothing else does.
+        // issue #16: a failing weekly-reset log must not take anything else down. The
+        // session/weekly percentages come from the plan-history file, not the log, so they
+        // must survive; the weekly RESET degrades to unknown (null), and nothing else does.
         var path = WriteSamples(
             (Now.AddMinutes(-10), "org-a", 40, 7),
             (Now.AddMinutes(-5), "org-a", 47, 8));
@@ -52,6 +71,73 @@ public class PlanHistoryProviderTests : IDisposable
         Assert.Equal(DataSource.Live, snapshot.Source);
         Assert.Equal(47, snapshot.SessionPercent);
         Assert.Equal(8, snapshot.WeeklyPercent);
+        Assert.Null(snapshot.WeeklyResetAtUtc);
+    }
+
+    [Fact]
+    public void NoResetSeenYet_LeavesTheWeeklyResetUnknown()
+    {
+        // The "waiting for first reset" state: real percentages, no derived reset. It is
+        // reported as null and never guessed (rule 6); the panel explains the wait.
+        var path = WriteSamples(
+            (Now.AddMinutes(-10), "org-a", 40, 7),
+            (Now.AddMinutes(-5), "org-a", 47, 8));
+
+        var snapshot = new PlanHistoryProvider(path, weeklyResetLog: new MemoryResetLog()).GetSnapshot(Now);
+
+        Assert.Equal(8, snapshot.WeeklyPercent);
+        Assert.Null(snapshot.WeeklyResetAtUtc);
+        Assert.Null(snapshot.WeeklyResetUncertainty);
+    }
+
+    [Fact]
+    public void ADropInTheSeries_IsDiscovered_RecordedAndForecast()
+    {
+        // The discovery loop, end to end: the poll that first sees the drop records it and
+        // the same poll's snapshot already carries the forecast — shaped like the real
+        // 2026-07-28 reset, i.e. across an overnight gap in Desktop's sampling.
+        var log = new MemoryResetLog();
+        var path = WriteSamples(
+            (Now.AddHours(-10), "org-a", 20, 70),
+            (Now.AddMinutes(-5), "org-a", 0, 0));
+
+        var snapshot = new PlanHistoryProvider(path, weeklyResetLog: log).GetSnapshot(Now);
+
+        Assert.Single(log.Recorded);
+        Assert.Equal(Now.AddMinutes(-5).AddDays(7), snapshot.WeeklyResetAtUtc);
+        Assert.Equal(TimeSpan.FromHours(10).Add(TimeSpan.FromMinutes(-5)), snapshot.WeeklyResetUncertainty);
+    }
+
+    [Fact]
+    public void DiscoveryKeepsLooking_AndDoesNotDuplicateAKnownReset()
+    {
+        var log = new MemoryResetLog();
+        var path = WriteSamples(
+            (Now.AddHours(-10), "org-a", 20, 70),
+            (Now.AddMinutes(-5), "org-a", 0, 0));
+        var provider = new PlanHistoryProvider(path, weeklyResetLog: log);
+
+        for (var poll = 0; poll < 5; poll++)
+        {
+            provider.GetSnapshot(Now);
+        }
+
+        Assert.Single(log.Recorded);
+    }
+
+    [Fact]
+    public void ResetsAreScopedToTheOrgTheSamplesBelongTo()
+    {
+        // A log carried over from a different organization must not be used to forecast
+        // this one's window — the windows are per-org and unrelated.
+        var log = new MemoryResetLog();
+        log.Record([new WeeklyResetObservation(Now.AddDays(-3).AddMinutes(-5), Now.AddDays(-3), "org-b")]);
+        var path = WriteSamples(
+            (Now.AddMinutes(-10), "org-a", 40, 7),
+            (Now.AddMinutes(-5), "org-a", 47, 8));
+
+        var snapshot = new PlanHistoryProvider(path, weeklyResetLog: log).GetSnapshot(Now);
+
         Assert.Null(snapshot.WeeklyResetAtUtc);
     }
 
