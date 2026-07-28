@@ -23,7 +23,9 @@ namespace OView.Tray;
 /// Tray-resident WPF app: no windows, no StartupUri; the WPF dispatcher pumps the
 /// messages NotifyIcon's hidden window needs. Diagnostic args (all optional):
 /// --interval-ms N, --log path, --stress N (refresh N times, log GDI delta, keep
-/// running), --samples dir (render icon PNGs and exit — legibility verification).
+/// running), --samples dir (render icon PNGs and exit — legibility verification),
+/// --menu-check path (activate every tray-menu row over repeated open/close cycles and
+/// report what fired — the menu's equivalent of --toggle-check).
 /// </summary>
 public partial class App : System.Windows.Application
 {
@@ -41,6 +43,12 @@ public partial class App : System.Windows.Application
     private UpdateService? _updates;
     private DispatcherTimer? _updateTimer;
     private bool _updateFlowActive;
+
+    /// <summary>
+    /// An interactive update check is running, including its modal confirmation. Distinct
+    /// from <see cref="_updateFlowActive"/>, which only spans the download that may follow.
+    /// </summary>
+    private bool _updateCheckActive;
     private string? _notifiedUpdateTag;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -82,6 +90,16 @@ public partial class App : System.Windows.Application
             RenderDialogSamples(dialogSamplesDir!);
             Shutdown();
             return;
+        }
+
+        // Drives every menu row through repeated open → activate → reopen cycles and reports
+        // what actually fired (issue #47). Before the mutex, like --menu-samples: it builds
+        // its own flyout with recording handlers, so it needs no tray icon and cannot
+        // disturb a running instance.
+        if (args.TryGetValue("--menu-check", out var menuCheckReport))
+        {
+            RunMenuCheck(menuCheckReport ?? "menu-check.txt");
+            return;     // the run shuts itself down when the sequence finishes
         }
 
         // Writes the same report as the Copy diagnostics menu item and exits. Handled
@@ -224,6 +242,86 @@ public partial class App : System.Windows.Application
                 : null;
             ShowMenu();
         }
+    }
+
+    /// <summary>
+    /// Exercises every menu row the way a user does, repeatedly: open the flyout, activate a
+    /// row, let it close, open it again. A single activation of a single row can never catch
+    /// this class of fault — the flyout carries state across opens (`_closing`, `_closedAt`)
+    /// and it is the SECOND and third cycles that expose it, exactly as `--toggle-check`
+    /// exists because the panel's toggle only broke on the second open.
+    ///
+    /// Handlers here only record. The point is the plumbing from a row to its event — running
+    /// the real actions would exit the app halfway through and download an installer.
+    /// </summary>
+    private void RunMenuCheck(string path)
+    {
+        var report = new System.Text.StringBuilder();
+        var fired = new Dictionary<string, int>
+        {
+            ["diagnostics"] = 0, ["updates"] = 0, ["exit"] = 0,
+        };
+
+        var menu = new MenuWindow
+        {
+            SetRunAtStartup = enable => enable,          // no registry writes in a check
+            SetNotifyOnThreshold = enable => enable,
+        };
+        menu.CopyDiagnosticsRequested += (_, _) => fired["diagnostics"]++;
+        menu.CheckForUpdatesRequested += (_, _) => fired["updates"]++;
+        menu.ExitRequested += (_, _) => fired["exit"]++;
+
+        void Open() => menu.ShowDocked(true, true, 70, UpdateService.CurrentVersion);
+        void Record(string label) =>
+            report.AppendLine($"{label,-42} visible={menu.IsVisible,-5} closing={menu.IsClosing,-5} " +
+                              $"fired=[diag {fired["diagnostics"]}, upd {fired["updates"]}, exit {fired["exit"]}]");
+
+        // Each action row, three times over, with a full open/close cycle between — plus the
+        // toggle rows, which must NOT close the flyout, and a click-away dismissal.
+        var steps = new List<(string Label, Action Do)>();
+        for (var cycle = 1; cycle <= 3; cycle++)
+        {
+            var n = cycle;
+            foreach (var row in new[] { MenuWindow.MenuRow.Updates, MenuWindow.MenuRow.Diagnostics })
+            {
+                steps.Add(($"cycle {n}: open before {row}", Open));
+                steps.Add(($"cycle {n}: activate {row}", () => menu.InvokeRow(row)));
+                steps.Add(($"cycle {n}: settled after {row}", () => { }));
+            }
+
+            steps.Add(($"cycle {n}: open for toggles", Open));
+            steps.Add(($"cycle {n}: toggle Run at startup", () => menu.InvokeRow(MenuWindow.MenuRow.Startup)));
+            steps.Add(($"cycle {n}: toggle Notify", () => menu.InvokeRow(MenuWindow.MenuRow.Notify)));
+            steps.Add(($"cycle {n}: toggles left it open", () => { }));
+            steps.Add(($"cycle {n}: dismiss (click-away)", menu.DismissNow));
+            steps.Add(($"cycle {n}: settled after dismiss", () => { }));
+        }
+
+        var step = 0;
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(700) };
+        timer.Tick += (_, _) =>
+        {
+            if (step > 0)
+            {
+                Record(steps[step - 1].Label);
+            }
+
+            if (step == steps.Count)
+            {
+                timer.Stop();
+                var expected = 3;
+                report.AppendLine();
+                report.AppendLine($"activations of 'Check for updates…' : {fired["updates"]} of {expected} expected");
+                report.AppendLine($"activations of 'Copy diagnostics'   : {fired["diagnostics"]} of {expected} expected");
+                report.AppendLine($"RESULT: {(fired["updates"] == expected && fired["diagnostics"] == expected ? "PASS" : "FAIL")}");
+                File.WriteAllText(path, report.ToString());
+                Shutdown();
+                return;
+            }
+
+            steps[step++].Do();
+        };
+        timer.Start();
     }
 
     /// <summary>
@@ -602,16 +700,34 @@ public partial class App : System.Windows.Application
     /// </summary>
     private async Task CheckForUpdatesInteractiveAsync()
     {
-        if (_updates is null || _trayHost is null || _updateFlowActive)
+        if (_updates is null || _trayHost is null || _updateFlowActive || _updateCheckActive)
         {
+            // _updateCheckActive covers the whole interactive flow, including the modal
+            // confirmation; _updateFlowActive only covers the download that follows it. A
+            // second click while the first check is still awaiting the network — or sitting
+            // on the confirm dialog — would otherwise start an independent flow and stack a
+            // second modal behind the first.
             return;
         }
 
-        var result = await _updates.CheckAsync();
+        _updateCheckActive = true;
+        try
+        {
+            await RunUpdateCheckAsync();
+        }
+        finally
+        {
+            _updateCheckActive = false;
+        }
+    }
+
+    private async Task RunUpdateCheckAsync()
+    {
+        var result = await _updates!.CheckAsync();
         switch (result.Outcome)
         {
             case UpdateOutcome.UpToDate:
-                _trayHost.ShowNotification("O-view is up to date",
+                _trayHost!.ShowNotification("O-view is up to date",
                     $"You have the latest version ({UpdateService.CurrentVersion}).");
                 break;
 
@@ -620,7 +736,7 @@ public partial class App : System.Windows.Application
                 break;
 
             default:
-                _trayHost.ShowNotification("Couldn't check for updates",
+                _trayHost!.ShowNotification("Couldn't check for updates",
                     "O-view couldn't reach GitHub to check for a newer version. Please try again later.");
                 break;
         }

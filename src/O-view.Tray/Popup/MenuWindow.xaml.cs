@@ -47,6 +47,12 @@ public partial class MenuWindow : Window
     /// <summary>When the flyout last began closing because it lost focus.</summary>
     private DateTimeOffset _closedAt = DateTimeOffset.MinValue;
 
+    /// <summary>Action to run once the close transition finishes — the activated row's.</summary>
+    private Action? _pendingAction;
+
+    /// <summary>Set while Hide() runs, so its own Deactivated does not re-enter the close.</summary>
+    private bool _suppressDeactivate;
+
     /// <summary>
     /// True if the flyout dismissed itself a moment ago — for a tray click, that means
     /// the click WAS the dismissal, so it must not reopen. See the panel's equivalent.
@@ -76,7 +82,7 @@ public partial class MenuWindow : Window
     {
         InitializeComponent();
 
-        Deactivated += (_, _) => { if (!PinForVerification) BeginClose(); };
+        Deactivated += (_, _) => { if (!PinForVerification && !_suppressDeactivate) BeginClose(); };
 
         // Rows are Buttons, so Tab, Space and Enter work already; Up/Down is added back
         // because the ContextMenu this replaces had it and it is how a menu is expected
@@ -176,22 +182,52 @@ public partial class MenuWindow : Window
     /// </summary>
     private void BeginClose(Action? after = null)
     {
+        // A close already in flight must not swallow the action. The early return used to
+        // drop `after` outright, so a row activated while the flyout was mid-close did
+        // nothing at all and the click simply vanished — the hardest kind of fault to
+        // report, because the menu looks like it worked. Queue it onto the running close
+        // instead; the transition is ~150 ms, so this window is small but reachable with a
+        // fast double-click or a click that lands as the flyout deactivates.
         if (_closing)
         {
+            if (after is not null)
+            {
+                _pendingAction += after;
+            }
             return;
         }
 
         _closing = true;
         _closedAt = DateTimeOffset.UtcNow;
+        _pendingAction = after;
+
         FlyoutAnimation.Close(this, _dockOrigin, () =>
         {
             // Re-checked: the flyout may have been re-opened while this was running.
             if (_closing)
             {
                 _closing = false;
-                Hide();
+
+                // Hiding the foreground window raises Deactivated, which re-enters this
+                // method. Suppress that: the flyout is already closing by definition, and
+                // the re-entrant call would otherwise start a second transition and leave
+                // _closing set on a window that is already hidden.
+                _suppressDeactivate = true;
+                try
+                {
+                    Hide();
+                }
+                finally
+                {
+                    _suppressDeactivate = false;
+                }
             }
-            after?.Invoke();
+
+            // Taken and cleared before invoking, so an action that reopens the flyout does
+            // not inherit a stale queue.
+            var pending = _pendingAction;
+            _pendingAction = null;
+            pending?.Invoke();
         });
     }
 
@@ -211,6 +247,39 @@ public partial class MenuWindow : Window
             StartupRow.Focus();
         }
     }
+
+    // ── verification hooks (--menu-check) ──────────────────────────────────────
+
+    /// <summary>The rows, so a verification run can name them without touching XAML fields.</summary>
+    internal enum MenuRow { Startup, Notify, Diagnostics, Updates, Exit }
+
+    private System.Windows.Controls.Button RowButton(MenuRow row) => row switch
+    {
+        MenuRow.Startup => StartupRow,
+        MenuRow.Notify => NotifyRow,
+        MenuRow.Diagnostics => DiagnosticsRow,
+        MenuRow.Updates => UpdatesRow,
+        _ => ExitRow,
+    };
+
+    /// <summary>
+    /// Activates a row through its automation peer — the same <c>Click</c> the mouse and the
+    /// keyboard both raise, so a verification run exercises the real handler rather than a
+    /// parallel path that could pass while the real one is broken.
+    /// </summary>
+    internal void InvokeRow(MenuRow row)
+    {
+        var peer = new System.Windows.Automation.Peers.ButtonAutomationPeer(RowButton(row));
+        ((System.Windows.Automation.Provider.IInvokeProvider)
+            peer.GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke)).Invoke();
+    }
+
+    /// <summary>Tick state of a toggle row, for asserting a toggle actually flipped.</summary>
+    internal bool RowIsChecked(MenuRow row) =>
+        row == MenuRow.Startup ? IsChecked(StartupCheck) : IsChecked(NotifyCheck);
+
+    /// <summary>Whether a close transition is in flight — the state that made rows dead.</summary>
+    internal bool IsClosing => _closing;
 
     private static bool IsChecked(Path check) => check.Visibility == Visibility.Visible;
 
