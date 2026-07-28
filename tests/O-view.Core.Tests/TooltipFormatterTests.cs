@@ -25,6 +25,34 @@ public class TooltipFormatterTests
     }
 
     [Fact]
+    public void Live_ShowsTheWeeklyResetOnceDerived()
+    {
+        var weekly = new DateTimeOffset(2026, 8, 4, 6, 28, 57, TimeSpan.Zero);
+        var s = new UsageSnapshot(DataSource.Live, 6, 70, Reset, Sampled, weekly, TimeSpan.FromMinutes(5));
+
+        Assert.Equal("5h: 6% · resets 11:14 · 7d: 70% · resets Tue 06:28", TooltipFormatter.Format(s, Utc));
+    }
+
+    [Fact]
+    public void AWeeklyResetObservedAcrossASamplingGap_IsMarkedApproximate()
+    {
+        // The reset was bracketed by ten hours of Desktop downtime, so the minute shown is
+        // an upper bound, not a measurement. The "~" is what stops it reading as exact.
+        var weekly = new DateTimeOffset(2026, 8, 4, 6, 28, 57, TimeSpan.Zero);
+        var s = new UsageSnapshot(DataSource.Live, 6, 70, Reset, Sampled, weekly, TimeSpan.FromHours(10));
+
+        Assert.Equal("5h: 6% · resets 11:14 · 7d: 70% · resets ~Tue 06:28", TooltipFormatter.Format(s, Utc));
+    }
+
+    [Fact]
+    public void UndiscoveredWeeklyReset_OmitsTheSegmentEntirely()
+    {
+        var s = new UsageSnapshot(DataSource.Live, 6, 70, Reset, Sampled);
+
+        Assert.Equal("5h: 6% · resets 11:14 · 7d: 70%", TooltipFormatter.Format(s, Utc));
+    }
+
+    [Fact]
     public void Stale_CarriesAsOfLabel()
     {
         var s = new UsageSnapshot(DataSource.Stale, 31, 6, Reset, Sampled);

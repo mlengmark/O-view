@@ -128,7 +128,12 @@ IUsageProvider
 
 Resolution: fresh plan-history → OAuth if it ever exists → JSONL (labelled estimate) → no data. See [ADR-0002](docs/adr/0002-usage-data-providers.md) and [ADR-0007](docs/adr/0007-plan-history-primary-provider.md).
 
-**Reset times are derived, not reported:** detect a decrease in `fh` of ≥2 points, then `next = last drop + 5h`, re-anchoring on each new drop. Before any drop is observed the reset time is genuinely **unknown** — show it as unknown rather than guessing.
+**Reset times are derived, not reported.** Both windows work the same way: detect a decrease of ≥2 points, anchor on it, step forward by the window length — **5h** from `fh`, **7 days** from `sd` ([ADR-0011](docs/adr/0011-weekly-reset-derivation.md); both lengths are measured, and 72h for the weekly window is disproved). Before any drop is observed the reset time is genuinely **unknown** — show it as unknown, never guessed.
+
+Two things about the weekly one are easy to "tidy up" back into the bug they fix:
+
+- **A drop across a gap in Desktop's sampling is a real reset, not a restart snap.** Weekly resets land overnight and Desktop is closed then, so rejecting gap-crossing drops rejects *every* observation — which is exactly why the panel showed no weekly reset for weeks. What the gap costs is precision, so the observation is stored as the bracket `(previous sample, drop sample]`, predicted from its upper bound, and marked `~` in the UI.
+- **Observed resets live in `%LOCALAPPDATA%\O-view\weekly-resets.json`, not in the rollup store.** The store is a rebuildable cache and wipes itself on corruption (rule 7 / issue #16); a weekly reset cannot be rebuilt and costs a week to re-observe. Do not move it back.
 
 ## Build order
 

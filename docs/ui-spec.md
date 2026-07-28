@@ -18,7 +18,7 @@ Per [ADR-0003](adr/0003-windows-tray-constraints.md) and the [legibility spike](
 - Arc colour — the shared `UsageLevels` bands ([issue #2](https://github.com/mlengmark/O-view/issues/2)):
   **green < 50% · amber 50–69% · red ≥ 70%**. Same classifier drives the popup bars.
 - No data / estimate: faint empty ring — never a fabricated fill
-- Tooltip (≤127 chars): `5h: 47% · resets 16:32 · 7d: 61%`
+- Tooltip (≤127 chars): `5h: 47% · resets 16:32 · 7d: 61% · resets ~Tue 06:28`. The weekly reset joins on the same terms as the session one — shown once derived, absent while unknown, `~` when the observation behind it was bracketed by a gap in Desktop's sampling ([ADR-0011](adr/0011-weekly-reset-derivation.md)).
 
 The icon tracks the **session** window, since that is the limit users hit first.
 A threshold notification fires once when session usage first reaches the critical
@@ -55,11 +55,26 @@ Both bars show **percentage of quota consumed** — consistent metric, with time
 | Row | Bar | Text |
 |---|---|---|
 | **Current session** | % of 5-hour rolling limit used | `Resets in 2h 14m · 16:32` |
-| **Weekly** | % of 7-day limit used | reset line only once derived (see below) |
+| **Weekly** | % of 7-day limit used | `Resets in 6d 3h · Tue 06:28` — same shape, plus a weekday (see below) |
 
 *Design note:* the original spec had the session bar showing **remaining time** and the weekly bar showing **remaining tokens**. Rejected during review: a time bar cannot warn about quota exhaustion — you could sit at 95% used with 4 hours "remaining" and the bar would still look healthy, which defeats the purpose of the tool. Time is still shown, as text.
 
-**Weekly reset ([GitHub issue #6](https://github.com/mlengmark/O-view/issues/6)):** derived from `sd` drops the same way the 5-hour reset is derived from `fh` drops — but two things differ. The weekly period is undocumented (disputed 7-day vs 72-hour), so it is **measured from two observed resets**, never assumed; and weekly resets are rare while plan-history retention is ~1.5 days, so observed resets are **persisted** (`weekly_resets` table). Until two clean resets have accrued, the reset is genuinely unknown and **no line is shown** — an honest blank replaces the earlier "Reset time unknown", which read as broken. Restart-snap drops (across a Desktop-closed gap) are rejected, not counted. The API almost certainly holds this directly, but reading it needs the encrypted OAuth token (deferred — ADR-0007).
+**Weekly reset ([GitHub issue #6](https://github.com/mlengmark/O-view/issues/6), [ADR-0011](adr/0011-weekly-reset-derivation.md)):** derived from `sd` drops the same way the 5-hour reset is derived from `fh` drops, and now presented the same way. The window is **7 days** — measured from two resets 7 d 0 h 14 m apart, with the 72-hour alternative disproved by the same file — so **one** observed reset is enough to predict the next, as one `fh` drop is. Observed resets are still **persisted**, in [`%LOCALAPPDATA%\O-view\weekly-resets.json`](adr/0011-weekly-reset-derivation.md): a reset that scrolls out of the source file is gone for good, and that state must not sit in the rollup store, which wipes itself on corruption.
+
+The row has four states, and naming them is the point of the feature:
+
+| State | Line |
+|---|---|
+| Derived from a precise observation | `Resets in 6d 3h · Tue 06:28` |
+| Derived from a gap-bracketed observation | `Resets in 6d 3h · ~Tue 06:28` — hover gives the bracket width |
+| Plan data flowing, no reset seen yet | `Waiting for first reset…` — hover explains what is being watched for |
+| No plan data at all | hidden; the no-data banner above already explains it |
+
+> **The `~` is load-bearing.** Weekly resets land in the small hours, and Claude Desktop stops sampling when it is closed — so a reset is typically only bracketed to within ~10 hours. Printing a bare `Tue 06:28` from that would be a fabricated minute (rule 6). The tilde and the hover state the precision; the time itself is the bracket's **upper** bound, so the panel never promises fresh quota before it arrives. Predictions anchor on the most precise observation on record, not the most recent, so the figure sharpens by itself as better observations accrue.
+
+> **What the blank row cost.** Until now this line was simply hidden whenever the reset was underived — which, because gap-crossing drops were being discarded, was *always*. A permanently missing line is indistinguishable from a bug, and that is what issue #6 reported.
+
+Discovery runs on the ordinary poll loop: every refresh re-scans the retained series and folds any drops into the log, so there is no separate schedule and re-recording a known reset is a no-op. The API almost certainly reports the reset directly, but reading it needs the encrypted OAuth token (deferred — ADR-0007).
 
 Percentages come from the OAuth provider. On JSONL fallback they are estimates and must be labelled as such.
 

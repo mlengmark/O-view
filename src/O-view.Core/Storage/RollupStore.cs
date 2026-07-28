@@ -1,7 +1,6 @@
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using OView.Core.Providers.Jsonl;
-using OView.Core.Providers.PlanHistory;
 
 namespace OView.Core.Storage;
 
@@ -18,7 +17,7 @@ namespace OView.Core.Storage;
 /// Ledger rows hold ids, dates, models, and token counts only — no conversation
 /// content (ADR-0006 privacy rationale).
 /// </summary>
-public sealed class RollupStore : IWeeklyResetLog, IDisposable
+public sealed class RollupStore : IDisposable
 {
     /// <summary>Default location: %LOCALAPPDATA%\O-view\usage.db</summary>
     public static string DefaultPath => Path.Combine(
@@ -127,6 +126,8 @@ public sealed class RollupStore : IWeeklyResetLog, IDisposable
                 byte_offset INTEGER NOT NULL,
                 file_length INTEGER NOT NULL
             );
+            -- Read-only since ADR-0011 (weekly resets live in weekly-resets.json now).
+            -- Still created so the legacy read works against a fresh database.
             CREATE TABLE IF NOT EXISTS weekly_resets (
                 reset_at TEXT PRIMARY KEY
             );
@@ -134,25 +135,13 @@ public sealed class RollupStore : IWeeklyResetLog, IDisposable
         cmd.ExecuteNonQuery();
     }
 
-    // ── IWeeklyResetLog (issue #6) ───────────────────────────────────────────────
-
-    /// <summary>Persist observed weekly resets; idempotent by timestamp.</summary>
-    public void RecordResets(IEnumerable<DateTimeOffset> resets)
-    {
-        using var transaction = _connection.BeginTransaction();
-        using var cmd = _connection.CreateCommand();
-        cmd.Transaction = transaction;
-        cmd.CommandText = "INSERT OR IGNORE INTO weekly_resets (reset_at) VALUES ($at)";
-        var pAt = cmd.Parameters.Add("$at", SqliteType.Text);
-        foreach (var reset in resets)
-        {
-            pAt.Value = reset.UtcDateTime.ToString("o", CultureInfo.InvariantCulture);
-            cmd.ExecuteNonQuery();
-        }
-        transaction.Commit();
-    }
-
-    public IReadOnlyList<DateTimeOffset> GetResets()
+    /// <summary>
+    /// Weekly resets recorded by versions before ADR-0011, when this store doubled as the
+    /// weekly-reset log. It no longer does — that state is unrebuildable and this store
+    /// wipes itself on corruption, so it moved to <see cref="WeeklyResetLog"/>. This reader
+    /// stays so an upgrade can carry the old rows across; the table is never written again.
+    /// </summary>
+    public IReadOnlyList<DateTimeOffset> GetLegacyWeeklyResets()
     {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = "SELECT reset_at FROM weekly_resets ORDER BY reset_at";

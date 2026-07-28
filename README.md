@@ -28,7 +28,7 @@ A balloon notification fires once per session window when usage crosses the thre
 Both flyouts dock to the taskbar corner like a system flyout, follow the Windows light/dark app theme (re-read on every open — no restart), and animate open and closed.
 
 - **Account header** — display name, email, and plan-tier badge, read from `~/.claude.json`. No token, no network call.
-- **Session and weekly bars** — percentage, proportional fill in the same colour bands as the icon, and the derived reset time for each. Reset times are *derived from observed drops*, not reported by any API; before a drop has been seen the panel says the reset time is unknown rather than guessing.
+- **Session and weekly bars** — percentage, proportional fill in the same colour bands as the icon, and the derived reset time for each: `Resets in 2h 14m · 16:32` for the 5-hour window, `Resets in 6d 3h · Tue 06:28` for the weekly one. Reset times are *derived from observed drops*, not reported by any API. Before a drop has been seen the panel says so — the weekly row reads **"Waiting for first reset…"** — rather than guessing. A weekly reset that happened while Claude Desktop was closed is only bracketed to within a few hours, and is shown with a `~` and an explanation on hover instead of a made-up minute.
 - **Four stat tiles** — tokens today, Est. value today, tokens over 31 days, Est. value over 31 days. **Click any tile to flip it to a per-model breakdown**: a segmented bar with a consistent colour per model across the whole panel, and per-model token and cost figures on hover. Nothing is fetched on click; the split is already in hand.
 - **Usage graph — last 31 days** — daily bars with calendar-week gridlines and hover tooltips. Days before O-view's first recorded day are drawn as an explicit empty region, never as zero-height bars, because "no data" and "no usage" are different claims.
 - **Off-plan usage — last 31 days** — the estimated API-rate value of usage on models that bill as extra usage (currently Fable) rather than drawing from the plan window.
@@ -53,7 +53,7 @@ O-view handles **no credentials and makes no API calls for usage data.** Everyth
 
 | Provider | Role | Reads | Gives |
 |---|---|---|---|
-| `PlanHistoryProvider` | Primary | `%APPDATA%\Claude\plan-usage-history.json` (read-only — the file belongs to Claude Desktop) | Authoritative 5-hour and 7-day % utilisation, plus reset times derived from observed drops |
+| `PlanHistoryProvider` | Primary | `%APPDATA%\Claude\plan-usage-history.json` (read-only — the file belongs to Claude Desktop) | Authoritative 5-hour and 7-day % utilisation, plus reset times derived from observed drops. Observed weekly resets are logged to `%LOCALAPPDATA%\O-view\weekly-resets.json`, since the source file's retention is shorter than a user's history |
 | `JsonlUsageProvider` | Fallback | Claude Code transcripts under `%USERPROFILE%\.claude\projects` | Token counts and per-model breakdown, de-duplicated by `requestId` |
 
 `CompositeUsageProvider` resolves between them by information value rather than list position: any live snapshot beats a stale one, and stale authoritative percentages beat an estimate carrying no percentages at all. The winning snapshot keeps its own label, so the UI shows a visible **"local estimate"** badge whenever it is running on fallback data. A provider that throws is treated as "no data" and the chain falls through rather than blanking the display.
