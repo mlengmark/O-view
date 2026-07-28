@@ -11,6 +11,7 @@ using Color = System.Windows.Media.Color;
 using Point = System.Windows.Point;
 using Rectangle = System.Windows.Shapes.Rectangle;
 using Size = System.Windows.Size;
+using ToolTip = System.Windows.Controls.ToolTip;
 
 namespace OView.Tray.Popup;
 
@@ -182,6 +183,25 @@ public partial class PopupWindow : Window
         return bitmap;
     }
 
+    /// <summary>
+    /// The graph's hover cards, built standalone for verification. They cannot appear in a
+    /// render of the panel — a <c>ToolTip</c> throws if given a parent, so it can neither be
+    /// laid out inside one nor screenshotted with it — and hover is the only way to reach
+    /// them in the running app, so without this they are unverifiable.
+    /// </summary>
+    internal IReadOnlyList<ToolTip> BuildSampleHoverCards(bool light)
+    {
+        PanelTheme.Apply(Resources, light);
+        return
+        [
+            HoverCard.Figure(this, "234.8M tokens", "Tuesday 21 July"),
+            HoverCard.Figure(this, "Tue 28 Jul · 06:28", "Weekly limit reset"),
+            HoverCard.Text(this,
+                "Start of the calendar week (Monday). O-view hasn't observed a weekly reset "
+                + "yet, so this is a calendar reference, not your plan's boundary."),
+        ];
+    }
+
     // ── data ───────────────────────────────────────────────────────────────────
 
     private void Populate(UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account)
@@ -272,19 +292,22 @@ public partial class PopupWindow : Window
             WeeklyResetText.Text =
                 $"Resets in {FormatCountdown(reset - Now(TimeZoneInfo.Utc))} · {(approximate ? "~" : "")}{at:ddd HH:mm}";
             WeeklyResetText.ToolTip = approximate
-                ? $"The weekly reset was observed while Claude Desktop wasn't sampling, so it is "
-                  + $"known to within {FormatCountdown(bracket)}. O-view keeps watching and will "
-                  + "sharpen this if it sees a reset while Desktop is running."
+                ? HoverCard.Text(this,
+                    $"The weekly reset was observed while Claude Desktop wasn't sampling, so it is "
+                    + $"known to within {FormatCountdown(bracket)}. O-view keeps watching and will "
+                    + "sharpen this if it sees a reset while Desktop is running.")
                 : null;
+            HoverCard.ApplyTiming(WeeklyResetText);
             WeeklyResetText.Visibility = Visibility.Visible;
             return;
         }
 
         WeeklyResetText.Text = "Waiting for first reset…";
-        WeeklyResetText.ToolTip =
+        WeeklyResetText.ToolTip = HoverCard.Text(this,
             "Claude Desktop reports weekly usage as a percentage and never reports when the "
             + "window resets, so O-view derives it by watching that percentage fall. It checks "
-            + "on every refresh and fills this in on the first reset it sees — within a week.";
+            + "on every refresh and fills this in on the first reset it sees — within a week.");
+        HoverCard.ApplyTiming(WeeklyResetText);
         WeeklyResetText.Visibility = authoritative ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -487,8 +510,16 @@ public partial class PopupWindow : Window
                     Fill = new SolidColorBrush(Lerp(GraphBlueLo, GraphBlueHi, intensity)),
                     RadiusX = 1,
                     RadiusY = 1,
-                    ToolTip = $"{day.DateUtc:ddd d MMM} · {FormatTokens(day.TotalTokens)} tokens",
+                    // Figure first, date beneath — the panel's shared hover card, not the
+                    // raw string this used to be. A bare `ToolTip = "…"` renders as system
+                    // chrome: a pale rectangle with a hard border, on a panel that is
+                    // otherwise entirely rounded cards on one palette.
+                    ToolTip = HoverCard.Figure(
+                        this,
+                        $"{FormatTokens(day.TotalTokens)} tokens",
+                        day.DateUtc.ToString("dddd d MMMM", CultureInfo.InvariantCulture)),
                 };
+                HoverCard.ApplyTiming(bar);
                 // Placed from the column centre, like the label below it, so the two
                 // cannot drift apart as the gutter or column width changes (issue #31).
                 Canvas.SetLeft(bar, BarCentre(x, col) - barWidth / 2);
@@ -569,16 +600,25 @@ public partial class PopupWindow : Window
                 continue;   // exactly on the left edge, where a line reads as a border
             }
 
-            GraphHost.Children.Add(new Line
+            var line = new Line
             {
                 X1 = x, X2 = x, Y1 = 0, Y2 = barAreaHeight + 3,
                 Stroke = gridBrush,
                 StrokeThickness = 1,
                 StrokeDashArray = [2, 2],
                 ToolTip = weeks.IsPlanDerived
-                    ? $"Weekly limit reset · {TimeZoneInfo.ConvertTime(boundary.AtUtc, TimeZoneInfo.Local):ddd d MMM HH:mm}"
-                    : "Start of the calendar week (Monday) — O-view hasn't observed a weekly reset yet",
-            });
+                    ? HoverCard.Figure(
+                        this,
+                        TimeZoneInfo.ConvertTime(boundary.AtUtc, TimeZoneInfo.Local)
+                            .ToString("ddd d MMM · HH:mm", CultureInfo.InvariantCulture),
+                        "Weekly limit reset")
+                    : HoverCard.Text(
+                        this,
+                        "Start of the calendar week (Monday). O-view hasn't observed a weekly "
+                        + "reset yet, so this is a calendar reference, not your plan's boundary."),
+            };
+            HoverCard.ApplyTiming(line);
+            GraphHost.Children.Add(line);
         }
     }
 

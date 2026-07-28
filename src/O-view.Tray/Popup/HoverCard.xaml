@@ -1,0 +1,43 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- The app's hover card. The default WPF tooltip is system chrome — a pale rectangle
+         with a hard border that looks nothing like the rest of the panel. This replaces the
+         template outright: same rounded card, same palette, same type as every other
+         surface in the app, on its own elevated background so it reads as floating above
+         what it describes rather than as part of it.
+
+         It lives in a shared dictionary rather than on one control because it was
+         previously defined inside StatTile and therefore reachable only from the tiles —
+         so the usage graph's bars kept the system chrome, and the panel had two different
+         tooltip designs depending on what you pointed at. Anything in the app that shows a
+         tooltip uses this; see HoverCard for the builders. -->
+    <Style x:Key="PanelTooltip" TargetType="ToolTip">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="HasDropShadow" Value="False"/>
+        <Setter Property="OverridesDefaultStyle" Value="True"/>
+        <Setter Property="HorizontalOffset" Value="8"/>
+        <Setter Property="VerticalOffset" Value="8"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ToolTip">
+                    <!-- The outer margin is the shadow's room to breathe: the popup clips
+                         to its own bounds, so an effect drawn hard against the edge would
+                         be cut off. -->
+                    <Border Margin="6" Background="{DynamicResource TooltipBg}"
+                            BorderBrush="{DynamicResource TooltipBorder}"
+                            BorderThickness="1" CornerRadius="6" Padding="9,7">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="8" ShadowDepth="1"
+                                              Direction="270" Opacity="0.22" Color="#FF000000"/>
+                        </Border.Effect>
+                        <ContentPresenter/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>
