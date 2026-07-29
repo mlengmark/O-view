@@ -19,24 +19,18 @@ public static class CostEstimator
     private const decimal CacheReadMultiplier = 0.10m;
 
     /// <summary>
-    /// Transcript records that stand for no billable model call. Claude Code writes
-    /// <c>&lt;synthetic&gt;</c> for locally generated assistant messages (interrupts,
-    /// "prompt too long" notices) — there was no API request, so the value is genuinely
-    /// zero rather than unknown. Treating it as an unpriced *model* is what blanked the
-    /// "Est. value" tiles, since one unpriced entry voided the whole total.
-    /// </summary>
-    public static bool IsNonBillable(string model) =>
-        model.Equals("<synthetic>", StringComparison.OrdinalIgnoreCase);
-
-    /// <summary>
-    /// Estimated USD value of the given token counts; 0 for non-billable records, and
-    /// null when the model's rate is unknown (the caller labels it, never guessing a rate).
+    /// Estimated USD value of the given token counts; null when the model's rate is
+    /// unknown (the caller labels it, never guessing a rate).
+    ///
+    /// <para>There is deliberately no <c>&lt;synthetic&gt;</c> special case here. Claude
+    /// Code's marker for locally generated messages is dropped at parse time by
+    /// <see cref="Providers.Jsonl.TranscriptReader"/>, so it never reaches the store and
+    /// therefore never reaches this method. The branch that used to sit here was
+    /// unreachable, and disagreed with the reader on case sensitivity (issue #57).</para>
     /// </summary>
     public static decimal? EstimateUsd(
         string model, long inputTokens, long cacheCreationTokens, long cacheReadTokens, long outputTokens)
     {
-        if (IsNonBillable(model)) return 0m;
-
         if (ModelCatalog.Find(model) is not { } rate) return null;
 
         const decimal mtok = 1_000_000m;

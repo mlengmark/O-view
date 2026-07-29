@@ -148,14 +148,23 @@ public class JsonlIngestionTests : IDisposable
         Assert.Equal(120, TotalOutputTokens());
     }
 
-    [Fact]
-    public void SyntheticPlaceholderRecords_AreSkipped()
+    [Theory]
+    [InlineData("<synthetic>")]
+    [InlineData("<Synthetic>")]     // casing must not decide whether one is stored
+    [InlineData("<SYNTHETIC>")]
+    public void SyntheticPlaceholderRecords_AreSkipped(string model)
     {
-        // Claude Code writes error/interruption placeholders with model "<synthetic>"
-        // and zero usage. They are not API calls.
+        // Claude Code writes error/interruption placeholders with this model and zero
+        // usage. They are not API calls.
+        //
+        // This is the ONLY place they are handled (issue #57). CostEstimator and
+        // ModelDisplayName each used to carry their own branch for the id — unreachable
+        // because of this filter, and case-INsensitive where this one was not, so an
+        // upstream casing change would have silently promoted the dead code to live and
+        // changed whether these records count toward DailyRollup.RequestCount.
         var path = WriteTranscript("session.jsonl",
             "{\"type\":\"assistant\",\"requestId\":\"req_synth\",\"timestamp\":\"2026-07-20T12:00:00.000Z\"," +
-            "\"message\":{\"model\":\"<synthetic>\",\"usage\":{\"input_tokens\":0,\"output_tokens\":0," +
+            "\"message\":{\"model\":\"" + model + "\",\"usage\":{\"input_tokens\":0,\"output_tokens\":0," +
             "\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0}}}",
             AssistantLine("req_A", "2026-07-20T12:01:00.000Z", output: 120));
 
@@ -163,6 +172,29 @@ public class JsonlIngestionTests : IDisposable
 
         Assert.Single(records);
         Assert.Equal("req_A", records[0].RequestId);
+    }
+
+    [Fact]
+    public void SyntheticRecords_NeverReachTheStore_SoTheyCannotBeCountedOrPriced()
+    {
+        // The end-to-end guarantee the two downstream branches were duplicating: no row
+        // with this model id can enter the ledger, whatever usage the record claims.
+        // Deliberately NON-zero here — the guarantee must rest on the record's shape,
+        // not on its usage happening to be zero on the transcripts measured so far.
+        var path = WriteTranscript("session.jsonl",
+            "{\"type\":\"assistant\",\"requestId\":\"req_synth\",\"timestamp\":\"2026-07-20T12:00:00.000Z\"," +
+            "\"message\":{\"model\":\"<synthetic>\",\"usage\":{\"input_tokens\":5000,\"output_tokens\":5000," +
+            "\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0}}}",
+            AssistantLine("req_A", "2026-07-20T12:01:00.000Z", output: 120));
+
+        _store.Ingest(TranscriptReader.ReadFile(path));
+
+        var rollups = _store.GetDailyRollups(DateOnly.MinValue, DateOnly.MaxValue);
+
+        Assert.DoesNotContain("<synthetic>", rollups.Select(r => r.Model));
+        Assert.Equal(120, TotalOutputTokens());
+        // And not counted as a request either — the behaviour that has always shipped.
+        Assert.Equal(1, rollups.Sum(r => r.RequestCount));
     }
 
     [Fact]

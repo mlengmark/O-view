@@ -157,7 +157,10 @@ public class ModelBreakdownTests
         var slices = new[]
         {
             Slice("claude-opus-5", 100, 10m),
-            Slice("<synthetic>", 40, 0m),      // real tokens, genuinely zero value
+            // Real tokens, value that rounds to zero — the case this test is about. It
+            // used to use "<synthetic>", which ingestion can never produce (issue #57);
+            // the behaviour under test is the zero MEASURE, not the model id.
+            Slice("claude-haiku-4-5", 40, 0m),
         };
         var order = ModelBreakdown.ColourOrder(slices);
 
@@ -219,7 +222,6 @@ public class ModelBreakdownTests
     [InlineData("claude-sonnet-5-20260101", "Sonnet 5")]
     [InlineData("claude-fable-5", "Fable 5")]
     [InlineData("claude-haiku-4-5", "Haiku 4.5")]
-    [InlineData("<synthetic>", "Local")]
     public void DisplayName_MapsKnownModels(string model, string expected) =>
         Assert.Equal(expected, ModelDisplayName.For(model));
 

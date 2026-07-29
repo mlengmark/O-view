@@ -171,17 +171,11 @@ public class PanelStatisticsTests : IDisposable
         Assert.Contains("claude-brand-new-9", stats.UnpricedModels);
     }
 
-    [Fact]
-    public void SyntheticRecords_DoNotCountAsUnpriced()
-    {
-        Seed("a", "2026-07-21", 1_000_000, "claude-opus-4-8");
-        Seed("b", "2026-07-21", 5_000, "<synthetic>");
-
-        var stats = PanelStatistics.Build(_store, Now);
-
-        Assert.Equal(25.00m, stats.Est31DaysUsd);
-        Assert.Empty(stats.UnpricedModels);
-    }
+    // A "<synthetic> does not count as unpriced" test used to sit here. It seeded the
+    // store with that model id directly — a state ingestion cannot produce, because
+    // TranscriptReader drops those records at parse time — so it pinned the behaviour of
+    // a branch no user could reach. The real guarantee is end-to-end and now lives in
+    // JsonlIngestionTests.SyntheticRecords_NeverReachTheStore_... (GitHub issue #57).
 
     [Fact]
     public void NothingPriceable_IsStillUnknown_NotZero()

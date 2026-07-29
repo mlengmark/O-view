@@ -11,9 +11,9 @@ namespace OView.Core.Models;
 /// </param>
 /// <param name="EstUsd">
 /// Null when the model has no published rate. Distinct from zero — zero is a real,
-/// known value (<c>&lt;synthetic&gt;</c> records cost nothing because no API call was
-/// made), whereas null means O-view cannot price it and must say so rather than
-/// dropping the model from the picture.
+/// known value (a priced model that happened to consume no tokens), whereas null means
+/// O-view cannot price it and must say so rather than dropping the model from the
+/// picture.
 /// </param>
 public sealed record ModelSlice(string Model, string DisplayName, long Tokens, decimal? EstUsd);
 
@@ -30,15 +30,8 @@ public static class ModelDisplayName
     /// <summary>Label for the aggregated remainder when there are more models than slots.</summary>
     public const string Other = "Other";
 
-    public static string For(string model)
-    {
-        // Not a model at all — Claude Code's marker for a locally generated message.
-        // "Local" says what it is without implying an API call happened.
-        if (Pricing.CostEstimator.IsNonBillable(model))
-        {
-            return "Local";
-        }
-
-        return ModelCatalog.Find(model)?.DisplayName ?? model;
-    }
+    // No <synthetic> branch: Claude Code's marker for locally generated messages is
+    // dropped at parse time by TranscriptReader, so it never reaches a ModelSlice. The
+    // "Local" case that used to live here was unreachable (issue #57).
+    public static string For(string model) => ModelCatalog.Find(model)?.DisplayName ?? model;
 }
