@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- Follows O-view.Core. The suite must run on Linux, or Core's platform-neutrality
+         has no enforcement mechanism (ADR-0012). -->
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>OView.Core.Tests</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
