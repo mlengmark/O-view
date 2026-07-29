@@ -1,7 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <!-- Platform-neutral by design: no Win32, no System.Drawing, no Microsoft.Win32.
+         The -windows suffix was a scaffolding leftover, never a requirement, and it was
+         the one thing stopping the accounting logic building and testing on Linux
+         (ADR-0012). Keep it that way — CI builds this project on ubuntu-latest. -->
+    <TargetFramework>net10.0</TargetFramework>
     <RootNamespace>OView.Core</RootNamespace>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>

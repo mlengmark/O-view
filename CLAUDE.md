@@ -98,7 +98,7 @@ Three traps, all silent:
 
 Available: `git`, `gh` (authenticated as `mlengmark`), `dotnet` 10.0.302. Not available: Node, Rust. The `python` on PATH is the non-functional Microsoft Store alias stub — do not use it for tooling scripts; use PowerShell or C#.
 
-Older runtimes (3.1, 6.0) are also present on the machine. Ignore them; always target `net10.0-windows`.
+Older runtimes (3.1, 6.0) are also present on the machine. Ignore them. Target **`net10.0`** for `O-view.Core` and its tests — they carry nothing Windows-specific and must build on Linux — and **`net10.0-windows`** for `O-view.Tray`, which is WPF.
 
 ## Intended structure
 
