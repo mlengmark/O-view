@@ -20,22 +20,10 @@ public static class ClaudeProjectsLocator
     public static IReadOnlyList<string> FindTranscripts(string root) =>
         TranscriptFileScan.Find(root, "*.jsonl");
 
-    /// <summary>
-    /// Windows path mangling as Claude Code applies it to project directory names:
-    /// separators and the drive colon become '-', e.g. C:\Users\X → C--Users-X.
-    /// Written for Windows deliberately — do not adapt a POSIX implementation
-    /// (docs/findings/jsonl-schema.md).
-    /// </summary>
-    public static string MangleCwd(string cwd)
-    {
-        var chars = cwd.ToCharArray();
-        for (var i = 0; i < chars.Length; i++)
-        {
-            if (chars[i] is ':' or '\\' or '/')
-            {
-                chars[i] = '-';
-            }
-        }
-        return new string(chars);
-    }
+    // A MangleCwd helper used to live here, reproducing how Claude Code turns a working
+    // directory into a project folder name (C:\Users\X → C--Users-X). Nothing called it:
+    // transcripts are found by walking TranscriptFileScan, never by reconstructing a
+    // directory name, so its only caller was its own test. The convention itself is
+    // recorded in docs/findings/jsonl-schema.md — the right home for a fact about another
+    // application's layout that this one does not depend on.
 }
