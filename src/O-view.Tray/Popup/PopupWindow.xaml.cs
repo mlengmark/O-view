@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
 using OView.Core.Models;
+using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
@@ -104,6 +105,14 @@ public partial class PopupWindow : Window
     /// the banner entirely (nothing to explain).
     /// </summary>
     public PlanHistoryReport? DataReport { get; set; }
+
+    /// <summary>
+    /// Where the local token counts were read from, for the scope note beneath the tiles.
+    /// Inspected on open like <see cref="DataReport"/>, so it reflects the machine as it is
+    /// now. Null falls back to inspecting on demand — which keeps the verification renders
+    /// honest rather than letting them show a note no real run would produce.
+    /// </summary>
+    public TranscriptScopeReport? ScopeReport { get; set; }
 
     public void ShowNearTrayIcon(UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account)
     {
@@ -247,13 +256,15 @@ public partial class PopupWindow : Window
         // Nothing recorded at all, while the plan meters show real usage: the tiles are
         // measuring a source this user does not feed, not measuring zero usage. Say which
         // source, so the 0 is interpretable instead of looking broken.
+        //
+        // The text is derived from what the scan actually resolved, never a literal. It
+        // used to name a hard-coded %USERPROFILE%\.claude\projects and only Claude Code —
+        // so a Cowork user, whose transcripts ARE read, was told their source was not
+        // counted, and a packaged Desktop install was pointed at a path O-view never
+        // searched (issue #58; the mistake ClaudeDataRoots exists to prevent).
         if (stats.RecordedDays == 0 && authoritative && snapshot.SessionPercent is > 0)
         {
-            TokenScopeNote.Text =
-                "No Claude Code usage recorded. Token counts and Est. value are read from Claude Code "
-                + "transcripts (%USERPROFILE%\\.claude\\projects) — chats in the Claude Desktop app do "
-                + "not produce these, so they are not counted here. The session and weekly bars above "
-                + "come from Claude Desktop itself and do cover all of your usage.";
+            TokenScopeNote.Text = (ScopeReport ?? TranscriptScopeReport.Inspect()).Explain();
             TokenScopeNote.Visibility = Visibility.Visible;
         }
         else

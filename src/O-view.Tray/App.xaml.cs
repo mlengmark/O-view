@@ -415,8 +415,11 @@ public partial class App : System.Windows.Application
         }
 
         _controller.Refresh();  // fresh data on open; local reads are cheap
-        // Inspected on open (not cached) so the banner reflects the file as it is now.
+        // Both inspected on open (not cached) so the banners reflect the machine as it is
+        // now. The scope report is what the token-scope note is built from — resolved
+        // roots and real file counts, never a hard-coded path (issue #58).
         popup.DataReport = PlanHistoryDiagnostics.Inspect();
+        popup.ScopeReport = TranscriptScopeReport.Inspect();
         popup.ShowNearTrayIcon(
             _controller.Latest,
             BuildStatistics(),
@@ -603,33 +606,13 @@ public partial class App : System.Windows.Application
         text.AppendLine($"  account file  : {(account is null ? "not readable" : "read ok")}"
                         + $" (org {account?.OrganizationUuid ?? "n/a"}, tier {account?.Tier ?? "n/a"})");
 
-        // The token tiles come from Claude Code transcripts, a different source entirely.
-        // Size and recency matter as much as the count: four empty or long-stale files
-        // produce a legitimate zero, whereas fat, freshly written files pointing at a zero
-        // total would mean ingestion is broken. A bare count cannot tell those apart.
-        var projects = ClaudeProjectsLocator.DefaultRoot;
-        var files = ClaudeProjectsLocator.FindTranscripts(projects);
-        long bytes = 0;
-        DateTime newest = DateTime.MinValue;
-        foreach (var f in files)
-        {
-            try
-            {
-                var info = new FileInfo(f);
-                bytes += info.Length;
-                if (info.LastWriteTimeUtc > newest)
-                {
-                    newest = info.LastWriteTimeUtc;
-                }
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-            {
-                // Per-file stat is diagnostic only.
-            }
-        }
-
-        text.AppendLine($"  transcripts   : {files.Count} .jsonl, {bytes:N0} bytes total under {projects}");
-        text.AppendLine($"  newest transcript: {(newest == DateTime.MinValue ? "n/a" : $"{(DateTime.UtcNow - newest).TotalHours:0.0} h old")}");
+        // The token tiles come from local session transcripts, a different source entirely
+        // — and from BOTH places Claude writes them, Claude Code and Cowork. This block
+        // used to count only the Claude Code root, so a report from a Cowork user showed
+        // "0 .jsonl" beside working token tiles. It is now the same TranscriptScopeReport
+        // the panel's scope note is built from, so the bundle and the banner can never
+        // describe different scans (issue #58).
+        text.Append(TranscriptScopeReport.Inspect().ToClipboardText());
         AppendWeeklyResets(text);
         return text.ToString();
     }
@@ -888,13 +871,37 @@ public partial class App : System.Windows.Application
         // of the way into its day column rather than on the edge.
         var nextWeekly = new DateTimeOffset(2026, 8, 4, 6, 28, 57, TimeSpan.Zero);
 
-        var cases = new (string Name, UsageSnapshot Snapshot)[]
+        var live = new UsageSnapshot(DataSource.Live, 25, 3,
+            capturedAt.AddHours(3), capturedAt, nextWeekly, TimeSpan.FromHours(10), TimeSpan.FromDays(7));
+
+        // Plan meters showing real usage while NOTHING is recorded locally — the state that
+        // triggers the token-scope note. Constructed, because a machine that feeds the
+        // transcripts can never produce it, which is exactly why the note went years
+        // carrying a hard-coded path and a source list that had been wrong since issue #44:
+        // no sample ever rendered it (issue #58).
+        var noLocalUsage = stats with
         {
-            ("plan-weeks", new UsageSnapshot(DataSource.Live, 25, 3,
-                capturedAt.AddHours(3), capturedAt, nextWeekly, TimeSpan.FromHours(10), TimeSpan.FromDays(7))),
+            TokensToday = 0, EstTodayUsd = 0m,
+            Tokens31Days = 0, Est31DaysUsd = 0m,
+            RecordedDays = 0,
+            DailySeries = [.. series.Select(d => d with { TotalTokens = 0, PreInstall = true })],
+            CreditTokens31Days = 0, EstCredit31DaysUsd = 0m,
+        };
+
+        // Fixed roots rather than the real machine's, so the note is deterministic and the
+        // sample does not leak this profile's paths into a committed screenshot.
+        var emptyScope = TranscriptScopeReport.Inspect(
+            projectsRoot: @"C:\Users\<user>\.claude\projects",
+            coworkRoots: [@"C:\Users\<user>\AppData\Roaming\Claude\local-agent-mode-sessions"]);
+
+        var cases = new (string Name, UsageSnapshot Snapshot, PanelStatistics Stats, TranscriptScopeReport? Scope)[]
+        {
+            ("plan-weeks", live, stats, null),
             // No reset observed: Monday-midnight gridlines, and "Waiting for first reset…".
             ("awaiting-first-reset", new UsageSnapshot(DataSource.Live, 25, 3,
-                capturedAt.AddHours(3), capturedAt)),
+                capturedAt.AddHours(3), capturedAt), stats, null),
+            // The token-scope note, which appears in no other state.
+            ("no-local-transcripts", live, noLocalUsage, emptyScope),
         };
 
         foreach (var light in new[] { true, false })
@@ -906,10 +913,10 @@ public partial class App : System.Windows.Application
                 [.. new PopupWindow { ThemeOverride = light }.BuildSampleHoverCards(light)],
                 "graph-hover-cards");
 
-            foreach (var (name, snapshot) in cases)
+            foreach (var (name, snapshot, caseStats, scope) in cases)
             {
-                var popup = new PopupWindow { ThemeOverride = light };
-                var bitmap = popup.RenderToBitmap(snapshot, stats, account, scale);
+                var popup = new PopupWindow { ThemeOverride = light, ScopeReport = scope };
+                var bitmap = popup.RenderToBitmap(snapshot, caseStats, account, scale);
 
                 var png = new System.Windows.Media.Imaging.PngBitmapEncoder();
                 png.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
