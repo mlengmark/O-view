@@ -4,34 +4,39 @@ namespace OView.Core.Models;
 /// Models believed to bill as **extra usage (credits)** rather than drawing from the
 /// plan's 5-hour window, on this account's plan.
 ///
-/// This is a classification O-view *infers*, not one the data states — there is no
-/// per-request billing-tier field (service_tier is uniformly "standard", including on
-/// requests known to have billed to credits). The set is therefore explicit and
-/// evidence-based rather than a universal rule:
+/// <para>The set itself lives in <see cref="ModelCatalog"/> as
+/// <see cref="BillingClass.Credit"/>, which is also where the evidence for each entry and
+/// the limits of the heuristic are recorded. This class is the query over it.</para>
 ///
-///   • claude-fable-5 — VERIFIED. On 2026-07-21, ~174K Fable output tokens moved the
-///     plan meter zero points while ~€86 of extra usage was billed; pricing Fable at
-///     published API rates matched that billing. See docs/findings/credit-usage-divergence.md.
-///   • claude-mythos-5 — same tier, pricing, and API surface as Fable (per the model
-///     catalog); included by parity, not by direct observation.
-///
-/// Consequences of this being a heuristic, stated so the UI can caveat honestly:
-///   • It is account- and plan-specific. A different plan may bill these differently.
-///   • It will MISS plan-tier usage (e.g. Opus) that goes off-plan once the plan limit
-///     is reached — that case is caught by the live divergence detector, not here.
-///   • Add a model only when there is evidence it bills to credits on the target plan.
+/// <para>Both the membership test and the caption the UI shows now derive from that one
+/// table. They did not: the caption was a hand-written <c>"Fable"</c> while the classifier
+/// matched Fable <em>and</em> Mythos, so a Mythos user's spend was summed into the credit
+/// total under a note claiming only Fable was included — and a Mythos-only user saw a
+/// non-zero "Est. credit spend" beneath a sentence naming a model they had never run
+/// (GitHub issue #56). A list stated twice is a list that eventually disagrees with
+/// itself.</para>
 /// </summary>
 public static class CreditBilledModels
 {
-    private static readonly string[] Prefixes =
-    [
-        "claude-fable-5",
-        "claude-mythos-5",
-    ];
+    /// <summary>U+00A0, as an escape — the literal character is invisible in source.</summary>
+    private const char NonBreakingSpace = '\u00A0';
 
-    /// <summary>Human-readable list of the covered models, for the UI caption.</summary>
-    public static string DisplayList => "Fable";
+    private static readonly IReadOnlyList<ModelEntry> Entries =
+        ModelCatalog.InClass(BillingClass.Credit);
+
+    /// <summary>
+    /// Human-readable list of the covered models, for the UI caption. Derived from the
+    /// same entries <see cref="IsCreditBilled"/> matches, so the caption can never name a
+    /// different set than the one being summed.
+    ///
+    /// <para>Spaces inside a name are non-breaking, so a model is never split across a
+    /// line. The caption sits in a wrapping run of prose whose entire job is stating
+    /// precisely which models are counted, and "Fable / 5, Mythos 5" broken over two lines
+    /// reads as three entries rather than two.</para>
+    /// </summary>
+    public static string DisplayList { get; } =
+        string.Join(", ", Entries.Select(e => e.DisplayName.Replace(' ', NonBreakingSpace)));
 
     public static bool IsCreditBilled(string model) =>
-        Prefixes.Any(p => model.StartsWith(p, StringComparison.OrdinalIgnoreCase));
+        ModelCatalog.Find(model)?.Billing == BillingClass.Credit;
 }
