@@ -337,9 +337,7 @@ public partial class PopupWindow : Window
         // reads as low usage rather than short history (ADR-0006). An unpriced model is
         // the same class of caveat: the total is real but incomplete, so say which model
         // is missing rather than letting the figure read as the whole picture.
-        var coverage = stats.HasPartialHistory
-            ? $"{stats.RecordedDays} of {stats.WindowDays} days recorded"
-            : "";
+        var coverage = stats.CoverageNote;
         if (stats.UnpricedModels.Count > 0)
         {
             var excluded = $"excludes {string.Join(", ", stats.UnpricedModels)} (no published rate)";
@@ -411,9 +409,7 @@ public partial class PopupWindow : Window
             CreditsBadgeText.Text = "credit-billed";
             CreditsSpendLabel.Text = "Est. credit spend";
             CreditsSpendValue.Text = FormatUsd(stats.EstCredit31DaysUsd);
-            CreditsCoverage.Text = stats.HasPartialHistory
-                ? $"{stats.RecordedDays} of {stats.WindowDays} days recorded"
-                : "";
+            CreditsCoverage.Text = stats.CoverageNote;
             // Issue #32: trimmed to two clauses. What remains still carries the rule-6
             // caveat — "Estimated at published API rates" and "check your billing page for
             // exact figures" both say this is not the charged number.
@@ -639,10 +635,6 @@ public partial class PopupWindow : Window
     /// was previously offset by a constant that no longer matched the bar.
     /// </summary>
     private static double BarCentre(double x, double col) => x + col / 2;
-
-    /// <summary>Monday of the ISO week containing the date.</summary>
-    private static DateOnly WeekStart(DateOnly date) =>
-        date.AddDays(-(((int)date.DayOfWeek + 6) % 7));
 
     /// <summary>
     /// Where one week boundary lands on the chart: the day column it falls in, and how far

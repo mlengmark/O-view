@@ -171,6 +171,24 @@ public class PanelStatisticsTests : IDisposable
         Assert.Contains("claude-brand-new-9", stats.UnpricedModels);
     }
 
+    [Fact]
+    public void CoverageNote_StatesPartialHistory_AndIsSilentWhenComplete()
+    {
+        // ADR-0006 requires the caveat: a small 31-day figure without it reads as low
+        // usage rather than as short history. The panel builds it in two places, so it
+        // is defined once here.
+        Seed("a", "2026-07-21", 1_000, "claude-opus-4-8");
+
+        var partial = PanelStatistics.Build(_store, Now);
+        Assert.True(partial.HasPartialHistory);
+        Assert.Equal($"{partial.RecordedDays} of {partial.WindowDays} days recorded", partial.CoverageNote);
+
+        // Complete coverage says nothing — an empty note is what collapses the label.
+        var complete = partial with { RecordedDays = partial.WindowDays };
+        Assert.False(complete.HasPartialHistory);
+        Assert.Equal("", complete.CoverageNote);
+    }
+
     // A "<synthetic> does not count as unpriced" test used to sit here. It seeded the
     // store with that model id directly — a state ingestion cannot produce, because
     // TranscriptReader drops those records at parse time — so it pinned the behaviour of

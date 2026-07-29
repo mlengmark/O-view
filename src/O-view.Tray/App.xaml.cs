@@ -283,10 +283,54 @@ public partial class App : System.Windows.Application
         menu.CheckForUpdatesRequested += (_, _) => fired["updates"]++;
         menu.ExitRequested += (_, _) => fired["exit"]++;
 
+        // Every open re-populates from these, so each cycle starts from both ticks ON and
+        // a toggle within the cycle must flip its row to OFF.
         void Open() => menu.ShowDocked(true, true, 70, UpdateService.CurrentVersion);
+
+        bool Ticked(MenuWindow.MenuRow row) => menu.RowIsChecked(row);
+
         void Record(string label) =>
             report.AppendLine($"{label,-42} visible={menu.IsVisible,-5} closing={menu.IsClosing,-5} " +
+                              $"ticks=[startup {Ticked(MenuWindow.MenuRow.Startup),-5} " +
+                              $"notify {Ticked(MenuWindow.MenuRow.Notify),-5}] " +
                               $"fired=[diag {fired["diagnostics"]}, upd {fired["updates"]}, exit {fired["exit"]}]");
+
+        // A toggle row renders what its setter RETURNS, not what was requested — the whole
+        // point being that a failed registry write must not draw a tick that lies about the
+        // machine. Nothing verified the tick actually followed, so verify it: with identity
+        // setters here, a toggle that leaves its row unchanged means the plumbing from the
+        // row through the setter to the glyph is broken.
+        //
+        // Checked on the FOLLOWING step, not inline. InvokeRow goes through the button's
+        // automation peer, which raises Click on a later dispatcher turn — so the tick has
+        // not moved by the time InvokeRow returns, and comparing immediately reports every
+        // toggle as broken. (It did: the first version of this counter said 0 of 6 while
+        // the recorded tick states plainly showed all six flipping.)
+        var toggleFlips = 0;
+        var toggleAttempts = 0;
+        (MenuWindow.MenuRow Row, bool Before)? pendingToggle = null;
+
+        void SettleToggle()
+        {
+            if (pendingToggle is not { } pending)
+            {
+                return;
+            }
+
+            pendingToggle = null;
+            toggleAttempts++;
+            if (Ticked(pending.Row) != pending.Before)
+            {
+                toggleFlips++;
+            }
+        }
+
+        void CheckedToggle(MenuWindow.MenuRow row)
+        {
+            SettleToggle();                     // the previous toggle has had a turn by now
+            pendingToggle = (row, Ticked(row));
+            menu.InvokeRow(row);
+        }
 
         // Each action row, three times over, with a full open/close cycle between — plus the
         // toggle rows, which must NOT close the flyout, and a click-away dismissal.
@@ -302,9 +346,9 @@ public partial class App : System.Windows.Application
             }
 
             steps.Add(($"cycle {n}: open for toggles", Open));
-            steps.Add(($"cycle {n}: toggle Run at startup", () => menu.InvokeRow(MenuWindow.MenuRow.Startup)));
-            steps.Add(($"cycle {n}: toggle Notify", () => menu.InvokeRow(MenuWindow.MenuRow.Notify)));
-            steps.Add(($"cycle {n}: toggles left it open", () => { }));
+            steps.Add(($"cycle {n}: toggle Run at startup", () => CheckedToggle(MenuWindow.MenuRow.Startup)));
+            steps.Add(($"cycle {n}: toggle Notify", () => CheckedToggle(MenuWindow.MenuRow.Notify)));
+            steps.Add(($"cycle {n}: toggles left it open", SettleToggle));
             steps.Add(($"cycle {n}: dismiss (click-away)", menu.DismissNow));
             steps.Add(($"cycle {n}: settled after dismiss", () => { }));
         }
@@ -325,7 +369,11 @@ public partial class App : System.Windows.Application
                 report.AppendLine();
                 report.AppendLine($"activations of 'Check for updates…' : {fired["updates"]} of {expected} expected");
                 report.AppendLine($"activations of 'Copy diagnostics'   : {fired["diagnostics"]} of {expected} expected");
-                report.AppendLine($"RESULT: {(fired["updates"] == expected && fired["diagnostics"] == expected ? "PASS" : "FAIL")}");
+                report.AppendLine($"toggles that moved their tick       : {toggleFlips} of {toggleAttempts} expected");
+                var pass = fired["updates"] == expected
+                           && fired["diagnostics"] == expected
+                           && toggleFlips == toggleAttempts;
+                report.AppendLine($"RESULT: {(pass ? "PASS" : "FAIL")}");
                 File.WriteAllText(path, report.ToString());
                 Shutdown();
                 return;

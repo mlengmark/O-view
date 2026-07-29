@@ -74,5 +74,15 @@ public sealed class NotifyIconTrayHost : ITrayHost
         }
     }
 
+    /// <summary>
+    /// Backstop, not the primary cap. <see cref="TooltipFormatter.Format"/> already
+    /// truncates to <see cref="TooltipFormatter.MaxLength"/>, and today it is the only
+    /// producer of this string — so this never fires in practice.
+    ///
+    /// <para>It stays because the 127-character limit is <c>NotifyIcon.Text</c>'s, i.e.
+    /// this class's platform constraint rather than Core's formatting choice, and
+    /// <see cref="ITrayHost.Update"/> accepts any string from any caller. Deliberate
+    /// redundancy at the boundary that owns the constraint — not an oversight.</para>
+    /// </summary>
     private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max];
 }

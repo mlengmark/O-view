@@ -197,10 +197,9 @@ public class JsonlIngestionTests : IDisposable
         Assert.Equal(1, rollups.Sum(r => r.RequestCount));
     }
 
-    [Fact]
-    public void WindowsPathMangling_Resolves()
-    {
-        Assert.Equal("C--Users-X", ClaudeProjectsLocator.MangleCwd(@"C:\Users\X"));
-        Assert.Equal("C--Users-Maximilian", ClaudeProjectsLocator.MangleCwd(@"C:\Users\Maximilian"));
-    }
+    // A WindowsPathMangling_Resolves test used to sit here, and it was the only caller of
+    // ClaudeProjectsLocator.MangleCwd anywhere. Ingestion locates transcripts by walking
+    // TranscriptFileScan, never by mangling a cwd into a directory name, so the method was
+    // production code kept alive solely by its own test. Both are gone; the convention it
+    // documented is recorded in docs/findings/jsonl-schema.md, which is where it belongs.
 }

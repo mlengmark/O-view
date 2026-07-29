@@ -58,6 +58,17 @@ public sealed record PanelStatistics(
 
     public bool HasPartialHistory => RecordedDays < WindowDays;
 
+    /// <summary>
+    /// The coverage caveat, or empty when the window is fully covered.
+    ///
+    /// <para>ADR-0006 makes this text a requirement rather than a nicety: a small 31-day
+    /// figure without it reads as low usage rather than as short history. That makes it
+    /// exactly the kind of string that should have one definition — it was built by hand
+    /// in two separate places in the panel, which is two places to forget it.</para>
+    /// </summary>
+    public string CoverageNote =>
+        HasPartialHistory ? $"{RecordedDays} of {WindowDays} days recorded" : "";
+
     /// <summary>True when work in the current session window is not drawing from the plan.</summary>
     public bool IsOffPlan => Divergence?.IsOffPlan == true;
 
