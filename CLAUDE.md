@@ -4,26 +4,39 @@ Guidance for AI coding assistants working in this repository. Read this before w
 
 ## What this is
 
-A **Windows 11 notification-area (system tray) application** that displays Claude AI token usage and time until the next usage-limit reset.
+A **desktop notification-area (system tray) application** that displays Claude AI token usage and time until the next usage-limit reset. **Windows 11 ships today; Linux is being built for v0.6.0** ([ADR-0012](docs/adr/0012-linux-support.md)).
 
-Status: **all five build phases complete** (see [docs/build-plan.md](docs/build-plan.md)) — the app is working end to end. The ADRs in `docs/adr/` are decided, not drafts — follow them. If you believe one is wrong, say so and propose superseding it; do not silently deviate.
+Status: **all five build phases complete** (see [docs/build-plan.md](docs/build-plan.md)) — the Windows app is working end to end and released. Linux support is in progress against the v0.6.0 milestone; nothing in that milestone has shipped yet, so do not describe Linux behaviour as though it exists. The ADRs in `docs/adr/` are decided, not drafts — follow them. If you believe one is wrong, say so and propose superseding it; do not silently deviate.
 
 ## Hard rules
 
-### 1. Windows only
+### 1. Two platforms — and the layer decides what you may use
 
-Target `net10.0-windows`. Use Win32 and WPF APIs directly. **Do not** add cross-platform abstractions, `#if` platform guards, or macOS/Linux considerations. Windows-only is a decision ([ADR-0003](docs/adr/0003-windows-tray-constraints.md)), not an unfinished state.
+**Windows 11 and Linux** (Ubuntu 22.04+ / Debian 12+, x64 + arm64). **macOS is out of scope.** This is [ADR-0012](docs/adr/0012-linux-support.md), which supersedes *only* the target scope of [ADR-0003](docs/adr/0003-windows-tray-constraints.md) — ADR-0003's icon analysis and its ten platform behaviours still govern the Windows head.
 
-Watch for macOS assumptions leaking in from AI training data, because the closest prior art is a Mac app. Specifically **wrong on Windows**:
+Where code lives decides what it may touch:
 
-| Wrong (macOS) | Right (Windows) |
-|---|---|
-| Tray icon can show a text label | **It cannot.** `Shell_NotifyIcon` takes an `HICON` only. Text must be rasterised into a 16/20/24 px bitmap. |
-| Keychain | DPAPI / Windows Credential Manager |
-| `~/Library/Application Support` | `%APPDATA%` / `%LOCALAPPDATA%` |
-| LaunchAgents / `SMAppService` | `HKCU\...\CurrentVersion\Run` |
-| `NSPopover` anchors itself | Position manually via `Shell_NotifyIconGetRect` + work area |
-| Menu bar item always visible | Windows 11 hides new tray icons in the overflow flyout |
+| Layer | Target | May use |
+|---|---|---|
+| `O-view.Core` | `net10.0` | BCL and SQLite only. No UI, no Win32, no `System.Drawing`, no `Microsoft.Win32`. **Must build and pass its tests on Linux.** |
+| `O-view.App` *(planned, #73)* | `net10.0` | The same. Orchestration only; platform behaviour arrives through injected interfaces. |
+| `O-view.Tray` — Windows head | `net10.0-windows` | Win32, WPF, WinForms `NotifyIcon`, **directly. No abstraction tax.** |
+| Linux head *(planned, #77)* | `net10.0` | D-Bus, StatusNotifierItem, the toolkit ADR-0013 picks. |
+
+Resolve platform differences by **which implementation gets constructed**, not with `#if` or `OperatingSystem.IsLinux()` sprinkled through logic. Where a runtime check genuinely is the simplest correct answer — data-root discovery is the real case — it lives in exactly one named place, and an ADR says where.
+
+> **Today the only layer that exists is `Core` + `O-view.Tray`.** Until #73 and #77 land, the rule that binds is the first row: nothing Windows-specific enters `Core`. CI enforces it on `ubuntu-latest`.
+
+Watch for macOS assumptions leaking in from AI training data, because the closest prior art is a Mac app. None of the left column is right on **either** target:
+
+| Wrong (macOS) | Right (Windows) | Right (Linux) |
+|---|---|---|
+| Tray icon can show a text label | **It cannot.** `Shell_NotifyIcon` takes an `HICON` only. Text must be rasterised into a 16/20/24 px bitmap. | **Also cannot.** StatusNotifierItem takes an icon name or ARGB32 pixmap. |
+| Keychain | DPAPI / Windows Credential Manager | Secret Service (libsecret) — and v1 still handles no credentials at all (rule 3) |
+| `~/Library/Application Support` | `%APPDATA%` / `%LOCALAPPDATA%` | XDG: `~/.config`, `~/.local/share` |
+| LaunchAgents / `SMAppService` | `HKCU\...\CurrentVersion\Run` | `~/.config/autostart/*.desktop` |
+| `NSPopover` anchors itself | Position manually via `Shell_NotifyIconGetRect` + work area | **Worse than manual:** SNI cannot report where its icon was drawn, and Wayland clients cannot position their own surfaces |
+| Menu bar item always visible | Windows 11 hides new tray icons in the overflow flyout | **GNOME has no tray at all** without a third-party AppIndicator extension |
 
 ### 2. Clean-room — do not read existing usage monitors
 
