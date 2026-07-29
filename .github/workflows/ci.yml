@@ -7,11 +7,45 @@ on:
 
 jobs:
   test:
-    runs-on: windows-latest
+    strategy:
+      # Deliberately not fail-fast. When a change breaks portability you want to see the
+      # Windows job finish green alongside the red Linux one — that contrast is the signal
+      # that says "this is a Linux-only break", and cancelling it throws the signal away.
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+
+    runs-on: ${{ matrix.os }}
+
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: "10.0.x"
-      - run: dotnet build -c Release
-      - run: dotnet test -c Release --no-build
+
+      # Windows builds everything: Core, the tests, and the WPF tray head.
+      - name: Build all projects
+        if: runner.os == 'Windows'
+        run: dotnet build -c Release
+
+      - name: Test
+        if: runner.os == 'Windows'
+        run: dotnet test -c Release --no-build
+
+      # Linux builds only what is platform-neutral. src/O-view.Tray is WPF and will never
+      # build here, so the projects are named explicitly rather than filtered out of a
+      # solution-wide build — it stays obvious to a reader why this job builds less.
+      # The test project pulls in src/O-view.Core transitively, and Core is the thing being
+      # guarded: it must stay free of Win32, System.Drawing and Microsoft.Win32 (ADR-0012).
+      # Without this job nothing enforces that, and the next PR to add a Windows-only API
+      # to Core would go unnoticed until someone tried to cut a Linux release.
+      #
+      # The Linux head joins these two steps when it lands (#77); the narrower scope here
+      # is current fact, not an oversight.
+      - name: Build Core and tests
+        if: runner.os == 'Linux'
+        run: dotnet build tests/O-view.Core.Tests -c Release
+
+      - name: Test
+        if: runner.os == 'Linux'
+        run: dotnet test tests/O-view.Core.Tests -c Release --no-build
