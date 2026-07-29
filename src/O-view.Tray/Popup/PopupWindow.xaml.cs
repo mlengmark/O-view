@@ -172,24 +172,9 @@ public partial class PopupWindow : Window
         PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
         Populate(snapshot, stats, account);
 
-        var root = (FrameworkElement)Content;
-        void Layout()
-        {
-            root.Measure(new Size(Width, double.PositiveInfinity));
-            root.Arrange(new Rect(root.DesiredSize));
-            root.UpdateLayout();
-        }
-
-        Layout();
-        BuildGraph(stats, snapshot);
-        Layout();
-
-        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
-            (int)Math.Ceiling(root.ActualWidth * scale),
-            (int)Math.Ceiling(root.ActualHeight * scale),
-            96 * scale, 96 * scale, System.Windows.Media.PixelFormats.Pbgra32);
-        bitmap.Render(root);
-        return bitmap;
+        // The second layout pass is the whole reason betweenPasses exists — see the
+        // remarks above and on VisualRenderer.RenderContent.
+        return VisualRenderer.RenderContent(this, scale, betweenPasses: () => BuildGraph(stats, snapshot));
     }
 
     /// <summary>
