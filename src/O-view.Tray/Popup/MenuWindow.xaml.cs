@@ -30,38 +30,29 @@ namespace OView.Tray.Popup;
 /// asked for — the panel's own palette (<see cref="PanelTheme"/>), rounded card, brand
 /// mark — which a themed system context menu cannot give.
 /// </summary>
-public partial class MenuWindow : Window
+public partial class MenuWindow : Window, IFlyout
 {
     /// <summary>Forces a theme for verification renders; null follows the OS.</summary>
     public bool? ThemeOverride { get; set; }
 
-    /// <summary>Disables auto-hide for verification screenshots.</summary>
-    public bool PinForVerification { get; set; }
-
-    /// <summary>Corner the flyout is docked to, so it grows from the tray.</summary>
-    private Point _dockOrigin = new(1, 1);
-
-    /// <summary>Guards the close transition against a re-open landing mid-fade.</summary>
-    private bool _closing;
-
-    /// <summary>When the flyout last began closing because it lost focus.</summary>
-    private DateTimeOffset _closedAt = DateTimeOffset.MinValue;
-
-    /// <summary>Action to run once the close transition finishes — the activated row's.</summary>
-    private Action? _pendingAction;
-
-    /// <summary>Set while Hide() runs, so its own Deactivated does not re-enter the close.</summary>
-    private bool _suppressDeactivate;
-
     /// <summary>
-    /// True if the flyout dismissed itself a moment ago — for a tray click, that means
-    /// the click WAS the dismissal, so it must not reopen. See the panel's equivalent.
+    /// Docking, the open/close transitions and the toggle grace window — shared with the
+    /// detail panel rather than reimplemented here (issue #54).
     /// </summary>
-    public bool ClosedByClickAway =>
-        DateTimeOffset.UtcNow - _closedAt < TimeSpan.FromMilliseconds(400);
+    private readonly DockedFlyout _flyout;
+
+    /// <summary>Disables auto-hide for verification screenshots.</summary>
+    public bool PinForVerification
+    {
+        get => _flyout.PinForVerification;
+        set => _flyout.PinForVerification = value;
+    }
+
+    /// <inheritdoc cref="DockedFlyout.ClosedByClickAway"/>
+    public bool ClosedByClickAway => _flyout.ClosedByClickAway;
 
     /// <summary>Closes the flyout from outside — a second right-click completing the toggle.</summary>
-    public void DismissNow() => BeginClose();
+    public void DismissNow() => _flyout.BeginClose();
 
     /// <summary>
     /// Applies the requested "run at startup" state and returns what the state
@@ -82,7 +73,8 @@ public partial class MenuWindow : Window
     {
         InitializeComponent();
 
-        Deactivated += (_, _) => { if (!PinForVerification && !_suppressDeactivate) BeginClose(); };
+        _flyout = new DockedFlyout(this);
+        Deactivated += (_, _) => _flyout.OnDeactivated();
 
         // Rows are Buttons, so Tab, Space and Enter work already; Up/Down is added back
         // because the ContextMenu this replaces had it and it is how a menu is expected
@@ -92,7 +84,7 @@ public partial class MenuWindow : Window
             switch (e.Key)
             {
                 case Key.Escape:
-                    BeginClose();
+                    _flyout.BeginClose();
                     break;
                 case Key.Down:
                     MoveRowFocus(FocusNavigationDirection.Next);
@@ -124,33 +116,11 @@ public partial class MenuWindow : Window
     {
         Populate(runAtStartup, notifyOnThreshold, thresholdPercent, version);
 
-        // Cancels a close still in flight, so re-opening mid-fade brings it straight back.
-        _closing = false;
-
-        // SizeToContent height is unknown until measured: lay out off-screen, then place.
-        // Opacity starts at 0 so the off-screen frame never flashes at the final spot.
-        Opacity = 0;
-        Left = -10_000;
-        Top = -10_000;
-        Show();
-        UpdateLayout();
-        (Left, Top, _dockOrigin) = PopupPositioner.Place(ActualWidth, ActualHeight);
-        Activate();
-
-        if (PinForVerification)
-        {
-            FlyoutAnimation.Reset(this);
-        }
-        else
-        {
-            FlyoutAnimation.Open(this, _dockOrigin);
-        }
-
-        // A tray-resident app owns no activated window, so Activate() alone is not
-        // guaranteed the foreground — and without it the flyout never receives the
-        // deactivation that dismisses it on an outside click (issue #11, which the old
-        // ContextMenu hit for the same reason). Foreground the HWND explicitly.
-        ForegroundWindow.Take(new WindowInteropHelper(this).Handle);
+        // takeForeground: a tray-resident app owns no activated window, so Activate()
+        // alone is not guaranteed the foreground — and without it the flyout never
+        // receives the deactivation that dismisses it on an outside click (issue #11,
+        // which the old ContextMenu hit for the same reason).
+        _flyout.Show(takeForeground: true);
     }
 
     /// <summary>Fills the rows without showing the window (also the verification-render path).</summary>
@@ -174,65 +144,8 @@ public partial class MenuWindow : Window
         SetChecked(check, apply(!IsChecked(check)));
     }
 
-    /// <summary>
-    /// Fades and shrinks back into the docked corner, then hides — and only then runs
-    /// <paramref name="after"/>. Waiting the ~110ms costs nothing perceptible and keeps
-    /// the original guarantee that an action's balloon or modal never appears behind a
-    /// still-visible topmost flyout.
-    /// </summary>
-    private void BeginClose(Action? after = null)
-    {
-        // A close already in flight must not swallow the action. The early return used to
-        // drop `after` outright, so a row activated while the flyout was mid-close did
-        // nothing at all and the click simply vanished — the hardest kind of fault to
-        // report, because the menu looks like it worked. Queue it onto the running close
-        // instead; the transition is ~150 ms, so this window is small but reachable with a
-        // fast double-click or a click that lands as the flyout deactivates.
-        if (_closing)
-        {
-            if (after is not null)
-            {
-                _pendingAction += after;
-            }
-            return;
-        }
-
-        _closing = true;
-        _closedAt = DateTimeOffset.UtcNow;
-        _pendingAction = after;
-
-        FlyoutAnimation.Close(this, _dockOrigin, () =>
-        {
-            // Re-checked: the flyout may have been re-opened while this was running.
-            if (_closing)
-            {
-                _closing = false;
-
-                // Hiding the foreground window raises Deactivated, which re-enters this
-                // method. Suppress that: the flyout is already closing by definition, and
-                // the re-entrant call would otherwise start a second transition and leave
-                // _closing set on a window that is already hidden.
-                _suppressDeactivate = true;
-                try
-                {
-                    Hide();
-                }
-                finally
-                {
-                    _suppressDeactivate = false;
-                }
-            }
-
-            // Taken and cleared before invoking, so an action that reopens the flyout does
-            // not inherit a stale queue.
-            var pending = _pendingAction;
-            _pendingAction = null;
-            pending?.Invoke();
-        });
-    }
-
     private void Dismiss(EventHandler? handler) =>
-        BeginClose(() => handler?.Invoke(this, EventArgs.Empty));
+        _flyout.BeginClose(() => handler?.Invoke(this, EventArgs.Empty));
 
     private void MoveRowFocus(FocusNavigationDirection direction)
     {
@@ -279,7 +192,7 @@ public partial class MenuWindow : Window
         row == MenuRow.Startup ? IsChecked(StartupCheck) : IsChecked(NotifyCheck);
 
     /// <summary>Whether a close transition is in flight — the state that made rows dead.</summary>
-    internal bool IsClosing => _closing;
+    internal bool IsClosing => _flyout.IsClosing;
 
     private static bool IsChecked(Path check) => check.Visibility == Visibility.Visible;
 
