@@ -640,10 +640,6 @@ public partial class PopupWindow : Window
     /// </summary>
     private static double BarCentre(double x, double col) => x + col / 2;
 
-    /// <summary>Monday of the ISO week containing the date.</summary>
-    private static DateOnly WeekStart(DateOnly date) =>
-        date.AddDays(-(((int)date.DayOfWeek + 6) % 7));
-
     /// <summary>
     /// Where one week boundary lands on the chart: the day column it falls in, and how far
     /// through that column, since a plan reset happens at a time of day rather than at
