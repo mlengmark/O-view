@@ -530,8 +530,12 @@ public partial class App : System.Windows.Application
             }
 
             _offPlanNotified = true;
+            // The panel's formatter, not a pinned-culture "C" lookup. This balloon sends
+            // the user to the Est. tile, so the two must write the same amount the same
+            // way — and ICU's currency pattern is not the same instruction as composing
+            // "$" + a fixed decimal format, even where they agree today (issue #55).
             var spend = stats.EstOffPlanUsd is { } usd
-                ? $" Est. {usd.ToString("C", System.Globalization.CultureInfo.GetCultureInfo("en-US"))} so far this window."
+                ? $" Est. {UsageFormatter.Usd(usd)} so far this window."
                 : "";
             _trayHost.ShowNotification("Usage is billing beyond your plan",
                 $"Work this session isn't drawing from your plan allowance.{spend} Open O-view for detail.");
@@ -1094,7 +1098,7 @@ public partial class App : System.Windows.Application
                     // into the breakdown view, and a sample that never shows one cannot
                     // catch it going missing (it did).
                     pending.Add((tokensTile, "Tokens · 31 days",
-                        FormatSampleTokens(slices.Sum(s => s.Tokens)), slices, BreakdownMeasure.Tokens));
+                        UsageFormatter.Tokens(slices.Sum(s => s.Tokens)), slices, BreakdownMeasure.Tokens));
                     pending.Add((valueTile, "Est. value · 31 days",
                         SumSampleUsd(slices), slices, BreakdownMeasure.EstValue));
                 }
@@ -1304,20 +1308,15 @@ public partial class App : System.Windows.Application
             Width = 180,
             Margin = new Thickness(0, 0, 8, 0),
             SplitBy = measure,
+            // The panel's own formatters, so a sample cannot render a figure differently
+            // from the tile it is a picture of (issue #55).
             FormatSlice = measure == BreakdownMeasure.Tokens
-                ? s => FormatSampleTokens(s.Tokens)
-                : s => s.EstUsd is { } v ? "$" + v.ToString("0.00", CultureInfo.InvariantCulture) : "unknown",
+                ? s => UsageFormatter.Tokens(s.Tokens)
+                : s => UsageFormatter.Usd(s.EstUsd),
         };
 
-    private static string FormatSampleTokens(long tokens) => tokens switch
-    {
-        >= 1_000_000 => string.Create(CultureInfo.InvariantCulture, $"{tokens / 1_000_000.0:0.0}M"),
-        >= 1_000 => string.Create(CultureInfo.InvariantCulture, $"{tokens / 1_000.0:0.0}K"),
-        _ => tokens.ToString(CultureInfo.InvariantCulture),
-    };
-
     private static string SumSampleUsd(ModelSlice[] slices) =>
-        "$" + slices.Sum(s => s.EstUsd ?? 0m).ToString("0.00", CultureInfo.InvariantCulture);
+        UsageFormatter.Usd(slices.Sum(s => s.EstUsd ?? 0m));
 
     /// <summary>Renders every icon state at 100% and 150% scaling sizes for visual verification.</summary>
     private static void RenderSamples(string dir)

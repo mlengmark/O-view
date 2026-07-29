@@ -751,16 +751,13 @@ public partial class PopupWindow : Window
                 ? string.Create(CultureInfo.InvariantCulture, $"{(int)t.TotalHours}h {t.Minutes}m")
                 : string.Create(CultureInfo.InvariantCulture, $"{t.Minutes}m");
 
-    private static string FormatTokens(long tokens) => tokens switch
-    {
-        >= 1_000_000 => string.Create(CultureInfo.InvariantCulture, $"{tokens / 1_000_000.0:0.0}M"),
-        >= 1_000 => string.Create(CultureInfo.InvariantCulture, $"{tokens / 1_000.0:0.0}K"),
-        _ => tokens.ToString(CultureInfo.InvariantCulture),
-    };
+    // Token and money formatting live in OView.Core.Models.UsageFormatter, shared with the
+    // off-plan notification and the verification renders so one amount cannot be written
+    // two ways (issue #55). Kept as local aliases because they read better unqualified at
+    // the dozen call sites above.
+    private static string FormatTokens(long tokens) => UsageFormatter.Tokens(tokens);
 
-    private static string FormatUsd(decimal? usd) => usd is { } v
-        ? "$" + v.ToString("0.00", CultureInfo.InvariantCulture)
-        : "unknown";
+    private static string FormatUsd(decimal? usd) => UsageFormatter.Usd(usd);
 
     // Theming lives in PanelTheme, shared with the tray menu flyout (issue #33).
 }
