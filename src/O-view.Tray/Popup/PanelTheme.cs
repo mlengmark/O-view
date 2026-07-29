@@ -108,8 +108,33 @@ internal static class PanelTheme
         // slot deliberately below the chroma floor. Its separation IS still verified:
         // worst CVD ΔE 11.0 light / 12.2 dark against the two named slots it appears with.
         Set(resources, "SeriesOther", "#8A8A8A");
+
+        // Not a panel surface: a desktop stand-in, used only by the verification renders
+        // to composite a transparent-cornered flyout onto something, so its corner radius
+        // and border are visible. One step OUTSIDE the palette in each theme — light greys
+        // down, dark greys up — because a backdrop matching PanelBg would hide the very
+        // edge the render exists to show. Lives here rather than as literals in the
+        // renderer so it moves with the rest of the palette (issue #52).
+        Set(resources, "Backdrop", light ? "#DEDEDE" : "#101010");
     }
 
     private static void Set(ResourceDictionary resources, string key, string hex) =>
         resources[key] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
+
+    /// <summary>
+    /// One palette entry, for code with no resource tree to resolve through — the sample
+    /// renderers composite their cards onto a flat backdrop and need the same colour the
+    /// app itself would paint there.
+    ///
+    /// <para>They used to restate those colours as hex literals, which is precisely the
+    /// failure this class exists to prevent: a colour defined twice is a colour that
+    /// eventually disagrees with itself, and a verification image that has quietly stopped
+    /// matching the app is worse than no image at all (GitHub issue #52).</para>
+    /// </summary>
+    public static System.Windows.Media.Brush Brush(string key, bool light)
+    {
+        var resources = new ResourceDictionary();
+        Apply(resources, light);
+        return (System.Windows.Media.Brush)resources[key];
+    }
 }

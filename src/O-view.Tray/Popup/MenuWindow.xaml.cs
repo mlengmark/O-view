@@ -293,18 +293,5 @@ public partial class MenuWindow : Window
     /// tray icon's <c>--samples</c> hook, so both themes can be eyeballed side by side
     /// without a desktop session or disturbing a running instance.
     /// </summary>
-    internal BitmapSource RenderToBitmap(double scale)
-    {
-        var root = (FrameworkElement)Content;
-        root.Measure(new Size(Width, double.PositiveInfinity));
-        root.Arrange(new Rect(root.DesiredSize));
-        root.UpdateLayout();
-
-        var bitmap = new RenderTargetBitmap(
-            (int)Math.Ceiling(root.ActualWidth * scale),
-            (int)Math.Ceiling(root.ActualHeight * scale),
-            96 * scale, 96 * scale, PixelFormats.Pbgra32);
-        bitmap.Render(root);
-        return bitmap;
-    }
+    internal BitmapSource RenderToBitmap(double scale) => VisualRenderer.RenderContent(this, scale);
 }

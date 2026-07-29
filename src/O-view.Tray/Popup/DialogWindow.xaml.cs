@@ -102,18 +102,6 @@ public partial class DialogWindow : Window
     /// uses, since a modal cannot be screenshotted without blocking the run that would
     /// take the screenshot.
     /// </summary>
-    internal System.Windows.Media.Imaging.BitmapSource RenderToBitmap(double scale)
-    {
-        var root = (FrameworkElement)Content;
-        root.Measure(new Size(Width, double.PositiveInfinity));
-        root.Arrange(new Rect(root.DesiredSize));
-        root.UpdateLayout();
-
-        var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(
-            (int)Math.Ceiling(root.ActualWidth * scale),
-            (int)Math.Ceiling(root.ActualHeight * scale),
-            96 * scale, 96 * scale, System.Windows.Media.PixelFormats.Pbgra32);
-        bitmap.Render(root);
-        return bitmap;
-    }
+    internal System.Windows.Media.Imaging.BitmapSource RenderToBitmap(double scale) =>
+        VisualRenderer.RenderContent(this, scale);
 }
