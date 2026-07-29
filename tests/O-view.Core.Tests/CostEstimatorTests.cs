@@ -60,12 +60,9 @@ public class CostEstimatorTests
         Assert.Equal(5.00m, CostEstimator.EstimateUsd("claude-opus-5", 1_000_000, 0, 0, 0));
     }
 
-    [Fact]
-    public void SyntheticRecords_AreFree_NotUnpriced()
-    {
-        // Claude Code's placeholder for locally generated messages — no API call happened,
-        // so the value is zero, not unknown. Returning null here voided whole-day totals.
-        Assert.True(CostEstimator.IsNonBillable("<synthetic>"));
-        Assert.Equal(0m, CostEstimator.EstimateUsd("<synthetic>", 5_000, 0, 0, 5_000));
-    }
+    // The <synthetic> case that used to live here has moved to JsonlIngestionTests, where
+    // the behaviour actually is: TranscriptReader drops those records at parse time, so
+    // they never reach the store and never reach this class. The branch tested here was
+    // unreachable in production and disagreed with the reader on case sensitivity
+    // (GitHub issue #57).
 }

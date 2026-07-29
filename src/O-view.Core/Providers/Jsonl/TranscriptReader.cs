@@ -16,6 +16,28 @@ namespace OView.Core.Providers.Jsonl;
 public static class TranscriptReader
 {
     /// <summary>
+    /// Claude Code's marker for a locally generated assistant message — an interruption,
+    /// an error, a "prompt too long" notice. Not a model and not an API call.
+    ///
+    /// <para><b>This is the one and only place such records are handled.</b> They are
+    /// dropped at parse time, so nothing downstream ever sees the id: it cannot reach the
+    /// rollup store, so it cannot reach <see cref="Pricing.CostEstimator"/> or
+    /// <see cref="Models.ModelDisplayName"/>. Both of those used to carry their own
+    /// <c>&lt;synthetic&gt;</c> branch, which was unreachable and diverged from this one on
+    /// case sensitivity — so an upstream casing change would have silently swapped which
+    /// implementation was live, and with it whether these records count toward
+    /// <c>DailyRollup.RequestCount</c> (GitHub issue #57).</para>
+    ///
+    /// <para>Dropping rather than storing at zero cost is deliberate and is the behaviour
+    /// that has always shipped: the filter dates from the same commit that introduced the
+    /// store, so no build has ever ingested one. Measured on real transcripts, every
+    /// synthetic record carries all-zero usage in all four token fields — so storing them
+    /// would add nothing to any total while inflating the request count with messages no
+    /// model produced.</para>
+    /// </summary>
+    internal const string SyntheticModel = "<synthetic>";
+
+    /// <summary>
     /// Parse a whole transcript file into assistant records, in file order (append
     /// order — so per-request, later records supersede earlier ones). Returns empty on
     /// any file-level failure. Never throws.
@@ -123,11 +145,9 @@ public static class TranscriptReader
                 ? m.GetString()!
                 : "unknown";
 
-            // Claude Code writes placeholder records (errors, interruptions) with
-            // model "<synthetic>" and all-zero usage — verified on real transcripts.
-            // Not API calls: counting them inflates request counts and marks cost
-            // tiles unpriceable.
-            if (model == "<synthetic>") return null;
+            // See SyntheticModel: dropped here and nowhere else. Case-insensitive, so an
+            // upstream casing change cannot slip one past into the store.
+            if (model.Equals(SyntheticModel, StringComparison.OrdinalIgnoreCase)) return null;
 
             return new TranscriptRecord(
                 requestId,
