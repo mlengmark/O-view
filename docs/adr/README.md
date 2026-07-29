@@ -8,7 +8,7 @@ These are **decided, not drafts.** To change one, add a new ADR that supersedes 
 |---|---|---|---|
 | [0001](0001-tech-stack.md) | Technology stack — .NET 10 + WPF | Accepted *(partly superseded by 0005)* | C# / .NET 10 LTS / WPF. Rejected Rust+Tauri, Python, Electron, WinUI 3. |
 | [0002](0002-usage-data-providers.md) | Dual usage-data providers with graceful fallback | Accepted *(precedence superseded by 0007)* | Dual providers with fallback and mandatory data-source labelling still stand. The original OAuth-primary choice does not: `PlanHistoryProvider` is primary and `OAuthUsageProvider` was never built. |
-| [0003](0003-windows-tray-constraints.md) | Windows-only target and notification-area design constraints | Accepted *(icon design revised)* | Windows 11 only. The tray icon cannot show text — information tiers across icon, tooltip, popup. |
+| [0003](0003-windows-tray-constraints.md) | Windows-only target and notification-area design constraints | Accepted *(icon design revised; target scope superseded by 0012)* | The tray icon cannot show text — information tiers across icon, tooltip, popup. Still governs the Windows head; "Windows only" no longer holds. |
 | [0004](0004-clean-room-provenance.md) | Clean-room provenance policy | Accepted | No third-party usage-monitor source is read or copied. Implementation derives from platform docs and local observation. |
 | [0005](0005-native-tray-integration.md) | Native tray integration — drop H.NotifyIcon | Accepted | Use first-party `System.Windows.Forms.NotifyIcon`. **Zero third-party runtime dependencies.** |
 | [0006](0006-local-rollup-store.md) | Local rollup store for usage history | Accepted | SQLite daily aggregates. Claude Code deletes transcripts at 30 days, so 31-day figures need our own store. |
@@ -17,6 +17,7 @@ These are **decided, not drafts.** To change one, add a new ADR that supersedes 
 | [0009](0009-auto-update.md) | In-app auto-update via GitHub release + existing installer | Accepted *(relaunch amended by 0010)* | Check `releases/latest`, download `O-view-Setup.exe`, silent in-place upgrade + relaunch. Resolves #18; no new dependency; Squirrel/Velopack/MSIX rejected. |
 | [0010](0010-post-update-relaunch.md) | Relaunch through Explorer after a silent update | Accepted | An installer-parented instance could not read `plan-usage-history.json` and never recovered; `explorer.exe` re-parents to the shell. Amends 0009. Mechanism unproven — trigger and cure reproduced. |
 | [0011](0011-weekly-reset-derivation.md) | Weekly reset — a measured 7-day window and its own durable log | Accepted | The window is **7 days**, measured; 72 h disproved. Gap-crossing drops are real resets recorded as brackets, so one observation now suffices. Amends 0007. Resolves #6. |
+| [0012](0012-linux-support.md) | Linux joins Windows as a supported target | Accepted | Claude Desktop for Linux shipped, so the files O-view reads exist there. Core needed **no code change** (278/278 tests pass on `net10.0`); the cost is the UI head. Supersedes 0003's target scope only. macOS still out. |
 
 ## Findings
 
@@ -40,6 +41,9 @@ Tracked here until resolved by a spike, then folded into an ADR:
 | Does icon legibility hold on a real taskbar at 125/150/175% scaling and in high-contrast themes? | Final icon polish | Ring/pupil geometry scales with the icon size; verify on-device |
 | **Which inherited token/environment property makes `File.Exists` fail** for an installer-parented instance? Correlation and cure are reproduced; the mechanism is not. | Confidence in [ADR-0010](0010-post-update-relaunch.md) | Explorer-parented launch avoids the trigger. If the symptom recurs on an Explorer-launched instance, supersede rather than patch |
 | On a machine where `plan-usage-history.json` **does not exist at all**, does Claude Desktop write it elsewhere, or not at all for that account/version? | Whether O-view can support that user | Needs a profile-wide search + Desktop version from an affected machine; the banner and `--diagnose` now capture the evidence |
+| **Which Linux UI toolkit**, and does an SNI tray icon update reliably on GNOME, KDE and XFCE, on X11 **and** Wayland? | ADR-0013, and every Linux UI issue after it | Time-boxed spike ([#75](https://github.com/mlengmark/O-view/issues/75)); the Windows head is untouched either way |
+| **What does O-view do on a GNOME desktop with no AppIndicator extension** — where it can be installed, running and correct, yet invisible? | Whether Ubuntu, the primary Linux target, is actually served | Must be answered by ADR-0013. Silently absent violates rule 6 and is not an option |
+| Do the Linux paths in [ADR-0012](0012-linux-support.md) match a real install, and does Claude Desktop for Linux write `plan-usage-history.json` at all? | Whether the primary provider works on Linux at all | Documented .NET behaviour says yes; confirm on a real Ubuntu/Debian machine before relying on it ([#70](https://github.com/mlengmark/O-view/issues/70)) |
 
 ### Resolved
 

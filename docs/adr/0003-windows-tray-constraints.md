@@ -1,8 +1,19 @@
 # ADR-0003: Windows-only target and notification-area design constraints
 
-- **Status:** Accepted
+- **Status:** Accepted *(target scope superseded by [ADR-0012](0012-linux-support.md); everything else stands)*
 - **Date:** 2026-07-20
 - **Deciders:** @mlengmark
+
+> **Scope superseded 2026-07-29.** [ADR-0012](0012-linux-support.md) adds **Linux** as a
+> supported target, because Claude Desktop for Linux entered official beta on 2026-06-30 and
+> the files O-view reads now exist there. What that supersedes is narrow: the
+> Windows-exclusive target, the "macOS or Linux builds" out-of-scope bullet below, and the
+> framing of cross-platform work as drift.
+>
+> **The analysis in this record is not superseded.** The icon constraint, the two-glyph
+> capacity at 16 px, the tiered icon → tooltip → panel design, the colour-is-never-the-sole-signal
+> rule and the ten platform behaviours below all still govern the Windows head, which remains a
+> first-class target. macOS remains out of scope.
 
 ## Context
 
@@ -64,13 +75,13 @@ These have no macOS analogue and are each a real work item:
 - Multi-provider support (the reference tracks 60+; O-view tracks Claude)
 - A bundled CLI
 - Browser cookie extraction — Chrome/Edge App-Bound Encryption makes this both fragile and improper
-- macOS or Linux builds
+- ~~macOS or Linux builds~~ — **Linux is now in scope** ([ADR-0012](0012-linux-support.md), 2026-07-29). macOS is still not.
 
 ## Alternatives considered
 
 | Option | Why rejected |
 |---|---|
-| **Cross-platform (Avalonia/MAUI)** | Adds abstraction cost for platforms with no requirement, and tray behaviour is precisely where cross-platform frameworks are weakest — the abstraction would leak on the one feature that matters most. |
+| **Cross-platform (Avalonia/MAUI)** | Adds abstraction cost for platforms with no requirement, and tray behaviour is precisely where cross-platform frameworks are weakest — the abstraction would leak on the one feature that matters most. **Half of this expired on 2026-06-30**: there is now a requirement ([ADR-0012](0012-linux-support.md)). The other half did not — Linux tray behaviour really is the weak spot. Reopened by a spike, and decided on its evidence in ADR-0013, rather than reversed by assertion. |
 | **Taskbar toolbar / deskband** | Would allow wide text like macOS. Rejected: the deskband API is **deprecated and non-functional on Windows 11**. |
 | **Widgets board / desktop widget** | More display space. Rejected: not always-visible, which defeats an at-a-glance monitor. |
 | **Ring gauge + digits** (as originally specified here) | Rejected after measurement: the ring and digits starve each other of space at 16 px. See the icon-design revision note above. |
