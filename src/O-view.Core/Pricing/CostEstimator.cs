@@ -1,3 +1,5 @@
+using OView.Core.Models;
+
 namespace OView.Core.Pricing;
 
 /// <summary>
@@ -5,29 +7,14 @@ namespace OView.Core.Pricing;
 /// NOT money charged — within plan limits the marginal cost is £0/$0 (CLAUDE.md
 /// rule 6; ui-spec.md). The UI must always prefix these figures "Est."
 ///
-/// Rates per million tokens, from Anthropic's published API pricing as cached
-/// 2026-06-24. Cache writes ≈1.25× input (5-minute TTL rate), cache reads ≈0.1×
-/// input. Unknown models return null — an honest unknown, never a guessed rate.
+/// Rates live in <see cref="ModelCatalog"/>, beside each model's friendly name and
+/// billing class, so adding a model is one row rather than three edits across three
+/// files (GitHub issue #56). Cache writes ≈1.25× input (5-minute TTL rate), cache
+/// reads ≈0.1× input. Unknown models return null — an honest unknown, never a
+/// guessed rate.
 /// </summary>
 public static class CostEstimator
 {
-    private sealed record Rate(decimal InputPerMTok, decimal OutputPerMTok);
-
-    // Longest-prefix wins; order here is most-specific first.
-    private static readonly (string Prefix, Rate Rate)[] Rates =
-    [
-        ("claude-fable-5", new Rate(10.00m, 50.00m)),
-        ("claude-mythos-5", new Rate(10.00m, 50.00m)),
-        ("claude-opus-5", new Rate(5.00m, 25.00m)),
-        ("claude-opus-4-8", new Rate(5.00m, 25.00m)),
-        ("claude-opus-4-7", new Rate(5.00m, 25.00m)),
-        ("claude-opus-4-6", new Rate(5.00m, 25.00m)),
-        ("claude-opus-4-5", new Rate(5.00m, 25.00m)),
-        ("claude-sonnet-5", new Rate(3.00m, 15.00m)),
-        ("claude-sonnet-4", new Rate(3.00m, 15.00m)),
-        ("claude-haiku-4-5", new Rate(1.00m, 5.00m)),
-    ];
-
     private const decimal CacheWriteMultiplier = 1.25m;
     private const decimal CacheReadMultiplier = 0.10m;
 
@@ -50,8 +37,7 @@ public static class CostEstimator
     {
         if (IsNonBillable(model)) return 0m;
 
-        var rate = Rates.FirstOrDefault(r => model.StartsWith(r.Prefix, StringComparison.OrdinalIgnoreCase)).Rate;
-        if (rate is null) return null;
+        if (ModelCatalog.Find(model) is not { } rate) return null;
 
         const decimal mtok = 1_000_000m;
         return (inputTokens * rate.InputPerMTok

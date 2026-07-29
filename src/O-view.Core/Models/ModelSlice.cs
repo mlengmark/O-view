@@ -18,28 +18,15 @@ namespace OView.Core.Models;
 public sealed record ModelSlice(string Model, string DisplayName, long Tokens, decimal? EstUsd);
 
 /// <summary>
-/// Friendly names for model ids. Longest-prefix-wins, mirroring
-/// <see cref="Pricing.CostEstimator"/> — and, like it, an unrecognised id yields no
-/// guess. A model Anthropic ships after this table was written renders as its raw id,
-/// which is honest and still identifies the row; inventing "Opus 6" from a pattern
-/// would be a fabricated fact.
+/// Friendly names for model ids, read from <see cref="ModelCatalog"/> — the one table that
+/// also carries each model's rate and billing class, so a model cannot be priced without
+/// also being nameable (GitHub issue #56).
+///
+/// An unrecognised id yields no guess: it renders as its raw id, which is honest and still
+/// identifies the row. Inventing "Opus 6" from a pattern would be a fabricated fact.
 /// </summary>
 public static class ModelDisplayName
 {
-    private static readonly (string Prefix, string Name)[] Names =
-    [
-        ("claude-fable-5", "Fable 5"),
-        ("claude-mythos-5", "Mythos 5"),
-        ("claude-opus-5", "Opus 5"),
-        ("claude-opus-4-8", "Opus 4.8"),
-        ("claude-opus-4-7", "Opus 4.7"),
-        ("claude-opus-4-6", "Opus 4.6"),
-        ("claude-opus-4-5", "Opus 4.5"),
-        ("claude-sonnet-5", "Sonnet 5"),
-        ("claude-sonnet-4", "Sonnet 4"),
-        ("claude-haiku-4-5", "Haiku 4.5"),
-    ];
-
     /// <summary>Label for the aggregated remainder when there are more models than slots.</summary>
     public const string Other = "Other";
 
@@ -52,14 +39,6 @@ public static class ModelDisplayName
             return "Local";
         }
 
-        foreach (var (prefix, name) in Names)
-        {
-            if (model.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
-            {
-                return name;
-            }
-        }
-
-        return model;
+        return ModelCatalog.Find(model)?.DisplayName ?? model;
     }
 }
