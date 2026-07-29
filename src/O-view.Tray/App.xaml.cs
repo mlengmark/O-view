@@ -287,15 +287,8 @@ public partial class App : System.Windows.Application
         }
 
         var popup = EnsurePopup();
-
-        // Clicking the tray icon is a TOGGLE, as every taskbar flyout is. The click
-        // itself dismisses the panel by taking focus away from it, so by the time this
-        // runs the panel is already closing — reopening it here made the icon a
-        // one-way switch that could only ever open. Treat a click that lands right
-        // after a dismissal as the second half of that toggle and leave it closed.
-        if (popup.IsVisible || popup.ClosedByClickAway)
+        if (CompletedToggle(popup))
         {
-            popup.DismissNow();
             return;
         }
 
@@ -383,6 +376,30 @@ public partial class App : System.Windows.Application
         }
     }
 
+    /// <summary>
+    /// Treats a tray click as the SECOND half of a toggle where that is what it is, and
+    /// returns whether it was handled.
+    ///
+    /// <para>Clicking the tray icon is a toggle, as every taskbar flyout is. The click
+    /// itself dismisses an open surface by taking focus away from it, so by the time this
+    /// runs the surface is already closing — reopening it here made the icon a one-way
+    /// switch that could only ever open. A click landing right after a dismissal is the
+    /// close half, and leaves it closed.</para>
+    ///
+    /// <para>One guard for both surfaces (issue #54): left-click and right-click behaved
+    /// identically here and were written twice.</para>
+    /// </summary>
+    private static bool CompletedToggle(IFlyout flyout)
+    {
+        if (!flyout.IsVisible && !flyout.ClosedByClickAway)
+        {
+            return false;
+        }
+
+        flyout.DismissNow();
+        return true;
+    }
+
     private PopupWindow EnsurePopup() => _popup ??= new PopupWindow();
 
     /// <summary>
@@ -393,11 +410,8 @@ public partial class App : System.Windows.Application
     private void ShowMenu()
     {
         _menu ??= CreateMenu();
-
-        // Right-click toggles too, for the same reason the left-click does.
-        if (_menu.IsVisible || _menu.ClosedByClickAway)
+        if (CompletedToggle(_menu))
         {
-            _menu.DismissNow();
             return;
         }
 

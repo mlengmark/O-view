@@ -22,7 +22,7 @@ namespace OView.Tray.Popup;
 /// AppsUseLightTheme — the app-window setting, distinct from the taskbar's — and is
 /// re-read on every open so a theme switch never needs a restart.
 /// </summary>
-public partial class PopupWindow : Window
+public partial class PopupWindow : Window, IFlyout
 {
     private static readonly Color Green = Color.FromRgb(64, 200, 110);
     private static readonly Color Amber = Color.FromRgb(240, 170, 40);
@@ -31,74 +31,35 @@ public partial class PopupWindow : Window
     /// <summary>Forces a theme for verification screenshots; null follows the OS.</summary>
     public bool? ThemeOverride { get; set; }
 
+    /// <summary>
+    /// Docking, the open/close transitions and the toggle grace window — shared with the
+    /// tray menu rather than reimplemented here (issue #54).
+    /// </summary>
+    private readonly DockedFlyout _flyout;
+
     /// <summary>Disables auto-hide for verification screenshots.</summary>
-    public bool PinForVerification { get; set; }
+    public bool PinForVerification
+    {
+        get => _flyout.PinForVerification;
+        set => _flyout.PinForVerification = value;
+    }
 
-    /// <summary>Corner the panel is docked to, so it grows from the tray rather than the middle.</summary>
-    private Point _dockOrigin = new(1, 1);
-
-    /// <summary>Guards the close transition against a re-open landing mid-fade.</summary>
-    private bool _closing;
-
-    /// <summary>
-    /// When the panel last began closing because it lost focus. Clicking the tray icon
-    /// while the panel is open deactivates it — so by the time the click arrives the
-    /// panel is already closing, and re-showing it would make the icon impossible to
-    /// toggle with. <see cref="ClosedByClickAway"/> lets the caller tell the two cases
-    /// apart.
-    /// </summary>
-    private DateTimeOffset _closedAt = DateTimeOffset.MinValue;
-
-    /// <summary>
-    /// True if the panel dismissed itself a moment ago, which for a tray click means the
-    /// click was the dismissal — so it should NOT reopen.
-    ///
-    /// The window is generous enough to cover the deactivate-then-click ordering and the
-    /// close transition, and short enough that a deliberate second click a moment later
-    /// still opens the panel.
-    /// </summary>
-    public bool ClosedByClickAway =>
-        DateTimeOffset.UtcNow - _closedAt < TimeSpan.FromMilliseconds(400);
+    /// <inheritdoc cref="DockedFlyout.ClosedByClickAway"/>
+    public bool ClosedByClickAway => _flyout.ClosedByClickAway;
 
     public PopupWindow()
     {
         InitializeComponent();
-        Deactivated += (_, _) => { if (!PinForVerification) BeginClose(); };
-        PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) BeginClose(); };
+        _flyout = new DockedFlyout(this);
+        Deactivated += (_, _) => _flyout.OnDeactivated();
+        PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) _flyout.BeginClose(); };
     }
 
     /// <summary>
     /// Closes the panel from outside — the tray icon completing a toggle. Idempotent, so
     /// a click that arrives while the panel is already closing changes nothing.
     /// </summary>
-    public void DismissNow() => BeginClose();
-
-    /// <summary>
-    /// Fades and shrinks back into the docked corner, then hides. The Hide() is deferred
-    /// to the end of the transition — hiding first would make the animation invisible,
-    /// which is the whole point of having one.
-    /// </summary>
-    private void BeginClose()
-    {
-        if (_closing)
-        {
-            return;
-        }
-
-        _closing = true;
-        _closedAt = DateTimeOffset.UtcNow;
-        FlyoutAnimation.Close(this, _dockOrigin, () =>
-        {
-            // Re-checked because 110ms is long enough for the tray icon to be clicked
-            // again: if the panel was re-opened while this was running, the flag is
-            // already clear and hiding now would undo that.
-            if (_closing)
-            {
-                _closing = false;
-                Hide();
-            }
-        });
-    }
+    public void DismissNow() => _flyout.BeginClose();
 
     /// <summary>
     /// Why plan data is unavailable, surfaced when the figures read "unknown". Null skips
@@ -119,32 +80,9 @@ public partial class PopupWindow : Window
         PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
         Populate(snapshot, stats, account);
 
-        // Cancels a close still in flight, so clicking the tray icon again mid-fade
-        // brings the panel straight back instead of letting it finish disappearing.
-        _closing = false;
-
-        // SizeToContent height is unknown until measured: lay out off-screen, then place.
-        // Opacity starts at 0 so the off-screen frame never flashes at the final spot.
-        Opacity = 0;
-        Left = -10_000;
-        Top = -10_000;
-        Show();
-        UpdateLayout();
         // The chart is a Canvas — its ActualWidth is only known after layout, so it is
-        // drawn here rather than in Populate.
-        BuildGraph(stats, snapshot);
-        (Left, Top, _dockOrigin) = PopupPositioner.Place(ActualWidth, ActualHeight);
-        Activate();
-
-        if (PinForVerification)
-        {
-            // Stills need the finished state, not a frame from the middle of a fade.
-            FlyoutAnimation.Reset(this);
-        }
-        else
-        {
-            FlyoutAnimation.Open(this, _dockOrigin);
-        }
+        // drawn between the flyout's layout pass and its placement rather than in Populate.
+        _flyout.Show(afterLayout: () => BuildGraph(stats, snapshot));
     }
 
     /// <summary>
