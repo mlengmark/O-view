@@ -9,8 +9,15 @@ public class PlatformCanaryTests
     [Fact]
     public void DirectorySeparatorIsBackslash()
     {
-        // True on Windows, false on Linux. Nothing CA1416 can see — exactly the class of
-        // break only a real Linux run catches.
-        Assert.Equal('\', Path.DirectorySeparatorChar);
+        // True on Windows, false on Linux, and invisible to CA1416 — exactly the class of
+        // break only a real Linux run catches. It must fail at *assertion* time, not
+        // compile time, or it says nothing about whether the tests actually ran.
+        Assert.Equal('\\', Path.DirectorySeparatorChar);
+    }
+
+    [Fact]
+    public void RunsOnWindows()
+    {
+        Assert.True(OperatingSystem.IsWindows());
     }
 }
