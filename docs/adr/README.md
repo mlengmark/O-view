@@ -18,6 +18,7 @@ These are **decided, not drafts.** To change one, add a new ADR that supersedes 
 | [0010](0010-post-update-relaunch.md) | Relaunch through Explorer after a silent update | Accepted | An installer-parented instance could not read `plan-usage-history.json` and never recovered; `explorer.exe` re-parents to the shell. Amends 0009. Mechanism unproven — trigger and cure reproduced. |
 | [0011](0011-weekly-reset-derivation.md) | Weekly reset — a measured 7-day window and its own durable log | Accepted | The window is **7 days**, measured; 72 h disproved. Gap-crossing drops are real resets recorded as brackets, so one observation now suffices. Amends 0007. Resolves #6. |
 | [0012](0012-linux-support.md) | Linux joins Windows as a supported target | Accepted | Claude Desktop for Linux shipped, so the files O-view reads exist there. Core needed **no code change** (278/278 tests pass on `net10.0`); the cost is the UI head. Supersedes 0003's target scope only. macOS still out. |
+| [0013](0013-linux-ui-toolkit.md) | Avalonia for a Linux head, alongside WPF | Accepted | Windows head untouched. **A tray icon reports success even with no SNI host**, so O-view must probe the bus itself and say what it observed. Zero-third-party (0005) is scoped to Windows: Linux costs 25 assemblies. |
 
 ## Findings
 
@@ -27,6 +28,7 @@ Empirical results from spikes, cited by the ADRs above:
 - [tray-icon-rendering.md](../findings/tray-icon-rendering.md) — icon legibility measurements; how the icon became the ring-gauge brand mark (ring + pupil)
 - [plan-usage-history.md](../findings/plan-usage-history.md) — Claude Desktop's cached utilisation series; how reset times are derived
 - [credit-usage-divergence.md](../findings/credit-usage-divergence.md) — **credit-billed usage bypasses the plan window**; the headline % can be true and misleading at once
+- [linux-tray-spike.md](../findings/linux-tray-spike.md) — an Avalonia tray icon reports `IsVisible = true` **with no host to display it**; a session-bus probe is what actually tells the difference
 
 ## Open questions
 
@@ -41,8 +43,7 @@ Tracked here until resolved by a spike, then folded into an ADR:
 | Does icon legibility hold on a real taskbar at 125/150/175% scaling and in high-contrast themes? | Final icon polish | Ring/pupil geometry scales with the icon size; verify on-device |
 | **Which inherited token/environment property makes `File.Exists` fail** for an installer-parented instance? Correlation and cure are reproduced; the mechanism is not. | Confidence in [ADR-0010](0010-post-update-relaunch.md) | Explorer-parented launch avoids the trigger. If the symptom recurs on an Explorer-launched instance, supersede rather than patch |
 | On a machine where `plan-usage-history.json` **does not exist at all**, does Claude Desktop write it elsewhere, or not at all for that account/version? | Whether O-view can support that user | Needs a profile-wide search + Desktop version from an affected machine; the banner and `--diagnose` now capture the evidence |
-| **Which Linux UI toolkit**, and does an SNI tray icon update reliably on GNOME, KDE and XFCE, on X11 **and** Wayland? | ADR-0013, and every Linux UI issue after it | Time-boxed spike ([#75](https://github.com/mlengmark/O-view/issues/75)); the Windows head is untouched either way |
-| **What does O-view do on a GNOME desktop with no AppIndicator extension** — where it can be installed, running and correct, yet invisible? | Whether Ubuntu, the primary Linux target, is actually served | Must be answered by ADR-0013. Silently absent violates rule 6 and is not an option |
+| Do real SNI hosts **draw** the gauge legibly, **recolour** it, survive a **shell restart**, and deliver **clicks**? And can the panel be positioned at all under **Wayland**? | [#77](https://github.com/mlengmark/O-view/issues/77) and [#78](https://github.com/mlengmark/O-view/issues/78) | Needs a real GNOME/Plasma session — a headless runner cannot answer it ([spike](../findings/linux-tray-spike.md)). Colour is already never the sole signal, so recolouring should degrade rather than break |
 | Do the Linux paths in [ADR-0012](0012-linux-support.md) match a real install, and does Claude Desktop for Linux write `plan-usage-history.json` at all? | Whether the primary provider works on Linux at all | Documented .NET behaviour says yes; confirm on a real Ubuntu/Debian machine before relying on it ([#70](https://github.com/mlengmark/O-view/issues/70)) |
 
 ### Resolved
@@ -56,6 +57,8 @@ Tracked here until resolved by a spike, then folded into an ADR:
 | ~~Is `plan-usage-history.json` capped at ~139 samples, or was that just Desktop's uptime?~~ | **Uptime.** The same file held **1,137 samples over 190 h (7.9 days)** on 2026-07-28. Retention exceeding the 7-day window is what makes weekly-reset discovery reliable. → [ADR-0011](0011-weekly-reset-derivation.md) |
 | ~~Is the weekly window 7 days or 72 hours?~~ | **7 days**, measured from two resets 7 d 0 h 14 m apart. 72 h is disproved by the same file: `sd` rose monotonically through a continuously sampled 2026-07-24, where a 72-hour window would have reset. → [ADR-0011](0011-weekly-reset-derivation.md) |
 | ~~Does the plan window capture all usage?~~ | **No — and this is the project's most consequential finding.** Credit-billed usage bypasses the 5-hour window entirely: the icon read a green 6% while ~€86 was spent off-plan (billing-confirmed). Divergence is detectable from data already on disk. → [credit-usage-divergence.md](../findings/credit-usage-divergence.md) |
+| ~~Which Linux UI toolkit?~~ | **Avalonia, for a Linux head alongside WPF.** The spike verified the load-bearing case — a live-rendered icon, replaced repeatedly on a timer — and registration over D-Bus. → [ADR-0013](0013-linux-ui-toolkit.md) |
+| ~~What does O-view do on a GNOME desktop with no AppIndicator extension?~~ | **It must ask the bus, not the toolkit.** Measured: an Avalonia tray icon reports `IsVisible = true` with no host present, and the app's output is identical either way — so trusting it means being silently invisible on stock Ubuntu. A probe for `org.kde.StatusNotifierWatcher` returns False/True correctly. → [findings](../findings/linux-tray-spike.md), [ADR-0013](0013-linux-ui-toolkit.md) |
 | ~~How to tune divergence detection against the integer-percent rounding floor?~~ | **Calibrated from 20 observed rise events:** median 2,523 output tokens per point, worst case 5,793. Floor set at 50,000 tokens with ≤1 point rise — ~10× worst case, biased toward silence. → [findings](../findings/credit-usage-divergence.md#calibration-spike-2026-07-21) |
 
 ## Format
