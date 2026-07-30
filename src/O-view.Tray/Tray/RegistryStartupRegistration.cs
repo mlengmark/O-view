@@ -1,5 +1,6 @@
 using System.IO;
 using Microsoft.Win32;
+using OView.App.Platform;
 
 namespace OView.Tray.Tray;
 
@@ -8,12 +9,12 @@ namespace OView.Tray.Tray;
 /// (ADR-0003 item 6; not LaunchAgents). The registry value is the single source
 /// of truth; nothing is duplicated into settings.json.
 /// </summary>
-public static class StartupRegistration
+public sealed class RegistryStartupRegistration : IStartupRegistration
 {
     private const string RunKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
     private const string ValueName = "O-view";
 
-    public static bool IsEnabled()
+    public bool IsEnabled()
     {
         try
         {
@@ -27,7 +28,7 @@ public static class StartupRegistration
     }
 
     /// <summary>Registers the currently running executable. Returns success.</summary>
-    public static bool Enable()
+    public bool Enable()
     {
         if (Environment.ProcessPath is not { Length: > 0 } exe)
         {
@@ -46,7 +47,7 @@ public static class StartupRegistration
         }
     }
 
-    public static bool Disable()
+    public bool Disable()
     {
         try
         {

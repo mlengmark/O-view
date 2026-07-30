@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Threading;
 using OView.App;
 using OView.App.Diagnostics;
+using OView.App.Platform;
 using OView.Core.Models;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
@@ -31,7 +32,9 @@ namespace OView.Tray;
 /// </summary>
 public partial class App : System.Windows.Application
 {
-    private Mutex? _instanceMutex;
+    private ISingleInstanceGuard? _instance;
+    private readonly IStartupRegistration _startup = new RegistryStartupRegistration();
+    private readonly IThemeSource _theme = new RegistryThemeSource();
     private UsageEngine? _engine;
     private NotifyIconTrayHost? _trayHost;
     private TrayController? _controller;
@@ -91,9 +94,8 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        // Two instances would mean two icons and double polling (ADR-0003 item 7).
-        _instanceMutex = new Mutex(initiallyOwned: true, "OView.Tray.SingleInstance", out var isFirstInstance);
-        if (!isFirstInstance)
+        _instance = new MutexSingleInstanceGuard();
+        if (!_instance.TryAcquire())
         {
             Shutdown();
             return;
@@ -122,7 +124,7 @@ public partial class App : System.Windows.Application
         });
 
         _trayHost = new NotifyIconTrayHost();
-        _controller = new TrayController(_trayHost, _engine, log);
+        _controller = new TrayController(_trayHost, _engine, _theme, log);
 
         _trayHost.IconClicked += (_, _) => ShowPopup();
         _trayHost.IconRightClicked += (_, _) => ShowMenu();
@@ -149,11 +151,11 @@ public partial class App : System.Windows.Application
         // Verification hooks for the startup-registration round trip.
         if (args.ContainsKey("--startup-on"))
         {
-            log?.Write($"startup-on ok={StartupRegistration.Enable()} enabled={StartupRegistration.IsEnabled()}");
+            log?.Write($"startup-on ok={_startup.Enable()} enabled={_startup.IsEnabled()}");
         }
         if (args.ContainsKey("--startup-off"))
         {
-            log?.Write($"startup-off ok={StartupRegistration.Disable()} enabled={StartupRegistration.IsEnabled()}");
+            log?.Write($"startup-off ok={_startup.Disable()} enabled={_startup.IsEnabled()}");
         }
 
         if (args.TryGetValue("--stress", out var stress) &&
@@ -317,7 +319,7 @@ public partial class App : System.Windows.Application
         // externally (another instance, a manual registry edit, Task Manager's
         // startup page).
         _menu.ShowDocked(
-            runAtStartup: StartupRegistration.IsEnabled(),
+            runAtStartup: _startup.IsEnabled(),
             notifyOnThreshold: _engine!.Settings.NotifyOnThreshold,
             thresholdPercent: _engine.Settings.ThresholdPercent,
             version: UpdateService.CurrentVersion);
@@ -329,12 +331,9 @@ public partial class App : System.Windows.Application
         {
             // Both setters return the state as it actually stands afterwards, not the
             // state that was requested — a registry write can fail, and a tick that
-            // claims otherwise would be a fabricated fact about the machine.
-            SetRunAtStartup = enable =>
-            {
-                var ok = enable ? StartupRegistration.Enable() : StartupRegistration.Disable();
-                return ok ? enable : StartupRegistration.IsEnabled();
-            },
+            // claims otherwise would be a fabricated fact about the machine. That rule
+            // now lives once, on IStartupRegistration.Apply, so both heads share it.
+            SetRunAtStartup = _startup.Apply,
             SetNotifyOnThreshold = enable => _engine!.SetNotifyOnThreshold(enable),
         };
 
@@ -576,7 +575,7 @@ public partial class App : System.Windows.Application
         _controller?.Dispose();
         _trayHost?.Dispose();
         _engine?.Dispose();   // stops every timer and closes the rollup store
-        _instanceMutex?.Dispose();
+        _instance?.Dispose();
         base.OnExit(e);
     }
 
