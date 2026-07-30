@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using OView.App;
+using OView.App.Platform;
 using OView.Core.Models;
 using OView.Tray.Tray;
 
@@ -21,12 +22,14 @@ public sealed class TrayController : IDisposable
 {
     private readonly ITrayHost _host;
     private readonly UsageEngine _engine;
+    private readonly IThemeSource _theme;
     private readonly IAppLog? _log;
 
-    public TrayController(ITrayHost host, UsageEngine engine, IAppLog? log)
+    public TrayController(ITrayHost host, UsageEngine engine, IThemeSource theme, IAppLog? log)
     {
         _host = host;
         _engine = engine;
+        _theme = theme;
         _log = log;
 
         _engine.SnapshotUpdated += Render;
@@ -43,7 +46,7 @@ public sealed class TrayController : IDisposable
             var tooltip = TooltipFormatter.Format(snapshot);
             var size = IconRenderer.CurrentIconSize();
 
-            using var bitmap = IconRenderer.Render(size, snapshot, TaskbarTheme.IsLight());
+            using var bitmap = IconRenderer.Render(size, snapshot, _theme.IsTrayLight());
             _host.Update(bitmap, tooltip);
 
             _log?.Write($"icon size={size} tooltip=\"{tooltip}\"");
