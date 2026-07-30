@@ -11,6 +11,9 @@
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.1" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.1" />
+    <!-- Already arrives transitively via Avalonia.FreeDesktop; referenced explicitly so
+         the spike can probe the bus itself rather than rely on an internal. -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.1" />
   </ItemGroup>
 
 </Project>

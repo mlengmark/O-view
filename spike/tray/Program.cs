@@ -44,8 +44,35 @@ internal static class Program
             .UsePlatformDetect()
             .LogToTrace();
 
+    /// <summary>
+    /// Can the app tell, itself, whether anything is there to draw its icon? If
+    /// TrayIcon reports success either way, this is the only honest signal available —
+    /// and rule 6 says O-view must not claim an icon exists when it cannot know.
+    /// </summary>
+    private static async Task<bool?> HasStatusNotifierWatcherAsync()
+    {
+        try
+        {
+            var connection = Tmds.DBus.Protocol.DBusConnection.Session;
+            await connection.ConnectAsync();
+
+            var services = await connection.ListServicesAsync();
+            var present = services.Contains("org.kde.StatusNotifierWatcher", StringComparer.Ordinal);
+            Log($"bus probe: {services.Length} name(s) on the session bus");
+            return present;
+        }
+        catch (Exception ex)
+        {
+            Log($"bus probe FAILED {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+    }
+
     internal static void OnFrameworkInitialized()
     {
+        var watcher = HasStatusNotifierWatcherAsync().GetAwaiter().GetResult();
+        Log($"PROBE org.kde.StatusNotifierWatcher present = {(watcher?.ToString() ?? "unknown")}");
+
         try
         {
             _tray = new TrayIcon
