@@ -2,8 +2,9 @@ using System.Globalization;
 using System.IO;
 using System.Windows;
 using System.Windows.Threading;
+using OView.App;
+using OView.App.Diagnostics;
 using OView.Core.Models;
-using OView.Core.Providers;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Core.Storage;
@@ -31,18 +32,12 @@ namespace OView.Tray;
 public partial class App : System.Windows.Application
 {
     private Mutex? _instanceMutex;
-    private RollupStore? _store;
+    private UsageEngine? _engine;
     private NotifyIconTrayHost? _trayHost;
     private TrayController? _controller;
     private PopupWindow? _popup;
-    private TraySettings _settings = new();
-    private ThresholdWatcher? _watcher;
     private MenuWindow? _menu;
-    private PlanHistoryProvider? _planHistory;
-    private bool _offPlanNotified;
-    private string? _simulateDivergence;
     private UpdateService? _updates;
-    private DispatcherTimer? _updateTimer;
     private bool _updateFlowActive;
 
     /// <summary>
@@ -110,58 +105,35 @@ public partial class App : System.Windows.Application
             ? TimeSpan.FromMilliseconds(parsed)
             : TimeSpan.FromSeconds(60);
 
-        _store = new RollupStore();
-
-        // Observed weekly resets accrue in their own durable file, not in the rollup store
-        // (ADR-0011): the store is a rebuildable cache that wipes itself on corruption,
-        // whereas a missed reset costs a week. Older builds kept them in the store, so any
-        // rows it still holds are carried across on the way past — idempotent, so this is
-        // safe to run on every launch.
-        var account = ClaudeAccount.TryRead();
-        var weeklyResets = new WeeklyResetLog();
-        try
+        // Everything about *what the numbers mean* — provider composition, the poll loop and
+        // its cadence, the rollup store and weekly-reset log lifecycle, threshold and
+        // off-plan decisions, settings, and the update schedule — lives in the engine, which
+        // is platform-neutral and tested (ADR-0012). What stays here is the Windows face.
+        _engine = new UsageEngine(new UsageEngineOptions
         {
-            weeklyResets.ImportLegacy(_store.GetLegacyWeeklyResets(), account?.OrganizationUuid ?? "");
-        }
-        catch (Exception ex)
-        {
-            log?.Write($"weekly-reset legacy import skipped: {ex.GetType().Name}: {ex.Message}");
-        }
-
-        _planHistory = new PlanHistoryProvider(
-            orgUuid: account?.OrganizationUuid,
-            weeklyResetLog: weeklyResets);
-        var provider = new CompositeUsageProvider(
-            _planHistory,
-            new JsonlUsageProvider(_store));
+            PollInterval = interval,
+            Log = log,
+            // Off-plan rendering can't be produced on demand from real data, so it is
+            // verifiable via simulation. This whole feature exists because a UI failed
+            // to communicate something expensive — the UI itself needs verifying.
+            SimulateDivergence = args.TryGetValue("--simulate-divergence", out var sim)
+                ? sim ?? "diverging"
+                : null,
+        });
 
         _trayHost = new NotifyIconTrayHost();
-        _controller = new TrayController(_trayHost, provider, interval, log);
+        _controller = new TrayController(_trayHost, _engine, log);
 
         _trayHost.IconClicked += (_, _) => ShowPopup();
         _trayHost.IconRightClicked += (_, _) => ShowMenu();
 
-        _settings = TraySettings.Load();
-        _watcher = new ThresholdWatcher(_settings.ThresholdPercent);
-        _controller.SnapshotUpdated += snapshot =>
-        {
-            if (_settings.NotifyOnThreshold && _watcher.ShouldNotify(snapshot.SessionPercent))
-            {
-                _trayHost.ShowNotification("Claude usage",
-                    $"Session usage is at {snapshot.SessionPercent}% of the 5-hour limit.");
-            }
-
-            CheckOffPlan(log);
-        };
-
-        log?.Write($"startup interval={interval.TotalSeconds}s");
-        _controller.Start();
-
         // Auto-update (ADR-0009): a quiet background check surfaces a newer release as a
         // balloon; the actual download-and-install is only ever done from the menu, with
-        // the user's confirmation.
+        // the user's confirmation. The engine owns the *when*; the HTTP and the UI are here.
         _updates = new UpdateService(log);
-        StartUpdateChecks();
+        _engine.UpdateCheckDue += () => _ = BackgroundCheckAsync();
+
+        _engine.Start(new DispatcherTimerFactory());
 
         if (args.ContainsKey("--test-notify"))
         {
@@ -198,10 +170,8 @@ public partial class App : System.Windows.Application
             _popup!.ThemeOverride = args.TryGetValue("--popup-theme", out var theme)
                 ? theme == "light"
                 : null;
-            // Off-plan rendering can't be produced on demand from real data, so it is
-            // verifiable via simulation. This whole feature exists because a UI failed
-            // to communicate something expensive — the UI itself needs verifying.
-            _simulateDivergence = args.TryGetValue("--simulate-divergence", out var sim) ? sim ?? "diverging" : null;
+            // --simulate-divergence is read where the engine is constructed, because the
+            // simulation feeds the real detector rather than the panel.
             ShowPopup();
         }
 
@@ -281,7 +251,7 @@ public partial class App : System.Windows.Application
 
     private void ShowPopup()
     {
-        if (_controller is null || _store is null)
+        if (_engine is null)
         {
             return;
         }
@@ -292,88 +262,16 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        _controller.Refresh();  // fresh data on open; local reads are cheap
+        _engine.Refresh();  // fresh data on open; local reads are cheap
         // Both inspected on open (not cached) so the banners reflect the machine as it is
         // now. The scope report is what the token-scope note is built from — resolved
         // roots and real file counts, never a hard-coded path (issue #58).
         popup.DataReport = PlanHistoryDiagnostics.Inspect();
         popup.ScopeReport = TranscriptScopeReport.Inspect();
         popup.ShowNearTrayIcon(
-            _controller.Latest,
-            BuildStatistics(),
+            _engine.Latest,
+            _engine.BuildStatistics(),
             ClaudeAccount.TryRead());
-    }
-
-    private PanelStatistics BuildStatistics()
-    {
-        var utcNow = DateTimeOffset.UtcNow;
-        var stats = PanelStatistics.Build(_store!, utcNow);
-        if (_planHistory is null)
-        {
-            return stats;
-        }
-
-        var (windowStart, percents) = _planHistory.GetCurrentWindow(utcNow);
-
-        if (_simulateDivergence is { } mode)
-        {
-            // Feed the real detector synthetic inputs rather than faking its output,
-            // so the simulation exercises the same code path the real case would.
-            var fake = mode == "limit" ? new[] { 99, 100 } : [6, 6, 6];
-            return stats.WithDivergence(_store!, windowStart, fake) with
-            {
-                EstOffPlanUsd = 92.75m,
-                Divergence = DivergenceDetector.Evaluate(fake, 69_091),
-            };
-        }
-
-        return stats.WithDivergence(_store!, windowStart, percents);
-    }
-
-    /// <summary>
-    /// Notifies once when usage starts bypassing the plan. Edge-triggered like the
-    /// threshold watcher, and re-armed when it stops — the point is to catch the
-    /// silent-and-expensive case the plan bars cannot show, not to nag.
-    /// </summary>
-    private void CheckOffPlan(FileLog? log)
-    {
-        if (_store is null || _planHistory is null || _trayHost is null)
-        {
-            return;
-        }
-
-        try
-        {
-            var stats = BuildStatistics();
-            if (!stats.IsOffPlan)
-            {
-                _offPlanNotified = false;
-                return;
-            }
-
-            log?.Write($"off-plan detected state={stats.Divergence?.State} " +
-                       $"tokens={stats.Divergence?.OutputTokensInWindow} rise={stats.Divergence?.PlanRisePoints}");
-
-            if (_offPlanNotified || !_settings.NotifyOnThreshold)
-            {
-                return;
-            }
-
-            _offPlanNotified = true;
-            // The panel's formatter, not a pinned-culture "C" lookup. This balloon sends
-            // the user to the Est. tile, so the two must write the same amount the same
-            // way — and ICU's currency pattern is not the same instruction as composing
-            // "$" + a fixed decimal format, even where they agree today (issue #55).
-            var spend = stats.EstOffPlanUsd is { } usd
-                ? $" Est. {UsageFormatter.Usd(usd)} so far this window."
-                : "";
-            _trayHost.ShowNotification("Usage is billing beyond your plan",
-                $"Work this session isn't drawing from your plan allowance.{spend} Open O-view for detail.");
-        }
-        catch (Exception ex)
-        {
-            log?.Write($"off-plan check FAILED {ex.GetType().Name}: {ex.Message}");
-        }
     }
 
     /// <summary>
@@ -420,8 +318,8 @@ public partial class App : System.Windows.Application
         // startup page).
         _menu.ShowDocked(
             runAtStartup: StartupRegistration.IsEnabled(),
-            notifyOnThreshold: _settings.NotifyOnThreshold,
-            thresholdPercent: _settings.ThresholdPercent,
+            notifyOnThreshold: _engine!.Settings.NotifyOnThreshold,
+            thresholdPercent: _engine.Settings.ThresholdPercent,
             version: UpdateService.CurrentVersion);
     }
 
@@ -437,12 +335,7 @@ public partial class App : System.Windows.Application
                 var ok = enable ? StartupRegistration.Enable() : StartupRegistration.Disable();
                 return ok ? enable : StartupRegistration.IsEnabled();
             },
-            SetNotifyOnThreshold = enable =>
-            {
-                _settings = _settings with { NotifyOnThreshold = enable };
-                _settings.Save();
-                return _settings.NotifyOnThreshold;
-            },
+            SetNotifyOnThreshold = enable => _engine!.SetNotifyOnThreshold(enable),
         };
 
         // One-click support bundle: a blank panel is otherwise indistinguishable from
@@ -547,26 +440,6 @@ public partial class App : System.Windows.Application
         {
             text.AppendLine($"  weekly resets : unreadable ({ex.GetType().Name})");
         }
-    }
-
-    /// <summary>
-    /// Background update cadence: one check ~30 s after launch (so it neither slows startup
-    /// nor races the first refresh), then daily. A DispatcherTimer keeps every callback on
-    /// the UI thread, so surfacing a balloon or a dialog needs no marshalling.
-    /// </summary>
-    private void StartUpdateChecks()
-    {
-        var initial = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
-        initial.Tick += (_, _) =>
-        {
-            initial.Stop();
-            _ = BackgroundCheckAsync();
-        };
-        initial.Start();
-
-        _updateTimer = new DispatcherTimer { Interval = TimeSpan.FromHours(24) };
-        _updateTimer.Tick += (_, _) => _ = BackgroundCheckAsync();
-        _updateTimer.Start();
     }
 
     /// <summary>
@@ -700,10 +573,9 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _updateTimer?.Stop();
         _controller?.Dispose();
         _trayHost?.Dispose();
-        _store?.Dispose();
+        _engine?.Dispose();   // stops every timer and closes the rollup store
         _instanceMutex?.Dispose();
         base.OnExit(e);
     }

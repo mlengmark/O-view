@@ -3,7 +3,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Reflection;
 using OView.Core.Updates;
-using OView.Tray.Diagnostics;
+using OView.App;
 
 namespace OView.Tray.Updates;
 
@@ -23,9 +23,9 @@ public sealed class UpdateService
     // and a short timeout so a stalled network never hangs a menu action.
     private static readonly HttpClient Http = CreateClient();
 
-    private readonly FileLog? _log;
+    private readonly IAppLog? _log;
 
-    public UpdateService(FileLog? log = null) => _log = log;
+    public UpdateService(IAppLog? log = null) => _log = log;
 
     /// <summary>
     /// The running build's version, from the assembly version stamped at release time

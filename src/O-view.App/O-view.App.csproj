@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The headless half of the app: provider composition, the refresh loop, threshold and
+       off-plan decisions, settings, and update-check scheduling. Everything here must run
+       without a desktop session, so both the WPF head and the Linux head can share it
+       (ADR-0012). No UI, no Win32, no System.Drawing, no Microsoft.Win32 — the same bar
+       O-view.Core is held to, and CI builds this on ubuntu-latest. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>OView.App</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\O-view.Core\O-view.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,109 +1,67 @@
 using System.Diagnostics;
-using System.Windows.Threading;
+using OView.App;
 using OView.Core.Models;
-using OView.Core.Providers;
-using OView.Tray.Diagnostics;
 using OView.Tray.Tray;
 
 namespace OView.Tray;
 
 /// <summary>
-/// The polling loop: snapshot → rasterise → tray. Default 60 s — local file reads
-/// are cheap (build-plan Phase 3), and the underlying plan-history file only updates
-/// every ~300 s anyway. A refresh failure keeps the previous icon; it never crashes
-/// the tray.
+/// The Windows half of the refresh cycle: snapshot → rasterise → tray.
 ///
-/// On a fresh launch it polls on a short warm-up cadence until authoritative data
-/// arrives, then settles to the normal interval — so a launch that beats Claude Desktop
-/// to the punch fills the plan bars within seconds instead of up to a minute
-/// (<see cref="PollingCadence"/>).
+/// <para>The polling itself, its cadence and every decision about what the numbers
+/// <em>mean</em> now live in <see cref="UsageEngine"/>, which is platform-neutral and
+/// tested. What is left here is the part that genuinely cannot leave Windows: rendering the
+/// gauge with System.Drawing, reading the taskbar theme from the registry, and handing an
+/// <c>HICON</c> to <c>NotifyIcon</c>.</para>
+///
+/// <para>A rendering failure must not break the poll loop, so it is caught here and logged
+/// rather than allowed to escape into the engine's refresh.</para>
 /// </summary>
 public sealed class TrayController : IDisposable
 {
-    /// <summary>Fast retry used while warming up before Desktop has produced data.</summary>
-    public static readonly TimeSpan DefaultWarmupInterval = TimeSpan.FromSeconds(3);
-
     private readonly ITrayHost _host;
-    private readonly IUsageProvider _provider;
-    private readonly FileLog? _log;
-    private readonly DispatcherTimer _timer;
-    private readonly TimeSpan _normalInterval;
-    private readonly TimeSpan _warmupInterval;
-    private DateTimeOffset _startedAt;
+    private readonly UsageEngine _engine;
+    private readonly IAppLog? _log;
 
-    /// <summary>Most recent snapshot — what the popup opens with.</summary>
-    public UsageSnapshot Latest { get; private set; } = UsageSnapshot.None;
-
-    /// <summary>Raised after every successful refresh — the notification hook.</summary>
-    public event Action<UsageSnapshot>? SnapshotUpdated;
-
-    public TrayController(ITrayHost host, IUsageProvider provider, TimeSpan interval, FileLog? log,
-        TimeSpan? warmupInterval = null)
+    public TrayController(ITrayHost host, UsageEngine engine, IAppLog? log)
     {
         _host = host;
-        _provider = provider;
+        _engine = engine;
         _log = log;
-        _normalInterval = interval;
-        // Never let the warm-up interval exceed the normal one (e.g. a sub-3 s diagnostic
-        // --interval-ms), which would make "warming up" slower than steady state.
-        _warmupInterval = Min(warmupInterval ?? DefaultWarmupInterval, interval);
-        _timer = new DispatcherTimer { Interval = _normalInterval };
-        _timer.Tick += (_, _) => Refresh();
+
+        _engine.SnapshotUpdated += Render;
+        _engine.NotificationRequested += n => _host.ShowNotification(n.Title, n.Message);
     }
 
-    public void Start()
-    {
-        _startedAt = DateTimeOffset.UtcNow;
-        Refresh();  // sets the initial cadence from the first result
-        _timer.Start();
-    }
+    /// <summary>Most recent snapshot — what the popup opens with.</summary>
+    public UsageSnapshot Latest => _engine.Latest;
 
-    public void Refresh()
+    private void Render(UsageSnapshot snapshot)
     {
         try
         {
-            var utcNow = DateTimeOffset.UtcNow;
-            var snapshot = _provider.GetSnapshot(utcNow);
-            Latest = snapshot;
             var tooltip = TooltipFormatter.Format(snapshot);
             var size = IconRenderer.CurrentIconSize();
 
             using var bitmap = IconRenderer.Render(size, snapshot, TaskbarTheme.IsLight());
             _host.Update(bitmap, tooltip);
 
-            _log?.Write($"refresh source={snapshot.Source} session={snapshot.SessionPercent?.ToString() ?? "null"} size={size} tooltip=\"{tooltip}\"");
-            SnapshotUpdated?.Invoke(snapshot);
-            AdjustCadence(snapshot.Source, utcNow);
+            _log?.Write($"icon size={size} tooltip=\"{tooltip}\"");
         }
         catch (Exception ex)
         {
-            // Keep the previous icon; a monitoring tool must not die on a bad poll.
-            _log?.Write($"refresh FAILED {ex.GetType().Name}: {ex.Message}");
-            // A failed poll produced no authoritative data — keep warming up if we still can.
-            AdjustCadence(DataSource.None, DateTimeOffset.UtcNow);
+            // Keep the previous icon; a monitoring tool must not die on a bad render.
+            _log?.Write($"render FAILED {ex.GetType().Name}: {ex.Message}");
         }
     }
-
-    /// <summary>
-    /// Re-times the poll timer for the current data state: fast while still waiting for
-    /// authoritative data early in the run, normal once it arrives or the warm-up window
-    /// has passed. Only touches the timer when the interval actually changes.
-    /// </summary>
-    private void AdjustCadence(DataSource source, DateTimeOffset utcNow)
-    {
-        var next = PollingCadence.Next(source, utcNow - _startedAt, _warmupInterval, _normalInterval);
-        if (_timer.Interval != next)
-        {
-            _timer.Interval = next;
-            _log?.Write($"cadence -> {next.TotalSeconds:0.##}s (source={source})");
-        }
-    }
-
-    private static TimeSpan Min(TimeSpan a, TimeSpan b) => a <= b ? a : b;
 
     /// <summary>
     /// Phase 3 acceptance self-check: N refreshes with GDI object counts sampled
     /// before and after. A leak shows as growth ≈ N (one handle per refresh).
+    ///
+    /// <para>Stays here rather than in the engine: <c>Bitmap.GetHicon()</c> allocates an
+    /// unmanaged GDI handle that <c>Icon</c> does not own, and this measures exactly that
+    /// (CLAUDE.md rule 5). There is nothing to count on a platform without GDI.</para>
     /// </summary>
     public void StressTest(int iterations)
     {
@@ -113,12 +71,12 @@ public sealed class TrayController : IDisposable
 
         for (var i = 0; i < iterations; i++)
         {
-            Refresh();
+            _engine.Refresh();
         }
 
         var after = NativeMethods.GetGuiResources(process.Handle, NativeMethods.GR_GDIOBJECTS);
         _log?.Write($"stress end gdiAfter={after} delta={(long)after - before}");
     }
 
-    public void Dispose() => _timer.Stop();
+    public void Dispose() => _engine.SnapshotUpdated -= Render;
 }

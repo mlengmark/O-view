@@ -1,14 +1,14 @@
 using System.Globalization;
 using System.IO;
 
-namespace OView.Tray.Diagnostics;
+namespace OView.App.Diagnostics;
 
 /// <summary>
-/// Minimal diagnostic log for a WinExe with no console. Only active when --log is
+/// Minimal diagnostic log for a windowed app with no console. Only active when --log is
 /// passed; never logs tokens, credentials, or conversation content — refresh
-/// telemetry and GDI counts only.
+/// telemetry and resource counts only.
 /// </summary>
-public sealed class FileLog(string path)
+public sealed class FileLog(string path) : IAppLog
 {
     private readonly object _gate = new();
 
