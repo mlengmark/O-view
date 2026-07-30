@@ -140,9 +140,11 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
 
         // Distinct by path, exactly as ingestion does: MSIX redirection can expose the same
         // session through two roots, and counting it twice would overstate the evidence.
+        // Must use the same rule ingestion uses, or the banner and the scan disagree about
+        // how many files there are — which is the drift issue #58 was about.
         var coworkFiles = CoworkAuditLocator
             .FindAuditLogs(coworkRoots)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Distinct(PathIdentity.Comparer)
             .ToList();
 
         return new TranscriptScopeReport(

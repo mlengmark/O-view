@@ -40,7 +40,10 @@ public static class TranscriptFileScan
         }
 
         // Guards against a junction that resolves back to a directory already walked.
-        var visited = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Keyed by platform path identity, not OrdinalIgnoreCase: on Linux, Alpha/ and
+        // alpha/ are two directories, and folding them together would skip the second
+        // silently — every transcript in it simply missing from the totals.
+        var visited = new HashSet<string>(PathIdentity.Comparer);
         var pending = new Stack<(string Path, int Depth)>();
         pending.Push((root, 0));
 
