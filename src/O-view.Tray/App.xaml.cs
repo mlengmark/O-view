@@ -5,6 +5,7 @@ using System.Windows.Threading;
 using OView.App;
 using OView.App.Diagnostics;
 using OView.App.Platform;
+using OView.App.Updates;
 using OView.Core.Models;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
@@ -513,9 +514,10 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>
-    /// Confirms with the user, then — for an installed build — downloads the installer and
-    /// hands off to it (the app exits so the installer can replace the exe and relaunch it).
-    /// A portable build cannot replace its own running exe, so it is sent to the release page.
+    /// Confirms with the user, then acts according to how this build was installed
+    /// (<see cref="UpdatePolicy"/>): an installer build downloads and hands off, exiting so
+    /// the installer can replace the exe and relaunch it; anything the user or a package
+    /// manager owns is sent to the release page instead.
     /// </summary>
     private async Task OfferUpdateAsync(AvailableUpdate update)
     {
@@ -524,8 +526,14 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        if (!UpdateService.IsInstalled)
+        var action = UpdatePolicy.ActionFor(UpdateService.CurrentInstallKind);
+
+        if (action is not UpdateAction.InstallInPlace)
         {
+            // A running single-file exe cannot overwrite itself, and the installer would
+            // create a parallel install rather than update the loose one. On Linux this
+            // branch also covers an apt build, which must never overwrite dpkg's files —
+            // but that head has its own copy and never reaches this method.
             if (ConfirmUpdate(update, "Open the download page for the new version?", "Open page"))
             {
                 _updates.OpenInBrowser(UpdateService.ReleasePageUrl(update));

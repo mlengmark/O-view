@@ -1,6 +1,6 @@
 # ADR-0009: In-app auto-update via the GitHub release + existing installer
 
-- **Status:** Accepted
+- **Status:** Accepted *(relaunch amended by [0010](0010-post-update-relaunch.md); Linux behaviour amended below, 2026-07-30)*
 - **Date:** 2026-07-24
 - **Deciders:** @mlengmark
 - **Resolves:** [#18](https://github.com/mlengmark/O-view/issues/18) — "No Auto Update Function"
@@ -61,3 +61,61 @@ Constraints inherited from earlier decisions shape the solution space:
 - `UpdateCheck` / `ReleaseVersion` covered by 30 unit tests (numeric comparison, 4-part assembly version vs 3-part tag, missing/duplicate installer asset, draft/prerelease, malformed JSON, unparseable current version). Full suite: 151 tests green.
 - Installer `[Code] WantsRelaunch` gates the silent relaunch on `/update=1`; a normal install (no `/update`) skips it, so there is no double launch. Compiled by the release workflow's ISCC step.
 - Live end-to-end (download + silent upgrade + relaunch) is exercisable only against a **public** release; to be confirmed on-device once the repo is public, tracked below.
+
+## Amendment (2026-07-30): Linux does not self-update
+
+Added with [ADR-0012](0012-linux-support.md) putting Linux in scope. Everything above still
+describes the Windows behaviour and is unchanged.
+
+### The decision
+
+**A Linux build never replaces itself.** What it does depends on how it was installed:
+
+| Install kind | On a newer release |
+|---|---|
+| Windows installer (`%LOCALAPPDATA%\Programs\O-view`) | Download and hand off, as above — **unchanged** |
+| Windows portable exe | Open the release page |
+| Linux `.deb` (apt/dpkg) | **Say a newer version exists, and stop.** `apt upgrade` does the work |
+| Linux tarball | Open the release page |
+
+Encoded once in `OView.App.Updates.UpdatePolicy`, so neither head can quietly disagree with
+this table.
+
+### Why an apt install must not self-update
+
+Files installed by dpkg are owned by dpkg. An app that overwrites them is silently reverted
+by the next `apt upgrade`, or leaves the package database describing a version that is no
+longer on disk. Anthropic's own Claude Desktop for Linux ships through an apt repository and
+does not self-update either — this follows the platform's convention rather than fighting it.
+
+Such a build still **checks**, so it can tell the user a newer version exists. What it must
+never do is download or execute anything.
+
+### The asset-selection defect this closes
+
+`UpdateCheck` matched a hard-coded `O-view-Setup.exe`. The moment one release carries both
+platforms' assets, a Linux build would have found the Windows installer, reported
+`UpdateAvailable`, downloaded it, and handed it to `Process.Start` with Inno Setup switches.
+
+`Evaluate` now takes a `ReleaseAssetSelector` **supplied by the caller**, so Core still has no
+knowledge of the running platform and stays a pure, unit-testable function. The published
+names and the patterns that match them live together in `ReleaseAssets` — one decision, one
+home, because the release workflow writes those names and the checker reads them
+([#81](https://github.com/mlengmark/O-view/issues/81)).
+
+`O-view-Setup.exe` is **frozen**: every installed Windows build looks for that literal string,
+so renaming it would strand existing users on their current version with no way to be told.
+
+### Deliberately not done
+
+This assumes **unified releases** — every tag carrying both platforms' assets — which is the
+recommendation in [#81](https://github.com/mlengmark/O-view/issues/81). Under that model
+`releases/latest` is always the right thing to read, because there is always an asset for the
+checking platform.
+
+If platform-partial releases are ever adopted, two further changes become mandatory *before*
+the first such release: walking `/releases` rather than reading `releases/latest` (otherwise a
+Linux-only release hides an older Windows one and Windows installs stall silently), and a
+distinct outcome for "no build for your platform" so it stops being indistinguishable from a
+broken feed. Both are specified in #79 and neither is built, because building half of them
+would be worse than building none.

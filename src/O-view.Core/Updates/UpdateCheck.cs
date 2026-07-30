@@ -33,17 +33,20 @@ public sealed record UpdateCheckResult(UpdateOutcome Outcome, AvailableUpdate? A
 /// </summary>
 public static class UpdateCheck
 {
-    /// <summary>The installer asset name published by the release workflow.</summary>
-    public const string InstallerAssetName = "O-view-Setup.exe";
-
     /// <summary>
     /// Evaluates the latest-release JSON against <paramref name="currentVersion"/>. A newer tag
-    /// only becomes <see cref="UpdateOutcome.UpdateAvailable"/> when its installer asset is also
-    /// present with a download URL — otherwise there is nothing to update *to*, so it reports
-    /// <see cref="UpdateOutcome.Unknown"/> rather than dangling an offer it cannot fulfil.
-    /// A draft or prerelease is treated as no update. Never throws on malformed input.
+    /// only becomes <see cref="UpdateOutcome.UpdateAvailable"/> when an asset <paramref name="asset"/>
+    /// recognises is also present with a download URL — otherwise there is nothing to update *to*,
+    /// so it reports <see cref="UpdateOutcome.Unknown"/> rather than dangling an offer it cannot
+    /// fulfil. A draft or prerelease is treated as no update. Never throws on malformed input.
+    ///
+    /// <para><paramref name="asset"/> is supplied by the caller rather than chosen here, so this
+    /// stays a pure function with no knowledge of the running platform. That is what stops a
+    /// Linux build finding <c>O-view-Setup.exe</c> in a release carrying both platforms and
+    /// handing a Windows installer to <c>Process.Start</c>.</para>
     /// </summary>
-    public static UpdateCheckResult Evaluate(string currentVersion, string releaseJson)
+    public static UpdateCheckResult Evaluate(
+        string currentVersion, string releaseJson, ReleaseAssetSelector asset)
     {
         if (!ReleaseVersion.TryParse(currentVersion, out var current))
         {
@@ -83,7 +86,7 @@ public static class UpdateCheck
             return UpdateCheckResult.UpToDate;
         }
 
-        var installerUrl = FindInstallerUrl(root);
+        var installerUrl = FindInstallerUrl(root, asset);
         if (installerUrl is null)
         {
             return UpdateCheckResult.Unknown;
@@ -94,7 +97,7 @@ public static class UpdateCheck
             new AvailableUpdate(latest, tag, installerUrl));
     }
 
-    private static string? FindInstallerUrl(JsonElement root)
+    private static string? FindInstallerUrl(JsonElement root, ReleaseAssetSelector selector)
     {
         if (!root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
         {
@@ -103,7 +106,8 @@ public static class UpdateCheck
 
         foreach (var asset in assets.EnumerateArray())
         {
-            if (string.Equals(GetString(asset, "name"), InstallerAssetName, StringComparison.OrdinalIgnoreCase)
+            if (GetString(asset, "name") is { } name
+                && selector.Matches(name)
                 && GetString(asset, "browser_download_url") is { Length: > 0 } url)
             {
                 return url;
