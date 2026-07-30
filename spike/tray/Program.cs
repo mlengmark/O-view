@@ -28,6 +28,12 @@ internal static class Program
             $"WAYLAND_DISPLAY={Environment.GetEnvironmentVariable("WAYLAND_DISPLAY") ?? "(unset)"} " +
             $"DBUS_SESSION_BUS_ADDRESS={(Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS") is null ? "(unset)" : "(set)")}");
 
+        // Probed BEFORE Avalonia starts. Doing it from OnFrameworkInitialized deadlocked:
+        // blocking the UI thread on a D-Bus round trip hangs the app outright, which is a
+        // real constraint for #77 — the host check must not be synchronous on the dispatcher.
+        var watcher = HasStatusNotifierWatcherAsync().GetAwaiter().GetResult();
+        Log($"PROBE org.kde.StatusNotifierWatcher present = {(watcher?.ToString() ?? "unknown")}");
+
         try
         {
             return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
@@ -70,9 +76,6 @@ internal static class Program
 
     internal static void OnFrameworkInitialized()
     {
-        var watcher = HasStatusNotifierWatcherAsync().GetAwaiter().GetResult();
-        Log($"PROBE org.kde.StatusNotifierWatcher present = {(watcher?.ToString() ?? "unknown")}");
-
         try
         {
             _tray = new TrayIcon
