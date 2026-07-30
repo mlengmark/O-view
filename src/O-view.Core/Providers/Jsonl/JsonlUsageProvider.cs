@@ -61,10 +61,11 @@ public sealed class JsonlUsageProvider : IUsageProvider
 
         // Distinct by path: the same root can appear twice through MSIX redirection, and
         // re-reading one file per poll is pointless work even though ingestion would
-        // de-duplicate its records anyway.
+        // de-duplicate its records anyway. Platform path identity, because on a
+        // case-sensitive filesystem two names differing only in case are two files.
         IEnumerable<string> audits = CoworkAuditLocator
             .FindAuditLogs(_coworkRoots)
-            .Distinct(StringComparer.OrdinalIgnoreCase);
+            .Distinct(PathIdentity.Comparer);
 
         return transcripts.Concat(audits);
     }
