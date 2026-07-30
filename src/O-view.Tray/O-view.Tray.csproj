@@ -35,6 +35,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\O-view.Core\O-view.Core.csproj" />
+    <ProjectReference Include="..\O-view.App\O-view.App.csproj" />
   </ItemGroup>
 
 </Project>
