@@ -1,0 +1,91 @@
+# SPIKE — throwaway, O-view issue #75. Deleted once the findings are written.
+#
+# Answers what can be answered without a physical Linux desktop: whether an Avalonia
+# TrayIcon with a LIVE-RENDERED icon works on Linux at all, whether it registers over
+# D-Bus when a StatusNotifierWatcher exists, and — the product question — what the app
+# does when NO watcher exists, which is stock Ubuntu GNOME from the app's point of view.
+#
+# It cannot answer whether GNOME Shell or Plasma actually DRAWS the icon. That needs a
+# real session and is recorded as outstanding in the findings.
+name: Spike - Linux tray
+
+on:
+  pull_request:
+    paths: ["spike/**", ".github/workflows/spike-linux-tray.yml"]
+  workflow_dispatch:
+
+jobs:
+  spike:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install a headless desktop session
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb dbus-x11 python3-dbus python3-gi libx11-6 libice6 libsm6 libfontconfig1
+
+      - name: Report the environment
+        run: |
+          echo "ubuntu: $(lsb_release -ds)"
+          echo "arch:   $(uname -m)"
+          python3 -c "import dbus, gi; print('python dbus + gi: ok')"
+
+      # Built once, up front, so the run timeouts below measure the app's behaviour
+      # rather than NuGet restore.
+      - name: Build the spike
+        run: dotnet publish spike/tray -c Release -o spike-out
+
+      # ---------------------------------------------------------------------------
+      # CASE A — session bus with NO StatusNotifierWatcher.
+      # This is the situation on stock Ubuntu GNOME, which ships no tray support.
+      # The question is not "is there an icon" (there cannot be) but "does the app
+      # survive, and can it TELL that there is no host" — because silently invisible
+      # is the one outcome CLAUDE.md rule 6 forbids.
+      # ---------------------------------------------------------------------------
+      - name: 'Case A: no StatusNotifierWatcher on the bus'
+        id: case_a
+        run: |
+          set +e
+          xvfb-run -a dbus-run-session -- \
+            timeout 60 ./spike-out/TraySpike 2>&1 | tee case-a.log
+          echo "exit_code=${PIPESTATUS[0]}" >> "$GITHUB_OUTPUT"
+          echo "--- case A exit: ${PIPESTATUS[0]} ---"
+
+      # ---------------------------------------------------------------------------
+      # CASE B — the same app against a watcher that IS present, standing in for the
+      # GNOME AppIndicator extension or KDE Plasma.
+      # ---------------------------------------------------------------------------
+      - name: 'Case B: StatusNotifierWatcher present'
+        id: case_b
+        run: |
+          set +e
+          cat > run-b.sh <<'SH'
+          python3 spike/watcher.py 45 > watcher.log 2>&1 &
+          sleep 3
+          timeout 60 ./spike-out/TraySpike 2>&1 | tee case-b.log
+          echo "--- app exit: $? ---"
+          sleep 3
+          cat watcher.log
+          SH
+          chmod +x run-b.sh
+          xvfb-run -a dbus-run-session -- bash run-b.sh 2>&1 | tee case-b-full.log
+          echo "--- case B done ---"
+
+      - name: Summarise
+        if: always()
+        run: |
+          echo "=================== CASE A (no watcher) ==================="
+          grep -E '^\[spike\]' case-a.log || echo "(no spike output)"
+          echo
+          echo "=================== CASE B (watcher present) ==============="
+          grep -E '^\[spike\]|^\[watcher\]' case-b-full.log || echo "(no output)"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: spike-logs
+          path: "*.log"
