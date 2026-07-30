@@ -59,11 +59,19 @@ public class ReleaseVersionTests
 
 public class UpdateCheckTests
 {
+    /// <summary>
+    /// These cases are all about version and feed handling, so they run as the Windows build
+    /// — the platform whose behaviour must not change. Asset selection itself is exercised
+    /// separately in <see cref="ReleaseAssetSelectionTests"/>.
+    /// </summary>
+    private static UpdateCheckResult Check(string currentVersion, string releaseJson) =>
+        UpdateCheck.Evaluate(currentVersion, releaseJson, ReleaseAssets.WindowsInstaller);
+
     private static string ReleaseJson(
         string tag,
         bool draft = false,
         bool prerelease = false,
-        string? assetName = UpdateCheck.InstallerAssetName,
+        string? assetName = ReleaseAssets.WindowsInstallerName,
         string? assetUrl = "https://github.com/mlengmark/O-view/releases/download/v9.9.9/O-view-Setup.exe")
     {
         var assets = assetName is null
@@ -77,7 +85,7 @@ public class UpdateCheckTests
     [Fact]
     public void Newer_release_with_installer_asset_is_offered()
     {
-        var result = UpdateCheck.Evaluate("0.4.2", ReleaseJson("v0.4.3"));
+        var result = Check("0.4.2", ReleaseJson("v0.4.3"));
 
         Assert.Equal(UpdateOutcome.UpdateAvailable, result.Outcome);
         Assert.NotNull(result.Available);
@@ -89,7 +97,7 @@ public class UpdateCheckTests
     [Fact]
     public void Same_version_is_up_to_date()
     {
-        var result = UpdateCheck.Evaluate("0.4.3", ReleaseJson("v0.4.3"));
+        var result = Check("0.4.3", ReleaseJson("v0.4.3"));
         Assert.Equal(UpdateOutcome.UpToDate, result.Outcome);
         Assert.Null(result.Available);
     }
@@ -98,21 +106,21 @@ public class UpdateCheckTests
     public void Older_published_release_is_up_to_date_never_offers_downgrade()
     {
         // Running a dev build ahead of the last release must not be told to "update" backwards.
-        var result = UpdateCheck.Evaluate("0.5.0", ReleaseJson("v0.4.3"));
+        var result = Check("0.5.0", ReleaseJson("v0.4.3"));
         Assert.Equal(UpdateOutcome.UpToDate, result.Outcome);
     }
 
     [Fact]
     public void Assembly_four_part_version_compares_against_three_part_tag()
     {
-        Assert.Equal(UpdateOutcome.UpToDate, UpdateCheck.Evaluate("0.4.2.0", ReleaseJson("v0.4.2")).Outcome);
-        Assert.Equal(UpdateOutcome.UpdateAvailable, UpdateCheck.Evaluate("0.4.2.0", ReleaseJson("v0.4.3")).Outcome);
+        Assert.Equal(UpdateOutcome.UpToDate, Check("0.4.2.0", ReleaseJson("v0.4.2")).Outcome);
+        Assert.Equal(UpdateOutcome.UpdateAvailable, Check("0.4.2.0", ReleaseJson("v0.4.3")).Outcome);
     }
 
     [Fact]
     public void Newer_tag_without_installer_asset_is_unknown_not_a_dangling_offer()
     {
-        var result = UpdateCheck.Evaluate("0.4.2", ReleaseJson("v0.4.3", assetName: null));
+        var result = Check("0.4.2", ReleaseJson("v0.4.3", assetName: null));
         Assert.Equal(UpdateOutcome.Unknown, result.Outcome);
         Assert.Null(result.Available);
     }
@@ -120,8 +128,8 @@ public class UpdateCheckTests
     [Fact]
     public void Draft_or_prerelease_is_not_offered()
     {
-        Assert.Equal(UpdateOutcome.Unknown, UpdateCheck.Evaluate("0.4.2", ReleaseJson("v0.4.3", draft: true)).Outcome);
-        Assert.Equal(UpdateOutcome.Unknown, UpdateCheck.Evaluate("0.4.2", ReleaseJson("v0.4.3", prerelease: true)).Outcome);
+        Assert.Equal(UpdateOutcome.Unknown, Check("0.4.2", ReleaseJson("v0.4.3", draft: true)).Outcome);
+        Assert.Equal(UpdateOutcome.Unknown, Check("0.4.2", ReleaseJson("v0.4.3", prerelease: true)).Outcome);
     }
 
     [Theory]
@@ -132,12 +140,12 @@ public class UpdateCheckTests
     [InlineData("\"a string\"")]
     public void Malformed_or_unusable_feed_is_unknown_never_throws(string json)
     {
-        Assert.Equal(UpdateOutcome.Unknown, UpdateCheck.Evaluate("0.4.2", json).Outcome);
+        Assert.Equal(UpdateOutcome.Unknown, Check("0.4.2", json).Outcome);
     }
 
     [Fact]
     public void Unparseable_current_version_is_unknown()
     {
-        Assert.Equal(UpdateOutcome.Unknown, UpdateCheck.Evaluate("dev", ReleaseJson("v9.9.9")).Outcome);
+        Assert.Equal(UpdateOutcome.Unknown, Check("dev", ReleaseJson("v9.9.9")).Outcome);
     }
 }

@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Reflection;
 using OView.Core.Updates;
 using OView.App;
+using OView.App.Updates;
 
 namespace OView.Tray.Updates;
 
@@ -46,24 +47,40 @@ public sealed class UpdateService
     /// releases page instead — the installer would create a parallel install rather than
     /// update the loose exe, and a running single-file exe cannot overwrite itself.
     /// </summary>
-    public static bool IsInstalled
+    public static bool IsInstalled => CurrentInstallKind is InstallKind.WindowsInstaller;
+
+    /// <summary>
+    /// How this build arrived, which <see cref="UpdatePolicy"/> turns into what it may do.
+    ///
+    /// <para>Only the two Windows kinds are reachable from here — this class is the WPF
+    /// head's, and Linux never reaches it (ADR-0009 as amended: an apt build defers to the
+    /// package manager and downloads nothing). The Linux head supplies its own kind.</para>
+    ///
+    /// <para>The comparison is case-insensitive because this path is Windows-only and
+    /// Windows filesystems are; it is deliberately not the general path-identity question
+    /// that #71 is about.</para>
+    /// </summary>
+    public static InstallKind CurrentInstallKind
     {
         get
         {
             if (Environment.ProcessPath is not { Length: > 0 } exe)
             {
-                return false;
+                return InstallKind.WindowsPortable;
             }
 
             var installRoot = Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "Programs", "O-view");
             var exeDir = Path.GetDirectoryName(Path.GetFullPath(exe));
+
             return exeDir is not null
                 && string.Equals(
                     Path.TrimEndingDirectorySeparator(exeDir),
                     Path.TrimEndingDirectorySeparator(Path.GetFullPath(installRoot)),
-                    StringComparison.OrdinalIgnoreCase);
+                    StringComparison.OrdinalIgnoreCase)
+                ? InstallKind.WindowsInstaller
+                : InstallKind.WindowsPortable;
         }
     }
 
@@ -83,7 +100,7 @@ public sealed class UpdateService
             using var response = await Http.GetAsync(LatestReleaseApi, cancellation).ConfigureAwait(false);
             response.EnsureSuccessStatusCode();
             var json = await response.Content.ReadAsStringAsync(cancellation).ConfigureAwait(false);
-            var result = UpdateCheck.Evaluate(CurrentVersion, json);
+            var result = UpdateCheck.Evaluate(CurrentVersion, json, ReleaseAssets.WindowsInstaller);
             _log?.Write($"update check current={CurrentVersion} outcome={result.Outcome}" +
                         (result.Available is { } a ? $" latest={a.Tag}" : ""));
             return result;
