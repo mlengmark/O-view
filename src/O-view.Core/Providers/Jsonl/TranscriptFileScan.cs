@@ -18,9 +18,10 @@ namespace OView.Core.Providers.Jsonl;
 public static class TranscriptFileScan
 {
     /// <summary>
-    /// Depth ceiling. Junctions can point at their own ancestors, which makes the tree
-    /// infinitely deep even though <see cref="_visited"/> stops exact revisits. Real
-    /// layouts here are 3–5 levels, so this only ever trips on a loop.
+    /// Depth ceiling, kept as a backstop even though links are now resolved before they are
+    /// walked. Resolution can fail — a permission error, a racing rename — and when it does
+    /// this is the only thing standing between a link loop and an unbounded walk. Real
+    /// layouts here are 3–5 levels, so it only ever trips on something pathological.
     /// </summary>
     private const int MaxDepth = 32;
 
@@ -39,13 +40,20 @@ public static class TranscriptFileScan
             return results;
         }
 
-        // Guards against a junction that resolves back to a directory already walked.
+        // Guards against a link that leads back to a directory already walked.
+        //
         // Keyed by platform path identity, not OrdinalIgnoreCase: on Linux, Alpha/ and
         // alpha/ are two directories, and folding them together would skip the second
         // silently — every transcript in it simply missing from the totals.
+        //
+        // It only works because links are resolved BEFORE being pushed (see Canonical), so
+        // every path in here is already canonical. Comparing paths as walked would not
+        // catch a symlink loop at all: `a/link -> ../..` generates
+        // a/link/a/link/a/link/... — textually distinct every time, so the set never hits,
+        // and only MaxDepth would stop it after a very large number of directories.
         var visited = new HashSet<string>(PathIdentity.Comparer);
         var pending = new Stack<(string Path, int Depth)>();
-        pending.Push((root, 0));
+        pending.Push((Canonical(root), 0));
 
         while (pending.Count > 0)
         {
@@ -76,7 +84,7 @@ public static class TranscriptFileScan
             {
                 foreach (var child in Directory.EnumerateDirectories(dir))
                 {
-                    pending.Push((child, depth + 1));
+                    pending.Push((Canonical(child), depth + 1));
                 }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -85,5 +93,34 @@ public static class TranscriptFileScan
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// The directory a path actually refers to, following a symlink or junction to its
+    /// final target.
+    ///
+    /// <para>Resolving here — at the moment a directory is queued, rather than when it is
+    /// compared — is what keeps the whole walk in canonical space. It means a link back to
+    /// an ancestor is recognised on the very next pop, instead of generating an ever-longer
+    /// chain of distinct-looking paths that the visited set can never match.</para>
+    ///
+    /// <para>Falls back to the path as given whenever resolution says nothing useful:
+    /// <see cref="Directory.ResolveLinkTarget"/> returns null for an ordinary directory,
+    /// and throws for a dangling link whose target is gone. Neither is an error here — a
+    /// dangling link simply fails to enumerate a moment later, which the per-directory
+    /// catch already handles and which is how a broken junction was made survivable in the
+    /// first place (issue #44).</para>
+    /// </summary>
+    private static string Canonical(string directory)
+    {
+        try
+        {
+            return Directory.ResolveLinkTarget(directory, returnFinalTarget: true)?.FullName
+                   ?? directory;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return directory;
+        }
     }
 }
