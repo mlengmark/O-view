@@ -165,9 +165,8 @@ public partial class PopupWindow : Window, IFlyout
 
         PopulateBar(SessionPctText, SessionBar, SessionBarFill,
             authoritative ? snapshot.SessionPercent : null);
-        SessionResetText.Text = snapshot.SessionResetAtUtc is { } reset
-            ? $"Resets in {FormatCountdown(reset - Now(TimeZoneInfo.Utc))} · {TimeZoneInfo.ConvertTime(reset, local):HH:mm}"
-            : "Reset time unknown (no reset observed yet)";
+        SessionResetText.Text = PanelText.SessionReset(
+            snapshot.SessionResetAtUtc, Now(TimeZoneInfo.Utc), local);
 
         PopulateBar(WeeklyPctText, WeeklyBar, WeeklyBarFill,
             authoritative ? snapshot.WeeklyPercent : null);
@@ -220,27 +219,19 @@ public partial class PopupWindow : Window, IFlyout
         if (snapshot.WeeklyResetAtUtc is { } reset)
         {
             var bracket = snapshot.WeeklyResetUncertainty ?? TimeSpan.Zero;
-            var approximate = bracket > WeeklyResetDetector.PreciseBracket;
-            var at = TimeZoneInfo.ConvertTime(reset, local);
 
-            WeeklyResetText.Text =
-                $"Resets in {FormatCountdown(reset - Now(TimeZoneInfo.Utc))} · {(approximate ? "~" : "")}{at:ddd HH:mm}";
-            WeeklyResetText.ToolTip = approximate
-                ? HoverCard.Text(this,
-                    $"The weekly reset was observed while Claude Desktop wasn't sampling, so it is "
-                    + $"known to within {FormatCountdown(bracket)}. O-view keeps watching and will "
-                    + "sharpen this if it sees a reset while Desktop is running.")
+            WeeklyResetText.Text = PanelText.WeeklyReset(
+                reset, snapshot.WeeklyResetUncertainty, Now(TimeZoneInfo.Utc), local);
+            WeeklyResetText.ToolTip = PanelText.IsApproximate(snapshot.WeeklyResetUncertainty)
+                ? HoverCard.Text(this, PanelText.WeeklyResetApproximateHint(bracket))
                 : null;
             HoverCard.ApplyTiming(WeeklyResetText);
             WeeklyResetText.Visibility = Visibility.Visible;
             return;
         }
 
-        WeeklyResetText.Text = "Waiting for first reset…";
-        WeeklyResetText.ToolTip = HoverCard.Text(this,
-            "Claude Desktop reports weekly usage as a percentage and never reports when the "
-            + "window resets, so O-view derives it by watching that percentage fall. It checks "
-            + "on every refresh and fills this in on the first reset it sees — within a week.");
+        WeeklyResetText.Text = PanelText.WeeklyResetWaiting;
+        WeeklyResetText.ToolTip = HoverCard.Text(this, PanelText.WeeklyResetWaitingHint);
         HoverCard.ApplyTiming(WeeklyResetText);
         WeeklyResetText.Visibility = authoritative ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -260,12 +251,7 @@ public partial class PopupWindow : Window, IFlyout
         // reads as low usage rather than short history (ADR-0006). An unpriced model is
         // the same class of caveat: the total is real but incomplete, so say which model
         // is missing rather than letting the figure read as the whole picture.
-        var coverage = stats.CoverageNote;
-        if (stats.UnpricedModels.Count > 0)
-        {
-            var excluded = $"excludes {string.Join(", ", stats.UnpricedModels)} (no published rate)";
-            coverage = coverage.Length > 0 ? $"{coverage} · {excluded}" : excluded;
-        }
+        var coverage = PanelText.Caveat(stats);
 
         // The "not money charged" framing is only true for plan usage. Off-plan work
         // bills at API rates, so the label has to flip with it.
@@ -273,24 +259,24 @@ public partial class PopupWindow : Window, IFlyout
 
         TileTokensToday.FormatSlice = s => FormatTokens(s.Tokens);
         TileTokensToday.Populate(
-            "Tokens today", FormatTokens(stats.TokensToday), "",
+            PanelText.TokensTodayLabel, FormatTokens(stats.TokensToday), "",
             stats.ModelsToday, BreakdownMeasure.Tokens, stats.ModelColourOrder);
 
         TileEstToday.FormatSlice = s => FormatUsd(s.EstUsd);
         TileEstToday.Populate(
-            offPlan ? "Est. spend today" : "Est. value today",
+            PanelText.EstTodayLabel(offPlan),
             FormatUsd(stats.EstTodayUsd),
-            offPlan ? "incl. off-plan usage" : "",
+            PanelText.OffPlanNote(offPlan),
             stats.ModelsToday, BreakdownMeasure.EstValue, stats.ModelColourOrder);
 
         TileTokens31.FormatSlice = s => FormatTokens(s.Tokens);
         TileTokens31.Populate(
-            "Tokens · 31 days", FormatTokens(stats.Tokens31Days), coverage,
+            PanelText.Tokens31DaysLabel, FormatTokens(stats.Tokens31Days), coverage,
             stats.Models31Days, BreakdownMeasure.Tokens, stats.ModelColourOrder);
 
         TileEst31.FormatSlice = s => FormatUsd(s.EstUsd);
         TileEst31.Populate(
-            "Est. value · 31 days", FormatUsd(stats.Est31DaysUsd), coverage,
+            PanelText.Est31DaysLabel, FormatUsd(stats.Est31DaysUsd), coverage,
             stats.Models31Days, BreakdownMeasure.EstValue, stats.ModelColourOrder);
     }
 
@@ -666,13 +652,10 @@ public partial class PopupWindow : Window, IFlyout
     /// 7-day reset rendered in the hours format reads "163h 45m", which is technically
     /// right and useless.
     /// </summary>
-    private static string FormatCountdown(TimeSpan t) => t.TotalMinutes < 1
-        ? "under a minute"
-        : t.TotalDays >= 1
-            ? string.Create(CultureInfo.InvariantCulture, $"{t.Days}d {t.Hours}h")
-            : t.TotalHours >= 1
-                ? string.Create(CultureInfo.InvariantCulture, $"{(int)t.TotalHours}h {t.Minutes}m")
-                : string.Create(CultureInfo.InvariantCulture, $"{t.Minutes}m");
+    // Duration wording lives in OView.Core.Models.PanelText, shared with the Linux panel so
+    // the two cannot describe the same reset differently. Kept as a local alias because it
+    // reads better unqualified at its call sites — the same reason FormatTokens exists.
+    private static string FormatCountdown(TimeSpan t) => PanelText.Countdown(t);
 
     // Token and money formatting live in OView.Core.Models.UsageFormatter, shared with the
     // off-plan notification and the verification renders so one amount cannot be written
