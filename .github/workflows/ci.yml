@@ -41,16 +41,19 @@ jobs:
       # to add a Windows-only API to either would go unnoticed until someone tried to cut a
       # Linux release.
       #
-      # The Linux head joins these two steps when it lands (#77); the narrower scope here
-      # is current fact, not an oversight.
-      - name: Build Core, App and their tests
+      # src/O-view.Linux is covered through its own test project. It is the one project
+      # that could only ever run here, so a compile break in it must not wait for a
+      # release to be noticed.
+      - name: Build Core, App, Linux and their tests
         if: runner.os == 'Linux'
         run: |
           dotnet build tests/O-view.Core.Tests -c Release
           dotnet build tests/O-view.App.Tests -c Release
+          dotnet build tests/O-view.Linux.Tests -c Release
 
       - name: Test
         if: runner.os == 'Linux'
         run: |
           dotnet test tests/O-view.Core.Tests -c Release --no-build
           dotnet test tests/O-view.App.Tests -c Release --no-build
+          dotnet test tests/O-view.Linux.Tests -c Release --no-build

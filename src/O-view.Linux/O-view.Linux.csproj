@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The Linux head (ADR-0013). Sits on O-view.App exactly as the WPF head does; the
+       accounting logic, the poll loop and the platform seams are all shared, and what
+       lives here is the Linux face: a StatusNotifierItem over D-Bus, a Skia rasteriser for
+       the shared tray geometry, freedesktop notifications, and the XDG portal theme.
+
+       ADR-0005's "zero third-party runtime dependencies" is scoped to the Windows head
+       (ADR-0013). This one takes Avalonia and its closure — measured at 25 managed
+       assemblies plus libSkiaSharp and libHarfBuzz. That is a property of the platform:
+       Linux has no first-party tray and no first-party rasteriser. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>OView.Linux</RootNamespace>
+    <AssemblyName>o-view</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Stamped by the release workflow from the tag, as the Windows head is. -->
+    <Version>0.0.0</Version>
+    <!-- No console window behind the tray icon. -->
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.1" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.1" />
+    <!-- Both already arrive transitively through Avalonia; referenced explicitly because
+         this project uses them directly, and pinned to Avalonia's own versions so the
+         restore cannot resolve a downgrade. -->
+    <PackageReference Include="SkiaSharp" Version="3.119.4" />
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\O-view.Core\O-view.Core.csproj" />
+    <ProjectReference Include="..\O-view.App\O-view.App.csproj" />
+  </ItemGroup>
+
+</Project>

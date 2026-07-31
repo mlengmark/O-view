@@ -70,7 +70,7 @@ public partial class App : System.Windows.Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
-        var args = ParseArgs(e.Args);
+        var args = CommandLine.Parse(e.Args);
 
         // Verification hooks, all handled BEFORE the single-instance mutex so they can be
         // run against a machine where O-view is already running without disturbing the
@@ -585,21 +585,6 @@ public partial class App : System.Windows.Application
         _engine?.Dispose();   // stops every timer and closes the rollup store
         _instance?.Dispose();
         base.OnExit(e);
-    }
-
-    private static Dictionary<string, string?> ParseArgs(string[] args)
-    {
-        var result = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
-        for (var i = 0; i < args.Length; i++)
-        {
-            if (args[i].StartsWith("--", StringComparison.Ordinal))
-            {
-                result[args[i]] = i + 1 < args.Length && !args[i + 1].StartsWith("--", StringComparison.Ordinal)
-                    ? args[++i]
-                    : null;
-            }
-        }
-        return result;
     }
 
 }
