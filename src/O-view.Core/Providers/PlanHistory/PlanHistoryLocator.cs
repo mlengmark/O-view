@@ -34,22 +34,30 @@ public static class PlanHistoryLocator
     /// </summary>
     public static IReadOnlyList<string> Candidates() => Candidates(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+        ClaudeDataRoots.Redirected());
+
+    /// <summary>
+    /// Windows-shaped overload, kept because the MSIX case is the one with the longest
+    /// history here and its tests name it directly.
+    /// </summary>
+    public static IReadOnlyList<string> Candidates(string appDataRoot, string localAppDataRoot) =>
+        Candidates(appDataRoot, ClaudeDataRoots.Packaged(localAppDataRoot));
 
     /// <summary>
     /// Builds candidates from explicit roots. Public so the layout rules can be tested
-    /// against a synthetic profile — the packaged-app layout is the whole reason this
+    /// against a synthetic profile — the sandboxed-app layout is the whole reason this
     /// class exists, and it cannot be exercised against the real machine.
     /// </summary>
-    public static IReadOnlyList<string> Candidates(string appDataRoot, string localAppDataRoot)
+    public static IReadOnlyList<string> Candidates(string appDataRoot, IReadOnlyList<string> redirectedRoots)
     {
         var paths = new List<string> { Path.Combine(appDataRoot, "Claude", FileName) };
 
-        // Packaged (MSIX) Claude Desktop redirects %APPDATA% into its own LocalCache.
+        // A sandboxed Claude Desktop redirects its config away from the canonical path —
+        // MSIX into a LocalCache on Windows, Snap or Flatpak into a per-app tree on Linux.
         // Root discovery is shared with Cowork ingestion (ClaudeDataRoots); the ordering
         // below is this caller's own — newest file first, because a machine can carry an
         // old package's leftovers and a stale file must never shadow the live one.
-        paths.AddRange(ClaudeDataRoots.Packaged(localAppDataRoot)
+        paths.AddRange(redirectedRoots
             .Select(root => Path.Combine(root, FileName))
             .Where(File.Exists)
             .OrderByDescending(LastWriteUtcOrMin));
