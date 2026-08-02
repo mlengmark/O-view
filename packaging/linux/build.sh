@@ -45,6 +45,11 @@ dotnet publish "$ROOT/src/O-view.Linux" \
   -p:DebugType=none \
   --output "$APP"
 
+# .NET publish leaves everything 0744, which makes every .dll look like an executable and
+# every .so like an executable shared library — 17 lintian errors and 400-odd warnings.
+# Normalise: nothing is executable except the two things that actually are.
+find "$APP" -type f -exec chmod 0644 {} +
+find "$APP" -type d -exec chmod 0755 {} +
 chmod 0755 "$APP/o-view"
 
 # ── package tree ────────────────────────────────────────────────────────────────────
@@ -97,6 +102,39 @@ mkdir -p "$STAGE/usr/share/doc/o-view"
   sed 's/^/ /; s/^ $/ ./' "$ROOT/LICENSE"
 } > "$STAGE/usr/share/doc/o-view/copyright"
 
+# Debian requires a changelog for a non-native package. The release history lives on
+# GitHub, so this points at it rather than duplicating it into a file nobody updates.
+cat > "$STAGE/usr/share/doc/o-view/changelog.Debian" <<CHANGELOG
+o-view ($VERSION) stable; urgency=low
+
+  * Release $VERSION. Full notes: https://github.com/mlengmark/O-view/releases
+
+ -- Maximilian Lengmark <noreply@github.com>  $(date -R)
+CHANGELOG
+gzip -9n "$STAGE/usr/share/doc/o-view/changelog.Debian"
+
+# Two lintian tags are inherent to shipping a self-contained .NET application, and are
+# overridden rather than "fixed" because the fixes would be wrong:
+#
+#   embedded-library — libSkiaSharp statically links zlib, libpng, libjpeg and freetype.
+#     That is how SkiaSharp is built upstream. Unbundling would mean building Skia
+#     ourselves against system libraries, which is a project, not a packaging tweak.
+#
+#   unstripped-binary-or-object — the native libraries come prebuilt from NuGet. Stripping
+#     third-party binaries we did not compile risks breaking them for a size saving that
+#     matters little in a 100 MB self-contained payload.
+#
+# Recorded here with reasons so a future maintainer can tell a deliberate exemption from a
+# forgotten warning.
+mkdir -p "$STAGE/usr/share/lintian/overrides"
+cat > "$STAGE/usr/share/lintian/overrides/o-view" <<'OVERRIDES'
+# libSkiaSharp statically links these upstream; unbundling means building Skia ourselves.
+o-view: embedded-library
+# Native libraries arrive prebuilt from NuGet; stripping binaries we did not compile
+# risks breaking them for a negligible saving on a self-contained payload.
+o-view: unstripped-binary-or-object
+OVERRIDES
+
 # ── control ─────────────────────────────────────────────────────────────────────────
 #
 # The dependency list is deliberately permissive across releases: ICU and OpenSSL are
@@ -116,17 +154,16 @@ Architecture: $DEB_ARCH
 Maintainer: Maximilian Lengmark <noreply@github.com>
 Homepage: https://github.com/mlengmark/O-view
 Installed-Size: $INSTALLED_KB
-Depends: libc6, libgcc-s1, libstdc++6, zlib1g, libx11-6, libice6, libsm6, libfontconfig1,
- libicu74 | libicu72 | libicu71 | libicu70 | libicu69, libssl3t64 | libssl3
+Depends: libc6, libgcc-s1, libstdc++6, zlib1g, libx11-6, libice6, libsm6, libfontconfig1, libicu74 | libicu72 | libicu71 | libicu70 | libicu69, libssl3t64 | libssl3
 Description: Claude usage in the notification area
- O-view shows how much of your Claude plan you have used and how long until the
- next limit resets, from a tray icon and a detail panel.
+ O-view shows how much of your Claude plan you have used and how long until
+ the next limit resets, from a tray icon and a detail panel.
  .
- It reads only files Claude already writes on this machine. No account, no token,
- and no network access except an optional check for a newer release.
+ It reads only files Claude already writes on this machine. No account, no
+ token, and no network access except an optional check for a newer release.
  .
  A notification-area host is required for the icon to appear. GNOME does not
- provide one by default; an AppIndicator/KStatusNotifierItem extension adds it.
+ provide one by default; an AppIndicator extension adds it.
 CONTROL
 
 # Deliberately no postrm cleanup of user data.
