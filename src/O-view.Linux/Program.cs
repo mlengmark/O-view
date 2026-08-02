@@ -34,6 +34,12 @@ internal static class Program
             return 0;
         }
 
+        if (parsed.TryGetValue("--panel-samples", out var panelDir))
+        {
+            LinuxApp.SampleDirectory = panelDir ?? "panel-samples";
+            return BuildAvaloniaApp().StartWithClassicDesktopLifetime([]);
+        }
+
         if (parsed.ContainsKey("--probe"))
         {
             var state = SniHostProbe.CheckAsync().GetAwaiter().GetResult();
