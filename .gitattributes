@@ -1,0 +1,10 @@
+# Shell scripts must be LF in the repository, whatever the checkout does locally.
+#
+# This project is developed on Windows and its packaging runs on Linux. A script committed
+# with CRLF fails on the runner with `bad interpreter: /usr/bin/env bash^M` — an error that
+# names the interpreter rather than the line endings, so it reads as a missing shell.
+*.sh text eol=lf
+
+# Same reasoning: these are consumed by Linux tooling, not by an editor on this machine.
+packaging/linux/** text eol=lf
+*.desktop text eol=lf
