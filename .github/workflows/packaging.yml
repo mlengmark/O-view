@@ -1,0 +1,176 @@
+# Builds the Linux packages and proves they actually install.
+#
+# Separate from CI because it is slow — two publishes plus container installs — and it only
+# needs to run when the packaging or the Linux head changes. The release workflow (#81)
+# calls the same script, so what is verified here is what ships.
+#
+# What this can establish without a desktop: that the package installs on every target
+# distribution, that its dependencies are right, that the files land where they should, and
+# that the binary starts and renders. What it cannot: whether an icon appears in a panel.
+name: Packaging
+
+on:
+  pull_request:
+    paths:
+      - "packaging/**"
+      - "src/O-view.Linux/**"
+      - ".github/workflows/packaging.yml"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to stamp"
+        default: "0.6.0-dev"
+
+env:
+  VERSION: ${{ github.event.inputs.version || '0.6.0-dev' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: linux-x64
+            arch: amd64
+          - rid: linux-arm64
+            arch: arm64
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Build package and tarball
+        run: |
+          chmod +x packaging/linux/build.sh
+          ./packaging/linux/build.sh "$VERSION" "${{ matrix.rid }}" dist
+
+      # The payload must be for the architecture the control file claims, or the package
+      # installs cleanly and then refuses to run — the worst possible combination.
+      - name: The binary is genuinely ${{ matrix.arch }}
+        run: |
+          mkdir -p probe && dpkg-deb -x dist/o-view_*_${{ matrix.arch }}.deb probe
+          file probe/usr/lib/o-view/o-view
+          case "${{ matrix.arch }}" in
+            amd64) file probe/usr/lib/o-view/o-view | grep -q "x86-64" ;;
+            arm64) file probe/usr/lib/o-view/o-view | grep -q "aarch64" ;;
+          esac
+
+      - name: Files land where the desktop expects them
+        run: |
+          dpkg-deb -c dist/o-view_*_${{ matrix.arch }}.deb | tee contents.txt
+          for path in \
+            ./usr/bin/o-view \
+            ./usr/lib/o-view/o-view \
+            ./usr/share/applications/o-view.desktop \
+            ./usr/share/icons/hicolor/48x48/apps/o-view.png \
+            ./usr/share/doc/o-view/copyright
+          do
+            grep -q " $path\$" contents.txt || { echo "MISSING: $path"; exit 1; }
+          done
+          echo "--- control ---"
+          dpkg-deb -I dist/o-view_*_${{ matrix.arch }}.deb
+
+      - name: Lintian
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq lintian
+          # Warnings are triaged by a human; errors are not acceptable.
+          lintian --fail-on error --no-tag-display-limit dist/o-view_*_${{ matrix.arch }}.deb || {
+            echo "lintian reported an error"; exit 1; }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.arch }}
+          path: dist/*
+
+  # The claim worth testing: it installs on every distribution the README will name.
+  install:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["ubuntu:22.04", "ubuntu:24.04", "debian:12"]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages-amd64
+          path: dist
+
+      - name: Install on ${{ matrix.image }}
+        run: |
+          docker run --rm -v "$PWD/dist:/dist" ${{ matrix.image }} bash -euxc '
+            apt-get update -qq
+            # Resolves the declared dependencies; a wrong or over-pinned one fails here.
+            apt-get install -y -qq /dist/o-view_*_amd64.deb
+
+            test -x /usr/bin/o-view
+            test -f /usr/share/applications/o-view.desktop
+            test -f /usr/share/icons/hicolor/48x48/apps/o-view.png
+
+            # Starts, loads ICU and libSkiaSharp, and renders — no display needed. This is
+            # the check that catches a missing runtime dependency, which is otherwise only
+            # discovered by the first user to try it.
+            o-view --samples /tmp/icons
+            test "$(ls /tmp/icons/*.png | wc -l)" -gt 0
+
+            # Reports what it sees rather than crashing when there is no session bus.
+            o-view --probe
+
+            # Removal must leave the user data alone: the weekly-reset log is
+            # unrebuildable and costs a week to re-observe (ADR-0011).
+            mkdir -p /root/.local/share/O-view && echo keep > /root/.local/share/O-view/weekly-resets.json
+            apt-get purge -y -qq o-view
+            test -f /root/.local/share/O-view/weekly-resets.json
+            test ! -e /usr/lib/o-view
+            echo "OK: installs, runs, and purge left user data intact"
+          '
+
+  # arm64 through emulation. Slower and only a smoke test, but it is the difference between
+  # "we built an arm64 payload" and "an arm64 payload runs".
+  install-arm64:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages-arm64
+          path: dist
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+
+      - name: Install and run under arm64 emulation
+        run: |
+          docker run --rm --platform linux/arm64 -v "$PWD/dist:/dist" ubuntu:24.04 bash -euxc '
+            apt-get update -qq
+            apt-get install -y -qq /dist/o-view_*_arm64.deb
+            test -x /usr/bin/o-view
+            o-view --samples /tmp/icons
+            test "$(ls /tmp/icons/*.png | wc -l)" -gt 0
+            echo "OK: arm64 package installs and runs"
+          '
+
+  tarball:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages-amd64
+          path: dist
+
+      # The portable path, for distributions the .deb does not target. Deliberately tested
+      # on one that is NOT Debian-family, since that is the whole reason it exists.
+      - name: Extract and run on Fedora
+        run: |
+          docker run --rm -v "$PWD/dist:/dist" fedora:latest bash -euxc '
+            dnf install -y -q tar libicu openssl libX11 fontconfig >/dev/null
+            mkdir -p /opt/ov && tar -xzf /dist/o-view-*-linux-x64.tar.gz -C /opt/ov --strip-components=1
+            # The execute bit must survive the archive — a tarball built on Windows loses it.
+            test -x /opt/ov/o-view
+            /opt/ov/o-view --samples /tmp/icons
+            test "$(ls /tmp/icons/*.png | wc -l)" -gt 0
+            echo "OK: tarball extracts and runs outside the .deb target"
+          '
