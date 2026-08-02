@@ -1,6 +1,6 @@
 # ADR-0009: In-app auto-update via the GitHub release + existing installer
 
-- **Status:** Accepted *(relaunch amended by [0010](0010-post-update-relaunch.md); Linux behaviour amended below, 2026-07-30)*
+- **Status:** Accepted *(relaunch amended by [0010](0010-post-update-relaunch.md); Linux behaviour and the unified-release model amended below, 2026-07-30 and 2026-08-02)*
 - **Date:** 2026-07-24
 - **Deciders:** @mlengmark
 - **Resolves:** [#18](https://github.com/mlengmark/O-view/issues/18) — "No Auto Update Function"
@@ -119,3 +119,49 @@ Linux-only release hides an older Windows one and Windows installs stall silentl
 distinct outcome for "no build for your platform" so it stops being indistinguishable from a
 broken feed. Both are specified in #79 and neither is built, because building half of them
 would be worse than building none.
+
+## Amendment (2026-08-02): unified releases
+
+Decided by @mlengmark alongside [#81](https://github.com/mlengmark/O-view/issues/81).
+
+**Every tag carries every platform's assets**, whether or not that platform's code changed.
+A release is therefore always complete: `O-view-Setup.exe`, `O-view.Tray.exe`, both `.deb`
+architectures and both tarballs, or no release at all.
+
+### Why, rather than publishing only what changed
+
+It makes the update path correct **by construction**. `releases/latest` returns exactly one
+release regardless of what is attached to it, so with unified releases there is always an
+asset for whichever platform is asking — and `releases/latest` stays the right thing to
+read.
+
+Publishing only the changed platform breaks that silently. A Windows user on v0.5.11 facing
+`[v0.6.1 (Linux only), v0.6.0 (both)]` reads v0.6.1, finds no `.exe`, and is told nothing —
+never learning that v0.6.0 exists and applies to them. They stay a version behind
+permanently, with no error to notice. That is why the two further changes specified in #79
+(walking `/releases`, and a distinct "no build for your platform" outcome) remain
+**deliberately unbuilt**: they are only needed under the model not chosen, and half of that
+pair would be worse than neither.
+
+The cost is cosmetic. A Linux-only fix prompts Windows users to reinstall an identical
+binary. If that ever grates, the fix is to not rebuild an unchanged platform's asset — not
+to publish a partial release.
+
+### One version line, one tag namespace
+
+Separate prefixes (`v*` for Windows, `linux-v*`) are not an alternative route to the same
+place. `ReleaseVersion.TryParse` strips a leading `v` only, then truncates at the first
+`-`, leaving `"linux"`, which fails to parse — so `Evaluate` returns `Unknown`. Combined
+with `releases/latest` ignoring tag prefixes, the first `linux-v*` release would stop every
+Windows client being offered updates. It fails safe, in that nothing bad is installed, but
+invisibly, which is the worst way to find out.
+
+### Asset names are one decision in two places
+
+The release workflow writes them; `ReleaseAssets` matches them. The workflow asserts every
+expected name is present before creating the release, because a rename on either side
+otherwise surfaces as an app that quietly stops updating rather than as a build failure.
+
+The Windows names carry no version or architecture and are **frozen** by compatibility; the
+Linux ones carry both. That asymmetry is why asset matching cannot be a simple equality
+test on both platforms.

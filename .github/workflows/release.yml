@@ -1,14 +1,34 @@
+# Cuts a release: one tag, every platform's assets.
+#
+# UNIFIED RELEASES (ADR-0009, decided 2026-08-02). Every tag carries both platforms'
+# assets, whether or not that platform's code changed. This is what makes the update path
+# correct by construction: there is always an asset for the checking platform, so
+# `releases/latest` stays the right thing for the app to read. The cost is cosmetic — a
+# Linux-only fix prompts Windows users to reinstall an identical binary.
+#
+# The alternative, publishing only the changed platform, would silently stall every Windows
+# install the first time a Linux-only release went out, because `releases/latest` returns
+# one release regardless of what is attached to it. See #79 and #81.
 name: Release
 
 on:
   push:
     tags: ["v*"]
+  # Dry run: builds and verifies every artifact without creating a release, so the pipeline
+  # can be exercised before a real tag depends on it.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to build (dry run — no release is created)"
+        required: true
+        default: "0.6.0-dry"
 
 permissions:
   contents: write
 
 jobs:
-  release:
+  # One gate, not one per matrix leg.
+  test:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
@@ -16,33 +36,139 @@ jobs:
         with:
           dotnet-version: "10.0.x"
       - run: dotnet test -c Release
-      - name: Compute version from tag
-        id: ver
-        shell: pwsh
+
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      is_tag: ${{ steps.v.outputs.is_tag }}
+    steps:
+      - id: v
         run: |
-          $version = "${{ github.ref_name }}".TrimStart('v')
-          "version=$version" >> $env:GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" = "push" ]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "is_tag=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+            echo "is_tag=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  windows:
+    needs: [test, version]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
       - name: Publish single-file self-contained exe
         run: >
           dotnet publish src/O-view.Tray -c Release -r win-x64 --self-contained
           -p:PublishSingleFile=true
-          -p:Version=${{ steps.ver.outputs.version }}
+          -p:Version=${{ needs.version.outputs.version }}
           -o publish
+
       - name: Install Inno Setup
         run: choco install innosetup --no-progress -y
+
       - name: Build installer
         shell: pwsh
         run: |
-          $version = "${{ steps.ver.outputs.version }}"
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-          & $iscc "/DAppVersion=$version" installer\O-view.iss
+          & $iscc "/DAppVersion=${{ needs.version.outputs.version }}" installer\O-view.iss
           if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
+
+      # These two names are FROZEN. Every installed Windows build looks for the literal
+      # string "O-view-Setup.exe"; renaming it strands existing users on their current
+      # version with no way to be told (ReleaseAssets.WindowsInstallerName).
+      - name: Stage assets
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item installer\O-view-Setup.exe dist\O-view-Setup.exe
+          Copy-Item publish\O-view.Tray.exe dist\O-view.Tray.exe
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assets-windows
+          path: dist/*
+
+  linux:
+    needs: [test, version]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [linux-x64, linux-arm64]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: "10.0.x"
+
+      # The same script the packaging workflow verifies, so what was proven to install is
+      # what ships. Asset names come from it: o-view_<version>_<arch>.deb and
+      # o-view-<version>-<rid>.tar.gz, matched by ReleaseAssets.DebianPackage / .Tarball.
+      - name: Build packages
+        run: |
+          chmod +x packaging/linux/build.sh
+          ./packaging/linux/build.sh "${{ needs.version.outputs.version }}" "${{ matrix.rid }}" dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: assets-${{ matrix.rid }}
+          path: dist/*
+
+  release:
+    # Every build job must succeed. A partial release is worse than no release: it would
+    # publish a tag some platform has no asset for, which is exactly the state unified
+    # releases exist to prevent.
+    needs: [version, windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: staged
+          merge-multiple: true
+
+      # The workflow writes these names and the app matches them (ReleaseAssets). That is
+      # one decision in two places, so it is asserted rather than assumed — a rename on
+      # either side otherwise shows up as an app that quietly stops updating.
+      - name: Every expected asset is present
+        run: |
+          V="${{ needs.version.outputs.version }}"
+          expected=(
+            "O-view-Setup.exe"
+            "O-view.Tray.exe"
+            "o-view_${V}_amd64.deb"
+            "o-view_${V}_arm64.deb"
+            "o-view-${V}-linux-x64.tar.gz"
+            "o-view-${V}-linux-arm64.tar.gz"
+          )
+          ls -la staged
+          missing=0
+          for name in "${expected[@]}"; do
+            if [ -f "staged/$name" ]; then
+              echo "ok       $name"
+            else
+              echo "MISSING  $name"; missing=1
+            fi
+          done
+          [ "$missing" -eq 0 ] || { echo "asset names do not match what the app looks for"; exit 1; }
+
+      - name: Dry run summary
+        if: needs.version.outputs.is_tag != 'true'
+        run: |
+          echo "Dry run — every asset built and named correctly. No release created."
+          echo "Tag the commit to publish."
+
       - name: Create release
+        if: needs.version.outputs.is_tag == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: >
-          gh release create "${{ github.ref_name }}"
-          "installer/O-view-Setup.exe"
-          "publish/O-view.Tray.exe"
-          --title "O-view ${{ github.ref_name }}"
-          --generate-notes
+        run: |
+          gh release create "${{ github.ref_name }}" staged/* \
+            --repo "${{ github.repository }}" \
+            --title "O-view ${{ github.ref_name }}" \
+            --generate-notes
