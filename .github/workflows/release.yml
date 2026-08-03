@@ -173,7 +173,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          cat .github/release-notes-header.md > notes.md
+
+          # The header opens with an HTML comment explaining the file to maintainers. It is
+          # invisible in rendered markdown, but it still ships inside the release body, where
+          # it is noise for anyone reading the raw notes or consuming them through the API.
+          # Strip it rather than moving the explanation somewhere nobody editing the file
+          # would see it.
+          sed '/^<!--$/,/^-->$/d' .github/release-notes-header.md > notes.md
 
           # Generated separately rather than via --generate-notes, so it lands BELOW the
           # header instead of replacing the body.
