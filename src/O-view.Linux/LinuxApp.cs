@@ -8,7 +8,9 @@ using OView.Core.Models;
 using OView.App.Platform;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
+using OView.App.Updates;
 using OView.Linux.Notifications;
+using OView.Linux.Updates;
 using OView.Linux.Panel;
 using OView.Linux.Platform;
 using OView.Linux.Rendering;
@@ -80,6 +82,17 @@ public sealed class LinuxApp : Application
 
         engine.SnapshotUpdated += snapshot => Dispatcher.UIThread.Post(() => Render(snapshot));
         engine.NotificationRequested += n => _ = _notifier.ShowAsync(n.Title, n.Message);
+
+        // Says a newer version exists; never downloads or runs anything (ADR-0009 as
+        // amended). Without this the engine raises UpdateCheckDue and nothing listens, which
+        // is how a Linux install ended up with no update path at all: the app said nothing,
+        // and apt cannot know about a release it has no repository for.
+        var notice = new LinuxUpdateNotice(
+            Program.DetectInstallKind(),
+            ReleaseFeed.VersionOf(typeof(LinuxApp).Assembly),
+            (title, body) => _notifier.ShowAsync(title, body),
+            _log);
+        engine.UpdateCheckDue += () => _ = notice.CheckAsync();
 
         engine.Start(new AvaloniaTimerFactory());
 

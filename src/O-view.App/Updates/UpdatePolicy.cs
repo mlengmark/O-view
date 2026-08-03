@@ -1,3 +1,6 @@
+using System.Runtime.InteropServices;
+using OView.Core.Updates;
+
 namespace OView.App.Updates;
 
 /// <summary>How this build arrived on the machine, which decides what it may do about updates.</summary>
@@ -59,4 +62,58 @@ public static class UpdatePolicy
     /// </summary>
     public static bool MayDownloadAndRun(InstallKind kind) =>
         ActionFor(kind) is UpdateAction.InstallInPlace;
+
+    /// <summary>
+    /// Which published asset proves to <i>this</i> build that a newer version exists.
+    ///
+    /// <para><b>Detection is not permission, and conflating them silently disabled the
+    /// Linux notice.</b> An apt build was handed <see cref="ReleaseAssets.None"/> on the
+    /// reasoning that it must never install anything — but
+    /// <see cref="UpdateCheck.Evaluate"/> only reports <c>UpdateAvailable</c> when the
+    /// selector matches something, so a selector matching nothing meant an apt build could
+    /// never report an update <i>at all</i>. It returned <c>Unknown</c> forever. ADR-0009
+    /// says that build should "say a newer version exists, and stop"; with no asset to
+    /// recognise, it could not do the first half.</para>
+    ///
+    /// <para>So detection uses the asset that build would actually install, and
+    /// <see cref="MayDownloadAndRun"/> — unchanged — remains the only thing that decides
+    /// whether anything is downloaded or executed. A <c>.deb</c> build now recognises the
+    /// <c>.deb</c>, says so, and still touches nothing.</para>
+    ///
+    /// <para>An architecture this app does not publish for yields
+    /// <see cref="ReleaseAssets.None"/>, so it reports <c>Unknown</c> rather than pointing
+    /// the user at a package that would not run.</para>
+    /// </summary>
+    public static ReleaseAssetSelector DetectionAsset(InstallKind kind, Architecture architecture) => kind switch
+    {
+        // Both Windows kinds detect on the installer: it is the asset that proves a release
+        // is real and complete. Only the installed one is allowed to act on it.
+        InstallKind.WindowsInstaller or InstallKind.WindowsPortable => ReleaseAssets.WindowsInstaller,
+
+        InstallKind.LinuxPackage => DebianArchitecture(architecture) is { } debArch
+            ? ReleaseAssets.DebianPackage(debArch)
+            : ReleaseAssets.None,
+
+        InstallKind.LinuxTarball => RuntimeIdentifier(architecture) is { } rid
+            ? ReleaseAssets.Tarball(rid)
+            : ReleaseAssets.None,
+
+        _ => ReleaseAssets.None,
+    };
+
+    /// <summary>Debian's architecture names, which are not .NET's.</summary>
+    public static string? DebianArchitecture(Architecture architecture) => architecture switch
+    {
+        Architecture.X64 => "amd64",
+        Architecture.Arm64 => "arm64",
+        _ => null,
+    };
+
+    /// <summary>The .NET runtime identifiers the release workflow builds tarballs for.</summary>
+    public static string? RuntimeIdentifier(Architecture architecture) => architecture switch
+    {
+        Architecture.X64 => "linux-x64",
+        Architecture.Arm64 => "linux-arm64",
+        _ => null,
+    };
 }

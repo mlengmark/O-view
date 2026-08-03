@@ -1,5 +1,6 @@
 using System.IO;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Net.Http.Headers;
 using System.Reflection;
 using OView.Core.Updates;
@@ -17,11 +18,9 @@ namespace OView.Tray.Updates;
 /// </summary>
 public sealed class UpdateService
 {
-    private const string LatestReleaseApi =
-        "https://api.github.com/repos/mlengmark/O-view/releases/latest";
-
-    // A shared client with a real User-Agent (the GitHub API rejects requests without one)
-    // and a short timeout so a stalled network never hangs a menu action.
+    // Used for the installer DOWNLOAD only; the release-feed query moved to the shared
+    // ReleaseFeed so both heads cannot drift on the endpoint. Downloading stays here because
+    // only this head is ever allowed to do it (ADR-0009).
     private static readonly HttpClient Http = CreateClient();
 
     private readonly IAppLog? _log;
@@ -35,10 +34,7 @@ public sealed class UpdateService
     /// always see an "update available"; that is harmless (it is not an installed build, so
     /// the update path opens the releases page rather than replacing anything).
     /// </summary>
-    public static string CurrentVersion =>
-        Assembly.GetExecutingAssembly().GetName().Version is { } v
-            ? $"{v.Major}.{v.Minor}.{v.Build}"
-            : "0.0.0";
+    public static string CurrentVersion => ReleaseFeed.VersionOf(Assembly.GetExecutingAssembly());
 
     /// <summary>
     /// Whether this process is running from the per-user install location
@@ -92,25 +88,17 @@ public sealed class UpdateService
     /// Queries the release feed and returns the comparison result. Any network or HTTP
     /// failure is swallowed to <see cref="UpdateOutcome.Unknown"/> — a failed update check
     /// must never crash a tray app that is otherwise working.
+    ///
+    /// <para>Delegates to the shared <see cref="ReleaseFeed"/> so both heads ask the same URL
+    /// with the same User-Agent. Restating the endpoint per head is how the two quietly come
+    /// to check different things. Behaviour here is unchanged: same asset, same swallowed
+    /// failures, same <see cref="UpdateOutcome.Unknown"/> on a dead network.</para>
     /// </summary>
-    public async Task<UpdateCheckResult> CheckAsync(CancellationToken cancellation = default)
-    {
-        try
-        {
-            using var response = await Http.GetAsync(LatestReleaseApi, cancellation).ConfigureAwait(false);
-            response.EnsureSuccessStatusCode();
-            var json = await response.Content.ReadAsStringAsync(cancellation).ConfigureAwait(false);
-            var result = UpdateCheck.Evaluate(CurrentVersion, json, ReleaseAssets.WindowsInstaller);
-            _log?.Write($"update check current={CurrentVersion} outcome={result.Outcome}" +
-                        (result.Available is { } a ? $" latest={a.Tag}" : ""));
-            return result;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
-        {
-            _log?.Write($"update check failed {ex.GetType().Name}: {ex.Message}");
-            return UpdateCheckResult.Unknown;
-        }
-    }
+    public Task<UpdateCheckResult> CheckAsync(CancellationToken cancellation = default) =>
+        new ReleaseFeed(_log).CheckAsync(
+            CurrentVersion,
+            UpdatePolicy.DetectionAsset(CurrentInstallKind, RuntimeInformation.OSArchitecture),
+            cancellation);
 
     /// <summary>
     /// Downloads the installer to a fresh temp file and returns its path. Throws on any

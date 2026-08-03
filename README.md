@@ -57,7 +57,7 @@ supports, since a machine that cannot run Claude Desktop has nothing for O-view 
 | Notifications | ✅ balloon tip | ✅ freedesktop notifications, *unverified on hardware* |
 | Run at startup | ✅ registry `Run` key | ✅ XDG autostart `.desktop` |
 | Light/dark theme | ✅ follows `AppsUseLightTheme` | ✅ XDG desktop portal, *unverified on hardware* |
-| Auto-update | ✅ in-place, one confirmation | ❌ **by design** — `apt upgrade` owns it ([ADR-0009](docs/adr/0009-auto-update.md)) |
+| Auto-update | ✅ in-place, one confirmation | ⚠️ **notifies only, by design** — tells you once per version, installs nothing ([ADR-0009](docs/adr/0009-auto-update.md)) |
 
 *"Unverified on hardware" means the code exists and passes its tests, but nobody has yet run
 it on a physical Linux desktop. It is recorded that way rather than ticked, because claiming
@@ -140,8 +140,18 @@ Self-contained: no .NET runtime needed. It adds an application-menu entry; run-a
 a toggle inside the app, not something the package decides for you. `apt remove` leaves your
 settings and — importantly — the weekly-reset log alone, since that one is unrebuildable.
 
-**Anything else** — download the `.tar.gz`, extract, and run `./o-view`. No installation, and
-no auto-update.
+**Anything else** — download the `.tar.gz`, extract, and run `./o-view`. No installation.
+
+**Staying up to date on Linux.** O-view checks for a newer release and tells you once per
+version — then leaves it entirely to you. It never downloads or replaces anything, because on
+a `.deb` install those files belong to your package manager and overwriting them would be
+undone by the next `apt upgrade`.
+
+> There is **no O-view apt repository**, so `apt upgrade` will not find a new version by
+> itself. Updating means downloading the next `.deb` or tarball from the releases page and
+> installing it the same way you did the first time. This is the one part of the Linux
+> experience that is genuinely worse than the Windows one, and it is stated rather than
+> glossed.
 
 On every change, the packaging workflow installs the `.deb` in clean **Ubuntu 22.04, Ubuntu
 24.04 and Debian 12** containers (plus Ubuntu 24.04 under arm64 emulation) and extracts the

@@ -165,3 +165,68 @@ otherwise surfaces as an app that quietly stops updating rather than as a build 
 The Windows names carry no version or architecture and are **frozen** by compatibility; the
 Linux ones carry both. That asymmetry is why asset matching cannot be a simple equality
 test on both platforms.
+
+---
+
+## Amendment (2026-08-03): correcting "`apt upgrade` does the work"
+
+Found at the v0.6.0 release gate ([#84](https://github.com/mlengmark/O-view/issues/84)), while
+re-testing the [#79](https://github.com/mlengmark/O-view/issues/79) regression against the real
+published release.
+
+### What was wrong
+
+The 2026-07-30 amendment's table says, of a `.deb` install: *"Say a newer version exists, and
+stop. `apt upgrade` does the work."* **Both halves were untrue of the shipped code.**
+
+1. **It did not say a newer version exists.** The Linux head never subscribed to the engine's
+   `UpdateCheckDue` event, so it never checked at all. Worse, it *could* not have: an apt build
+   was handed `ReleaseAssets.None`, and `UpdateCheck.Evaluate` only reports `UpdateAvailable`
+   when the selector matches a published asset. A selector matching nothing returns `Unknown`
+   forever. The design had conflated **detection** with **permission** — using "must never
+   install this" to mean "must never recognise this".
+
+2. **`apt upgrade` does not do the work.** The `.deb` installs no apt source, and there is no
+   O-view repository for one to point at. `apt` cannot learn about a version it has no
+   repository for, so it would never have offered the upgrade.
+
+Together those meant a Linux user had **no update path whatsoever**: install once, and never
+find out anything had shipped. Neither failure was visible, which is what made it survive to
+the release gate.
+
+### The correction
+
+**Detection is separated from permission.** `UpdatePolicy.DetectionAsset` returns the asset a
+build would actually install — the `.deb` for its architecture, the tarball for its RID — so
+the build can *recognise* a newer release. `UpdatePolicy.MayDownloadAndRun` is unchanged and
+remains the only thing deciding whether anything is fetched or executed. A `.deb` build now
+sees the `.deb`, says so once, and still touches nothing.
+
+The corrected table row:
+
+| Install kind | On a newer release |
+|---|---|
+| Linux `.deb` (apt/dpkg) | **Notify once per version, and stop.** The user downloads and installs the next `.deb` themselves |
+| Linux tarball | **Notify once per version, and stop.** The user downloads and extracts the next tarball |
+
+"Once per version" is persisted (`TraySettings.LastUpdateNoticeTag`) rather than held in
+memory: the check runs every 24 h in an app designed to run for days, and an in-memory flag
+would re-nag after every restart.
+
+**The notice must not say "run `apt upgrade`".** That command would report nothing to do, and
+a user who ran it and saw nothing would reasonably conclude the notification was wrong — rule
+6 applied to our own copy. It names the real step instead.
+
+### What this does not change
+
+Nothing about Windows. And nothing about the prohibition itself: a Linux build still never
+downloads, extracts or executes anything. The guard is asserted in `LinuxUpdateNotice` rather
+than assumed, so a later edit that made this head "helpfully" install something trips it
+instead of shipping.
+
+### Deferred, deliberately
+
+Publishing a real apt repository would make the original sentence true, and is the better
+end state. It needs signing keys, hosting and its own ADR, and it is not a prerequisite for
+v0.6.0 — a notification the user can act on is a complete answer, just not the most convenient
+one. Revisit if `.deb` downloads prove awkward in practice.

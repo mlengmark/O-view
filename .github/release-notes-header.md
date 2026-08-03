@@ -41,10 +41,14 @@ but has nowhere to put its icon. To check what it found:
 o-view --probe
 ```
 
-**Linux updates come from your package manager, not from inside the app.** `apt upgrade`
-owns the installed copy; overwriting files dpkg owns would be silently reverted by the next
-upgrade. O-view will tell you a newer version exists and will not try to install it. Tarball
-users update by downloading the next tarball. Only the Windows installer build updates itself.
+**Linux builds notify; they never update themselves.** When a newer release exists O-view
+tells you once, and stops there — overwriting files dpkg owns would be silently reverted by
+the next `apt upgrade`, so it does not touch them.
+
+Note that **there is no O-view apt repository**, so `apt upgrade` will *not* find a new
+version on its own. Updating means downloading the next `.deb` (or tarball) from the releases
+page and installing it, exactly as you did the first time. Only the Windows installer build
+updates itself.
 
 **macOS is not supported and is out of scope.** There is no Snap or Flatpak either: both
 sandbox the filesystem, and reading another application's files is O-view's entire function.

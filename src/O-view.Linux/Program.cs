@@ -178,7 +178,7 @@ internal static class Program
     /// Whether dpkg owns this build. An apt install must never self-update — overwriting
     /// files the package manager owns is silently reverted by the next upgrade (ADR-0009).
     /// </summary>
-    private static InstallKind DetectInstallKind() =>
+    internal static InstallKind DetectInstallKind() =>
         Environment.ProcessPath?.StartsWith("/usr/lib/o-view", StringComparison.Ordinal) == true
             ? InstallKind.LinuxPackage
             : InstallKind.LinuxTarball;
