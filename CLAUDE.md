@@ -4,9 +4,11 @@ Guidance for AI coding assistants working in this repository. Read this before w
 
 ## What this is
 
-A **desktop notification-area (system tray) application** that displays Claude AI token usage and time until the next usage-limit reset. **Windows 11 ships today; Linux is being built for v0.6.0** ([ADR-0012](docs/adr/0012-linux-support.md)).
+A **desktop notification-area (system tray) application** that displays Claude AI token usage and time until the next usage-limit reset. **Windows 11 and Linux are both supported targets as of v0.6.0** ([ADR-0012](docs/adr/0012-linux-support.md)).
 
-Status: **all five build phases complete** (see [docs/build-plan.md](docs/build-plan.md)) — the Windows app is working end to end and released at v0.5.11. **The Linux head is built and its tests pass, but it has never run on a physical Linux desktop and v0.6.0 has not been cut.** Describe it as built, not as working. The ADRs in `docs/adr/` are decided, not drafts — follow them. If you believe one is wrong, say so and propose superseding it; do not silently deviate.
+Status: all build phases complete (see [docs/build-plan.md](docs/build-plan.md)). Windows has been working end to end and in daily use since v0.1.0. **Linux shipped in v0.6.0 but has still never run on a physical Linux desktop** — its packages are install-tested in headless containers on every change, which proves the package is sound and says nothing about whether the icon appears, the panel is legible, or the theme follows. **Released is not the same as verified: do not describe Linux tray, panel or theme behaviour as working** until a hardware report exists. The README's support matrix marks those rows *unverified* deliberately, and rule 6 applies to our own claims about our own app as much as to usage numbers.
+
+The ADRs in `docs/adr/` are decided, not drafts — follow them. If you believe one is wrong, say so and propose superseding it; do not silently deviate. ADR-0009 carries a worked example of why: its Linux amendment asserted that `apt upgrade` handled updates, which was untrue in both halves and survived undetected until the release gate.
 
 ## Hard rules
 

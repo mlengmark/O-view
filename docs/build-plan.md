@@ -129,7 +129,10 @@ Its shape, in four movements:
    unified release carrying every platform's assets.
 4. **Document what shipped** — this document, the README's support matrix, CLAUDE.md.
 
-**Acceptance, and the part that is not yet met.** The code-side criteria pass: `Core`, `App`
+**Shipped as [v0.6.0](https://github.com/mlengmark/O-view/releases/tag/v0.6.0)** on 2026-08-03
+— one tag carrying all six assets.
+
+**Acceptance, and the part that is still not met.** The code-side criteria pass: `Core`, `App`
 and the Linux head build and test on `ubuntu-latest`; the `.deb` installs, runs and purges
 cleanly in Ubuntu 22.04, Ubuntu 24.04 and Debian 12 containers, plus arm64 under emulation;
 the tarball runs on Fedora; a Linux build never offers itself a Windows installer.
@@ -138,8 +141,13 @@ the tarball runs on Fedora; a Linux build never offers itself a Windows installe
 prove the package is sound, not that the icon appears, the panel is legible, or the theme
 follows. Those rows in the README's support matrix are marked *unverified on hardware*
 deliberately, and **they stay that way until a real user reports otherwise** — writing them as
-ticks would be rule 4 below applied to ourselves. That report is the last acceptance criterion
-for the milestone, and it is why the tag is cut before it, not after.
+ticks would be rule 4 below applied to ourselves.
+
+That report is the last acceptance criterion for the milestone, and the tag was cut **before**
+it rather than after: shipping is what puts installable packages in a tester's hands, so
+waiting for hardware confirmation before releasing would have been waiting for something that
+could not happen. Released and verified are different claims, and the milestone stays open on
+the second one.
 
 ---
 
