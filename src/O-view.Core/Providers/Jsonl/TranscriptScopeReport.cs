@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using OView.Core.Models;
 
 namespace OView.Core.Providers.Jsonl;
 
@@ -89,13 +90,13 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
             + $"{SearchedRoots.Count} location(s) without finding any. Chat conversations keep "
             + "no local usage record, so they cannot be counted here. The session and weekly "
             + "bars above come from Claude Desktop's own usage file and do cover all of your "
-            + "usage. Right-click the tray icon → Copy diagnostics to see the exact locations.",
+            + $"usage. {DiagnosticsHint.Instruction} to see the exact locations.",
 
         _ =>
             $"O-view found {TotalFiles} local transcript file(s) ({FormatBytes(TotalBytes)}) but "
             + "recorded no usage from them. That is unexpected — the session and weekly bars "
-            + "above are unaffected, but the token figures may be incomplete. Right-click the "
-            + "tray icon → Copy diagnostics and report this.",
+            + "above are unaffected, but the token figures may be incomplete. "
+            + $"{DiagnosticsHint.Instruction} and report this.",
     };
 
     /// <summary>

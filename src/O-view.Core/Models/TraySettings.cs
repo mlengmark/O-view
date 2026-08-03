@@ -13,7 +13,18 @@ namespace OView.Core.Models;
 /// source of truth, so the two can never disagree about whether O-view starts with Windows,
 /// and Task Manager's startup page — which edits that key directly — stays authoritative.</para>
 /// </summary>
-public sealed record TraySettings(bool NotifyOnThreshold = true, int ThresholdPercent = UsageLevels.CriticalPercent)
+/// <param name="LastUpdateNoticeTag">
+/// The release tag the user has already been told about, so a build that cannot update
+/// itself says so <b>once per version</b> rather than on every check.
+///
+/// <para>Persisted rather than held in memory because the check runs every 24 h and the app
+/// is designed to run for days: in-memory state would re-nag after every restart, and a
+/// notice the user has already acted on is noise. Empty means "never told".</para>
+/// </param>
+public sealed record TraySettings(
+    bool NotifyOnThreshold = true,
+    int ThresholdPercent = UsageLevels.CriticalPercent,
+    string LastUpdateNoticeTag = "")
 {
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),

@@ -26,6 +26,11 @@ internal static class Program
     {
         var parsed = CommandLine.Parse(args);
 
+        // What the panel's explanatory copy should tell a stuck user to do. This head has no
+        // Copy-diagnostics menu item — the SNI menu carries Exit only — so the shared copy
+        // must name the command instead of a menu the user does not have.
+        DiagnosticsHint.Use("Run o-view --diagnose in a terminal");
+
         // Offscreen hooks first: they need no bus, no display and no single-instance
         // claim, so they can be run against a machine already running O-view. That is what
         // makes a remote bug report a single round trip rather than a conversation.
@@ -173,7 +178,7 @@ internal static class Program
     /// Whether dpkg owns this build. An apt install must never self-update — overwriting
     /// files the package manager owns is silently reverted by the next upgrade (ADR-0009).
     /// </summary>
-    private static InstallKind DetectInstallKind() =>
+    internal static InstallKind DetectInstallKind() =>
         Environment.ProcessPath?.StartsWith("/usr/lib/o-view", StringComparison.Ordinal) == true
             ? InstallKind.LinuxPackage
             : InstallKind.LinuxTarball;
