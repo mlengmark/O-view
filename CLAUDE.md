@@ -6,7 +6,7 @@ Guidance for AI coding assistants working in this repository. Read this before w
 
 A **desktop notification-area (system tray) application** that displays Claude AI token usage and time until the next usage-limit reset. **Windows 11 ships today; Linux is being built for v0.6.0** ([ADR-0012](docs/adr/0012-linux-support.md)).
 
-Status: **all five build phases complete** (see [docs/build-plan.md](docs/build-plan.md)) — the Windows app is working end to end and released. Linux support is in progress against the v0.6.0 milestone; nothing in that milestone has shipped yet, so do not describe Linux behaviour as though it exists. The ADRs in `docs/adr/` are decided, not drafts — follow them. If you believe one is wrong, say so and propose superseding it; do not silently deviate.
+Status: **all five build phases complete** (see [docs/build-plan.md](docs/build-plan.md)) — the Windows app is working end to end and released at v0.5.11. **The Linux head is built and its tests pass, but it has never run on a physical Linux desktop and v0.6.0 has not been cut.** Describe it as built, not as working. The ADRs in `docs/adr/` are decided, not drafts — follow them. If you believe one is wrong, say so and propose superseding it; do not silently deviate.
 
 ## Hard rules
 
@@ -19,13 +19,13 @@ Where code lives decides what it may touch:
 | Layer | Target | May use |
 |---|---|---|
 | `O-view.Core` | `net10.0` | BCL and SQLite only. No UI, no Win32, no `System.Drawing`, no `Microsoft.Win32`. **Must build and pass its tests on Linux.** |
-| `O-view.App` *(planned, #73)* | `net10.0` | The same. Orchestration only; platform behaviour arrives through injected interfaces. |
+| `O-view.App` | `net10.0` | The same. Orchestration only; platform behaviour arrives through injected interfaces. |
 | `O-view.Tray` — Windows head | `net10.0-windows` | Win32, WPF, WinForms `NotifyIcon`, **directly. No abstraction tax.** |
-| Linux head *(planned, #77)* | `net10.0` | D-Bus, StatusNotifierItem, the toolkit ADR-0013 picks. |
+| `O-view.Linux` — Linux head | `net10.0` | D-Bus, StatusNotifierItem, Avalonia + SkiaSharp ([ADR-0013](docs/adr/0013-linux-ui-toolkit.md)). |
 
 Resolve platform differences by **which implementation gets constructed**, not with `#if` or `OperatingSystem.IsLinux()` sprinkled through logic. Where a runtime check genuinely is the simplest correct answer — data-root discovery is the real case — it lives in exactly one named place, and an ADR says where.
 
-> **Today the only layer that exists is `Core` + `O-view.Tray`.** Until #73 and #77 land, the rule that binds is the first row: nothing Windows-specific enters `Core`. CI enforces it on `ubuntu-latest`.
+> **All four layers now exist.** The rule that binds hardest is still the first row — nothing Windows-specific enters `Core` or `App` — and CI enforces it by building and testing both on `ubuntu-latest`. The second-hardest is that neither head may grow logic the other needs: see *Intended structure* below.
 
 Watch for macOS assumptions leaking in from AI training data, because the closest prior art is a Mac app. None of the left column is right on **either** target:
 
@@ -40,7 +40,7 @@ Watch for macOS assumptions leaking in from AI training data, because the closes
 
 ### 2. Clean-room — do not read existing usage monitors
 
-This project was inspired by the *product concept* of existing macOS menu-bar apps that track AI token usage (macOS/Swift). **Do not read, clone, fetch, or browse the source code** of any such app, and do not reproduce its naming or file layout. If asked "how does [an existing usage monitor] do X", decline and reason from Windows/.NET documentation instead. Full policy: [ADR-0004](docs/adr/0004-clean-room-provenance.md).
+This project was inspired by the *product concept* of existing macOS menu-bar apps that track AI token usage (macOS/Swift). **Do not read, clone, fetch, or browse the source code** of any such app, and do not reproduce its naming or file layout. If asked "how does [an existing usage monitor] do X", decline and reason from first-party platform documentation instead — Microsoft's for Windows, and the freedesktop/XDG specifications for Linux. Full policy: [ADR-0004](docs/adr/0004-clean-room-provenance.md).
 
 Those macOS designs are not merely encumbered — they are *incorrect* for this platform.
 
@@ -58,11 +58,18 @@ Non-negotiable, and the single easiest way to ship a silently broken app. Assist
 
 **The id has two spellings.** Claude Code transcripts write `requestId`; **Cowork** audit logs write `request_id` on an otherwise identical record. Reading only one spelling ingests *nothing* from the other source — no error, just an empty tile. See rule 9.
 
-### 5. No third-party tray library — and free the GDI handle
+### 5. Tray integration — the rules differ by head
 
-Tray integration uses the **first-party `System.Windows.Forms.NotifyIcon`** (`<UseWPF>` + `<UseWindowsForms>` together). Do not add H.NotifyIcon or any other tray package; the dependency was evaluated and deliberately dropped ([ADR-0005](docs/adr/0005-native-tray-integration.md)). WinForms is for `NotifyIcon` **only** — no WinForms controls, forms, or `Application.Run`.
+**Windows: no third-party tray library, and free the GDI handle.** Tray integration uses the **first-party `System.Windows.Forms.NotifyIcon`** (`<UseWPF>` + `<UseWindowsForms>` together). Do not add H.NotifyIcon or any other tray package; the dependency was evaluated and deliberately dropped ([ADR-0005](docs/adr/0005-native-tray-integration.md)). WinForms is for `NotifyIcon` **only** — no WinForms controls, forms, or `Application.Run`.
 
 `Bitmap.GetHicon()` allocates an unmanaged GDI handle that `Icon` does not own. **Call `DestroyIcon` on every icon refresh** or the process leaks a handle per update — a slow leak in an app designed to run for days.
+
+**Linux: ADR-0005's zero-dependency guarantee does not extend here** ([ADR-0013](docs/adr/0013-linux-ui-toolkit.md) scopes it to Windows). There is no first-party option: the head uses Avalonia, SkiaSharp and `Tmds.DBus.Protocol`. Two things about it are counter-intuitive and both are measured, not assumed:
+
+- **An Avalonia `TrayIcon` reports `IsVisible = true` whether or not a notification-area host exists.** The toolkit cannot be asked whether the icon is actually anywhere. Ask the *bus* — `SniHostProbe` checks for an owner of `org.kde.StatusNotifierWatcher` — and tell the user when there is none, because silently invisible is indistinguishable from broken ([findings](docs/findings/linux-tray-spike.md)).
+- **Probe before the toolkit starts.** Blocking Avalonia's UI thread on a D-Bus round trip deadlocks the app outright. `Program.Main` does it first, deliberately.
+
+Do not "simplify" either back out.
 
 **Icon design (measured, not assumed):** the tray icon is the O-view **brand mark** — a colour-coded **ring gauge with a centre pupil** (the "eye"), **no digits**. Colour carries urgency (green <50, amber 50–69, red ≥70; `OView.Core.UsageLevels`), the exact number lives in the tooltip. The history: digits alone were the spike's winner, but a ring *plus* digits starved each other at 16 px, so when product direction required a graph the digits were dropped and the ring kept (GitHub issue #1). The pupil (added 2026-07-22 to unify the tray icon with the exe icon) is **not** a second signal — it carries no number and takes the arc's colour, so it coexists with the ring where digits could not. Scale the geometry to the icon size — never hard-code, a fixed size clips at some DPI scales. See [findings/tray-icon-rendering.md](docs/findings/tray-icon-rendering.md) and [IconRenderer.cs](src/O-view.Tray/Tray/IconRenderer.cs).
 
@@ -107,22 +114,39 @@ Three traps, all silent:
 
 ## Prerequisites
 
-**.NET 10 SDK `10.0.302` is installed and verified** (2026-07-20), including `Microsoft.WindowsDesktop.App 10.0.10` for WPF. Verified end to end: a `net10.0-windows` WPF project scaffolds and builds clean, and **`H.NotifyIcon.Wpf 2.4.1` resolves and builds** against .NET 10 — so the ADR-0001 tray dependency is confirmed viable, not assumed.
+**.NET 10 SDK `10.0.302` is installed and verified** (2026-07-20), including `Microsoft.WindowsDesktop.App 10.0.10` for WPF. Verified end to end: a `net10.0-windows` WPF project scaffolds and builds clean.
 
 Available: `git`, `gh` (authenticated as `mlengmark`), `dotnet` 10.0.302. Not available: Node, Rust. The `python` on PATH is the non-functional Microsoft Store alias stub — do not use it for tooling scripts; use PowerShell or C#.
 
-Older runtimes (3.1, 6.0) are also present on the machine. Ignore them. Target **`net10.0`** for `O-view.Core` and its tests — they carry nothing Windows-specific and must build on Linux — and **`net10.0-windows`** for `O-view.Tray`, which is WPF.
+Older runtimes (3.1, 6.0) are also present on the machine. Ignore them. Target **`net10.0`** everywhere except `O-view.Tray`, which is WPF and must be `net10.0-windows`. Everything else carries nothing Windows-specific and must build on Linux; CI enforces that on `ubuntu-latest`.
+
+**The development machine is Windows, and no Linux hardware is available here.** The Linux head is therefore verified by unit tests, by offscreen render hooks (`--samples`, `--panel-samples`, `--probe`, `--diagnose` — all of which run with no display and no bus), and by container installs in the packaging workflow. None of that is a desktop. **Do not describe Linux tray, panel or theme behaviour as verified** until someone reports it from real hardware; the README's support matrix marks those rows *unverified* deliberately, and rule 6 applies to our own claims about our own app.
 
 ## Intended structure
 
 ```
-O-view.sln
+O-view.slnx
 ├── src/
-│   ├── O-view.Core/      # Providers, rollup store, window math — no UI, no Win32
-│   └── O-view.Tray/      # WPF + WinForms NotifyIcon, icon rendering, popup
-└── tests/
-    └── O-view.Core.Tests/  # xUnit
+│   ├── O-view.Core/      # net10.0        Providers, rollup store, window math — no UI, no Win32
+│   ├── O-view.App/       # net10.0        Orchestration: UsageEngine, update policy, diagnostics,
+│   │                     #                shared rendering geometry and panel text. Platform
+│   │                     #                behaviour arrives through injected interfaces only.
+│   ├── O-view.Tray/      # net10.0-windows  WPF + WinForms NotifyIcon, icon rendering, popup
+│   └── O-view.Linux/     # net10.0        Avalonia + SkiaSharp, SNI over D-Bus, freedesktop
+│                         #                notifications, XDG autostart, portal theme
+├── tests/
+│   ├── O-view.Core.Tests/   # xUnit, 332
+│   ├── O-view.App.Tests/    # xUnit,  80
+│   └── O-view.Linux.Tests/  # xUnit,  12
+└── packaging/linux/build.sh  # .deb + tarball; the same script CI runs
 ```
+
+**Both heads are thin.** Anything a Linux user and a Windows user would expect to behave
+identically — what the countdown says, which release asset to offer, what the panel's text
+reads — belongs in `App`, not duplicated into each head. `PanelText` and `TrayIconGeometry`
+exist because that duplication had already started.
+
+On Linux, build the projects, not the solution: `O-view.Tray` is WPF and will not build there.
 
 The full UI contract is [docs/ui-spec.md](docs/ui-spec.md) — read it before building any panel.
 Phased work breakdown with acceptance criteria: [docs/build-plan.md](docs/build-plan.md).

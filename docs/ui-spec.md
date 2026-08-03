@@ -6,6 +6,27 @@ Three surfaces: the always-visible **tray icon**, the **popup panel** shown when
 
 ---
 
+## 0. What binds on which platform
+
+**Added 2026-08-03, when the Linux head landed.** This document was written for a Windows-only
+app and most of it still describes the Windows head specifically. Two kinds of statement are
+mixed together throughout, and they are not equally binding:
+
+| | Binds where | Lives in |
+|---|---|---|
+| **The shared contract** — *what* a surface says and when. Icon geometry and colour bands, the tooltip's wording and its degraded forms, panel copy, the reset-line phrasing, the countdown format, tile labels, which states are "unknown" rather than zero | **Both heads.** A user should not be told a different thing on a different OS | `O-view.App` — `TrayIconGeometry`, `PanelPalette`, `PanelText`. Changing the wording here means changing it in one place, and 21 exact-string tests pin it |
+| **Windows presentation** — *where* a surface appears and how it moves. Docked placement, `PopupPositioner`, work-area insets, the 230 ms rise, foreground/`AttachThreadInput` handling, `Shell_NotifyIcon` behaviour, Segoe glyph avoidance | **The Windows head only** | `O-view.Tray` |
+
+Read every section below as Windows presentation unless it is describing content. Where Linux
+**cannot** meet a section, it is noted inline rather than left to be inferred — the three real
+divergences are the panel's placement (§2), the menu (§3) and motion (§4).
+
+The Linux head's own constraints are [ADR-0013](adr/0013-linux-ui-toolkit.md) and the [tray
+spike](findings/linux-tray-spike.md). Nothing in this document has been verified on Linux
+hardware; see the README's support matrix.
+
+---
+
 ## 1. Tray icon
 
 Per [ADR-0003](adr/0003-windows-tray-constraints.md) and the [legibility spike](findings/tray-icon-rendering.md), revised 2026-07-21 to a **ring gauge** ([GitHub issue #1](https://github.com/mlengmark/O-view/issues/1)), then unified with the exe icon as the **brand mark** (ring + centre pupil) on 2026-07-22:
@@ -24,6 +45,14 @@ The icon tracks the **session** window, since that is the limit users hit first.
 A threshold notification fires once when session usage first reaches the critical
 band (default 70%, matching red; user-adjustable).
 
+> **This section is the shared contract**, and the two heads render it from the same
+> `TrayIconGeometry` — a divergence here would mean the same usage looked like a different
+> number on a different OS. What differs is only the rasteriser (GDI+ on Windows, Skia on
+> Linux) and the **sizes asked for**: Windows requests 16/20/24 px, while SNI hosts commonly
+> want 22–24 px and 48 px on HiDPI. That last part matters — the original legibility
+> measurements cover 16/20/24 and **do not carry to 48 px untested**, which is what
+> `o-view --samples <dir>` exists to make judgeable from images rather than from prose.
+
 ---
 
 ## 2. Popup panel
@@ -33,6 +62,15 @@ the same placement model as the system flyouts (volume, network, calendar), so i
 always opens in the same dedicated place regardless of exact click position. The
 cursor selects only the monitor; the taskbar edge is derived from the work-area
 inset (handles all four dock positions and auto-hide).
+
+> **Linux: the placement above does not apply; the content below does.** SNI gives an
+> application no way to learn where its own icon was drawn — there is no
+> `Shell_NotifyIconGetRect` equivalent — and a Wayland client generally cannot position its
+> own surface at all. Approximating the docking would put the panel in the wrong place most
+> of the time, which reads as broken, so the Linux panel is a **plain centred window**
+> ([ADR-0013](adr/0013-linux-ui-toolkit.md)). Everything from *Header* down — the copy, the
+> bands, the tiles, the graph's rules about absent days — is the shared contract and holds
+> identically.
 
 ### Header
 
@@ -211,6 +249,14 @@ Exact credit *balances* remain deferred (no local or API source found). What the
 
 The right-click surface. Rebuilt as a **docked flyout window** ([GitHub issue #33](https://github.com/mlengmark/O-view/issues/33)), replacing a WPF `ContextMenu` placed at `PlacementMode.MousePoint`.
 
+> **This entire section is Windows-only.** On Linux the menu belongs to the SNI host, not to
+> O-view: the host renders it in its own style, at a position O-view cannot know, and the
+> custom flyout below has no equivalent. The Linux menu currently carries **Exit only** — the
+> startup, notification, diagnostics and update rows are not yet wired to it, which the
+> README's support matrix records as a ⚠️ rather than a tick. The three rows that *do* have
+> Linux implementations behind them (`XdgAutostartRegistration`, `AppNotification`,
+> `DiagnosticsBundle`) are reachable from the command line in the meantime.
+
 **Why the cursor placement had to go.** The menu opened wherever the pointer was when the tray icon was hit — and the tray icon sits *inside* the taskbar, so that is reliably the one place a menu cannot fully fit. It clipped into the taskbar and off the screen edge, leaving items unclickable, and every item added made it worse.
 
 **Placement.** The flyout ignores the cursor for positioning and docks to the work-area corner adjacent to the taskbar, through the same [`PopupPositioner`](../src/O-view.Tray/Popup/PopupPositioner.cs) the detail panel uses — one placement model for both surfaces, matching the system flyouts (volume, network, calendar). The work area **excludes the taskbar by definition**, so clearing it is structural, not a margin that happens to be large enough. The cursor still selects which monitor.
@@ -242,6 +288,12 @@ Measured on a 2560×1440 display, taskbar bottom-docked at `y=1392`: the flyout 
 ---
 
 ## 4. Motion
+
+> **Windows-only, and for a stated reason.** The motion below is *fitted to Windows' own
+> Quick Settings flyout* — it exists to make O-view's surfaces indistinguishable from the
+> shell's. Copying that curve onto a centred window on a Linux desktop would imitate nothing;
+> it would just be an animation borrowed from another platform's shell. The Linux panel opens
+> without it.
 
 Both docked surfaces — the detail panel and the tray menu — **rise out of the docked edge**: a clip reveals the surface from that edge while the content slides the last 20 px into place, over **230 ms** opening and 150 ms closing. They previously appeared and vanished in a single frame, which reads as a glitch rather than as a window opening.
 

@@ -1,8 +1,14 @@
 # Build plan
 
-Five session-sized phases. Each ends in something **runnable and verifiable** — not just compiling. Do not start a phase before its predecessor's acceptance criteria pass.
+Session-sized phases. Each ends in something **runnable and verifiable** — not just compiling. Do not start a phase before its predecessor's acceptance criteria pass.
 
 Read [CLAUDE.md](../CLAUDE.md) and [docs/adr/README.md](adr/README.md) before phase 1.
+
+> **Phases 1–6 describe v1: a Windows application, and all are complete.** They are kept as
+> written, including the Windows-only assumptions they were built under, because they record
+> what was decided at the time. **[Phase 7](#phase-7--linux-v060-milestone-added-2026-07-29)
+> adds Linux** and supersedes those assumptions — read it before treating anything above as
+> current, and see the amended rules at the foot of this document.
 
 ---
 
@@ -103,10 +109,44 @@ Run-at-startup (`HKCU\...\Run`), settings, threshold notifications, `/security-r
 
 ---
 
+## Phase 7 — Linux *(v0.6.0 milestone, added 2026-07-29)*
+
+Phases 1–6 above describe **v1, a Windows application**, and are complete. Phase 7 is a
+different shape: rather than one session-sized slice, it is the [v0.6.0
+milestone](https://github.com/mlengmark/O-view/milestone/1) — issues #67–#84, ordered so each
+lands on top of the last. The decisions are [ADR-0012](adr/0012-linux-support.md) (scope) and
+[ADR-0013](adr/0013-linux-ui-toolkit.md) (toolkit); the milestone issues carry the per-issue
+acceptance criteria and are not restated here.
+
+Its shape, in four movements:
+
+1. **Make the shared layers portable** — retarget `Core` to `net10.0`, add the `ubuntu-latest`
+   CI leg, extract `O-view.App` so orchestration is written once and neither head owns logic
+   the other needs.
+2. **Build the head** — Avalonia + SkiaSharp, SNI over D-Bus, freedesktop notifications, XDG
+   autostart, portal theme.
+3. **Package and release** — `.deb` and tarball for x64 and arm64, container install tests, one
+   unified release carrying every platform's assets.
+4. **Document what shipped** — this document, the README's support matrix, CLAUDE.md.
+
+**Acceptance, and the part that is not yet met.** The code-side criteria pass: `Core`, `App`
+and the Linux head build and test on `ubuntu-latest`; the `.deb` installs, runs and purges
+cleanly in Ubuntu 22.04, Ubuntu 24.04 and Debian 12 containers, plus arm64 under emulation;
+the tarball runs on Fedora; a Linux build never offers itself a Windows installer.
+
+**But no part of this has run on a physical Linux desktop.** Containers are headless: they
+prove the package is sound, not that the icon appears, the panel is legible, or the theme
+follows. Those rows in the README's support matrix are marked *unverified on hardware*
+deliberately, and **they stay that way until a real user reports otherwise** — writing them as
+ticks would be rule 4 below applied to ourselves. That report is the last acceptance criterion
+for the milestone, and it is why the tag is cut before it, not after.
+
+---
+
 ## Rules for every phase
 
-1. **Windows-only.** No cross-platform abstractions. Watch for macOS patterns leaking in — the nearest prior art is a Mac app.
+1. **Two platforms, and the layer decides.** Windows 11 and Linux; macOS is out of scope. Nothing platform-specific in `Core` or `App` — resolve differences by which implementation is constructed, not by `#if`. Watch for macOS patterns leaking in: the nearest prior art is a Mac app, and it is wrong for *both* targets. (Phases 1–6 ran under an earlier, Windows-only version of this rule; [ADR-0012](adr/0012-linux-support.md) supersedes it.)
 2. **Clean-room.** Never read the source of any existing AI usage-monitor app, especially when stuck.
-3. **No new dependencies** without an ADR. Current set: `Microsoft.Data.Sqlite`, xUnit. That is all.
-4. **Never fabricate a number.** Unknown is a valid, honest state.
+3. **No new dependencies** without an ADR. `Core` and `App`: `Microsoft.Data.Sqlite` and xUnit, and that is all. The Linux head is the one place ADR-0005's zero-dependency guarantee does not reach — Avalonia, SkiaSharp and `Tmds.DBus.Protocol`, per ADR-0013, because no first-party option exists.
+4. **Never fabricate a number** — or a support claim. Unknown is a valid, honest state.
 5. **Commit at the end of each phase** with the acceptance evidence in the message.
