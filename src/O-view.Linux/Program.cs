@@ -4,6 +4,7 @@ using Avalonia;
 using OView.App;
 using OView.App.Diagnostics;
 using OView.App.Platform;
+using OView.App.Updates;
 using OView.Core.Models;
 using OView.Linux.Rendering;
 using OView.Linux.Tray;
@@ -47,6 +48,24 @@ internal static class Program
             Console.WriteLine($"             {SniHostProbe.Explain(state)}");
             Console.WriteLine($"desktop     : {DesktopEnvironment()}");
             Console.WriteLine($"session     : {SessionType()}");
+            return 0;
+        }
+
+        // The full support bundle, same shape as the Windows head's so a report is
+        // comparable across platforms. Writes to stdout by default — unlike Windows, where
+        // a windowed app has no console and must be given a path.
+        if (parsed.TryGetValue("--diagnose", out var diagnosePath))
+        {
+            var bundle = DiagnosticsBundle.Build(DescribeThisMachine());
+            if (diagnosePath is { Length: > 0 })
+            {
+                File.WriteAllText(diagnosePath, bundle);
+                Console.WriteLine($"wrote diagnostics to {Path.GetFullPath(diagnosePath)}");
+            }
+            else
+            {
+                Console.Write(bundle);
+            }
             return 0;
         }
 
@@ -136,6 +155,28 @@ internal static class Program
         Console.WriteLine(
             $"wrote {SkiaIconRenderer.CommonSizes.Length * 2 * states.Length} PNGs to {Path.GetFullPath(directory)}");
     }
+
+    /// <summary>
+    /// What only this head can tell the shared bundle. The tray-host line is the
+    /// highest-value field on Linux: "my icon doesn't appear" is the most likely report by
+    /// a wide margin, and an Avalonia tray icon claims success whether or not a host
+    /// exists — so the bus is asked rather than the toolkit.
+    /// </summary>
+    private static DiagnosticsEnvironment DescribeThisMachine() => new(
+        Version: typeof(Program).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0",
+        InstallKind: DetectInstallKind().ToString(),
+        Desktop: DesktopEnvironment(),
+        SessionType: SessionType(),
+        TrayHost: SniHostProbe.CheckAsync().GetAwaiter().GetResult().ToString());
+
+    /// <summary>
+    /// Whether dpkg owns this build. An apt install must never self-update — overwriting
+    /// files the package manager owns is silently reverted by the next upgrade (ADR-0009).
+    /// </summary>
+    private static InstallKind DetectInstallKind() =>
+        Environment.ProcessPath?.StartsWith("/usr/lib/o-view", StringComparison.Ordinal) == true
+            ? InstallKind.LinuxPackage
+            : InstallKind.LinuxTarball;
 
     internal static string DesktopEnvironment() =>
         Environment.GetEnvironmentVariable("XDG_CURRENT_DESKTOP")
