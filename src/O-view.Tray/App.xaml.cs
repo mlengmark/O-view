@@ -386,61 +386,18 @@ public partial class App : System.Windows.Application
         }
     }
 
-    private static string BuildDiagnostics()
-    {
-        var report = PlanHistoryDiagnostics.Inspect();
-        var account = ClaudeAccount.TryRead();
-
-        var text = new System.Text.StringBuilder();
-        text.Append(report.ToClipboardText(UpdateService.CurrentVersion));
-        // The resolved roots matter: if SpecialFolder resolution ever returns something
-        // unexpected, the path above is wrong and every other field is a consequence.
-        text.AppendLine($"  appdata root  : {Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData)}");
-        text.AppendLine($"  user profile  : {Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)}");
-        text.AppendLine($"  process       : {Environment.ProcessPath}");
-        text.AppendLine($"  installed     : {UpdateService.IsInstalled}");
-        text.AppendLine($"  account file  : {(account is null ? "not readable" : "read ok")}"
-                        + $" (org {account?.OrganizationUuid ?? "n/a"}, tier {account?.Tier ?? "n/a"})");
-
-        // The token tiles come from local session transcripts, a different source entirely
-        // — and from BOTH places Claude writes them, Claude Code and Cowork. This block
-        // used to count only the Claude Code root, so a report from a Cowork user showed
-        // "0 .jsonl" beside working token tiles. It is now the same TranscriptScopeReport
-        // the panel's scope note is built from, so the bundle and the banner can never
-        // describe different scans (issue #58).
-        text.Append(TranscriptScopeReport.Inspect().ToClipboardText());
-        AppendWeeklyResets(text);
-        return text.ToString();
-    }
-
     /// <summary>
-    /// What the weekly-reset discovery has actually found (ADR-0011). "Weekly says
-    /// waiting" is otherwise undiagnosable from the outside: it looks identical whether no
-    /// reset has occurred yet, the file was never written, or drops are being detected and
-    /// discarded. Listing the observations with their brackets separates those in one
-    /// glance. Timestamps only — no usage figures, nothing identifying.
+    /// The bundle itself is shared with the Linux head (<see cref="DiagnosticsBundle"/>) so
+    /// a report reads the same on either platform and cannot drift. What is supplied here
+    /// is only what this head knows: its version and how it was installed. Windows has no
+    /// desktop-environment or session-type question, and its notification area is part of
+    /// the shell and cannot be absent — so those fields are omitted rather than padded with
+    /// "n/a".
     /// </summary>
-    private static void AppendWeeklyResets(System.Text.StringBuilder text)
-    {
-        try
-        {
-            var log = new WeeklyResetLog();
-            var observations = log.GetObservations();
-            text.AppendLine($"  weekly resets : {observations.Count} observed ({WeeklyResetLog.DefaultPath})");
-            foreach (var o in observations.TakeLast(5))
-            {
-                text.AppendLine($"    reset       : by {o.LatestUtc:u} "
-                                + $"(± {o.Uncertainty.TotalMinutes:0} min{(o.IsPrecise ? "" : ", Desktop not sampling")})");
-            }
-
-            var next = WeeklyResetDetector.PredictNextReset(observations, DateTimeOffset.UtcNow);
-            text.AppendLine($"  next weekly   : {(next is null ? "unknown — waiting for first reset" : $"{next.AtUtc:u}")}");
-        }
-        catch (Exception ex)
-        {
-            text.AppendLine($"  weekly resets : unreadable ({ex.GetType().Name})");
-        }
-    }
+    private static string BuildDiagnostics() =>
+        DiagnosticsBundle.Build(new DiagnosticsEnvironment(
+            Version: UpdateService.CurrentVersion,
+            InstallKind: UpdateService.CurrentInstallKind.ToString()));
 
     /// <summary>
     /// Quiet check: only *notifies* when a newer release exists, and only once per version
