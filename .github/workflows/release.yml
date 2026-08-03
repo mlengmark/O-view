@@ -127,6 +127,12 @@ jobs:
     needs: [version, windows, linux]
     runs-on: ubuntu-latest
     steps:
+      # Only for the release-notes header. Everything shipped comes from the artifacts.
+      - uses: actions/checkout@v7
+        with:
+          sparse-checkout: .github/release-notes-header.md
+          sparse-checkout-cone-mode: false
+
       - uses: actions/download-artifact@v4
         with:
           path: staged
@@ -157,6 +163,27 @@ jobs:
           done
           [ "$missing" -eq 0 ] || { echo "asset names do not match what the app looks for"; exit 1; }
 
+      # Auto-generated notes are a list of merged PRs. They never say which of six assets a
+      # given user wants, that GNOME needs an extension before the icon can appear, or that
+      # Linux updates come from apt rather than from inside the app — and those are the three
+      # things a first-time Linux user most needs (#84). So the evergreen header is
+      # prepended to the generated section rather than replacing it.
+      - name: Compose release notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          cat .github/release-notes-header.md > notes.md
+
+          # Generated separately rather than via --generate-notes, so it lands BELOW the
+          # header instead of replacing the body.
+          gh api "repos/${{ github.repository }}/releases/generate-notes" \
+            -f tag_name="${{ github.ref_name }}" \
+            --jq .body >> notes.md || echo "_(no generated notes available)_" >> notes.md
+
+          echo "--- composed release notes ---"
+          cat notes.md
+
       - name: Dry run summary
         if: needs.version.outputs.is_tag != 'true'
         run: |
@@ -171,4 +198,4 @@ jobs:
           gh release create "${{ github.ref_name }}" staged/* \
             --repo "${{ github.repository }}" \
             --title "O-view ${{ github.ref_name }}" \
-            --generate-notes
+            --notes-file notes.md

@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.Json;
+using OView.Core.Models;
 
 namespace OView.Core.Providers.PlanHistory;
 
@@ -69,13 +70,13 @@ public sealed record PlanHistoryReport(
             $"O-view searched {SearchedCount} location(s) for Claude Desktop's usage file — the "
             + $"source of session and weekly % — and found none. Last checked: {Path}. "
             + "If Claude Desktop is not running, start it and reopen this panel. If it is "
-            + "running, use Copy diagnostics from the tray menu: O-view may be looking in the "
+            + $"running: {DiagnosticsHint.Instruction} — O-view may be looking in the "
             + "wrong place for how Claude Desktop is installed on this machine.",
         PlanDataStatus.Unreadable =>
-            $"O-view could not read {Path}. Right-click the tray icon → Copy diagnostics to report this.",
+            $"O-view could not read {Path}. {DiagnosticsHint.Instruction} to report this.",
         PlanDataStatus.NoValidSamples =>
             $"O-view read {Path} but found no usage entries in the expected format. "
-            + "Right-click the tray icon → Copy diagnostics to report this.",
+            + $"{DiagnosticsHint.Instruction} to report this.",
         PlanDataStatus.Stale =>
             "Claude Desktop has not recorded usage recently — figures may lag until it records again.",
         _ => "",

@@ -72,6 +72,10 @@ public partial class App : System.Windows.Application
         base.OnStartup(e);
         var args = CommandLine.Parse(e.Args);
 
+        // What the panel's explanatory copy should tell a stuck user to do. Set before any
+        // panel can be shown, and before the hooks below, which render that copy.
+        DiagnosticsHint.Use("Right-click the tray icon → Copy diagnostics");
+
         // Verification hooks, all handled BEFORE the single-instance mutex so they can be
         // run against a machine where O-view is already running without disturbing the
         // live instance — which for --diagnose is the case that actually needs diagnosing,
