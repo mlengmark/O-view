@@ -2,8 +2,9 @@
 
 A notification-area (system tray) app that displays your Claude AI token usage and the time remaining until your next usage-limit reset.
 
-> **Status:** **Windows** is shipped and in use — current release [v0.5.11](https://github.com/mlengmark/O-view/releases/latest).
-> **Linux** support is built but **not yet released**: it has never run on a physical Linux desktop, so the rows marked *unverified* in [Platform support](#platform-support) are exactly that. See [`docs/adr/`](docs/adr/) for the decisions that shaped the build.
+> **Status:** **Windows 11 and Linux are both supported as of [v0.6.0](https://github.com/mlengmark/O-view/releases/latest)**, which ships every platform's assets under one tag — Windows installer and portable exe, `.deb` for amd64 and arm64, and portable tarballs.
+>
+> Windows has been shipped and in daily use since v0.1.0. **Linux is newly released and has not yet been confirmed on a physical Linux desktop:** its packages install and run in clean Ubuntu 22.04, Ubuntu 24.04, Debian 12 and Fedora containers on every change, but a container is headless, so the rows marked *unverified* in [Platform support](#platform-support) are exactly that — and will stay that way until someone reports back. See [`docs/adr/`](docs/adr/) for the decisions behind both.
 
 ---
 
@@ -40,13 +41,19 @@ Figures labelled **Est.** price tokens at published API rates. They are not mone
 
 ## Platform support
 
-**Windows 11** and **Linux** (Ubuntu 22.04+ / Debian 12+, x64 and arm64 — deliberately the
-same matrix [Claude Desktop for Linux](https://code.claude.com/docs/en/desktop-linux)
-supports, since a machine that cannot run Claude Desktop has nothing for O-view to read).
-**macOS is out of scope.** See [ADR-0012](docs/adr/0012-linux-support.md) and
-[ADR-0013](docs/adr/0013-linux-ui-toolkit.md).
+Both platforms are supported from **v0.6.0** onward. Releases before that are Windows-only.
 
-**The two are not identical, and this table does not pretend they are.**
+| | Supported since | Targets |
+|---|---|---|
+| **Windows 11** | v0.1.0 | x64 |
+| **Linux** | **v0.6.0** | Ubuntu 22.04+ / Debian 12+ (`.deb`), x64 and arm64; portable tarball elsewhere |
+
+The Linux matrix deliberately mirrors what [Claude Desktop for
+Linux](https://code.claude.com/docs/en/desktop-linux) supports, since a machine that cannot
+run Claude Desktop has nothing for O-view to read. **macOS is out of scope.** See
+[ADR-0012](docs/adr/0012-linux-support.md) and [ADR-0013](docs/adr/0013-linux-ui-toolkit.md).
+
+**Supported does not mean identical, and this table does not pretend otherwise.**
 
 | | Windows 11 | Linux |
 |---|---|---|
@@ -55,14 +62,17 @@ supports, since a machine that cannot run Claude Desktop has nothing for O-view 
 | Detail panel | ✅ docked flyout at the taskbar corner | ⚠️ a **plain centred window**, not docked — see below |
 | Right-click menu | ✅ full: startup, notifications, diagnostics, updates, exit | ⚠️ **Exit only** so far |
 | Notifications | ✅ balloon tip | ✅ freedesktop notifications, *unverified on hardware* |
-| Run at startup | ✅ registry `Run` key | ✅ XDG autostart `.desktop` |
+| Run at startup | ✅ registry `Run` key, toggled from the menu | ⚠️ **not reachable yet** — the XDG autostart writer is built and tested, but no menu item or flag turns it on ([#109](https://github.com/mlengmark/O-view/issues/109)) |
 | Light/dark theme | ✅ follows `AppsUseLightTheme` | ✅ XDG desktop portal, *unverified on hardware* |
 | Auto-update | ✅ in-place, one confirmation | ⚠️ **notifies only, by design** — tells you once per version, installs nothing ([ADR-0009](docs/adr/0009-auto-update.md)) |
 
-*"Unverified on hardware" means the code exists and passes its tests, but nobody has yet run
-it on a physical Linux desktop. It is recorded that way rather than ticked, because claiming
-otherwise would be exactly the kind of unearned assertion the rest of this app refuses to
-make.*
+*"Unverified on hardware" means the code ships, passes its tests, and installs and runs in
+clean Ubuntu 22.04, Ubuntu 24.04, Debian 12 and Fedora containers on every change — but
+nobody has yet run it on a physical Linux desktop. Containers are headless: they prove the
+package is sound, not that an icon appears in a panel. Those rows are recorded that way
+rather than ticked because shipping something is not the same as having seen it work, and
+claiming otherwise would be exactly the kind of unearned assertion the rest of this app
+refuses to make.*
 
 ### Why the icon may not appear on GNOME
 
@@ -136,9 +146,14 @@ Only to its own directory — `%LOCALAPPDATA%\O-view\` on Windows, `~/.local/sha
 sudo apt install ./o-view_0.6.0_amd64.deb
 ```
 
-Self-contained: no .NET runtime needed. It adds an application-menu entry; run-at-startup is
-a toggle inside the app, not something the package decides for you. `apt remove` leaves your
-settings and — importantly — the weekly-reset log alone, since that one is unrebuildable.
+Self-contained: no .NET runtime needed. It adds an application-menu entry, and deliberately
+does **not** enable run-at-startup on your behalf — that is the user's choice, not the
+package's. `apt remove` leaves your settings and — importantly — the weekly-reset log alone,
+since that one is unrebuildable.
+
+> **Run-at-startup has no switch on Linux yet** ([#109](https://github.com/mlengmark/O-view/issues/109)).
+> The autostart writer exists but nothing exposes it, so for now add O-view to your desktop's
+> own startup-applications settings, or drop a `.desktop` file into `~/.config/autostart/`.
 
 **Anything else** — download the `.tar.gz`, extract, and run `./o-view`. No installation.
 
