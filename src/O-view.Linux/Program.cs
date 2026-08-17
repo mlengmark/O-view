@@ -18,6 +18,11 @@ namespace OView.Linux;
 /// the same on either platform: <c>--log path</c>, <c>--interval-ms N</c>,
 /// <c>--samples dir</c> (render the tray icon at every size an SNI host might request and
 /// exit), <c>--probe</c> (report what the session bus says and exit).</para>
+///
+/// <para>Plus <c>--startup-on</c> / <c>--startup-off</c> / <c>--startup-status</c>, which are
+/// not merely diagnostic here: on a desktop with no notification-area host there is no menu,
+/// so these are the <i>only</i> way to control run-at-startup. Handled before the
+/// single-instance guard so they work while O-view is running.</para>
 /// </summary>
 internal static class Program
 {
@@ -54,6 +59,45 @@ internal static class Program
             Console.WriteLine($"desktop     : {DesktopEnvironment()}");
             Console.WriteLine($"session     : {SessionType()}");
             return 0;
+        }
+
+        // Run-at-startup, from a terminal. Deliberately handled BEFORE the single-instance
+        // guard — unlike the Windows head's equivalent pair, which run inside the live
+        // instance — so these work whether or not O-view is already running, which is the
+        // normal case for someone who has just installed it and wants it to come back after
+        // a reboot.
+        //
+        // They also exist because the menu item beside them cannot be relied on: how
+        // faithfully an SNI host renders a checkable entry varies by host, and on GNOME
+        // without an AppIndicator extension there is no menu at all. A flag works on every
+        // desktop, including one with no notification area.
+        if (parsed.ContainsKey("--startup-on") || parsed.ContainsKey("--startup-off")
+            || parsed.ContainsKey("--startup-status"))
+        {
+            var startup = new XdgAutostartRegistration();
+
+            // Apply is a default interface method, so it is reached through the interface.
+            // Using it rather than Enable/Disable directly is the point: it reports the state
+            // as it stands AFTER the write, not the one requested. Writing the file can fail
+            // — a read-only home, a full disk — and saying otherwise would be a fabricated
+            // fact about the machine (rule 6). Shared with the Windows head so neither can
+            // get it subtly different.
+            IStartupRegistration registration = startup;
+
+            var enabled = parsed.ContainsKey("--startup-status")
+                ? registration.IsEnabled()
+                : registration.Apply(parsed.ContainsKey("--startup-on"));
+
+            Console.WriteLine($"run at startup : {(enabled ? "enabled" : "disabled")}");
+            Console.WriteLine($"autostart file : {startup.FilePath}");
+
+            // A request that did not take is worth a non-zero exit, so a script can tell.
+            var requested = parsed.ContainsKey("--startup-status") || enabled == parsed.ContainsKey("--startup-on");
+            if (!requested)
+            {
+                Console.Error.WriteLine("could not write the autostart file — check permissions on the directory above");
+            }
+            return requested ? 0 : 1;
         }
 
         // The full support bundle, same shape as the Windows head's so a report is
