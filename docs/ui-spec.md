@@ -251,11 +251,18 @@ The right-click surface. Rebuilt as a **docked flyout window** ([GitHub issue #3
 
 > **This entire section is Windows-only.** On Linux the menu belongs to the SNI host, not to
 > O-view: the host renders it in its own style, at a position O-view cannot know, and the
-> custom flyout below has no equivalent. The Linux menu currently carries **Exit only** — the
-> startup, notification, diagnostics and update rows are not yet wired to it, which the
-> README's support matrix records as a ⚠️ rather than a tick. The three rows that *do* have
-> Linux implementations behind them (`XdgAutostartRegistration`, `AppNotification`,
-> `DiagnosticsBundle`) are reachable from the command line in the meantime.
+> custom flyout below has no equivalent.
+>
+> The Linux menu carries **Run at startup** and **Exit**. The startup row is a checkable
+> `NativeMenuItem` and follows the same rule as its Windows counterpart — the tick shows the
+> state as it stands *after* the write, never the state requested, because writing the
+> autostart file can fail (rule 6). It is re-read from disk whenever the panel opens, since
+> the file is the source of truth and the desktop's own settings may have changed it.
+>
+> The notification, diagnostics and update rows are **not** on the Linux menu. Each has a
+> command-line equivalent instead (`--diagnose`, `--probe`, `--startup-status`), which is
+> also the only route that works on GNOME without an AppIndicator extension, where there is
+> no menu at all. The README's matrix records this as a ⚠️ rather than a tick.
 
 **Why the cursor placement had to go.** The menu opened wherever the pointer was when the tray icon was hit — and the tray icon sits *inside* the taskbar, so that is reliably the one place a menu cannot fully fit. It clipped into the taskbar and off the screen edge, leaving items unclickable, and every item added made it worse.
 

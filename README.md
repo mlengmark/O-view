@@ -60,9 +60,9 @@ run Claude Desktop has nothing for O-view to read. **macOS is out of scope.** Se
 | Tray icon | ✅ | ⚠️ **Needs a notification-area host.** GNOME ships none by default — see below |
 | Tooltip | ✅ | ✅ built, *unverified on hardware* |
 | Detail panel | ✅ docked flyout at the taskbar corner | ⚠️ a **plain centred window**, not docked — see below |
-| Right-click menu | ✅ full: startup, notifications, diagnostics, updates, exit | ⚠️ **Exit only** so far |
+| Right-click menu | ✅ full: startup, notifications, diagnostics, updates, exit | ⚠️ **Run at startup and Exit.** Notifications, diagnostics and updates are not on the menu — `--diagnose` and `--probe` cover them from a terminal |
 | Notifications | ✅ balloon tip | ✅ freedesktop notifications, *unverified on hardware* |
-| Run at startup | ✅ registry `Run` key, toggled from the menu | ⚠️ **not reachable yet** — the XDG autostart writer is built and tested, but no menu item or flag turns it on ([#109](https://github.com/mlengmark/O-view/issues/109)) |
+| Run at startup | ✅ registry `Run` key, toggled from the menu | ✅ XDG autostart `.desktop`, from the menu **or** `o-view --startup-on`, *menu rendering unverified on hardware* |
 | Light/dark theme | ✅ follows `AppsUseLightTheme` | ✅ XDG desktop portal, *unverified on hardware* |
 | Auto-update | ✅ in-place, one confirmation | ⚠️ **notifies only, by design** — tells you once per version, installs nothing ([ADR-0009](docs/adr/0009-auto-update.md)) |
 
@@ -151,9 +151,23 @@ does **not** enable run-at-startup on your behalf — that is the user's choice,
 package's. `apt remove` leaves your settings and — importantly — the weekly-reset log alone,
 since that one is unrebuildable.
 
-> **Run-at-startup has no switch on Linux yet** ([#109](https://github.com/mlengmark/O-view/issues/109)).
-> The autostart writer exists but nothing exposes it, so for now add O-view to your desktop's
-> own startup-applications settings, or drop a `.desktop` file into `~/.config/autostart/`.
+**To start O-view with your session**, tick **Run at startup** in the tray menu, or run:
+
+```bash
+o-view --startup-on
+```
+
+`--startup-off` disables it and `--startup-status` just reports. All three print the state as
+it stands *after* the write and the path of the autostart file, and exit non-zero if the write
+did not take — so a failure is visible rather than silently ignored. They work whether or not
+O-view is running, which matters because the menu is not always available: how faithfully an
+SNI host draws a checkable entry varies, and on GNOME without an AppIndicator extension there
+is no menu at all.
+
+It writes `~/.config/autostart/o-view.desktop` (honouring `$XDG_CONFIG_HOME`). That file is
+the single source of truth — nothing is copied into `settings.json` — so deleting it, or
+switching O-view off in your desktop's own startup-applications settings, is authoritative and
+the menu tick follows it.
 
 **Anything else** — download the `.tar.gz`, extract, and run `./o-view`. No installation.
 

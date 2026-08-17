@@ -31,6 +31,8 @@ public sealed class LinuxApp : Application
 
     private readonly FreedesktopNotifier _notifier = new();
     private readonly IThemeSource _theme = new PortalThemeSource();
+    private readonly IStartupRegistration _startup = new XdgAutostartRegistration();
+    private NativeMenuItem? _startupItem;
     private TrayIcon? _tray;
     private PanelWindow? _panel;
     private CancellationTokenSource? _hostWatch;
@@ -118,6 +120,7 @@ public sealed class LinuxApp : Application
         try
         {
             engine.Refresh();   // fresh figures on open; local reads are cheap
+            RefreshStartupItem();   // and the tick, which anything on the machine may have changed
 
             _panel?.Close();
             _panel = new PanelWindow(new LinuxPanelTheme(_theme.IsPanelLight()));
@@ -205,6 +208,24 @@ public sealed class LinuxApp : Application
 
     private NativeMenu BuildMenu()
     {
+        var startup = new NativeMenuItem("Run at startup")
+        {
+            ToggleType = MenuItemToggleType.CheckBox,
+            IsChecked = _startup.IsEnabled(),
+        };
+
+        // The tick shows the state as it ACTUALLY stands after the write, never the state
+        // that was requested. Writing the autostart file can fail — a read-only home, a full
+        // disk — and a tick claiming otherwise would be a fabricated fact about the user's
+        // machine (rule 6). IStartupRegistration.Apply is shared with the Windows head
+        // precisely so the two cannot get this subtly different.
+        startup.Click += (_, _) =>
+        {
+            var actual = _startup.Apply(!startup.IsChecked);
+            startup.IsChecked = actual;
+            _log?.Write($"run at startup -> {actual} ({XdgAutostartRegistration.DefaultDirectory})");
+        };
+
         var exit = new NativeMenuItem("Exit O-view");
         exit.Click += (_, _) =>
         {
@@ -212,6 +233,21 @@ public sealed class LinuxApp : Application
             (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown();
         };
 
-        return [exit];
+        _startupItem = startup;
+        return [startup, exit];
+    }
+
+    /// <summary>
+    /// Re-reads the autostart state from disk. The autostart file is the single source of
+    /// truth and anything may have changed it — the desktop's own startup-applications
+    /// settings, or <c>o-view --startup-off</c> in a terminal — so a menu built once at
+    /// launch would otherwise show a tick that quietly went stale.
+    /// </summary>
+    private void RefreshStartupItem()
+    {
+        if (_startupItem is not null)
+        {
+            _startupItem.IsChecked = _startup.IsEnabled();
+        }
     }
 }
