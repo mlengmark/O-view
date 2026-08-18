@@ -30,6 +30,13 @@ public static class ReleaseAssets
     /// <summary>Frozen. The portable exe, offered as a manual download.</summary>
     public const string WindowsPortableName = "O-view.Tray.exe";
 
+    /// <summary>
+    /// The checksum manifest published beside every release asset. Also a frozen name — a
+    /// build that verifies against it looks for this exact string, so renaming it fails
+    /// every update rather than skipping the check.
+    /// </summary>
+    public const string ChecksumsName = "SHA256SUMS";
+
     /// <summary>The Inno Setup installer, which can replace an installed build in place (ADR-0009).</summary>
     public static ReleaseAssetSelector WindowsInstaller { get; } = new(
         WindowsInstallerName,

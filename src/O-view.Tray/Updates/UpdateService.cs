@@ -3,6 +3,7 @@ using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Net.Http.Headers;
 using System.Reflection;
+using System.Security.Cryptography;
 using OView.Core.Updates;
 using OView.App;
 using OView.App.Updates;
@@ -101,25 +102,53 @@ public sealed class UpdateService
             cancellation);
 
     /// <summary>
-    /// Downloads the installer to a fresh temp file and returns its path. Throws on any
-    /// failure so the caller can report "couldn't download" rather than launch a truncated
-    /// or missing file.
+    /// Downloads the installer to a fresh temp file, verifies it against the release's
+    /// published <c>SHA256SUMS</c>, and returns its path. Throws on any failure — a bad
+    /// download, a missing manifest, a digest that does not match — so the caller reports
+    /// "couldn't update" rather than launching something unverified.
+    ///
+    /// <para><b>This fails closed, deliberately.</b> Falling back to "install it anyway"
+    /// when the manifest is missing would mean an attacker who can replace the asset simply
+    /// omits the manifest, and the check buys nothing. The cost is that a release which
+    /// forgets to publish <c>SHA256SUMS</c> strands every user on their current version —
+    /// the same failure mode as renaming a frozen asset, and the release workflow asserts
+    /// against it for the same reason.</para>
+    ///
+    /// <para><b>What this does and does not establish.</b> The manifest ships from the same
+    /// release as the asset, so it proves the bytes are the ones that release published — not
+    /// that the release itself is honest. A compromised account can replace both. Provenance
+    /// attestation is the control for that; this is the one that costs nothing.</para>
     /// </summary>
     public async Task<string> DownloadInstallerAsync(AvailableUpdate update, CancellationToken cancellation = default)
     {
+        // The URL decides where bytes come from and those bytes get executed, so it is
+        // checked before it is used rather than trusted because the feed said it.
+        if (!ReleaseDownloadUrl.IsTrusted(update.InstallerUrl))
+        {
+            throw new UpdateVerificationException(
+                $"Refusing to download the installer from an unexpected location: {update.InstallerUrl}");
+        }
+
+        if (update.ChecksumsUrl is not { Length: > 0 } checksumsUrl
+            || !ReleaseDownloadUrl.IsTrusted(checksumsUrl))
+        {
+            throw new UpdateVerificationException(
+                $"Release {update.Tag} publishes no usable {ReleaseAssets.ChecksumsName}, so the "
+                + "installer cannot be verified.");
+        }
+
         var dir = Path.Combine(Path.GetTempPath(), "O-view-update");
         Directory.CreateDirectory(dir);
-        var target = Path.Combine(dir, $"O-view-Setup-{update.Tag}.exe");
+
+        // Named from the PARSED version, never from update.Tag. The tag is a remote string,
+        // and ReleaseVersion.TryParse truncates at the first '-' or '+' — so a tag of
+        // "v9.9.9-../../../../Startup/evil" parses as 9.9.9 and would have carried its
+        // traversal segments straight into this path, landing the download outside the temp
+        // directory and then executing it.
+        var target = Path.Combine(dir, $"O-view-Setup-{update.Version}.exe");
 
         _log?.Write($"downloading installer {update.Tag} from {update.InstallerUrl}");
-        using (var response = await Http.GetAsync(update.InstallerUrl, HttpCompletionOption.ResponseHeadersRead, cancellation)
-                   .ConfigureAwait(false))
-        {
-            response.EnsureSuccessStatusCode();
-            await using var source = await response.Content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
-            await using var file = new FileStream(target, FileMode.Create, FileAccess.Write, FileShare.None);
-            await source.CopyToAsync(file, cancellation).ConfigureAwait(false);
-        }
+        await DownloadToFileAsync(update.InstallerUrl, target, cancellation).ConfigureAwait(false);
 
         if (new FileInfo(target).Length == 0)
         {
@@ -127,8 +156,80 @@ public sealed class UpdateService
             throw new IOException("Downloaded installer was empty.");
         }
 
-        _log?.Write($"installer downloaded to {target} ({new FileInfo(target).Length} bytes)");
+        await VerifyAsync(target, checksumsUrl, cancellation).ConfigureAwait(false);
+
+        _log?.Write($"installer verified at {target} ({new FileInfo(target).Length} bytes)");
         return target;
+    }
+
+    /// <summary>
+    /// Compares the downloaded file against the digest the release recorded for
+    /// <see cref="ReleaseAssets.WindowsInstallerName"/>. Deletes the file on any failure —
+    /// leaving a rejected installer sitting in the temp directory is how it later gets run
+    /// by hand.
+    /// </summary>
+    private async Task VerifyAsync(string path, string checksumsUrl, CancellationToken cancellation)
+    {
+        try
+        {
+            using var response = await Http.GetAsync(checksumsUrl, cancellation).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+            var manifest = await response.Content.ReadAsStringAsync(cancellation).ConfigureAwait(false);
+
+            var recorded = ChecksumFile.DigestFor(manifest, ReleaseAssets.WindowsInstallerName);
+            if (recorded is null)
+            {
+                throw new UpdateVerificationException(
+                    $"{ReleaseAssets.ChecksumsName} does not record a digest for "
+                    + $"{ReleaseAssets.WindowsInstallerName}.");
+            }
+
+            string computed;
+            await using (var file = File.OpenRead(path))
+            {
+                computed = Convert.ToHexString(
+                    await SHA256.HashDataAsync(file, cancellation).ConfigureAwait(false));
+            }
+
+            if (!ChecksumFile.Matches(recorded, computed))
+            {
+                throw new UpdateVerificationException(
+                    "The downloaded installer does not match the checksum published with this "
+                    + "release. It has not been run.");
+            }
+
+            _log?.Write($"installer checksum verified against {ReleaseAssets.ChecksumsName}");
+        }
+        catch
+        {
+            TryDelete(path);
+            throw;
+        }
+    }
+
+    private static async Task DownloadToFileAsync(string url, string target, CancellationToken cancellation)
+    {
+        using var response = await Http
+            .GetAsync(url, HttpCompletionOption.ResponseHeadersRead, cancellation)
+            .ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+
+        await using var source = await response.Content.ReadAsStreamAsync(cancellation).ConfigureAwait(false);
+        await using var file = new FileStream(target, FileMode.Create, FileAccess.Write, FileShare.None);
+        await source.CopyToAsync(file, cancellation).ConfigureAwait(false);
+    }
+
+    private static void TryDelete(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            // Best effort. The file is unverified, not dangerous on its own — nothing runs
+            // it, and the next attempt overwrites it.
+        }
     }
 
     /// <summary>

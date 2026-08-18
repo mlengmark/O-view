@@ -16,7 +16,18 @@ public enum UpdateOutcome
 }
 
 /// <summary>A newer release and the installer asset to fetch it from.</summary>
-public sealed record AvailableUpdate(ReleaseVersion Version, string Tag, string InstallerUrl);
+/// <param name="ChecksumsUrl">
+/// Where the release's <c>SHA256SUMS</c> lives, or null when the release does not publish
+/// one. Null is not "skip the check" — a build that verifies treats it as "cannot verify,
+/// therefore do not install", and says so. It is nullable because releases cut before
+/// checksums existed genuinely have none, and because detection must keep working for the
+/// platforms that download nothing at all.
+/// </param>
+public sealed record AvailableUpdate(
+    ReleaseVersion Version,
+    string Tag,
+    string InstallerUrl,
+    string? ChecksumsUrl = null);
 
 /// <summary>The outcome of comparing the current build against the latest release.</summary>
 public sealed record UpdateCheckResult(UpdateOutcome Outcome, AvailableUpdate? Available = null)
@@ -92,12 +103,22 @@ public static class UpdateCheck
             return UpdateCheckResult.Unknown;
         }
 
+        // Absent rather than fatal: a release published before checksums existed has none,
+        // and this method is also what the Linux heads use to *detect* an update they will
+        // never download. Whether a null here blocks an install is the downloading head's
+        // decision, not this one's.
+        var checksumsUrl = FindAssetUrl(
+            root, name => string.Equals(name, ReleaseAssets.ChecksumsName, StringComparison.Ordinal));
+
         return new UpdateCheckResult(
             UpdateOutcome.UpdateAvailable,
-            new AvailableUpdate(latest, tag, installerUrl));
+            new AvailableUpdate(latest, tag, installerUrl, checksumsUrl));
     }
 
-    private static string? FindInstallerUrl(JsonElement root, ReleaseAssetSelector selector)
+    private static string? FindInstallerUrl(JsonElement root, ReleaseAssetSelector selector) =>
+        FindAssetUrl(root, selector.Matches);
+
+    private static string? FindAssetUrl(JsonElement root, Func<string, bool> matches)
     {
         if (!root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
         {
@@ -107,7 +128,7 @@ public static class UpdateCheck
         foreach (var asset in assets.EnumerateArray())
         {
             if (GetString(asset, "name") is { } name
-                && selector.Matches(name)
+                && matches(name)
                 && GetString(asset, "browser_download_url") is { Length: > 0 } url)
             {
                 return url;

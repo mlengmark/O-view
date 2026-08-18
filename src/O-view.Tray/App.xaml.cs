@@ -515,6 +515,19 @@ public partial class App : System.Windows.Application
             _updates.LaunchInstaller(installer);
             Shutdown();  // release the exe lock so the installer can replace it and relaunch
         }
+        catch (UpdateVerificationException)
+        {
+            // Deliberately does NOT open the releases page. Every other failure here means
+            // "try again by hand", but this one means the file that arrived was not the file
+            // the release published — sending the user to download it manually would hand
+            // them the thing the check just rejected. Say what was observed and stop
+            // (CLAUDE.md rule 6); the installer has already been deleted, and nothing on the
+            // machine has changed.
+            _updateFlowActive = false;
+            _trayHost.ShowNotification("Update not installed",
+                "The download didn't match the checksum published with this release, so O-view "
+                + "didn't run it. Your current version is untouched.");
+        }
         catch (Exception)
         {
             _updateFlowActive = false;
