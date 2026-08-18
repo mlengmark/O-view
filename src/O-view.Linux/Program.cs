@@ -6,6 +6,7 @@ using OView.App.Diagnostics;
 using OView.App.Platform;
 using OView.App.Updates;
 using OView.Core.Models;
+using OView.Linux.Platform;
 using OView.Linux.Rendering;
 using OView.Linux.Tray;
 
@@ -118,10 +119,20 @@ internal static class Program
             return 0;
         }
 
-        // Probed BEFORE the toolkit starts. Blocking the UI thread on a D-Bus round trip
-        // deadlocks the app outright — measured during the spike, not guessed
-        // (docs/findings/linux-tray-spike.md).
-        var hostState = SniHostProbe.CheckAsync().GetAwaiter().GetResult();
+        // Both asked BEFORE the toolkit starts, and for the same reason: blocking the UI
+        // thread on a D-Bus round trip deadlocks the app outright — measured during the
+        // spike, not guessed (docs/findings/linux-tray-spike.md), and shipped anyway in
+        // v0.6.1 by way of the theme read, which froze the app on the first left click
+        // (issue #124). There is no dispatcher yet at this point, so this is the one place
+        // in the process's life where waiting on the bus is safe.
+        //
+        // Started together rather than one after the other so a desktop that answers
+        // neither costs one timeout, not two, before the icon appears.
+        var probe = SniHostProbe.CheckAsync();
+        var theme = PortalThemeSource.PrimeAsync();
+
+        var hostState = probe.GetAwaiter().GetResult();
+        theme.GetAwaiter().GetResult();
 
         var guard = new FileLockSingleInstanceGuard();
         if (!guard.TryAcquire())
