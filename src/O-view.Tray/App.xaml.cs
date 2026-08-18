@@ -358,7 +358,9 @@ public partial class App : System.Windows.Application
     /// found. Covers both usage sources — the plan-history file (session/weekly %) and the
     /// JSONL transcripts (token tiles) — plus whether account info resolved, because which
     /// of those are blank narrows the cause immediately. Contains no token and no
-    /// conversation content; the org UUID is included as it is the documented filter key.
+    /// conversation content, and is redacted before it leaves — the account name is replaced
+    /// in every path and org UUIDs are truncated to eight characters, because this goes on
+    /// the clipboard on its way to a public issue (see <c>Redact</c>).
     /// </summary>
     private void CopyDiagnostics()
     {

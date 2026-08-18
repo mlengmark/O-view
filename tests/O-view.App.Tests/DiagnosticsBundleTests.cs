@@ -60,6 +60,13 @@ public class DiagnosticsBundleTests : IDisposable
         var bundle = Build(Windows);
 
         // The label alone is useless; the point is the value beside it.
+        //
+        // Compared against the redacted spelling, not the raw one. The bundle now removes
+        // the account name before returning (Redact), so the raw path never appears — but
+        // what this test guards is unchanged: that the RESOLVED value is printed rather
+        // than the label alone, because a wrong SpecialFolder resolution is only visible
+        // in the value. Redaction replaces the account segment and nothing else, so the
+        // resolution is still what is being asserted.
         foreach (var folder in new[]
                  {
                      Environment.SpecialFolder.ApplicationData,
@@ -67,8 +74,27 @@ public class DiagnosticsBundleTests : IDisposable
                      Environment.SpecialFolder.UserProfile,
                  })
         {
-            Assert.Contains(Environment.GetFolderPath(folder), bundle, StringComparison.Ordinal);
+            var resolved = Redact.Bundle(Environment.GetFolderPath(folder));
+
+            Assert.Contains(resolved, bundle, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void NothingIdentifyingSurvivesIntoTheBundle()
+    {
+        // The bundle is pasted into public issues. This asserts the property at the funnel,
+        // so a field added later cannot reintroduce the leak without failing here.
+        var bundle = Build(Windows);
+
+        foreach (var name in Redact.AccountNames())
+        {
+            Assert.DoesNotContain(name, bundle, StringComparison.OrdinalIgnoreCase);
+        }
+
+        Assert.DoesNotMatch(
+            @"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+            bundle);
     }
 
     // ── the platform block ──────────────────────────────────────────────────────────
@@ -130,12 +156,18 @@ public class DiagnosticsBundleTests : IDisposable
     }
 
     /// <summary>
-    /// The bundle is pasted into public bug reports. It carries no token and no
-    /// conversation content; the org UUID is the one identifier included, because it is the
-    /// documented filter key.
+    /// The bundle is pasted into public bug reports, so it must carry no credential of any
+    /// kind and no conversation content.
+    ///
+    /// <para>This used to be called <c>NothingIdentifyingBeyondTheOrgKeyIsAdded</c>, on the
+    /// reasoning that the org UUID was a permitted exception because it is the documented
+    /// filter key. It is no longer an exception: <see cref="Redact"/> truncates it, which
+    /// keeps the comparison the filter key is needed for without publishing the identifier.
+    /// The name went with the reasoning — a test asserting the old rule by name, while the
+    /// code enforces a stricter one, is a comment that lies.</para>
     /// </summary>
     [Fact]
-    public void NothingIdentifyingBeyondTheOrgKeyIsAdded()
+    public void NoCredentialOrConversationContentReachesTheBundle()
     {
         var bundle = Build(Linux);
 
