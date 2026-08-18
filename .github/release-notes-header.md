@@ -27,6 +27,34 @@ Every release carries every platform's assets, whether or not that platform's co
 that is what keeps "check for updates" correct on both. A release with no visible change for
 your platform is expected, not a mistake.
 
+### Verifying your download
+
+`SHA256SUMS` lists a checksum for each of the six assets above. It is the seventh file on
+this release, and you do not need it for a normal install.
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+```powershell
+(Get-FileHash .\O-view-Setup.exe -Algorithm SHA256).Hash
+```
+
+O-view is **not code-signed** — an Authenticode certificate costs more than a free tool
+justifies — so Windows SmartScreen will warn on first run. The checksum is what you have
+instead: it confirms the file you have is the file this release published. It cannot tell you
+anything about a release itself being wrong, only that your copy arrived intact.
+
+Every asset also carries **build provenance**, signed by Sigstore. This is the stronger check:
+it proves the file came out of O-view's own release workflow rather than being attached to the
+release by some other route. It needs the [GitHub CLI](https://cli.github.com):
+
+```bash
+gh attestation verify O-view-Setup.exe --repo mlengmark/O-view
+```
+
+A file that fails this did not come from this pipeline, whatever else it claims.
+
 ## Linux: read this before you file a bug about a missing icon
 
 **GNOME ships no notification-area support by default** — including stock Ubuntu. The Linux
