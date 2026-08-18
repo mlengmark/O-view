@@ -5,6 +5,13 @@ on:
     branches: [main]
   pull_request:
 
+# Least privilege. This workflow only ever reads the repository — it publishes nothing and
+# comments nowhere — so it does not need the write-capable token a repository default may
+# hand it. Declared rather than inherited, because the default is a repository setting that
+# can change without any change to this file.
+permissions:
+  contents: read
+
 jobs:
   test:
     strategy:
@@ -18,8 +25,13 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
+      # Actions are pinned to commit SHAs, not tags. A tag is mutable: whoever controls the
+      # action repository can move v7 to point at anything, and the next run executes it with
+      # this job's token and this job's checkout. That is the tj-actions/changed-files
+      # incident exactly. The trailing comment carries the human-readable version, and
+      # Dependabot rewrites both halves together.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: "10.0.x"
 

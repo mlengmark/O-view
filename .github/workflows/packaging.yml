@@ -21,6 +21,13 @@ on:
         description: "Version to stamp"
         default: "0.6.0-dev"
 
+# This workflow builds and install-tests packages; it publishes nothing. Without this block
+# it inherits whatever the repository default is, which on a repo that has not been switched
+# to the read-only default is a write-capable token — handed to a job that runs a shell
+# script from a pull request branch and executes downloaded artifacts inside containers.
+permissions:
+  contents: read
+
 env:
   VERSION: ${{ github.event.inputs.version || '0.6.0-dev' }}
 
@@ -36,8 +43,8 @@ jobs:
           - rid: linux-arm64
             arch: arm64
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
           dotnet-version: "10.0.x"
 
@@ -79,7 +86,7 @@ jobs:
           lintian --fail-on error --no-tag-display-limit dist/o-view_*_${{ matrix.arch }}.deb || {
             echo "lintian reported an error"; exit 1; }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: packages-${{ matrix.arch }}
           path: dist/*
@@ -93,7 +100,7 @@ jobs:
       matrix:
         image: ["ubuntu:22.04", "ubuntu:24.04", "debian:12"]
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: packages-amd64
           path: dist
@@ -133,11 +140,11 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: packages-arm64
           path: dist
-      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3.7.0
         with:
           platforms: arm64
 
@@ -156,7 +163,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: packages-amd64
           path: dist
