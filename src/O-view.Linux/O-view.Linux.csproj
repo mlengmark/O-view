@@ -29,8 +29,8 @@
     <!-- Both already arrive transitively through Avalonia; referenced explicitly because
          this project uses them directly, and pinned to Avalonia's own versions so the
          restore cannot resolve a downgrade. -->
-    <PackageReference Include="SkiaSharp" Version="3.119.4" />
-    <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.1" />
+    <PackageReference Include="SkiaSharp" Version="4.151.1" />
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.94.2" />
   </ItemGroup>
 
   <ItemGroup>
