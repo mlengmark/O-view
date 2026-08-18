@@ -23,6 +23,31 @@ updates:
     commit-message:
       prefix: "deps"
 
+    # These two are Avalonia's decision, not ours.
+    #
+    # O-view.Linux references SkiaSharp and Tmds.DBus.Protocol directly, but both also
+    # arrive transitively through Avalonia, and the csproj pins each to the version
+    # Avalonia itself declares. That pin is load-bearing rather than tidy: SkiaSharp is a
+    # managed wrapper over a native libSkiaSharp, and Avalonia ships the native half. Move
+    # the managed half on its own and the two disagree at runtime.
+    #
+    # That is not hypothetical. The first Dependabot batch (#117) proposed SkiaSharp
+    # 3.119.4 -> 4.151.1 while leaving Avalonia at 12.1.1, and every Linux tray-icon
+    # render died with a TypeInitializationException from
+    # SkiaSharpVersion.CheckNativeLibraryCompatible. The Windows CI leg stayed green
+    # throughout, because it does not build O-view.Linux.
+    #
+    # Dependabot cannot see the reasoning, because it lives in a comment in the csproj.
+    # This is that comment restated somewhere the bot can act on.
+    #
+    # The right time to move either is when Avalonia moves: bump Avalonia, read the
+    # versions out of avalonia.skia.nuspec and avalonia.freedesktop.nuspec, and set all
+    # three together. Avalonia is deliberately NOT ignored here, so its own updates still
+    # arrive and still prompt exactly that.
+    ignore:
+      - dependency-name: "SkiaSharp"
+      - dependency-name: "Tmds.DBus.Protocol"
+
   # Actions are pinned to commit SHAs (see the note in ci.yml). Dependabot understands that
   # pinning and rewrites the SHA together with the trailing version comment, which is the
   # only practical way to keep SHA pins current without doing it by hand.
