@@ -1,0 +1,52 @@
+# Security policy
+
+## Reporting a vulnerability
+
+**Please do not open a public issue for a security problem.**
+
+Report it through GitHub's private vulnerability reporting:
+[**Report a vulnerability**](https://github.com/mlengmark/O-view/security/advisories/new).
+
+That channel is private until an advisory is published, so a flaw in the update path can be
+fixed and released before it is described publicly.
+
+Expect an acknowledgement within a week. O-view is a free tool maintained by one person in
+spare time — there is no bounty, and there is no on-call rotation. What there is: a fix or an
+honest "I am not going to fix this, and here is why", rather than silence.
+
+## Supported versions
+
+Only the **latest release** is supported. O-view auto-updates on Windows and defers to the
+package manager on Linux, so there is no back-porting: fixes ship in the next release.
+
+## What O-view handles
+
+Knowing what the app touches is usually enough to judge whether a report is in scope.
+
+| | |
+|---|---|
+| Credentials | **None.** v1 handles no token and performs no authentication (CLAUDE.md rule 3). |
+| Network | One request, to `api.github.com`, to check for a newer release. Plus the installer download when a Windows user accepts an update. Nothing else. |
+| Reads | Files Claude already writes on this machine — `~/.claude.json` (account fields only, never a token), plan-usage history, and session transcripts. **Read-only, always.** |
+| Writes | Its own state under `%LOCALAPPDATA%\O-view` / `~/.local/share/O-view`, plus the run-at-startup entry when you enable it. |
+| Telemetry | None. Nothing is sent anywhere. |
+
+## Known and accepted
+
+Stated here rather than left to be rediscovered.
+
+- **The Windows installer and executable are not code-signed.** An Authenticode certificate
+  costs more than a free tool justifies ([ADR-0008](docs/adr/0008-installer-distribution.md)).
+  SmartScreen will warn on first run. Integrity of downloaded releases rests on GitHub's TLS
+  and on checksums published with each release — verify the checksum if that matters to you.
+- **Diagnostics output contains machine-identifying detail.** The Copy diagnostics bundle
+  includes resolved paths and your Claude organization identifier. It contains no token and
+  no conversation content, but read it before pasting it into a public issue.
+
+## Out of scope
+
+- An attacker who already has code execution as your user account. O-view installs per-user
+  into a user-writable directory and holds no elevated privileges; someone in that position
+  can replace the binary regardless.
+- Findings in Claude Desktop, Claude Code or Cowork. Report those to Anthropic. O-view only
+  reads the files they write.

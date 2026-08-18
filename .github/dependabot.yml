@@ -1,0 +1,38 @@
+# Dependency updates.
+#
+# Two ecosystems, because both ship in the product. NuGet packages are compiled into the
+# self-contained payload — SkiaSharp and SQLitePCLRaw carry prebuilt native libraries, so a
+# CVE in one of those reaches users inside the binary. Actions are not shipped, but they run
+# in the job that builds and publishes the installer, which is the same blast radius by a
+# different route.
+#
+# Both are grouped into one PR per ecosystem per week. Ungrouped, five NuGet packages and
+# five pinned actions produce enough PR noise on a solo project that the important ones stop
+# being read — which is the failure this file exists to prevent.
+version: 2
+
+updates:
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      nuget:
+        patterns: ["*"]
+    commit-message:
+      prefix: "deps"
+
+  # Actions are pinned to commit SHAs (see the note in ci.yml). Dependabot understands that
+  # pinning and rewrites the SHA together with the trailing version comment, which is the
+  # only practical way to keep SHA pins current without doing it by hand.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: "ci"
