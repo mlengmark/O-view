@@ -230,3 +230,78 @@ Publishing a real apt repository would make the original sentence true, and is t
 end state. It needs signing keys, hosting and its own ADR, and it is not a prerequisite for
 v0.6.0 — a notification the user can act on is a complete answer, just not the most convenient
 one. Revisit if `.deb` downloads prove awkward in practice.
+
+---
+
+## Amendment (2026-08-18): the installer is verified before it is run
+
+### What was missing
+
+The original decision reasoned about *which* asset to install and *whether* a given build is
+allowed to install it. It never said anything about whether the bytes that arrived are the
+bytes the release published — and the implementation did not check. `DownloadInstallerAsync`
+fetched `O-view-Setup.exe` and `LaunchInstaller` handed it to `Process.Start` with
+`/SILENT /update=1`. Since the installer is deliberately unsigned (ADR-0008), nothing anywhere
+in the chain offered a second opinion. The only integrity guarantee was "the bytes arrived
+over TLS from api.github.com".
+
+That is a real guarantee and it is not nothing. But it makes the release feed a single point
+of trust for code execution on every installed Windows machine, and it costs almost nothing to
+add a second check.
+
+### The decision
+
+The release workflow publishes `SHA256SUMS` alongside every asset, and the Windows head
+verifies the downloaded installer against it before the installer is ever launched.
+
+**It fails closed.** A missing manifest, an entry that does not parse, an asset the manifest
+does not name, or a digest that does not match — each of these refuses the update. Falling
+back to "install it anyway" when the manifest is absent would mean an attacker who can replace
+the asset simply omits the manifest, and the check would buy nothing.
+
+The cost of failing closed is real and is accepted: a release that forgets to publish
+`SHA256SUMS` strands every user on their current version with no way to be told. That is the
+same failure mode as renaming a frozen asset name, and it is guarded the same way — the
+release job generates the manifest itself rather than staging it, and asserts both that it
+carries an entry per asset and that `sha256sum -c` passes against the staged bytes.
+
+Two smaller decisions travel with it, because they are the same question — *does the app
+trust what the feed told it?*
+
+- **The download URL is checked against an allowlist of GitHub hosts.** `browser_download_url`
+  arrives inside the JSON and the app acts on it by executing what it fetches, so the URL is a
+  trust decision, not a detail. `ReleaseDownloadUrl` requires https and an exact host match.
+- **The temp filename comes from the parsed version, not the raw tag.** `ReleaseVersion.TryParse`
+  truncates at the first `-` or `+`, so a tag of `v9.9.9-../../../../Startup/evil` parsed
+  cleanly as 9.9.9 while `AvailableUpdate.Tag` kept the traversal segments — which then went
+  into `Path.Combine` and decided where the downloaded executable landed.
+
+### What this does not establish
+
+The manifest ships from the same release as the asset it describes. **It proves the bytes are
+the ones that release published; it does not prove the release is honest.** Whoever can
+replace `O-view-Setup.exe` can replace `SHA256SUMS` beside it.
+
+What it does defend against: tampering or corruption between the release and the user, a
+partially-swapped asset set, and a truncated download that would otherwise have been executed.
+
+The control that *does* cover a compromised account is provenance attestation — Sigstore-backed
+`actions/attest-build-provenance`, verifiable with `gh attestation verify`, free for public
+repositories. It is the better end state and it is deferred rather than rejected: it needs
+`id-token: write` and `attestations: write` on the release job, which pulls against the
+permission scoping done at the same time, and it deserves its own decision rather than being
+smuggled in here.
+
+### Nothing changes for Linux
+
+A Linux build still downloads and executes nothing (see the 2026-07-30 amendment), so it has
+nothing to verify. `AvailableUpdate.ChecksumsUrl` is populated for every platform because
+detection is shared, and ignored by the head that never acts on it.
+
+### On the failure message
+
+A verification failure is **not** reported as "couldn't download", and it deliberately does not
+open the releases page. Every other failure in this path means "try again by hand"; this one
+means the file that arrived was not the file the release published, and routing the user to
+download it manually would hand them exactly what the check rejected. `UpdateVerificationException`
+exists to make that distinction catchable rather than left to a shared `catch`.
