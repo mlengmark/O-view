@@ -164,8 +164,17 @@ jobs:
     needs: [version, windows, linux]
     runs-on: ubuntu-latest
     # The only job that publishes, and so the only one that needs to be able to.
+    #
+    # id-token and attestations are the price of provenance. They are genuinely broader than
+    # contents: write — id-token: write mints an OIDC token identifying this workflow, which
+    # is what Sigstore signs against — so they are granted here, on the one job that already
+    # holds publish rights, and nowhere else. Granting them at workflow scope would hand an
+    # OIDC identity to the jobs running `choco install` and a checked-out shell script, which
+    # is the opposite of what the scoping in the previous change was for.
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     env:
       VERSION: ${{ needs.version.outputs.version }}
       TAG: ${{ github.ref_name }}
@@ -219,8 +228,7 @@ jobs:
       # job — whoever can replace the asset can replace this file next to it. It defends
       # against tampering or corruption between the release and the user, against a
       # partially-swapped asset set, and against a truncated download that would otherwise
-      # be executed. Provenance attestation is the stronger control and is worth adding
-      # separately; it is not this PR.
+      # be executed. The attestation step below is what covers the case this one cannot.
       #
       # Generated here rather than staged by the build jobs, so it cannot be forgotten:
       # there is no path through this job that publishes assets without also publishing
@@ -249,6 +257,49 @@ jobs:
 
           echo "--- SHA256SUMS ---"
           cat SHA256SUMS
+
+      # Build provenance, signed by Sigstore against this workflow's OIDC identity.
+      #
+      # What it covers that SHA256SUMS cannot. The checksum manifest is published by the same
+      # pipeline as the assets, so anyone able to replace an asset can replace the manifest
+      # beside it. An attestation cannot be forged that way: the signature is over a GitHub
+      # OIDC token that only a run of THIS workflow, in THIS repository, can obtain. An asset
+      # uploaded to a release by any other route — a stolen PAT attaching a file to an
+      # existing release, a release created by hand, an asset swapped after publication — has
+      # no valid attestation, and `gh attestation verify` says so.
+      #
+      # What it still does not cover, stated so it is not mistaken for more. Anyone who can
+      # push to this repository or trigger this workflow gets a genuine attestation for
+      # whatever the workflow built. Provenance answers "did this come out of O-view's
+      # release pipeline", not "is what the pipeline built trustworthy". The controls for the
+      # second question are the ones around what the pipeline runs: pinned actions, a pinned
+      # Inno Setup, and scoped tokens.
+      #
+      # A known limitation worth writing down: the assets are built in the windows and linux
+      # jobs and attested here, after travelling through upload/download-artifact. The
+      # attestation therefore binds the bytes to this workflow run, not to the specific job
+      # that compiled them. Closing that gap means attesting in each build job, which needs
+      # id-token: write in the jobs this workflow deliberately keeps it out of — a worse
+      # trade than the one it fixes.
+      #
+      # SHA256SUMS is deliberately NOT attested. It is a description of the other assets, not
+      # an artifact anyone runs, and attesting a list of hashes alongside the things it hashes
+      # invites the reading that a valid attestation on the manifest says something about the
+      # files it names. It does not.
+      # Deliberately NOT gated on is_tag. This workflow's dry run exists "so the pipeline can
+      # be exercised before a real tag depends on it", and a step skipped on every dry run is
+      # a step first exercised by the release that needs it to work. The permissions and the
+      # action are exactly what a dry run should be proving. The cost is an attestation
+      # recorded against a throwaway 0.6.0-dry digest that no release ever publishes, which is
+      # inert — attestations are looked up by artifact digest, and nobody holds that artifact.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            staged/O-view-Setup.exe
+            staged/O-view.Tray.exe
+            staged/o-view_*.deb
+            staged/o-view-*.tar.gz
 
       # Auto-generated notes are a list of merged PRs. They never say which of six assets a
       # given user wants, that GNOME needs an extension before the icon can appear, or that
