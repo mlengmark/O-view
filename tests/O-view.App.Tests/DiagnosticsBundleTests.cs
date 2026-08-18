@@ -60,6 +60,13 @@ public class DiagnosticsBundleTests : IDisposable
         var bundle = Build(Windows);
 
         // The label alone is useless; the point is the value beside it.
+        //
+        // Compared against the redacted spelling, not the raw one. The bundle now removes
+        // the account name before returning (Redact), so the raw path never appears — but
+        // what this test guards is unchanged: that the RESOLVED value is printed rather
+        // than the label alone, because a wrong SpecialFolder resolution is only visible
+        // in the value. Redaction replaces the account segment and nothing else, so the
+        // resolution is still what is being asserted.
         foreach (var folder in new[]
                  {
                      Environment.SpecialFolder.ApplicationData,
@@ -67,8 +74,27 @@ public class DiagnosticsBundleTests : IDisposable
                      Environment.SpecialFolder.UserProfile,
                  })
         {
-            Assert.Contains(Environment.GetFolderPath(folder), bundle, StringComparison.Ordinal);
+            var resolved = Redact.Bundle(Environment.GetFolderPath(folder));
+
+            Assert.Contains(resolved, bundle, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void NothingIdentifyingSurvivesIntoTheBundle()
+    {
+        // The bundle is pasted into public issues. This asserts the property at the funnel,
+        // so a field added later cannot reintroduce the leak without failing here.
+        var bundle = Build(Windows);
+
+        foreach (var name in Redact.AccountNames())
+        {
+            Assert.DoesNotContain(name, bundle, StringComparison.OrdinalIgnoreCase);
+        }
+
+        Assert.DoesNotMatch(
+            @"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}",
+            bundle);
     }
 
     // ── the platform block ──────────────────────────────────────────────────────────

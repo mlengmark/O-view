@@ -38,9 +38,12 @@ Stated here rather than left to be rediscovered.
 - **The Windows installer and executable are not code-signed.** An Authenticode certificate
   costs more than a free tool justifies ([ADR-0008](docs/adr/0008-installer-distribution.md)).
   SmartScreen will warn on first run. Integrity rests instead on the two checks below.
-- **Diagnostics output contains machine-identifying detail.** The Copy diagnostics bundle
-  includes resolved paths and your Claude organization identifier. It contains no token and
-  no conversation content, but read it before pasting it into a public issue.
+- **Diagnostics output is redacted, but still describes your machine.** The Copy diagnostics
+  bundle replaces your account name in every path with `<user>` and truncates organization
+  UUIDs to eight characters, so it carries no token, no conversation content, no account name
+  and no full identifier. It does still show your directory layout, which Claude surfaces you
+  use and how much data they hold — worth a glance before pasting it into a public issue, but
+  it is no longer a disclosure.
 
 ## Verifying a release
 

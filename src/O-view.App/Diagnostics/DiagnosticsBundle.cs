@@ -34,8 +34,21 @@ public sealed record DiagnosticsEnvironment(
 /// what it found.
 ///
 /// <para>Shared because both heads need it and because a report has to read the same on
-/// either platform to be comparable. It contains no token and no conversation content; the
-/// org UUID is included because it is the documented filter key.</para>
+/// either platform to be comparable. It contains no token and no conversation content.</para>
+///
+/// <para><b>It is redacted before it is returned, because of where it goes.</b> Users are
+/// told to paste this into a public GitHub issue, and it previously carried the account name
+/// in every path and the organization UUID in full — both the one from <c>~/.claude.json</c>
+/// and the whole list found in the plan-history file. That is a real identifier and a real
+/// person's account name, published permanently and searchably, to diagnose a tray icon.
+/// This project already treated an org UUID as sensitive when one was committed to the repo
+/// (commit 3f7cc2f, "security: redact real org UUID"); publishing the same value from every
+/// user's bug report was the same disclosure by a longer route.</para>
+///
+/// <para><see cref="Redact"/> runs once over the finished text rather than at each field, so
+/// a field added later is covered whether or not its author thought about it. Path shape and
+/// a UUID prefix survive, because those are what the bundle is read for — see that class for
+/// the reasoning.</para>
 ///
 /// <para><b>Labels name what a path is, not which platform's vocabulary it came from.</b>
 /// This block used to say <c>appdata root</c>, which on Linux points at <c>~/.config</c> —
@@ -67,7 +80,9 @@ public static class DiagnosticsBundle
         text.Append(scope.ToClipboardText());
         AppendWeeklyResets(text, weeklyResets, utcNow);
 
-        return text.ToString();
+        // The single funnel. Every field above, and every field added below it later, is
+        // redacted here rather than at its own call site — see the class remarks.
+        return Redact.Bundle(text.ToString());
     }
 
     /// <summary>
