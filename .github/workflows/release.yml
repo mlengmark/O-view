@@ -206,6 +206,50 @@ jobs:
           done
           [ "$missing" -eq 0 ] || { echo "asset names do not match what the app looks for"; exit 1; }
 
+      # SHA256SUMS, published alongside the assets.
+      #
+      # What this is for. Today the only thing standing between a user and a
+      # substituted installer is "the bytes arrived over TLS from api.github.com". The
+      # updater downloads O-view-Setup.exe and hands it to Process.Start with no check on
+      # what it received, and the installer is deliberately unsigned (ADR-0008), so there is
+      # no second opinion available anywhere in the chain. This adds one.
+      #
+      # What it is not. A checksum published by the same pipeline that built the
+      # asset does not defend against a compromised GitHub account or a compromised release
+      # job — whoever can replace the asset can replace this file next to it. It defends
+      # against tampering or corruption between the release and the user, against a
+      # partially-swapped asset set, and against a truncated download that would otherwise
+      # be executed. Provenance attestation is the stronger control and is worth adding
+      # separately; it is not this PR.
+      #
+      # Generated here rather than staged by the build jobs, so it cannot be forgotten:
+      # there is no path through this job that publishes assets without also publishing
+      # their checksums. The count assertion is what makes that a guarantee rather than an
+      # intention — a client that fails closed on a missing entry (the follow-up PR) strands
+      # every user if this file is ever incomplete, which is the same failure mode as
+      # renaming a frozen asset.
+      - name: Checksums for every published asset
+        run: |
+          set -euo pipefail
+          cd staged
+          sha256sum \
+            "O-view-Setup.exe" \
+            "O-view.Tray.exe" \
+            "o-view_${VERSION}_amd64.deb" \
+            "o-view_${VERSION}_arm64.deb" \
+            "o-view-${VERSION}-linux-x64.tar.gz" \
+            "o-view-${VERSION}-linux-arm64.tar.gz" \
+            > SHA256SUMS
+
+          lines="$(wc -l < SHA256SUMS)"
+          [ "$lines" -eq 6 ] || { echo "expected 6 checksums, wrote $lines"; exit 1; }
+
+          # Proves the file describes the bytes actually staged, not a stale copy.
+          sha256sum -c SHA256SUMS
+
+          echo "--- SHA256SUMS ---"
+          cat SHA256SUMS
+
       # Auto-generated notes are a list of merged PRs. They never say which of six assets a
       # given user wants, that GNOME needs an extension before the icon can appear, or that
       # Linux updates come from apt rather than from inside the app — and those are the three
