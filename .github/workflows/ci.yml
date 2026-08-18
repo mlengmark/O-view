@@ -69,6 +69,116 @@ jobs:
           sys.exit(1 if failed else 0)
           CHECK
 
+  # Fails if an identifier that should never be committed appears in a tracked file.
+  #
+  # This exists because it already happened. A real Claude organization UUID and a real
+  # requestId reached two test fixtures and a findings doc, were noticed weeks later
+  # (commit 3f7cc2f), and scrubbing them from the working tree did not remove them from
+  # GitHub: the objects survive in unreachable commits and refs/pull/*, where they are
+  # still fetchable today. An org UUID cannot be rotated the way a leaked token can, so
+  # there is no clean recovery — only prevention. Nothing was watching, which is the gap
+  # this closes.
+  #
+  # ALLOWLIST, NEVER DENYLIST. The obvious design is "fail if you see <the real UUID>",
+  # and it is precisely wrong: this file is public, so writing the value here would
+  # republish the thing being protected. Instead every identifier the repository is
+  # *allowed* to contain is listed, and anything else fails. A new placeholder means one
+  # deliberate line here, which is the point — adding an identifier should be a decision.
+  identifiers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: No unexpected identifiers or credentials in tracked files
+        run: |
+          python3 - <<'CHECK'
+          import re, subprocess, sys
+
+          # Every UUID the repository may legitimately contain, and why. Lowercased.
+          ALLOWED_UUIDS = {
+              # The all-zero placeholder that replaced the real org UUID in 3f7cc2f.
+              "00000000-0000-0000-0000-000000000000",
+              # Inno Setup's AppId. Application identity, not a secret, and installer/O-view.iss
+              # says never to change it — doing so breaks upgrades and the uninstall entry.
+              "9e5f2b7a-3c4d-4e8a-9f1b-6d2a7c0e4b31",
+              # RFC 4122's own example UUID, used as a fixture in RedactTests.
+              "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
+              # Synthetic second fixture, so RedactTests can prove two orgs stay distinguishable.
+              "9c858901-8a57-4791-81fe-4c455b099bc9",
+          }
+
+          # Same rule for request ids: only the documented placeholder.
+          ALLOWED_REQUEST_IDS = {"req_011ExampleRequestId000"}
+
+          UUID = re.compile(
+              r"(?<![0-9a-fA-F-])[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}"
+              r"-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?![0-9a-fA-F-])")
+          REQUEST_ID = re.compile(r"req_[0-9A-Za-z]{8,}")
+
+          # Length floors matter: they keep these patterns from matching their own source,
+          # since this workflow file is itself a tracked file and gets scanned.
+          CREDENTIALS = [
+              ("Anthropic API key", re.compile(r"sk-ant-[A-Za-z0-9_-]{20,}")),
+              ("GitHub token",      re.compile(r"gh[pousr]_[A-Za-z0-9]{30,}")),
+              ("GitHub fine-grained token", re.compile(r"github_pat_[A-Za-z0-9_]{30,}")),
+              ("AWS access key",    re.compile(r"AKIA[0-9A-Z]{16}")),
+              ("Slack token",       re.compile(r"xox[baprs]-[A-Za-z0-9-]{10,}")),
+              ("private key",       re.compile(r"-----BEGIN [A-Z ]+PRIVATE KEY-----")),
+          ]
+
+          files = subprocess.run(
+              ["git", "ls-files", "-z"], capture_output=True, check=True
+          ).stdout.decode().split("\0")
+
+          def violations(text):
+              """Every reason this text may not be committed, as (offset, message)."""
+              found = []
+
+              for match in UUID.finditer(text):
+                  if match.group(0).lower() not in ALLOWED_UUIDS:
+                      found.append((match.start(),
+                          f"unexpected UUID {match.group(0)[:8]}… — if this is a placeholder, "
+                          "add it to ALLOWED_UUIDS in .github/workflows/ci.yml with a reason"))
+
+              for match in REQUEST_ID.finditer(text):
+                  if match.group(0) not in ALLOWED_REQUEST_IDS:
+                      found.append((match.start(),
+                          f"unexpected request id {match.group(0)[:10]}… — use the "
+                          "documented placeholder instead"))
+
+              for label, pattern in CREDENTIALS:
+                  for match in pattern.finditer(text):
+                      found.append((match.start(), f"possible {label} committed"))
+
+              return found
+
+          failed, scanned = False, 0
+          for path in filter(None, files):
+              try:
+                  with open(path, encoding="utf-8") as handle:
+                      text = handle.read()
+              except (UnicodeDecodeError, OSError):
+                  continue          # binary asset, or unreadable: nothing to read here
+              scanned += 1
+
+              for offset, message in violations(text):
+                  print(f"{path}:{text[:offset].count(chr(10)) + 1}: {message}")
+                  failed = True
+
+          # A detector that cannot fail is not a detector — the same reasoning as the
+          # tampered-byte control on a release: prove it rejects something before trusting
+          # a pass. The control UUID is assembled at runtime rather than written whole,
+          # because a known-bad literal in this file would be found by the scan above and
+          # fail the job on its own source.
+          control = "6ba7b810-9dad-11d1-80b4-" + "00c04fd430c8"
+          if not violations(f"id: {control}"):
+              print("self-test failed: the detector did not flag a known-bad UUID")
+              sys.exit(1)
+
+          print(f"scanned {scanned} tracked text files")
+          sys.exit(1 if failed else 0)
+          CHECK
+
   test:
     strategy:
       # Deliberately not fail-fast. When a change breaks portability you want to see the
