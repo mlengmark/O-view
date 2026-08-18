@@ -37,11 +37,34 @@ Stated here rather than left to be rediscovered.
 
 - **The Windows installer and executable are not code-signed.** An Authenticode certificate
   costs more than a free tool justifies ([ADR-0008](docs/adr/0008-installer-distribution.md)).
-  SmartScreen will warn on first run. Integrity of downloaded releases rests on GitHub's TLS
-  and on checksums published with each release — verify the checksum if that matters to you.
+  SmartScreen will warn on first run. Integrity rests instead on the two checks below.
 - **Diagnostics output contains machine-identifying detail.** The Copy diagnostics bundle
   includes resolved paths and your Claude organization identifier. It contains no token and
   no conversation content, but read it before pasting it into a public issue.
+
+## Verifying a release
+
+Two things ship with every release, and they answer different questions.
+
+**`SHA256SUMS`** answers *did my copy arrive intact* — it is published by the same pipeline as
+the assets, so it detects corruption or tampering in transit but not a bad release.
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+```
+
+**Build provenance** answers *did this come out of O-view's release pipeline*. It is signed by
+Sigstore against a GitHub OIDC identity that only a run of this repository's release workflow
+can obtain, so it cannot be forged by replacing files on the release. Needs the
+[GitHub CLI](https://cli.github.com):
+
+```bash
+gh attestation verify O-view-Setup.exe --repo mlengmark/O-view
+```
+
+Neither establishes that the source is trustworthy — only that the binary is the one this
+repository's pipeline produced. Anyone who can push to the repository gets a genuine
+attestation for whatever the pipeline builds.
 
 ## Out of scope
 
