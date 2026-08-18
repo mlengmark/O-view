@@ -13,6 +13,62 @@ permissions:
   contents: read
 
 jobs:
+  # release.yml is parsed by GitHub only when a tag is pushed or the workflow is dispatched.
+  # A syntax error in it therefore passes every PR and surfaces at the worst possible moment
+  # — when you are trying to cut a release. That is not hypothetical: it is how this job came
+  # to exist. A comment written inside a run: block, explaining that the workflow avoids
+  # inline expression syntax, contained the empty two-brace token as an example. A run: block
+  # is a block scalar, so its '#' lines are part of the script string rather than comments,
+  # and Actions evaluates expression syntax across the whole value before bash sees any of
+  # it. An empty expression is not a valid one, and the entire file stopped parsing.
+  #
+  # This is deliberately not a general workflow linter. Adding one means adding a
+  # third-party binary to the pipeline the rest of this work spent its time constraining.
+  # It checks the one property that broke, in the language already on the runner.
+  workflows:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Workflows parse, and every expression has a body
+        run: |
+          python3 - <<'CHECK'
+          import glob, re, sys
+
+          try:
+              import yaml
+          except ImportError:
+              yaml = None
+              print("note: PyYAML unavailable, checking expressions only")
+
+          # Written with escapes so this pattern is not itself an expression: the literal
+          # characters below are backslash-dollar-backslash-brace, which Actions does not
+          # recognise. Exactly the trap this job exists to catch.
+          EXPRESSION = re.compile(r"\$\{\{(.*?)\}\}", re.S)
+
+          failed = False
+          for path in sorted(glob.glob(".github/workflows/*.yml")):
+              text = open(path, encoding="utf-8").read()
+
+              if yaml is not None:
+                  try:
+                      yaml.safe_load(text)
+                  except yaml.YAMLError as error:
+                      print(f"{path}: not valid YAML: {error}")
+                      failed = True
+                      continue
+
+              for match in EXPRESSION.finditer(text):
+                  if not match.group(1).strip():
+                      line = text[:match.start()].count("\n") + 1
+                      print(f"{path}:{line}: empty expression — Actions rejects the whole file")
+                      failed = True
+
+              print(f"ok  {path}")
+
+          sys.exit(1 if failed else 0)
+          CHECK
+
   test:
     strategy:
       # Deliberately not fail-fast. When a change breaks portability you want to see the
