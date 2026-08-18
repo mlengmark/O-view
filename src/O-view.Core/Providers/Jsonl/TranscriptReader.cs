@@ -1,5 +1,5 @@
+using System.Buffers;
 using System.Globalization;
-using System.Text;
 using System.Text.Json;
 
 namespace OView.Core.Providers.Jsonl;
@@ -53,12 +53,22 @@ public static class TranscriptReader
     /// The returned offset lands on a line boundary: a poll that catches a half-written
     /// line leaves it unconsumed and re-reads it next time, rather than parsing a
     /// truncated record or skipping it permanently.
+    ///
+    /// <para><b>Streamed, not slurped.</b> This used to read the whole range into one
+    /// <c>byte[]</c>, decode it to a string and <c>Split</c> that — roughly five times the
+    /// file's size in transient allocations per file, nearly all of it on the large object
+    /// heap. Steady state never noticed, because the offset above means there is usually
+    /// nothing new to read. A <i>first</i> run has no offsets, and the first machine to
+    /// arrive with 563 MB of history spent that whole ingest unresponsive (issue #125).
+    /// Peak allocation is now the read buffer plus the longest single line, whatever the
+    /// file's size.</para>
     /// </summary>
     public static (IReadOnlyList<TranscriptRecord> Records, long NextOffset) ReadFrom(string path, long startOffset)
     {
         try
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite,
+                ReadBufferSize, FileOptions.SequentialScan);
 
             // A shorter file than we last saw means it was replaced or rotated; the
             // stored offset now points into unrelated content, so start over.
@@ -68,32 +78,57 @@ public static class TranscriptReader
             }
 
             stream.Position = startOffset;
-            var buffer = new byte[stream.Length - startOffset];
-            var read = stream.ReadAtLeast(buffer, buffer.Length, throwOnEndOfStream: false);
-            if (read == 0)
-            {
-                return ([], startOffset);
-            }
-
-            // Consume up to the last newline only. Anything after it is a line still
-            // being written; leaving it unconsumed is what makes resumption safe.
-            var lastNewline = Array.LastIndexOf(buffer, (byte)'\n', read - 1);
-            if (lastNewline < 0)
-            {
-                return ([], startOffset);
-            }
 
             var records = new List<TranscriptRecord>();
-            foreach (var line in Encoding.UTF8.GetString(buffer, 0, lastNewline + 1)
-                         .Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            var buffer = ArrayPool<byte>.Shared.Rent(ReadBufferSize);
+
+            // Holds one line while it is being assembled, because a line can straddle any
+            // number of buffer fills. Cleared per line, so it settles at the size of the
+            // longest record seen rather than growing with the file.
+            var line = new ArrayBufferWriter<byte>(4096);
+
+            // Advanced only past a line that was terminated by a newline. Whatever is left
+            // in `line` when the stream ends is a record still being written: it is
+            // discarded, the offset stays behind it, and the next poll re-reads it whole.
+            // That is the same guarantee the previous "consume to the last newline"
+            // implementation gave.
+            var consumed = startOffset;
+
+            try
             {
-                if (TryParseLine(line) is { } record)
+                int read;
+                while ((read = stream.Read(buffer, 0, ReadBufferSize)) > 0)
                 {
-                    records.Add(record);
+                    var remaining = buffer.AsSpan(0, read);
+
+                    while (true)
+                    {
+                        var newline = remaining.IndexOf((byte)'\n');
+                        if (newline < 0)
+                        {
+                            line.Write(remaining);
+                            break;
+                        }
+
+                        line.Write(remaining[..newline]);
+
+                        if (TryParseLine(line.WrittenMemory) is { } record)
+                        {
+                            records.Add(record);
+                        }
+
+                        consumed += line.WrittenCount + 1;   // + the newline itself
+                        line.Clear();
+                        remaining = remaining[(newline + 1)..];
+                    }
                 }
             }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
 
-            return (records, startOffset + lastNewline + 1);
+            return (records, consumed);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -101,9 +136,22 @@ public static class TranscriptReader
         }
     }
 
-    private static TranscriptRecord? TryParseLine(string line)
+    /// <summary>
+    /// 64 KB. Large enough that a poll over a big transcript is not dominated by syscalls,
+    /// small enough to stay off the large object heap — the 85 KB threshold is the ceiling
+    /// this is chosen under, and exceeding it is what the streaming change exists to avoid.
+    /// </summary>
+    private const int ReadBufferSize = 64 * 1024;
+
+    /// <summary>
+    /// One line, as raw UTF-8. Parsed from the bytes rather than a decoded string: the
+    /// JSON reader consumes UTF-8 natively, so decoding first would allocate a copy at
+    /// twice the size purely to hand it straight back.
+    /// </summary>
+    private static TranscriptRecord? TryParseLine(ReadOnlyMemory<byte> line)
     {
-        if (string.IsNullOrWhiteSpace(line)) return null;
+        // Blank and whitespace-only lines are skipped, as the Split that preceded this did.
+        if (line.Span.IndexOfAnyExcept((byte)' ', (byte)'\t', (byte)'\r') < 0) return null;
 
         try
         {

@@ -32,6 +32,7 @@ public sealed class LinuxApp : Application
     private readonly FreedesktopNotifier _notifier = new();
     private readonly IThemeSource _theme = new PortalThemeSource();
     private readonly IStartupRegistration _startup = new XdgAutostartRegistration();
+    private readonly IUiDispatcher _dispatcher = new AvaloniaUiDispatcher();
     private NativeMenuItem? _startupItem;
     private TrayIcon? _tray;
     private PanelWindow? _panel;
@@ -82,7 +83,9 @@ public sealed class LinuxApp : Application
         };
         _tray.Clicked += (_, _) => ShowPanel(engine);
 
-        engine.SnapshotUpdated += snapshot => Dispatcher.UIThread.Post(() => Render(snapshot));
+        // No Post needed: the engine publishes through the dispatcher handed to Start below,
+        // so this already arrives on the UI thread.
+        engine.SnapshotUpdated += Render;
         engine.NotificationRequested += n => _ = _notifier.ShowAsync(n.Title, n.Message);
 
         // Says a newer version exists; never downloads or runs anything (ADR-0009 as
@@ -96,7 +99,10 @@ public sealed class LinuxApp : Application
             _log);
         engine.UpdateCheckDue += () => _ = notice.CheckAsync();
 
-        engine.Start(new AvaloniaTimerFactory());
+        // Ticks arrive on the UI thread; the reading happens off it and comes back through
+        // the dispatcher. The pair is what keeps the icon and the menu responsive while a
+        // first run ingests a large transcript history (issue #125).
+        engine.Start(new AvaloniaTimerFactory(), _dispatcher);
 
         // The icon reports IsVisible = true whether or not anything can display it, so a
         // missing host has to be discovered from the bus and said out loud. Notifications
@@ -119,8 +125,12 @@ public sealed class LinuxApp : Application
     {
         try
         {
-            engine.Refresh();   // fresh figures on open; local reads are cheap
-            RefreshStartupItem();   // and the tick, which anything on the machine may have changed
+            // Opens on the last polled snapshot — at most one poll old, and exactly what
+            // the icon beside it is already showing. It used to force a synchronous
+            // Refresh() here, on the assumption that "local reads are cheap"; they are not
+            // when the machine holds hundreds of MB of transcripts, and that read ran on
+            // the UI thread with the user's click waiting behind it (issue #125).
+            RefreshStartupItem();   // the tick, which anything on the machine may have changed
 
             _panel?.Close();
             _panel = new PanelWindow(new LinuxPanelTheme(_theme.IsPanelLight()));
