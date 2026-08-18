@@ -1,3 +1,4 @@
+using OView.App.Platform;
 using OView.Core.Models;
 using OView.Core.Providers;
 
@@ -61,6 +62,64 @@ public sealed class FakeTimerFactory : ITimerFactory
     }
 }
 
+/// <summary>
+/// Stands in for the head's UI thread. Nothing is run until the test pumps it, which is
+/// what makes "was this raised on the UI thread or on the reading thread?" an assertion
+/// rather than a race.
+/// </summary>
+public sealed class FakeDispatcher : IUiDispatcher
+{
+    private readonly List<Action> _queued = [];
+
+    /// <summary>The thread that constructed this — the stand-in for the UI thread.</summary>
+    public int OwningThreadId { get; } = Environment.CurrentManagedThreadId;
+
+    public int Pending
+    {
+        get { lock (_queued) { return _queued.Count; } }
+    }
+
+    public void Post(Action work)
+    {
+        lock (_queued) { _queued.Add(work); }
+    }
+
+    /// <summary>Runs everything queued so far, on the calling thread. Returns how many ran.</summary>
+    public int Pump()
+    {
+        Action[] due;
+        lock (_queued)
+        {
+            due = [.. _queued];
+            _queued.Clear();
+        }
+
+        foreach (var work in due)
+        {
+            work();
+        }
+        return due.Length;
+    }
+
+    /// <summary>
+    /// Pumps until something is due or the wait expires. The engine posts from the thread
+    /// pool, so a test has to allow for the read not having finished yet.
+    /// </summary>
+    public bool PumpWithin(TimeSpan timeout)
+    {
+        var deadline = DateTime.UtcNow + timeout;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (Pump() > 0)
+            {
+                return true;
+            }
+            Thread.Sleep(5);
+        }
+        return false;
+    }
+}
+
 /// <summary>A provider whose answer the test sets, including "throw" to exercise the failure path.</summary>
 public sealed class FakeProvider : IUsageProvider
 {
@@ -70,9 +129,17 @@ public sealed class FakeProvider : IUsageProvider
 
     public int Calls { get; private set; }
 
+    /// <summary>Blocks every read until released — stands in for a large first ingest.</summary>
+    public ManualResetEventSlim? BlockUntil { get; set; }
+
+    /// <summary>The thread each read ran on, so "off the UI thread" can be asserted.</summary>
+    public List<int> ReadThreadIds { get; } = [];
+
     public UsageSnapshot GetSnapshot(DateTimeOffset utcNow)
     {
+        lock (ReadThreadIds) { ReadThreadIds.Add(Environment.CurrentManagedThreadId); }
         Calls++;
+        BlockUntil?.Wait(TimeSpan.FromSeconds(10));
         if (ThrowOnNext is { } ex)
         {
             ThrowOnNext = null;

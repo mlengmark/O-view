@@ -1,3 +1,4 @@
+using OView.App.Platform;
 using OView.Core.Models;
 using OView.Core.Providers;
 using OView.Core.Providers.Jsonl;
@@ -38,6 +39,12 @@ public sealed class UsageEngine : IDisposable
     private IAppTimer? _pollTimer;
     private DateTimeOffset _startedAt;
     private bool _offPlanNotified;
+
+    /// <summary>Where a scheduled poll publishes back to. Null means "publish inline".</summary>
+    private IUiDispatcher? _dispatcher;
+
+    /// <summary>1 while a scheduled poll is reading, so a slow one cannot stack.</summary>
+    private int _polling;
 
     /// <summary>Most recent snapshot — what the panel opens with.</summary>
     public UsageSnapshot Latest { get; private set; } = UsageSnapshot.None;
@@ -97,14 +104,15 @@ public sealed class UsageEngine : IDisposable
     /// Starts polling. Refreshes once immediately so the first result sets the cadence,
     /// then schedules the poll timer and the update-check timers.
     /// </summary>
-    public void Start(ITimerFactory timers)
+    public void Start(ITimerFactory timers, IUiDispatcher? dispatcher = null)
     {
         _startedAt = _clock.UtcNow;
+        _dispatcher = dispatcher;
 
-        _pollTimer = Track(timers.Create(_normalInterval, Refresh));
+        _pollTimer = Track(timers.Create(_normalInterval, Poll));
         _log?.Write($"startup interval={_normalInterval.TotalSeconds}s");
 
-        Refresh();  // sets the initial cadence from the first result
+        Poll();  // sets the initial cadence from the first result
         _pollTimer.Start();
 
         // Auto-update (ADR-0009): one check shortly after launch, then daily. The engine
@@ -121,35 +129,156 @@ public sealed class UsageEngine : IDisposable
     }
 
     /// <summary>
-    /// One poll: read a snapshot, publish it, then evaluate the notification rules.
+    /// One poll, start to finish on the calling thread: read a snapshot, publish it, then
+    /// evaluate the notification rules.
     ///
     /// <para>Publish-before-notify is deliberate and matches the order the tray has always
     /// used — the icon reflects the new number before any balloon talks about it.</para>
+    ///
+    /// <para>Synchronous, so a caller that needs <see cref="Latest"/> to be current when it
+    /// returns gets that. The scheduled polls do <b>not</b> use this — see
+    /// <see cref="Poll"/>.</para>
     /// </summary>
-    public void Refresh()
+    public void Refresh() => Publish(Read());
+
+    /// <summary>
+    /// A scheduled poll: read off the UI thread, publish back onto it.
+    ///
+    /// <para>The read is file discovery, JSON parsing and SQLite writes, and its cost
+    /// scales with total transcript history rather than with new activity on a first run.
+    /// Done on the dispatcher, that froze the tray icon and the menu for the whole ingest
+    /// on the first machine that had a large enough history (issue #125). Done here, the
+    /// UI thread only ever runs <see cref="Publish"/>, which raises events and compares
+    /// numbers.</para>
+    ///
+    /// <para>With no dispatcher the engine has no separate UI thread to protect and runs
+    /// inline, which is what the tests rely on.</para>
+    /// </summary>
+    private void Poll()
     {
+        if (_dispatcher is not { } dispatcher)
+        {
+            Refresh();
+            return;
+        }
+
+        // A poll slower than the interval must not stack another behind it. Dropping the
+        // tick is right rather than queueing it: the next one reads the same files and
+        // reports the same state, so a queue would only replay stale work.
+        if (Interlocked.Exchange(ref _polling, 1) == 1)
+        {
+            _log?.Write("poll skipped — previous still running");
+            return;
+        }
+
+        _ = Task.Run(() =>
+        {
+            var result = Read();
+
+            try
+            {
+                dispatcher.Post(() =>
+                {
+                    try
+                    {
+                        Publish(result);
+                    }
+                    finally
+                    {
+                        Volatile.Write(ref _polling, 0);
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                // The dispatcher is gone — the app is shutting down. Release the guard so
+                // nothing is wedged, and drop the result: there is no longer anything to
+                // draw it on.
+                Volatile.Write(ref _polling, 0);
+                _log?.Write($"poll publish skipped {ex.GetType().Name}: {ex.Message}");
+            }
+        });
+    }
+
+    /// <summary>
+    /// Everything a poll needs from disk, gathered on whatever thread is doing the reading.
+    ///
+    /// <para>The off-plan figures are built here rather than in <see cref="Publish"/>
+    /// because they are a 31-day SQLite aggregate plus a plan-history parse — the second
+    /// most expensive thing a poll does, and it used to run on the UI thread too.</para>
+    ///
+    /// <para>Never throws: a monitoring tool must not die on a bad poll, and a failure has
+    /// to reach <see cref="Publish"/> intact so the cadence still gets re-timed.</para>
+    /// </summary>
+    private PollResult Read()
+    {
+        var utcNow = _clock.UtcNow;
+
         try
         {
-            var utcNow = _clock.UtcNow;
             var snapshot = _provider.GetSnapshot(utcNow);
-            Latest = snapshot;
-
-            _log?.Write($"refresh source={snapshot.Source} session={snapshot.SessionPercent?.ToString() ?? "null"}");
-            SnapshotUpdated?.Invoke(snapshot);
-
-            NotifyOnThreshold(snapshot);
-            CheckOffPlan();
-
-            AdjustCadence(snapshot.Source, utcNow);
+            return new PollResult(snapshot, ReadOffPlan(), utcNow, Failed: false);
         }
         catch (Exception ex)
         {
-            // Keep the previous state; a monitoring tool must not die on a bad poll.
             _log?.Write($"refresh FAILED {ex.GetType().Name}: {ex.Message}");
-            // A failed poll produced no authoritative data — keep warming up if we still can.
-            AdjustCadence(DataSource.None, _clock.UtcNow);
+            return new PollResult(UsageSnapshot.None, null, utcNow, Failed: true);
         }
     }
+
+    /// <summary>
+    /// The divergence figures, or null when there is no plan history to compare against or
+    /// the build failed. A failure here is not a failed poll — the snapshot is still good.
+    /// </summary>
+    private PanelStatistics? ReadOffPlan()
+    {
+        if (_planHistory is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return BuildStatistics();
+        }
+        catch (Exception ex)
+        {
+            _log?.Write($"off-plan check FAILED {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// What a poll changes, on the head's own thread: the published snapshot, the
+    /// notification decisions, and the cadence.
+    /// </summary>
+    private void Publish(PollResult result)
+    {
+        if (result.Failed)
+        {
+            // Keep the previous state, and keep warming up if we still can.
+            AdjustCadence(DataSource.None, result.UtcNow);
+            return;
+        }
+
+        Latest = result.Snapshot;
+
+        _log?.Write($"refresh source={result.Snapshot.Source} " +
+                    $"session={result.Snapshot.SessionPercent?.ToString() ?? "null"}");
+        SnapshotUpdated?.Invoke(result.Snapshot);
+
+        NotifyOnThreshold(result.Snapshot);
+        CheckOffPlan(result.OffPlan);
+
+        AdjustCadence(result.Snapshot.Source, result.UtcNow);
+    }
+
+    /// <summary>One poll's readings, carried from the reading thread to the UI thread.</summary>
+    private readonly record struct PollResult(
+        UsageSnapshot Snapshot,
+        PanelStatistics? OffPlan,
+        DateTimeOffset UtcNow,
+        bool Failed);
 
     /// <summary>
     /// The panel's figures: 31-day rollups plus off-plan divergence for the current window.
@@ -206,45 +335,39 @@ public sealed class UsageEngine : IDisposable
     /// threshold watcher, and re-armed when it stops — the point is to catch the
     /// silent-and-expensive case the plan bars cannot show, not to nag.
     /// </summary>
-    private void CheckOffPlan()
+    private void CheckOffPlan(PanelStatistics? stats)
     {
-        if (_planHistory is null)
+        // No plan history, or the figures could not be built — either way there is nothing
+        // to decide on, and a failed build must not re-arm the edge trigger.
+        if (stats is null)
         {
             return;
         }
 
-        try
+        if (!stats.IsOffPlan)
         {
-            var stats = BuildStatistics();
-            if (!stats.IsOffPlan)
-            {
-                _offPlanNotified = false;
-                return;
-            }
-
-            _log?.Write($"off-plan detected state={stats.Divergence?.State} " +
-                        $"tokens={stats.Divergence?.OutputTokensInWindow} rise={stats.Divergence?.PlanRisePoints}");
-
-            if (_offPlanNotified || !Settings.NotifyOnThreshold)
-            {
-                return;
-            }
-
-            _offPlanNotified = true;
-            // The panel's formatter, not a pinned-culture "C" lookup. This balloon sends
-            // the user to the Est. tile, so the two must write the same amount the same
-            // way — and ICU's currency pattern is not the same instruction as composing
-            // "$" + a fixed decimal format, even where they agree today (issue #55).
-            var spend = stats.EstOffPlanUsd is { } usd
-                ? $" Est. {UsageFormatter.Usd(usd)} so far this window."
-                : "";
-            NotificationRequested?.Invoke(new AppNotification("Usage is billing beyond your plan",
-                $"Work this session isn't drawing from your plan allowance.{spend} Open O-view for detail."));
+            _offPlanNotified = false;
+            return;
         }
-        catch (Exception ex)
+
+        _log?.Write($"off-plan detected state={stats.Divergence?.State} " +
+                    $"tokens={stats.Divergence?.OutputTokensInWindow} rise={stats.Divergence?.PlanRisePoints}");
+
+        if (_offPlanNotified || !Settings.NotifyOnThreshold)
         {
-            _log?.Write($"off-plan check FAILED {ex.GetType().Name}: {ex.Message}");
+            return;
         }
+
+        _offPlanNotified = true;
+        // The panel's formatter, not a pinned-culture "C" lookup. This balloon sends
+        // the user to the Est. tile, so the two must write the same amount the same
+        // way — and ICU's currency pattern is not the same instruction as composing
+        // "$" + a fixed decimal format, even where they agree today (issue #55).
+        var spend = stats.EstOffPlanUsd is { } usd
+            ? $" Est. {UsageFormatter.Usd(usd)} so far this window."
+            : "";
+        NotificationRequested?.Invoke(new AppNotification("Usage is billing beyond your plan",
+            $"Work this session isn't drawing from your plan allowance.{spend} Open O-view for detail."));
     }
 
     /// <summary>

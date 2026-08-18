@@ -28,6 +28,23 @@ public sealed class RollupStore : IDisposable
     private readonly string _path;
     private SqliteConnection _connection;
 
+    /// <summary>
+    /// Serialises access to the single connection above.
+    ///
+    /// <para>Needed since the poll moved off the UI thread (issue #125): a scheduled poll
+    /// ingests on the thread pool while a panel opened at the same moment aggregates on the
+    /// UI thread. <see cref="SqliteConnection"/> is not thread-safe, and two commands on
+    /// one handle is not a race that surfaces as an exception — it corrupts the reader
+    /// state and returns wrong numbers, which rule 6 treats as the worst possible failure
+    /// mode for this app.</para>
+    ///
+    /// <para>A lock rather than a connection per thread because the store deliberately owns
+    /// exactly one handle: pooling is off so that <see cref="Dispose"/> actually releases
+    /// the file, which tests and uninstall both depend on. Contention is not a concern at a
+    /// 60 s cadence.</para>
+    /// </summary>
+    private readonly Lock _gate = new();
+
     public RollupStore(string? dbPath = null)
     {
         _path = dbPath ?? DefaultPath;
@@ -143,16 +160,19 @@ public sealed class RollupStore : IDisposable
     /// </summary>
     public IReadOnlyList<DateTimeOffset> GetLegacyWeeklyResets()
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "SELECT reset_at FROM weekly_resets ORDER BY reset_at";
-        var result = new List<DateTimeOffset>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
+        lock (_gate)
         {
-            result.Add(DateTimeOffset.Parse(reader.GetString(0), CultureInfo.InvariantCulture,
-                DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal));
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT reset_at FROM weekly_resets ORDER BY reset_at";
+            var result = new List<DateTimeOffset>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add(DateTimeOffset.Parse(reader.GetString(0), CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal));
+            }
+            return result;
         }
-        return result;
     }
 
     /// <summary>
@@ -162,28 +182,34 @@ public sealed class RollupStore : IDisposable
     /// </summary>
     public (long Offset, long KnownLength) GetFileOffset(string path)
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "SELECT byte_offset, file_length FROM file_offsets WHERE path = $path";
-        cmd.Parameters.AddWithValue("$path", path);
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT byte_offset, file_length FROM file_offsets WHERE path = $path";
+            cmd.Parameters.AddWithValue("$path", path);
 
-        using var reader = cmd.ExecuteReader();
-        return reader.Read() ? (reader.GetInt64(0), reader.GetInt64(1)) : (0L, 0L);
+            using var reader = cmd.ExecuteReader();
+            return reader.Read() ? (reader.GetInt64(0), reader.GetInt64(1)) : (0L, 0L);
+        }
     }
 
     public void SetFileOffset(string path, long offset, long fileLength)
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            INSERT INTO file_offsets (path, byte_offset, file_length)
-            VALUES ($path, $offset, $length)
-            ON CONFLICT(path) DO UPDATE SET
-                byte_offset = excluded.byte_offset,
-                file_length = excluded.file_length
-            """;
-        cmd.Parameters.AddWithValue("$path", path);
-        cmd.Parameters.AddWithValue("$offset", offset);
-        cmd.Parameters.AddWithValue("$length", fileLength);
-        cmd.ExecuteNonQuery();
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO file_offsets (path, byte_offset, file_length)
+                VALUES ($path, $offset, $length)
+                ON CONFLICT(path) DO UPDATE SET
+                    byte_offset = excluded.byte_offset,
+                    file_length = excluded.file_length
+                """;
+            cmd.Parameters.AddWithValue("$path", path);
+            cmd.Parameters.AddWithValue("$offset", offset);
+            cmd.Parameters.AddWithValue("$length", fileLength);
+            cmd.ExecuteNonQuery();
+        }
     }
 
     /// <summary>
@@ -192,78 +218,84 @@ public sealed class RollupStore : IDisposable
     /// </summary>
     public void Ingest(IEnumerable<TranscriptRecord> records)
     {
-        using var transaction = _connection.BeginTransaction();
-        using var cmd = _connection.CreateCommand();
-        cmd.Transaction = transaction;
-        cmd.CommandText = """
-            INSERT INTO ingested_requests
-                (request_id, utc_date, model, input_tokens, cache_creation_tokens,
-                 cache_read_tokens, output_tokens, last_timestamp)
-            VALUES ($id, $date, $model, $input, $cacheW, $cacheR, $output, $ts)
-            ON CONFLICT(request_id) DO UPDATE SET
-                utc_date = excluded.utc_date,
-                model = excluded.model,
-                input_tokens = excluded.input_tokens,
-                cache_creation_tokens = excluded.cache_creation_tokens,
-                cache_read_tokens = excluded.cache_read_tokens,
-                output_tokens = excluded.output_tokens,
-                last_timestamp = excluded.last_timestamp
-            """;
-        var pId = cmd.Parameters.Add("$id", SqliteType.Text);
-        var pDate = cmd.Parameters.Add("$date", SqliteType.Text);
-        var pModel = cmd.Parameters.Add("$model", SqliteType.Text);
-        var pInput = cmd.Parameters.Add("$input", SqliteType.Integer);
-        var pCacheW = cmd.Parameters.Add("$cacheW", SqliteType.Integer);
-        var pCacheR = cmd.Parameters.Add("$cacheR", SqliteType.Integer);
-        var pOutput = cmd.Parameters.Add("$output", SqliteType.Integer);
-        var pTs = cmd.Parameters.Add("$ts", SqliteType.Text);
-
-        foreach (var r in records)
+        lock (_gate)
         {
-            pId.Value = r.RequestId;
-            pDate.Value = r.TimestampUtc.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-            pModel.Value = r.Model;
-            pInput.Value = r.InputTokens;
-            pCacheW.Value = r.CacheCreationTokens;
-            pCacheR.Value = r.CacheReadTokens;
-            pOutput.Value = r.OutputTokens;
-            pTs.Value = r.TimestampUtc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture);
-            cmd.ExecuteNonQuery();
-        }
+            using var transaction = _connection.BeginTransaction();
+            using var cmd = _connection.CreateCommand();
+            cmd.Transaction = transaction;
+            cmd.CommandText = """
+                INSERT INTO ingested_requests
+                    (request_id, utc_date, model, input_tokens, cache_creation_tokens,
+                     cache_read_tokens, output_tokens, last_timestamp)
+                VALUES ($id, $date, $model, $input, $cacheW, $cacheR, $output, $ts)
+                ON CONFLICT(request_id) DO UPDATE SET
+                    utc_date = excluded.utc_date,
+                    model = excluded.model,
+                    input_tokens = excluded.input_tokens,
+                    cache_creation_tokens = excluded.cache_creation_tokens,
+                    cache_read_tokens = excluded.cache_read_tokens,
+                    output_tokens = excluded.output_tokens,
+                    last_timestamp = excluded.last_timestamp
+                """;
+            var pId = cmd.Parameters.Add("$id", SqliteType.Text);
+            var pDate = cmd.Parameters.Add("$date", SqliteType.Text);
+            var pModel = cmd.Parameters.Add("$model", SqliteType.Text);
+            var pInput = cmd.Parameters.Add("$input", SqliteType.Integer);
+            var pCacheW = cmd.Parameters.Add("$cacheW", SqliteType.Integer);
+            var pCacheR = cmd.Parameters.Add("$cacheR", SqliteType.Integer);
+            var pOutput = cmd.Parameters.Add("$output", SqliteType.Integer);
+            var pTs = cmd.Parameters.Add("$ts", SqliteType.Text);
 
-        transaction.Commit();
+            foreach (var r in records)
+            {
+                pId.Value = r.RequestId;
+                pDate.Value = r.TimestampUtc.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+                pModel.Value = r.Model;
+                pInput.Value = r.InputTokens;
+                pCacheW.Value = r.CacheCreationTokens;
+                pCacheR.Value = r.CacheReadTokens;
+                pOutput.Value = r.OutputTokens;
+                pTs.Value = r.TimestampUtc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture);
+                cmd.ExecuteNonQuery();
+            }
+
+            transaction.Commit();
+        }
     }
 
     /// <summary>Daily (UTC date × model) rollups for [from, to] inclusive.</summary>
     public IReadOnlyList<DailyRollup> GetDailyRollups(DateOnly fromUtc, DateOnly toUtc)
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT utc_date, model,
-                   SUM(input_tokens), SUM(cache_creation_tokens),
-                   SUM(cache_read_tokens), SUM(output_tokens), COUNT(*)
-            FROM ingested_requests
-            WHERE utc_date >= $from AND utc_date <= $to
-            GROUP BY utc_date, model
-            ORDER BY utc_date, model
-            """;
-        cmd.Parameters.AddWithValue("$from", fromUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-        cmd.Parameters.AddWithValue("$to", toUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-
-        var result = new List<DailyRollup>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
+        lock (_gate)
         {
-            result.Add(new DailyRollup(
-                DateOnly.ParseExact(reader.GetString(0), "yyyy-MM-dd", CultureInfo.InvariantCulture),
-                reader.GetString(1),
-                reader.GetInt64(2),
-                reader.GetInt64(3),
-                reader.GetInt64(4),
-                reader.GetInt64(5),
-                reader.GetInt64(6)));
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                SELECT utc_date, model,
+                       SUM(input_tokens), SUM(cache_creation_tokens),
+                       SUM(cache_read_tokens), SUM(output_tokens), COUNT(*)
+                FROM ingested_requests
+                WHERE utc_date >= $from AND utc_date <= $to
+                GROUP BY utc_date, model
+                ORDER BY utc_date, model
+                """;
+            cmd.Parameters.AddWithValue("$from", fromUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            cmd.Parameters.AddWithValue("$to", toUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+
+            var result = new List<DailyRollup>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add(new DailyRollup(
+                    DateOnly.ParseExact(reader.GetString(0), "yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    reader.GetString(1),
+                    reader.GetInt64(2),
+                    reader.GetInt64(3),
+                    reader.GetInt64(4),
+                    reader.GetInt64(5),
+                    reader.GetInt64(6)));
+            }
+            return result;
         }
-        return result;
     }
 
     /// <summary>
@@ -273,11 +305,14 @@ public sealed class RollupStore : IDisposable
     /// </summary>
     public int CountRecordedDays(DateOnly fromUtc, DateOnly toUtc)
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(DISTINCT utc_date) FROM ingested_requests WHERE utc_date >= $from AND utc_date <= $to";
-        cmd.Parameters.AddWithValue("$from", fromUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-        cmd.Parameters.AddWithValue("$to", toUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-        return Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(DISTINCT utc_date) FROM ingested_requests WHERE utc_date >= $from AND utc_date <= $to";
+            cmd.Parameters.AddWithValue("$from", fromUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            cmd.Parameters.AddWithValue("$to", toUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            return Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
     }
 
     /// <summary>
@@ -287,43 +322,59 @@ public sealed class RollupStore : IDisposable
     /// </summary>
     public IReadOnlyList<DailyRollup> GetUsageSince(DateTimeOffset sinceUtc)
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT model,
-                   SUM(input_tokens), SUM(cache_creation_tokens),
-                   SUM(cache_read_tokens), SUM(output_tokens), COUNT(*)
-            FROM ingested_requests
-            WHERE last_timestamp >= $since
-            GROUP BY model
-            ORDER BY model
-            """;
-        cmd.Parameters.AddWithValue("$since", sinceUtc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
-
-        var result = new List<DailyRollup>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
+        lock (_gate)
         {
-            result.Add(new DailyRollup(
-                DateOnly.FromDateTime(sinceUtc.UtcDateTime),
-                reader.GetString(0),
-                reader.GetInt64(1),
-                reader.GetInt64(2),
-                reader.GetInt64(3),
-                reader.GetInt64(4),
-                reader.GetInt64(5)));
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                SELECT model,
+                       SUM(input_tokens), SUM(cache_creation_tokens),
+                       SUM(cache_read_tokens), SUM(output_tokens), COUNT(*)
+                FROM ingested_requests
+                WHERE last_timestamp >= $since
+                GROUP BY model
+                ORDER BY model
+                """;
+            cmd.Parameters.AddWithValue("$since", sinceUtc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
+
+            var result = new List<DailyRollup>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                result.Add(new DailyRollup(
+                    DateOnly.FromDateTime(sinceUtc.UtcDateTime),
+                    reader.GetString(0),
+                    reader.GetInt64(1),
+                    reader.GetInt64(2),
+                    reader.GetInt64(3),
+                    reader.GetInt64(4),
+                    reader.GetInt64(5)));
+            }
+            return result;
         }
-        return result;
     }
 
     /// <summary>Timestamp of the newest ingested record, or null when the store is empty.</summary>
     public DateTimeOffset? LatestActivityUtc()
     {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "SELECT MAX(last_timestamp) FROM ingested_requests";
-        return cmd.ExecuteScalar() is string s
-            ? DateTimeOffset.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal)
-            : null;
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT MAX(last_timestamp) FROM ingested_requests";
+            return cmd.ExecuteScalar() is string s
+                ? DateTimeOffset.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal)
+                : null;
+        }
     }
 
-    public void Dispose() => _connection.Dispose();
+    /// <summary>
+    /// Closes the connection. Taken under the gate so a poll still writing on the thread
+    /// pool cannot be disposed out from under itself while the app shuts down.
+    /// </summary>
+    public void Dispose()
+    {
+        lock (_gate)
+        {
+            _connection.Dispose();
+        }
+    }
 }

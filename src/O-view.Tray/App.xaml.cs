@@ -140,7 +140,10 @@ public partial class App : System.Windows.Application
         _updates = new UpdateService(log);
         _engine.UpdateCheckDue += () => _ = BackgroundCheckAsync();
 
-        _engine.Start(new DispatcherTimerFactory());
+        // Ticks arrive on the UI thread; the reading happens off it and comes back through
+        // the dispatcher, so a first ingest over a large transcript history cannot hold the
+        // message pump (issue #125).
+        _engine.Start(new DispatcherTimerFactory(), new WpfUiDispatcher());
 
         if (args.ContainsKey("--test-notify"))
         {
