@@ -156,12 +156,18 @@ public class DiagnosticsBundleTests : IDisposable
     }
 
     /// <summary>
-    /// The bundle is pasted into public bug reports. It carries no token and no
-    /// conversation content; the org UUID is the one identifier included, because it is the
-    /// documented filter key.
+    /// The bundle is pasted into public bug reports, so it must carry no credential of any
+    /// kind and no conversation content.
+    ///
+    /// <para>This used to be called <c>NothingIdentifyingBeyondTheOrgKeyIsAdded</c>, on the
+    /// reasoning that the org UUID was a permitted exception because it is the documented
+    /// filter key. It is no longer an exception: <see cref="Redact"/> truncates it, which
+    /// keeps the comparison the filter key is needed for without publishing the identifier.
+    /// The name went with the reasoning — a test asserting the old rule by name, while the
+    /// code enforces a stricter one, is a comment that lies.</para>
     /// </summary>
     [Fact]
-    public void NothingIdentifyingBeyondTheOrgKeyIsAdded()
+    public void NoCredentialOrConversationContentReachesTheBundle()
     {
         var bundle = Build(Linux);
 
