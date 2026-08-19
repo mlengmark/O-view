@@ -37,6 +37,16 @@ History therefore accumulates from O-view's install date forward and survives Cl
 
 The store cannot invent history that predates installation. Consistent with the "never fabricate a number" rule, any window that is not fully covered must be **labelled with its actual coverage** — e.g. `3 of 31 days recorded`. A 31-day tile showing a small number without that caveat reads as low usage rather than short history, which is a materially misleading difference.
 
+> **Correction (2026-08-19, [#142](https://github.com/mlengmark/O-view/issues/142)) — the implementation had this backwards, and no decision here changes.**
+>
+> "Coverage" above means *how much of the window predates the store*. What shipped counted **days carrying usage**: a `SELECT COUNT(DISTINCT utc_date)` over the request ledger, in which a day the user spent away from Claude was indistinguishable from a day before O-view existed.
+>
+> That inverted the paragraph's own purpose. A user who took a week off was told `18 of 31 days recorded` — their history read as *short* when it was complete and their usage was simply low, which is the misreading this requirement exists to prevent, pointed the other way. It also disagreed with the graph rendered directly beneath the label, which had always drawn an idle day as a real day with a zero bar.
+>
+> Coverage is now derived in `PanelStatistics.Build` from the same first-recorded-day boundary that marks `DayUsage.PreInstall`, so the caveat and the chart are one derivation and cannot disagree. `RollupStore.CountRecordedDays` is deleted rather than left unused — a second, wrong answer to the same question is how it would come back.
+>
+> Two consequences accepted deliberately: the caveat now disappears for most users once they are past 31 days (correct — it is for short history, and that history is not short), and a store wiped by the corruption guard legitimately reports shrunken coverage if Claude Code has since pruned the transcripts behind it (also correct — the data really is gone, and it is the floor the graph already drew).
+
 ## Alternatives considered
 
 | Option | Why rejected |

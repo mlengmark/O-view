@@ -17,6 +17,15 @@ public sealed record DayUsage(DateOnly DateUtc, long TotalTokens, bool PreInstal
 /// keep the Est. prefix. A null estimate means an unpriced model was involved and
 /// the tile shows unknown rather than a partial sum presented as a total.
 /// </summary>
+/// <param name="RecordedDays">
+/// How many days of the window O-view has data <b>for</b> — every day from the first day it
+/// ever recorded onward, whether or not there was usage on it.
+///
+/// <para>A day inside that era with no usage is a <i>genuine zero</i> and counts. Only days
+/// before the store began are missing, which is the same line
+/// <see cref="DayUsage.PreInstall"/> draws for the graph — deliberately, so the caveat and
+/// the chart beneath it cannot say different things (issue #142).</para>
+/// </param>
 public sealed record PanelStatistics(
     long TokensToday,
     decimal? EstTodayUsd,
@@ -65,7 +74,12 @@ public sealed record PanelStatistics(
     /// figure without it reads as low usage rather than as short history. That makes it
     /// exactly the kind of string that should have one definition — it was built by hand
     /// in two separate places in the panel, which is two places to forget it.</para>
-    /// </summary>
+    ///
+    /// <para><b><see cref="RecordedDays"/> counts days O-view has data <i>for</i>, not days
+    /// with usage on them</b> (GitHub issue #142). Counting the latter inverted the caveat's
+    /// whole purpose: a user who took a week off was told "18 of 31 days recorded" — their
+    /// history read as short when it was complete and their usage was simply low, which is
+    /// precisely the misreading ADR-0006 wrote this label to prevent.</para>
     public string CoverageNote =>
         HasPartialHistory ? $"{RecordedDays} of {WindowDays} days recorded" : "";
 
@@ -120,6 +134,12 @@ public sealed record PanelStatistics(
             series.Add(new DayUsage(day, byDate.GetValueOrDefault(day), preInstall));
         }
 
+        // Coverage is derived from the series rather than counted again in SQL (issue #142).
+        // The store could only ever answer "how many days had usage", which is a different
+        // question and the wrong one — and it disagreed with the graph rendered directly
+        // beneath the label, from this same data. One derivation cannot disagree with itself.
+        var recordedDays = series.Count(d => !d.PreInstall);
+
         // 31-day credit spend (GitHub issue #3): the estimated API-rate value of usage
         // on models that bill as extra usage rather than drawing from the plan window.
         // A retroactive per-model estimate — see CreditBilledModels for why this is
@@ -133,7 +153,7 @@ public sealed record PanelStatistics(
             EstimateTotal(todayRollups),
             rollups.Sum(r => r.TotalTokens),
             est31,
-            store.CountRecordedDays(windowStart, today),
+            recordedDays,
             windowDays,
             series,
             creditRollups.Sum(r => r.TotalTokens),
