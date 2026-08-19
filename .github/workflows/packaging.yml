@@ -31,9 +31,15 @@ permissions:
 env:
   VERSION: ${{ github.event.inputs.version || '0.6.0-dev' }}
 
+# Every job here is bounded. Without these, a step that wedges runs to the Actions default
+# of six hours: on 2026-08-19 four jobs across two runs sat on the Lintian step for over an
+# hour each, and a job's logs are not retrievable while it is still in progress, so the
+# stall was invisible from the outside until it was cancelled. The numbers are several times
+# each job's observed duration — they exist to cap a hang, not to police a slow runner.
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -82,9 +88,37 @@ jobs:
       - name: Lintian
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq lintian
+
+          # Bounded, after this step stalled on 2026-08-19: four jobs across two runs sat
+          # here for over an hour each -- both architectures in the first run, amd64 only in
+          # the second -- against a normal time of roughly two minutes. No packaging change
+          # on either branch, and it cleared on its own within the hour, so it was the runner
+          # infrastructure rather than the package or lintian itself.
+          #
+          # The bound is here because of what the stall cost rather than what caused it: a
+          # job's logs cannot be retrieved while it is in progress, so an hour of hanging
+          # showed nothing beyond the step name, and without timeout-minutes it would have
+          # run to the Actions default of six hours.
+          #
+          # 15 minutes is several times the observed duration, so it cannot fire on a merely
+          # slow runner.
+          #
+          # --tag-display-limit 0 rather than --no-tag-display-limit: lintian prints "a future
+          # release will drop" the latter. Same meaning, and it fails loudly today rather than
+          # silently the week the runner image updates.
+          set +e
+          timeout 900 lintian --fail-on error --tag-display-limit 0 dist/o-view_*_${{ matrix.arch }}.deb
+          STATUS=$?
+          set -e
+
           # Warnings are triaged by a human; errors are not acceptable.
-          lintian --fail-on error --no-tag-display-limit dist/o-view_*_${{ matrix.arch }}.deb || {
-            echo "lintian reported an error"; exit 1; }
+          if [ "$STATUS" -eq 124 ]; then
+            echo "lintian did not finish within 15 minutes and was killed — this is the stall the bound exists for, not a package defect"
+            exit 1
+          elif [ "$STATUS" -ne 0 ]; then
+            echo "lintian reported an error"
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -95,6 +129,7 @@ jobs:
   install:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -134,11 +169,97 @@ jobs:
             echo "OK: installs, runs, and purge left user data intact"
           '
 
+  # Every job above installs onto a clean image, which is the one thing no real user after
+  # the first release ever does. This one upgrades.
+  #
+  # What it guards is not the binary — dpkg replaces that — but the three files in
+  # ~/.local/share/O-view that outlive the package. The weekly-reset log is the one that
+  # matters: it cannot be rebuilt from anything on disk and costs a week to re-observe
+  # (ADR-0011), so losing it once is unrecoverable in a way losing the rollup store is not.
+  #
+  # build.sh deliberately ships no maintainer scripts, so today the data survives by
+  # construction. That is exactly why this is worth pinning: the property is currently held
+  # up by the absence of code, and nothing fails if someone later adds a postrm that tidies
+  # up after itself. The comment in build.sh saying not to is the only thing standing there.
+  #
+  # Run across the full matrix rather than one image, because the upgrade re-resolves
+  # Depends — and the ICU and OpenSSL alternatives differ on every one of these releases.
+  upgrade:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ["ubuntu:22.04", "ubuntu:24.04", "debian:12"]
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: packages-amd64
+          path: dist
+
+      - name: Upgrade over a previous version on ${{ matrix.image }}
+        run: |
+          docker run --rm -v "$PWD/dist:/dist" ${{ matrix.image }} bash -euxc '
+            apt-get update -qq
+
+            # "The previous version" is the package under test, repacked with a lower version
+            # number. Synthesised rather than downloaded from the releases page so the test
+            # stays hermetic: no network, nothing that breaks when an old asset is renamed,
+            # and it still works on a branch that has never been released. The upgrade TARGET
+            # is the real built artifact, which is the half that has to be right.
+            NEW_VERSION="$(dpkg-deb -f /dist/o-view_*_amd64.deb Version)"
+            mkdir -p /tmp/prev
+            dpkg-deb -R /dist/o-view_*_amd64.deb /tmp/prev
+            sed -i "s/^Version: .*/Version: 0.0.1-previous/" /tmp/prev/DEBIAN/control
+            # -Znone: this package is installed once and thrown away, so re-compressing a
+            # self-contained .NET payload three times over would be the slowest step here for
+            # no benefit.
+            dpkg-deb -Znone --root-owner-group --build /tmp/prev /tmp/prev.deb
+
+            apt-get install -y -qq /tmp/prev.deb
+            dpkg -s o-view | grep -qx "Version: 0.0.1-previous"
+
+            # State a real install accrues. Written after the old version is in place, so the
+            # upgrade meets them exactly as it would on a machine that has been running for
+            # weeks. usage.db is opaque bytes on purpose: what is being tested is that dpkg
+            # leaves the file alone, not anything about its contents.
+            mkdir -p /root/.local/share/O-view
+            printf "%s" "{\"NotifyOnThreshold\":false,\"ThresholdPercent\":42,\"LastUpdateNoticeTag\":\"v0.0.1\"}" \
+              > /root/.local/share/O-view/settings.json
+            printf "%s" "the-observed-weekly-reset-that-costs-a-week-to-re-observe" \
+              > /root/.local/share/O-view/weekly-resets.json
+            head -c 4096 /dev/urandom > /root/.local/share/O-view/usage.db
+            sha256sum /root/.local/share/O-view/settings.json \
+                      /root/.local/share/O-view/weekly-resets.json \
+                      /root/.local/share/O-view/usage.db > /tmp/before.sha256
+
+            # The upgrade itself, through apt so dependency re-resolution is exercised too.
+            apt-get install -y -qq /dist/o-view_*_amd64.deb
+
+            # The new version is the one installed, and it is fully configured rather than
+            # left half-unpacked -- which is what a failing maintainer script would look like.
+            dpkg -s o-view | grep -qx "Version: $NEW_VERSION"
+            dpkg -s o-view | grep -qx "Status: install ok installed"
+
+            # The point of the whole job: all three files byte-identical across the upgrade.
+            sha256sum -c /tmp/before.sha256
+
+            # And the upgraded install is not merely present but working — a preserved
+            # weekly-reset log is no use behind a binary that will not start.
+            test -x /usr/bin/o-view
+            o-view --samples /tmp/icons
+            test "$(ls /tmp/icons/*.png | wc -l)" -gt 0
+            echo "OK: upgrade preserved settings, rollup store and weekly-reset log"
+          '
+
   # arm64 through emulation. Slower and only a smoke test, but it is the difference between
   # "we built an arm64 payload" and "an arm64 payload runs".
   install-arm64:
     needs: build
     runs-on: ubuntu-latest
+    # The most generous bound here: everything inside runs through QEMU.
+    timeout-minutes: 40
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -162,6 +283,7 @@ jobs:
   tarball:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
