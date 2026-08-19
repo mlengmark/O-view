@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using OView.App;
 using OView.Core.Models;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
@@ -20,14 +21,21 @@ namespace OView.Linux.Panel;
 /// <para>So this centres on the active screen and closes on Esc or deactivation. If a real
 /// desktop turns out to allow better placement, that is an improvement to make with
 /// evidence rather than a guess to build on now.</para>
+///
+/// <para>Deactivation only dismisses once the panel has actually been focused — see
+/// <see cref="PanelDismissal"/> for why an unguarded handler makes a refused activation look
+/// exactly like a broken tray icon.</para>
 /// </summary>
 public sealed class PanelWindow : Window
 {
     private readonly PanelContent _content;
+    private readonly PanelDismissal _dismissal = new();
+    private readonly IAppLog? _log;
 
-    public PanelWindow(LinuxPanelTheme theme)
+    public PanelWindow(LinuxPanelTheme theme, IAppLog? log = null)
     {
         _content = new PanelContent(theme);
+        _log = log;
 
         Title = "O-view";
         Content = _content;
@@ -46,7 +54,22 @@ public sealed class PanelWindow : Window
                 Hide();
             }
         };
-        Deactivated += (_, _) => Hide();
+        Activated += (_, _) => _dismissal.Activated();
+        Deactivated += (_, _) =>
+        {
+            if (_dismissal.ShouldHideOnDeactivated())
+            {
+                Hide();
+                return;
+            }
+
+            // Not a click-away — the compositor refused the activation. Named in the log
+            // because "panel opened" alone cannot distinguish this from the #124 deadlock,
+            // and the two need completely different fixes.
+            _log?.Write(
+                "panel deactivated before it was ever focused — dismissal suppressed "
+                + $"(x{_dismissal.SuppressedDeactivations}); the window manager declined to activate it");
+        };
     }
 
     public void ShowWith(
@@ -58,6 +81,7 @@ public sealed class PanelWindow : Window
         DateTimeOffset utcNow)
     {
         _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow);
+        _dismissal.Opening();
         Show();
         Activate();
     }
