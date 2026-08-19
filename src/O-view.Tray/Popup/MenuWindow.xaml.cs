@@ -305,6 +305,11 @@ public partial class MenuWindow : Window, IFlyout
     /// <summary>
     /// Opens or closes the threshold list for an offscreen render. Skips the re-dock, which
     /// needs a placed window; the sample renderer never shows one.
+    ///
+    /// <para>Note that skipping the re-dock also skips the clip re-fit, so this path cannot
+    /// see the clipping bug that <see cref="ContentFullyDrawn"/> exists for — nothing here
+    /// ever animates, so there is no clip to be stale. <c>--menu-check</c> drives the real
+    /// window and is where that property is actually asserted.</para>
     /// </summary>
     internal void ExpandThresholdsForVerification(bool expanded) =>
         SetOptionsExpanded(expanded, redock: false);
@@ -314,6 +319,22 @@ public partial class MenuWindow : Window, IFlyout
 
     /// <summary>Whether the option list is open — the state a click on the pill must flip.</summary>
     internal bool ThresholdOptionsOpen => ThresholdOptions.Visibility == Visibility.Visible;
+
+    /// <summary>
+    /// Whether every pixel of the card is actually being drawn — i.e. the open transition's
+    /// clip, if one is still attached, covers the whole content.
+    ///
+    /// <para>This exists because expanding the threshold list severed the two: the card grew,
+    /// the window grew with it, and the content stayed clipped to the height it had when the
+    /// flyout opened. Rows below the fold were sliced in half and the bottom border and corner
+    /// vanished, which reads as the UI breaking outright. Logical state was entirely correct
+    /// throughout — the list was open, the label had moved, the tick had not — so nothing the
+    /// verification asserted could see it.</para>
+    /// </summary>
+    internal bool ContentFullyDrawn =>
+        Content is not FrameworkElement content
+        || content.Clip is not RectangleGeometry clip
+        || (clip.Rect.Width + 0.5 >= content.ActualWidth && clip.Rect.Height + 0.5 >= content.ActualHeight);
 
     /// <summary>
     /// Activates the pill through its automation peer, exactly as <see cref="InvokeRow"/>

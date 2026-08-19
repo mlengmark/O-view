@@ -559,6 +559,7 @@ internal static class SampleRenderer
         var thresholdSkipped = 0;
         var listOpened = 0;
         var choiceApplied = 0;
+        var drawnWhileExpanded = 0;
         var notifyTickBeforeThreshold = false;
         var thresholdCycleUsable = false;
 
@@ -631,6 +632,15 @@ internal static class SampleRenderer
                 {
                     listOpened++;
                 }
+
+                // The expanded card must be fully drawn, not just logically expanded. The open
+                // transition clips the content to the size it had when the flyout opened, and
+                // growing it left the rows below that line sliced off — with every logical
+                // assertion above still passing.
+                if (thresholdCycleUsable && menu.ContentFullyDrawn)
+                {
+                    drawnWhileExpanded++;
+                }
             }));
             steps.Add(($"cycle {n}: choose 90%", () => menu.InvokeThresholdOption(90)));
             steps.Add(($"cycle {n}: chosen, list closed", () =>
@@ -671,13 +681,15 @@ internal static class SampleRenderer
                                       ? $"  ({thresholdSkipped} cycle(s) skipped — flyout was not open, see #11)"
                                       : ""));
                 report.AppendLine($"choice applied, list closed, tick   : {choiceApplied} of {thresholdAttempts} expected");
+                report.AppendLine($"card fully drawn while expanded     : {drawnWhileExpanded} of {thresholdAttempts} expected");
                 var pass = fired["updates"] == expected
                            && fired["diagnostics"] == expected
                            && toggleFlips == toggleAttempts
                            // At least one cycle must have been testable, or this passes vacuously.
                            && thresholdAttempts > 0
                            && listOpened == thresholdAttempts
-                           && choiceApplied == thresholdAttempts;
+                           && choiceApplied == thresholdAttempts
+                           && drawnWhileExpanded == thresholdAttempts;
                 report.AppendLine($"RESULT: {(pass ? "PASS" : "FAIL")}");
                 File.WriteAllText(path, report.ToString());
                 shutdown();
