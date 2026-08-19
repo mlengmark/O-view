@@ -138,6 +138,27 @@ internal sealed class DockedFlyout(Window host)
     }
 
     /// <summary>
+    /// Re-places an already-open surface at the same corner for a new size.
+    ///
+    /// <para>For content that grows or shrinks while the flyout is open — the menu's threshold
+    /// list. The card is <c>SizeToContent</c> and docked by its top-left, so growing it without
+    /// this pushes the new rows down into the taskbar, which is precisely the failure the
+    /// docked placement replaced a cursor-placed <c>ContextMenu</c> to avoid (issue #33).</para>
+    ///
+    /// <para>Deliberately does not touch the close state machine or the animation: it moves an
+    /// open window and nothing else.</para>
+    /// </summary>
+    public void Redock(double widthDip, double heightDip)
+    {
+        if (_closing)
+        {
+            return;   // it is on its way out; moving it now only makes the fade travel
+        }
+
+        (host.Left, host.Top, _dockOrigin) = PopupPositioner.Place(widthDip, heightDip);
+    }
+
+    /// <summary>
     /// Fades and shrinks back into the docked corner, then hides — and only then runs
     /// <paramref name="after"/>. Waiting the ~110 ms costs nothing perceptible and keeps the
     /// guarantee that an action's balloon or modal never appears behind a still-visible

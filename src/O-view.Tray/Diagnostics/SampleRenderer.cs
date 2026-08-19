@@ -149,16 +149,32 @@ internal static class SampleRenderer
         const double scale = 2.0;
         const double pad = 16;
 
+        // The threshold selector needs its open state in the sheet, not just its closed one:
+        // the list is inline in the card (it is not a Popup, precisely so it can be rendered),
+        // and it is the frame that shows whether the group reads as belonging to the row above
+        // it. `suffix` renders the two copy options side by side — see MenuWindow.NotifySuffixText.
+        var cases = new (string Name, bool Startup, bool Notify, int Threshold, bool Open, string Suffix)[]
+        {
+            ("both-on", true, true, 70, false, "session usage"),
+            ("both-off", false, false, 70, false, "session usage"),
+            ("threshold-open", true, true, 70, true, "session usage"),
+            ("threshold-open-90", true, true, 90, true, "session usage"),
+            ("threshold-90", true, true, 90, false, "session usage"),
+            // The literal wording from the request, for comparison.
+            ("threshold-open-bare-copy", true, true, 80, true, "usage"),
+            // A hand-edited settings.json value that is none of the three offered. It must
+            // render honestly rather than snap to the nearest option.
+            ("threshold-unlisted-75", true, true, 75, true, "session usage"),
+        };
+
         foreach (var light in new[] { true, false })
         {
-            foreach (var (name, startup, notify) in new (string, bool, bool)[]
+            foreach (var (name, startup, notify, threshold, open, suffix) in cases)
             {
-                ("both-on", true, true),
-                ("both-off", false, false),
-            })
-            {
+                MenuWindow.NotifySuffixText = suffix;
                 var menu = new MenuWindow { ThemeOverride = light };
-                menu.Populate(startup, notify, 70, UpdateService.CurrentVersion);
+                menu.Populate(startup, notify, threshold, UpdateService.CurrentVersion);
+                menu.ExpandThresholdsForVerification(open);
                 var card = menu.RenderToBitmap(scale);
 
                 SavePng(
@@ -166,6 +182,8 @@ internal static class SampleRenderer
                     Path.Combine(dir, $"menu-{name}-{(light ? "light" : "dark")}.png"));
             }
         }
+
+        MenuWindow.NotifySuffixText = "session usage";
     }
 
     /// <summary>
