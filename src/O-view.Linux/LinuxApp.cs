@@ -81,7 +81,7 @@ public sealed class LinuxApp : Application
             IsVisible = true,
             Menu = BuildMenu(),
         };
-        _tray.Clicked += (_, _) => ShowPanel(engine);
+        _tray.Clicked += TrayClickHandler(engine);
 
         // No Post needed: the engine publishes through the dispatcher handed to Start below,
         // so this already arrives on the UI thread.
@@ -118,8 +118,26 @@ public sealed class LinuxApp : Application
     }
 
     /// <summary>
+    /// The tray icon's click handler, marshalled onto the UI thread (issue #143).
+    ///
+    /// <para>Its own method so the wiring is assertable without a session bus: the returned
+    /// delegate's <c>Method.DeclaringType</c> is <see cref="BusCallback"/>, and a test can
+    /// check that on the real delegate rather than on a re-implementation. It proves the
+    /// marshalling is still in place; it cannot prove <see cref="StartTray"/> still uses this
+    /// method, and nothing available on a machine with no Linux desktop can.</para>
+    /// </summary>
+    internal EventHandler TrayClickHandler(UsageEngine engine) =>
+        BusCallback.For(_dispatcher, () => ShowPanel(engine), _log);
+
+    /// <summary>
     /// Opens the detail panel, rebuilt for the current theme so a desktop switched between
     /// light and dark never needs a restart — the same rule the WPF panel follows.
+    ///
+    /// <para><b>UI thread only.</b> Reached through <see cref="BusCallback"/>, because the
+    /// tray click that calls it arrives on the D-Bus thread and everything below here builds
+    /// and shows an Avalonia window. Called directly from a bus callback, this segfaulted
+    /// (issue #143) — and note that the <c>catch</c> below cannot help with that: a SIGSEGV
+    /// is not an exception, which is why the report was a core dump and an empty log.</para>
     /// </summary>
     private void ShowPanel(UsageEngine engine)
     {
@@ -229,19 +247,26 @@ public sealed class LinuxApp : Application
         // disk — and a tick claiming otherwise would be a fabricated fact about the user's
         // machine (rule 6). IStartupRegistration.Apply is shared with the Windows head
         // precisely so the two cannot get this subtly different.
-        startup.Click += (_, _) =>
+        //
+        // Marshalled for the same reason the tray click is (issue #143): a DBusMenu event
+        // arrives on the bus thread, and this both touches the disk and sets IsChecked on an
+        // AvaloniaObject. It was the second of the three faults that one root cause produced.
+        startup.Click += BusCallback.For(_dispatcher, () =>
         {
             var actual = _startup.Apply(!startup.IsChecked);
             startup.IsChecked = actual;
             _log?.Write($"run at startup -> {actual} ({XdgAutostartRegistration.DefaultDirectory})");
-        };
+        }, _log);
 
         var exit = new NativeMenuItem("Exit O-view");
-        exit.Click += (_, _) =>
+
+        // The third. Shutdown() tears down the dispatcher, so calling it from the bus thread
+        // races the UI thread it is dismantling.
+        exit.Click += BusCallback.For(_dispatcher, () =>
         {
             _hostWatch?.Cancel();
             (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown();
-        };
+        }, _log);
 
         _startupItem = startup;
         return [startup, exit];

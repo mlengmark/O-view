@@ -60,7 +60,7 @@ run Claude Desktop has nothing for O-view to read. **macOS is out of scope.** Se
 | Reading Claude's data | ✅ | ✅ **seen working** — every path resolved, 5,645 of 5,645 plan-history samples parsed, Cowork logs and account tier read |
 | Tray icon | ✅ | ✅ **seen working** on KDE Plasma / Wayland. **Needs a notification-area host** — GNOME ships none by default, see below |
 | Tooltip | ✅ | ✅ built, *never observed* |
-| Detail panel | ✅ docked flyout at the taskbar corner | ⚠️ a **plain window in the work area's corner**, not docked to the icon — see below. *Never observed:* the one report could not open it. Two separate causes fixed since (v0.6.4, v0.6.5), neither re-tested, and the corner placement has never been seen either |
+| Detail panel | ✅ docked flyout at the taskbar corner | ⚠️ a **plain window in the work area's corner**, not docked to the icon — see below. *Never observed:* neither report could open it — the left click first deadlocked the app, then crashed it. Three separate causes fixed since, none re-tested, and the corner placement has never been seen either |
 | Right-click menu | ✅ full: startup, notifications, diagnostics, updates, exit | ⚠️ **Run at startup and Exit.** Notifications, diagnostics and updates are not on the menu — `--diagnose` and `--probe` cover them from a terminal. *Rendering never observed;* took tens of seconds on the one report (fixed in v0.6.4, not re-tested) |
 | Notifications | ✅ balloon tip | ✅ freedesktop notifications, *never observed* |
 | Run at startup | ✅ registry `Run` key, toggled from the menu | ✅ XDG autostart `.desktop`, from the menu **or** `o-view --startup-on`, *menu rendering never observed* |
@@ -76,17 +76,25 @@ run Claude Desktop has nothing for O-view to read. **macOS is out of scope.** Se
   runs in clean Ubuntu 22.04, Ubuntu 24.04, Debian 12 and Fedora containers on every change.
   But a container is headless. That proves the package is sound, not that an icon appears in
   a panel, a tooltip is legible or a theme follows.
-- ***Fixed, not re-tested*** — **three fixes now sit in this state.** The one report found
+- ***Fixed, not re-tested*** — **four fixes now sit in this state.** The one report found
   the app unusable past the tray icon: the first left click deadlocked it, and the menu took
   tens of seconds. Both causes were found and fixed in v0.6.4. Reading that code turned up a
   third failure nobody had hit yet — the panel dismissed itself when a compositor refused to
   focus it — fixed in v0.6.5.
 
-  All three are reasoned from the code and guarded by tests, but **no test can reach a live
-  session bus and a dispatcher together**, which is exactly how the first one shipped. So
-  "fixed" here means found and understood, not seen working. The label deliberately does not
-  name a version: it applies to whatever is currently shipped and unverified, and pinning it
-  to one release just means editing it at the next.
+  A second report then found the left click **crashing the whole app** rather than
+  deadlocking it: `segmentation fault (core dumped)`. Avalonia's tray backend raises the
+  click on D-Bus's own thread, and the head built its window straight from there
+  ([#143](https://github.com/mlengmark/O-view/issues/143)). Every bus callback is marshalled
+  onto the UI thread now — the menu items had the same defect, unreported only because the
+  click was hit first.
+
+  All four are reasoned from the code and guarded by tests, but **no test can reach a live
+  session bus and a dispatcher together**, which is exactly how the first one shipped, and
+  how the fourth one shipped past the fix for the first. So "fixed" here means found and
+  understood, not seen working. The label deliberately does not name a version: it applies to
+  whatever is currently shipped and unverified, and pinning it to one release just means
+  editing it at the next.
 
 Rows are recorded this way rather than ticked because shipping something is not the same as
 having seen it work, and claiming otherwise would be exactly the kind of unearned assertion

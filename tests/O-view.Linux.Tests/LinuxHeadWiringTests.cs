@@ -1,6 +1,8 @@
 using System.Reflection;
+using Avalonia.Controls;
 using OView.App.Platform;
 using OView.Linux.Platform;
+using OView.Linux.Tray;
 
 namespace OView.Linux.Tests;
 
@@ -107,6 +109,55 @@ public class LinuxHeadWiringTests
     /// covers it by behaviour instead.</para>
     /// </summary>
     private static readonly HashSet<string> ResolvedElsewhere = ["ISingleInstanceGuard"];
+
+    // ── bus callbacks run on the UI thread (issue #143) ─────────────────────────────
+    //
+    // Avalonia's SNI backend raises TrayIcon.Clicked and NativeMenuItem.Click on Tmds.DBus's
+    // thread, not the UI thread. Building a window there segfaulted the app on the first left
+    // click anyone ever gave it. These assert on the REAL delegates the head attaches, not on
+    // a re-implementation — a handler that goes through BusCallback carries its declaring
+    // type, so deleting the marshalling changes what the assertion sees.
+    //
+    // What they cannot do is prove the app no longer crashes: that needs a live session bus
+    // and a dispatcher in one process, which is exactly the gap that let #124 ship.
+
+    [Fact]
+    public void TheTrayClickHandlerIsMarshalledOntoTheUiThread()
+    {
+        // The engine argument is only dereferenced when the work runs, and nothing here runs
+        // it — so no store is opened and no path on this machine is touched.
+        var handler = (EventHandler)typeof(LinuxApp)
+            .GetMethod("TrayClickHandler", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(Head, [null])!;
+
+        Assert.Equal(typeof(BusCallback), handler.Method.DeclaringType);
+    }
+
+    /// <summary>
+    /// Every menu item too. A sweep rather than one test each, so a fourth row added without
+    /// the marshalling fails here instead of waiting for a hardware report.
+    /// </summary>
+    [Fact]
+    public void EveryMenuItemsClickHandlerIsMarshalledOntoTheUiThread()
+    {
+        var menu = (NativeMenu)typeof(LinuxApp)
+            .GetMethod("BuildMenu", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(Head, null)!;
+
+        var items = menu.Items.OfType<NativeMenuItem>().ToArray();
+        Assert.NotEmpty(items);
+
+        var clickField = typeof(NativeMenuItem).GetField("Click", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(clickField);   // the toolkit moved the event; the check below is blind without it
+
+        foreach (var item in items)
+        {
+            var handlers = ((Delegate?)clickField!.GetValue(item))?.GetInvocationList() ?? [];
+
+            Assert.NotEmpty(handlers);
+            Assert.All(handlers, h => Assert.Equal(typeof(BusCallback), h.Method.DeclaringType));
+        }
+    }
 
     /// <summary>
     /// The seam the sweep above cannot see. Verified by using it the way the head does: the
