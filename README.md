@@ -4,7 +4,7 @@ A notification-area (system tray) app that displays your Claude AI token usage a
 
 > **Status:** **Windows 11 and Linux are both supported as of [v0.6.0](https://github.com/mlengmark/O-view/releases/latest)**, which ships every platform's assets under one tag — Windows installer and portable exe, `.deb` for amd64 and arm64, and portable tarballs.
 >
-> Windows has been shipped and in daily use since v0.1.0. **Linux is newly released and has not yet been confirmed on a physical Linux desktop:** its packages install and run in clean Ubuntu 22.04, Ubuntu 24.04, Debian 12 and Fedora containers on every change, but a container is headless, so the rows marked *unverified* in [Platform support](#platform-support) are exactly that — and will stay that way until someone reports back. See [`docs/adr/`](docs/adr/) for the decisions behind both.
+> Windows has been shipped and in daily use since v0.1.0. **Linux has now been run on a physical desktop once** — an Arch-based system on KDE Plasma under Wayland, reporting against v0.6.1. It confirmed that O-view finds and reads Claude's data correctly and that the tray icon appears; it also found two bugs that made the app unusable past that point, both fixed in v0.6.4 and **not yet re-tested**. Everything else in [Platform support](#platform-support) is still marked *never observed* and stays that way until someone reports back. See [`docs/adr/`](docs/adr/) for the decisions behind both.
 
 ---
 
@@ -57,22 +57,37 @@ run Claude Desktop has nothing for O-view to read. **macOS is out of scope.** Se
 
 | | Windows 11 | Linux |
 |---|---|---|
-| Tray icon | ✅ | ⚠️ **Needs a notification-area host.** GNOME ships none by default — see below |
-| Tooltip | ✅ | ✅ built, *unverified on hardware* |
-| Detail panel | ✅ docked flyout at the taskbar corner | ⚠️ a **plain centred window**, not docked — see below |
-| Right-click menu | ✅ full: startup, notifications, diagnostics, updates, exit | ⚠️ **Run at startup and Exit.** Notifications, diagnostics and updates are not on the menu — `--diagnose` and `--probe` cover them from a terminal |
-| Notifications | ✅ balloon tip | ✅ freedesktop notifications, *unverified on hardware* |
-| Run at startup | ✅ registry `Run` key, toggled from the menu | ✅ XDG autostart `.desktop`, from the menu **or** `o-view --startup-on`, *menu rendering unverified on hardware* |
-| Light/dark theme | ✅ follows `AppsUseLightTheme` | ✅ XDG desktop portal, *unverified on hardware* |
+| Reading Claude's data | ✅ | ✅ **seen working** — every path resolved, 5,645 of 5,645 plan-history samples parsed, Cowork logs and account tier read |
+| Tray icon | ✅ | ✅ **seen working** on KDE Plasma / Wayland. **Needs a notification-area host** — GNOME ships none by default, see below |
+| Tooltip | ✅ | ✅ built, *never observed* |
+| Detail panel | ✅ docked flyout at the taskbar corner | ⚠️ a **plain centred window**, not docked — see below. *Never observed:* the one report could not open it (fixed in v0.6.4, not re-tested) |
+| Right-click menu | ✅ full: startup, notifications, diagnostics, updates, exit | ⚠️ **Run at startup and Exit.** Notifications, diagnostics and updates are not on the menu — `--diagnose` and `--probe` cover them from a terminal. *Rendering never observed;* took tens of seconds on the one report (fixed in v0.6.4, not re-tested) |
+| Notifications | ✅ balloon tip | ✅ freedesktop notifications, *never observed* |
+| Run at startup | ✅ registry `Run` key, toggled from the menu | ✅ XDG autostart `.desktop`, from the menu **or** `o-view --startup-on`, *menu rendering never observed* |
+| Light/dark theme | ✅ follows `AppsUseLightTheme` | ✅ XDG desktop portal, *never observed* — the portal read deadlocked the UI thread on the one report (fixed in v0.6.4, not re-tested) |
 | Auto-update | ✅ in-place, one confirmation | ⚠️ **notifies only, by design** — tells you once per version, installs nothing ([ADR-0009](docs/adr/0009-auto-update.md)) |
 
-*"Unverified on hardware" means the code ships, passes its tests, and installs and runs in
-clean Ubuntu 22.04, Ubuntu 24.04, Debian 12 and Fedora containers on every change — but
-nobody has yet run it on a physical Linux desktop. Containers are headless: they prove the
-package is sound, not that an icon appears in a panel. Those rows are recorded that way
-rather than ticked because shipping something is not the same as having seen it work, and
-claiming otherwise would be exactly the kind of unearned assertion the rest of this app
-refuses to make.*
+**What the Linux column's three states mean.** They are deliberately not two, because
+"shipped" and "seen working" are different claims and the difference is the whole point.
+
+- ***Seen working*** — someone ran it on a physical Linux desktop and reported back. One
+  report exists: an Arch-based system, KDE Plasma, Wayland, tarball install, against v0.6.1.
+- ***Never observed*** — the code ships and passes its tests, and the package installs and
+  runs in clean Ubuntu 22.04, Ubuntu 24.04, Debian 12 and Fedora containers on every change.
+  But a container is headless. That proves the package is sound, not that an icon appears in
+  a panel, a tooltip is legible or a theme follows.
+- ***Fixed in v0.6.4, not re-tested*** — the one report found the app unusable past the tray
+  icon: the first left click deadlocked it, and the menu took tens of seconds. Both causes
+  were found and fixed, and the fixes are reasoned from the code and guarded by tests — but
+  no test can reach a live session bus and a dispatcher together, so nobody has seen them
+  work either.
+
+Rows are recorded this way rather than ticked because shipping something is not the same as
+having seen it work, and claiming otherwise would be exactly the kind of unearned assertion
+the rest of this app refuses to make.
+
+**Not yet reported on at all:** X11 (the one report was Wayland), GNOME without an
+AppIndicator extension, and the `.deb` on real hardware (that report was a tarball install).
 
 ### Why the icon may not appear on GNOME
 
