@@ -184,7 +184,13 @@ public partial class PopupWindow : Window, IFlyout
         // so a Cowork user, whose transcripts ARE read, was told their source was not
         // counted, and a packaged Desktop install was pointed at a path O-view never
         // searched (issue #58; the mistake ClaudeDataRoots exists to prevent).
-        if (stats.RecordedDays == 0 && authoritative && snapshot.SessionPercent is > 0)
+        //
+        // Keyed on the token total, not on RecordedDays. Those meant the same thing while
+        // RecordedDays counted days with usage; now that it counts days observed (issue
+        // #142), a store older than the window reports full coverage while the tiles still
+        // read zero — the exact case this note is for. "The tiles show nothing" is what the
+        // note is about, so it is what the condition should say.
+        if (stats.Tokens31Days == 0 && authoritative && snapshot.SessionPercent is > 0)
         {
             TokenScopeNote.Text = (ScopeReport ?? TranscriptScopeReport.Inspect()).Explain();
             TokenScopeNote.Visibility = Visibility.Visible;

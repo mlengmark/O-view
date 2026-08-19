@@ -74,7 +74,12 @@ public sealed class PanelContent : Border
         // measuring a source this user does not feed, not measuring zero. Say which source,
         // so the 0 is interpretable rather than looking broken. Derived from what the scan
         // actually resolved, never a literal (issue #58).
-        if (stats.RecordedDays == 0 && authoritative && snapshot.SessionPercent is > 0)
+        //
+        // Keyed on the token total, not on RecordedDays: those meant the same thing while
+        // RecordedDays counted days with usage, but it now counts days observed (issue #142),
+        // so a store older than the window reports full coverage while the tiles still read
+        // zero — the exact case this note is for.
+        if (stats.Tokens31Days == 0 && authoritative && snapshot.SessionPercent is > 0)
         {
             _root.Children.Add(Muted((scopeReport ?? TranscriptScopeReport.Inspect()).Explain()));
         }

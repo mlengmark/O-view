@@ -298,22 +298,13 @@ public sealed class RollupStore : IDisposable
         }
     }
 
-    /// <summary>
-    /// Distinct UTC dates with any recorded usage in [from, to] — drives the honest
-    /// "N of 31 days recorded" coverage label (ADR-0006: partial history must state
-    /// its coverage; it must never read as low usage).
-    /// </summary>
-    public int CountRecordedDays(DateOnly fromUtc, DateOnly toUtc)
-    {
-        lock (_gate)
-        {
-            using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "SELECT COUNT(DISTINCT utc_date) FROM ingested_requests WHERE utc_date >= $from AND utc_date <= $to";
-            cmd.Parameters.AddWithValue("$from", fromUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-            cmd.Parameters.AddWithValue("$to", toUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-            return Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
-        }
-    }
+    // CountRecordedDays lived here, counting distinct dates with usage to drive the
+    // "N of 31 days recorded" label. It is gone rather than left unused: it could only answer
+    // "how many days had usage", which is not what coverage means, and a day the user spent
+    // away from Claude was indistinguishable from a day before the store existed. Coverage is
+    // now derived in PanelStatistics.Build from the same first-recorded-day boundary the graph
+    // draws, so the label and the chart cannot disagree (issue #142). Leaving a second, wrong
+    // answer to the same question in place is how it would come back.
 
     /// <summary>
     /// Per-model totals for requests at or after <paramref name="sinceUtc"/>. The daily

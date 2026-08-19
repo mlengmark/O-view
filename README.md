@@ -27,7 +27,7 @@ A balloon notification fires once per session window when usage crosses the thre
 
 ### The detail panel
 
-On Windows both flyouts dock to the taskbar corner like a system flyout and animate open and closed. On Linux the panel is a plain centred window and the menu is the desktop's own — see [Platform support](#platform-support) for why. Both follow the desktop's light/dark theme, re-read on every open, so switching never needs a restart.
+On Windows both flyouts dock to the taskbar corner like a system flyout and animate open and closed. On Linux the panel opens in the same work-area corner — beside the panel bar, not anchored to the icon — and the menu is the desktop's own; see [Platform support](#platform-support) for why. Both follow the desktop's light/dark theme, re-read on every open, so switching never needs a restart.
 
 - **Account header** — display name, email, and plan-tier badge, read from `~/.claude.json`. No token, no network call.
 - **Session and weekly bars** — percentage, proportional fill in the same colour bands as the icon, and the derived reset time for each: `Resets in 2h 14m · 16:32` for the 5-hour window, `Resets in 6d 3h · Tue 06:28` for the weekly one. Reset times are *derived from observed drops*, not reported by any API. Before a drop has been seen the panel says so — the weekly row reads **"Waiting for first reset…"** — rather than guessing. A weekly reset that happened while Claude Desktop was closed is only bracketed to within a few hours, and is shown with a `~` and an explanation on hover instead of a made-up minute.
@@ -60,7 +60,7 @@ run Claude Desktop has nothing for O-view to read. **macOS is out of scope.** Se
 | Reading Claude's data | ✅ | ✅ **seen working** — every path resolved, 5,645 of 5,645 plan-history samples parsed, Cowork logs and account tier read |
 | Tray icon | ✅ | ✅ **seen working** on KDE Plasma / Wayland. **Needs a notification-area host** — GNOME ships none by default, see below |
 | Tooltip | ✅ | ✅ built, *never observed* |
-| Detail panel | ✅ docked flyout at the taskbar corner | ⚠️ a **plain centred window**, not docked — see below. *Never observed:* the one report could not open it. Two separate causes fixed since (v0.6.4, v0.6.5), neither re-tested |
+| Detail panel | ✅ docked flyout at the taskbar corner | ⚠️ a **plain window in the work area's corner**, not docked to the icon — see below. *Never observed:* neither report could open it — the left click first deadlocked the app, then crashed it. Three separate causes fixed since, none re-tested, and the corner placement has never been seen either |
 | Right-click menu | ✅ full: startup, notifications, diagnostics, updates, exit | ⚠️ **Run at startup and Exit.** Notifications, diagnostics and updates are not on the menu — `--diagnose` and `--probe` cover them from a terminal. *Rendering never observed;* took tens of seconds on the one report (fixed in v0.6.4, not re-tested) |
 | Notifications | ✅ balloon tip | ✅ freedesktop notifications, *never observed* |
 | Run at startup | ✅ registry `Run` key, toggled from the menu | ✅ XDG autostart `.desktop`, from the menu **or** `o-view --startup-on`, *menu rendering never observed* |
@@ -76,17 +76,25 @@ run Claude Desktop has nothing for O-view to read. **macOS is out of scope.** Se
   runs in clean Ubuntu 22.04, Ubuntu 24.04, Debian 12 and Fedora containers on every change.
   But a container is headless. That proves the package is sound, not that an icon appears in
   a panel, a tooltip is legible or a theme follows.
-- ***Fixed, not re-tested*** — **three fixes now sit in this state.** The one report found
+- ***Fixed, not re-tested*** — **four fixes now sit in this state.** The one report found
   the app unusable past the tray icon: the first left click deadlocked it, and the menu took
   tens of seconds. Both causes were found and fixed in v0.6.4. Reading that code turned up a
   third failure nobody had hit yet — the panel dismissed itself when a compositor refused to
   focus it — fixed in v0.6.5.
 
-  All three are reasoned from the code and guarded by tests, but **no test can reach a live
-  session bus and a dispatcher together**, which is exactly how the first one shipped. So
-  "fixed" here means found and understood, not seen working. The label deliberately does not
-  name a version: it applies to whatever is currently shipped and unverified, and pinning it
-  to one release just means editing it at the next.
+  A second report then found the left click **crashing the whole app** rather than
+  deadlocking it: `segmentation fault (core dumped)`. Avalonia's tray backend raises the
+  click on D-Bus's own thread, and the head built its window straight from there
+  ([#143](https://github.com/mlengmark/O-view/issues/143)). Every bus callback is marshalled
+  onto the UI thread now — the menu items had the same defect, unreported only because the
+  click was hit first.
+
+  All four are reasoned from the code and guarded by tests, but **no test can reach a live
+  session bus and a dispatcher together**, which is exactly how the first one shipped, and
+  how the fourth one shipped past the fix for the first. So "fixed" here means found and
+  understood, not seen working. The label deliberately does not name a version: it applies to
+  whatever is currently shipped and unverified, and pinning it to one release just means
+  editing it at the next.
 
 Rows are recorded this way rather than ticked because shipping something is not the same as
 having seen it work, and claiming otherwise would be exactly the kind of unearned assertion
@@ -109,12 +117,23 @@ silently invisible is indistinguishable from a broken one.
 O-view asks the session bus rather than trusting the toolkit, which reports success either
 way ([findings](docs/findings/linux-tray-spike.md)). `o-view --probe` reports what it found.
 
-### Why the Linux panel is not docked
+### Why the Linux panel is not docked to the icon
 
 SNI provides no way for an application to learn where its own icon was drawn — there is no
-`Shell_NotifyIconGetRect` equivalent — and under Wayland a client generally cannot position
-its own surface at all. Approximating the Windows docking would put the panel in the wrong
-place most of the time, which reads as broken; a plainly-centred window does not.
+`Shell_NotifyIconGetRect` equivalent. So the panel cannot appear *under the icon* the way the
+Windows one does, and does not try: approximating it would put the panel in the wrong place
+most of the time, which reads as broken.
+
+**A fixed corner needs none of that**, and is what you get. The work area already excludes the
+desktop's panel bar wherever it publishes one, so O-view places the window in the corner
+beside it — the same corner the Windows flyout docks to, computed by the same shared rule.
+
+That placement is a **request**, not a guarantee. Setting a window position is something an X11
+window manager may ignore and a native Wayland compositor will refuse outright. O-view logs
+both the position it asked for and the one it was given, so `o-view --log` says which happened
+rather than leaving you to guess. Where the screen geometry cannot be read at all, the panel
+centres instead of guessing at coordinates — half off-screen reads as broken where centred
+does not.
 
 ### No Snap or Flatpak
 

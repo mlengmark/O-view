@@ -94,11 +94,34 @@ public static class TrayIconGeometry
             ? Math.Clamp(p, 0, 100)
             : null;
 
-    /// <summary>The arc and pupil colour for a snapshot — neutral when there is no authoritative percentage.</summary>
+    /// <summary>The arc colour for a snapshot — neutral when there is no authoritative percentage.</summary>
     public static IconColor Foreground(UsageSnapshot snapshot, bool lightTaskbar) =>
         FillPercent(snapshot) is { } percent
             ? LevelColor(UsageLevels.Classify(percent), lightTaskbar)
             : (lightTaskbar ? LightNeutral : DarkNeutral);
+
+    /// <summary>
+    /// The pupil's colour: the arc's, except at a measured zero, where it takes the
+    /// <see cref="Track"/>'s so an empty gauge is uniformly empty (GitHub issue #139).
+    ///
+    /// <para>At 0% there is no arc, and a full-saturation green pupil inside a faint grey ring
+    /// made the icon read as two states at once — an empty gauge wrapped around a live dot.
+    /// <c>UsageLevels.Classify(0)</c> is <c>Normal</c>, so the pupil was simply taking the
+    /// green it would have at 1%.</para>
+    ///
+    /// <para><b>Only an authoritative zero fades.</b> <see cref="FillPercent"/> returns null
+    /// rather than 0 for unknown and estimated data, so those keep the opaque neutral pupil —
+    /// which is the whole of what still distinguishes "O-view has no number" from "the number
+    /// is zero" once both rings are drawn faint. Collapsing the two would trade one wrong icon
+    /// for another.</para>
+    ///
+    /// <para>Here rather than in either renderer because it is a decision about what the mark
+    /// <i>is</i>, and two copies of one of those is how the heads drift (issues #55, #56).</para>
+    /// </summary>
+    public static IconColor Pupil(UsageSnapshot snapshot, bool lightTaskbar) =>
+        FillPercent(snapshot) is 0
+            ? Track(lightTaskbar)
+            : Foreground(snapshot, lightTaskbar);
 
     public static IconColor LevelColor(UsageLevel level, bool lightTaskbar) => level switch
     {

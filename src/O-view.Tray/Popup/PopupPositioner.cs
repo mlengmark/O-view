@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using OView.App.Rendering;
 using Point = System.Windows.Point;
 
 namespace OView.Tray.Popup;
@@ -11,6 +12,20 @@ namespace OView.Tray.Popup;
 /// is used only to select the monitor (the one whose tray was clicked); the
 /// taskbar edge is derived from where the work area is inset relative to the
 /// monitor rect. DIP conversion uses that monitor's effective DPI (PerMonitorV2).
+///
+/// <para><b>Which corner, and the margin, now live in
+/// <see cref="WorkAreaPlacement"/></b> — shared with the Linux head, which needed the same
+/// answer for its panel (issue #144). What stays here is the Windows-only half: asking
+/// <c>GetMonitorInfoW</c> for the two rectangles and converting between pixels and DIPs.
+/// The arithmetic moved so there is one copy of it rather than two that drift (issues #55,
+/// #56), and it gained the unit tests it could never have while it was welded to
+/// P/Invoke.</para>
+///
+/// <para>The placement is unchanged bar one deliberate difference: the surface's size is
+/// rounded to whole device pixels before the corner is computed, where it used to be carried
+/// as a fraction. It moves a flyout by at most half a pixel on a fractional-scale display,
+/// and a window lands on a pixel boundary regardless — the shared rule works in whole pixels
+/// because a work area is only ever reported in them.</para>
 /// </summary>
 internal static class PopupPositioner
 {
@@ -43,42 +58,29 @@ internal static class PopupPositioner
             ? dpiX / 96.0
             : 1.0;
 
-        var widthPx = widthDip * scale;
-        var heightPx = heightDip * scale;
-        const int margin = 12;
-
         // The tray sits at the right (horizontal taskbars) or bottom (vertical ones)
-        // end of the bar, so dock to the work-area corner nearest it. Auto-hide
-        // taskbars leave no inset; bottom-right is the Windows 11 default.
-        double left, top;
-        Point origin;
-        if (work.Top > mon.Top)                 // taskbar at top
-        {
-            left = work.Right - margin - widthPx;
-            top = work.Top + margin;
-            origin = new Point(1, 0);           // grows down from the top-right
-        }
-        else if (work.Left > mon.Left)          // taskbar at left
-        {
-            left = work.Left + margin;
-            top = work.Bottom - margin - heightPx;
-            origin = new Point(0, 1);           // grows up from the bottom-left
-        }
-        else                                    // bottom (default), right, or auto-hide
-        {
-            left = work.Right - margin - widthPx;
-            top = work.Bottom - margin - heightPx;
-            origin = new Point(1, 1);           // grows up from the bottom-right
-        }
+        // end of the bar, so the shared rule docks to the work-area corner nearest it.
+        // Auto-hide taskbars leave no inset; bottom-right is the Windows 11 default.
+        var (left, top, corner) = WorkAreaPlacement.Place(
+            ToBox(mon), ToBox(work),
+            (int)Math.Round(widthDip * scale),
+            (int)Math.Round(heightDip * scale));
 
-        left = Clamp(left, work.Left + margin, work.Right - margin - widthPx);
-        top = Clamp(top, work.Top + margin, work.Bottom - margin - heightPx);
-
-        return (left / scale, top / scale, origin);
+        return (left / scale, top / scale, RenderTransformOrigin(corner));
     }
 
-    private static double Clamp(double value, double min, double max) =>
-        max < min ? min : Math.Max(min, Math.Min(max, value));
+    private static PixelBox ToBox(RECT r) => new(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
+
+    /// <summary>
+    /// The docked corner as a WPF <c>RenderTransformOrigin</c>, so the open/close animation
+    /// grows from the docked edge rather than from the middle of nowhere.
+    /// </summary>
+    private static Point RenderTransformOrigin(FlyoutCorner corner) => corner switch
+    {
+        FlyoutCorner.TopRight => new Point(1, 0),      // grows down from the top-right
+        FlyoutCorner.BottomLeft => new Point(0, 1),    // grows up from the bottom-left
+        _ => new Point(1, 1),                          // grows up from the bottom-right
+    };
 
     private const int MONITOR_DEFAULTTONEAREST = 2;
     private const int MDT_EFFECTIVE_DPI = 0;

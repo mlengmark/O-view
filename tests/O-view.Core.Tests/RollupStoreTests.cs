@@ -54,18 +54,11 @@ public class RollupStoreTests : IDisposable
         Assert.Equal(2, rollups.Sum(r => r.OutputTokens));
     }
 
-    [Fact]
-    public void CoverageCount_ReportsDistinctRecordedDays()
-    {
-        _store.Ingest([
-            Record("r1", "2026-07-18", "m", 1),
-            Record("r2", "2026-07-20", "m", 2),
-            Record("r3", "2026-07-20", "m", 3),
-        ]);
-
-        // 3 of 31 days would mislead; only 2 days actually carry data.
-        Assert.Equal(2, _store.CountRecordedDays(new DateOnly(2026, 6, 20), new DateOnly(2026, 7, 21)));
-    }
+    // CoverageCount_ReportsDistinctRecordedDays went with CountRecordedDays (issue #142). It
+    // asserted the behaviour that turned out to be the bug — that a day with no usage does not
+    // count as recorded — so it could not be repaired, only removed. Coverage is now derived
+    // from the day series and covered by PanelStatisticsTests, next to the PreInstall boundary
+    // it has to agree with.
 
     [Fact]
     public void EmptyStore_LatestActivityIsNull()
