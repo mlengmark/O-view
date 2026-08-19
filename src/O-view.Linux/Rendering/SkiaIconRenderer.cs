@@ -83,9 +83,15 @@ public static class SkiaIconRenderer
                 arc);
         }
 
-        // Pupil: the brand "eye", centred in the ring's hole. Takes the arc's colour, so
-        // the icon stays a single-colour signal rather than gaining a second one.
-        using var pupil = new SKPaint { IsAntialias = true, Style = SKPaintStyle.Fill, Color = colour };
+        // Pupil: the brand "eye", centred in the ring's hole. Takes the arc's colour, so the
+        // icon stays a single-colour signal rather than gaining a second one — except at a
+        // measured 0%, where there is no arc and it fades to the track instead (issue #139).
+        using var pupil = new SKPaint
+        {
+            IsAntialias = true,
+            Style = SKPaintStyle.Fill,
+            Color = ToSkia(TrayIconGeometry.Pupil(snapshot, lightPanel)),
+        };
         canvas.DrawCircle(centre, centre, TrayIconGeometry.PupilRadius(size), pupil);
     }
 

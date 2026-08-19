@@ -409,6 +409,10 @@ internal static class SampleRenderer
         Directory.CreateDirectory(dir);
         var states = new (string Name, UsageSnapshot Snapshot)[]
         {
+            // A measured zero. Its own case because it is the one state with no arc at all,
+            // where the pupil fades to the track — and nothing rendered it, which is how the
+            // bright-green-pupil-on-an-empty-ring icon shipped (issue #139).
+            ("live-00", new(DataSource.Live, 0, 0, null, DateTimeOffset.UtcNow)),
             ("live-06", new(DataSource.Live, 6, 1, null, DateTimeOffset.UtcNow)),
             ("live-47", new(DataSource.Live, 47, 20, null, DateTimeOffset.UtcNow)),
             ("live-58", new(DataSource.Live, 58, 30, null, DateTimeOffset.UtcNow)),

@@ -182,4 +182,67 @@ public class TrayIconGeometryTests
         Assert.Equal(90, TrayIconGeometry.Track(lightTaskbar: false).A);
         Assert.Equal(90, TrayIconGeometry.Track(lightTaskbar: true).A);
     }
+
+    // ── the pupil's colour (GitHub issue #139) ──────────────────────────────────────
+
+    /// <summary>
+    /// The reported bug: at 0% no arc is drawn, but the pupil was still painted the green
+    /// <c>Classify(0)</c> yields — an empty gauge wrapped around a live dot.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void PupilFadesToTheTrackAtAMeasuredZero(bool light)
+    {
+        Assert.Equal(TrayIconGeometry.Track(light), TrayIconGeometry.Pupil(Live(0), light));
+        Assert.NotEqual(TrayIconGeometry.Foreground(Live(0), light), TrayIconGeometry.Pupil(Live(0), light));
+    }
+
+    /// <summary>One point of usage restores it — the fade is the empty state, not a new band.</summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(47)]
+    [InlineData(70)]
+    [InlineData(100)]
+    public void PupilTakesTheArcColourWhereverThereIsAnArc(int percent)
+    {
+        foreach (var light in new[] { false, true })
+        {
+            Assert.Equal(
+                TrayIconGeometry.Foreground(Live(percent), light),
+                TrayIconGeometry.Pupil(Live(percent), light));
+        }
+    }
+
+    /// <summary>
+    /// The distinction the fade must not eat. With no data the ring is already faint, so the
+    /// opaque neutral pupil is the only thing left separating "O-view has no number" from
+    /// "the number is zero" — fading it too would trade one wrong icon for another.
+    /// </summary>
+    [Fact]
+    public void UnknownAndEstimatedDataKeepTheOpaqueNeutralPupil()
+    {
+        var estimate = new UsageSnapshot(DataSource.Estimate, 83, null, null, DateTimeOffset.UnixEpoch);
+
+        foreach (var light in new[] { false, true })
+        {
+            foreach (var snapshot in new[] { UsageSnapshot.None, estimate })
+            {
+                Assert.Equal(TrayIconGeometry.Foreground(snapshot, light), TrayIconGeometry.Pupil(snapshot, light));
+                Assert.NotEqual(TrayIconGeometry.Track(light), TrayIconGeometry.Pupil(snapshot, light));
+                Assert.Equal(255, TrayIconGeometry.Pupil(snapshot, light).A);
+            }
+
+            Assert.NotEqual(TrayIconGeometry.Pupil(UsageSnapshot.None, light), TrayIconGeometry.Pupil(Live(0), light));
+        }
+    }
+
+    /// <summary>
+    /// A clamped negative is still a measured zero. <see cref="TrayIconGeometry.FillPercent"/>
+    /// clamps before this sees it, so the fade must follow the clamped value rather than the
+    /// raw one.
+    /// </summary>
+    [Fact]
+    public void ANegativePercentClampsToZeroAndFadesWithIt() =>
+        Assert.Equal(TrayIconGeometry.Track(lightTaskbar: false), TrayIconGeometry.Pupil(Live(-5), lightTaskbar: false));
 }
