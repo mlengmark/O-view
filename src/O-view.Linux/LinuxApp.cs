@@ -133,7 +133,7 @@ public sealed class LinuxApp : Application
             RefreshStartupItem();   // the tick, which anything on the machine may have changed
 
             _panel?.Close();
-            _panel = new PanelWindow(new LinuxPanelTheme(_theme.IsPanelLight()));
+            _panel = new PanelWindow(new LinuxPanelTheme(_theme.IsPanelLight()), _log);
 
             // Both reports are inspected on open, not cached, so the banners describe the
             // machine as it is now rather than as it was at startup.
