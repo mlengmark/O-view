@@ -11,10 +11,10 @@ Status: all build phases complete (see [docs/build-plan.md](docs/build-plan.md))
 That one report is the whole of what anyone has seen, and it splits three ways:
 
 - **Confirmed working:** data resolution (every path, 5,645 of 5,645 plan-history samples, Cowork logs, account tier) and the tray icon appearing.
-- **Confirmed broken, fixed in v0.6.4, never re-tested:** the first left click deadlocked the app (#124), and the menu took tens of seconds (#125). The fixes are reasoned from the code and guarded by structural tests, but no test can reach a live session bus and a dispatcher together — which is exactly how the bug shipped.
+- **Fixed, never re-tested — three of them:** the first left click deadlocked the app (#124) and the menu took tens of seconds (#125), both found by the report and fixed in v0.6.4; then reading that code turned up a third nobody had hit, the panel dismissing itself when a compositor refuses to focus it (#129), fixed in v0.6.5. All three are reasoned from the code and guarded by structural tests, but **no test can reach a live session bus and a dispatcher together** — which is exactly how the first one shipped.
 - **Still never observed:** the panel (nobody has seen it — it was blocked behind the deadlock), the tooltip, notifications, theme following, X11, GNOME without an AppIndicator extension, and the `.deb` on hardware.
 
-**Released is not the same as verified, and neither is fixed. Do not describe Linux panel or theme behaviour as working, and do not describe #124 or #125 as confirmed fixed** until a re-test lands. The README's support matrix carries these three states deliberately, and rule 6 applies to our own claims about our own app as much as to usage numbers.
+**Released is not the same as verified, and neither is fixed. Do not describe Linux panel or theme behaviour as working, and do not describe #124, #125 or #129 as confirmed fixed** until a re-test lands. The README's support matrix carries these three states deliberately, and rule 6 applies to our own claims about our own app as much as to usage numbers.
 
 The ADRs in `docs/adr/` are decided, not drafts — follow them. If you believe one is wrong, say so and propose superseding it; do not silently deviate. ADR-0009 carries a worked example of why: its Linux amendment asserted that `apt upgrade` handled updates, which was untrue in both halves and survived undetected until the release gate.
 
@@ -132,7 +132,7 @@ Older runtimes (3.1, 6.0) are also present on the machine. Ignore them. Target *
 
 **The development machine is Windows, and no Linux hardware is available here.** The Linux head is therefore verified by unit tests, by offscreen render hooks (`--samples`, `--panel-samples`, `--probe`, `--diagnose` — all of which run with no display and no bus), and by container installs in the packaging workflow. None of that is a desktop.
 
-One hardware report exists (see *What this is* above) and it covers the tray icon and data resolution only. **Do not describe Linux panel or theme behaviour as verified, and do not treat the v0.6.4 fixes for #124/#125 as confirmed** — they have never run against a live session bus and a dispatcher together. The README's support matrix distinguishes *seen working* from *never observed* from *fixed but not re-tested* deliberately, and rule 6 applies to our own claims about our own app.
+One hardware report exists (see *What this is* above) and it covers the tray icon and data resolution only. **Do not describe Linux panel or theme behaviour as verified, and do not treat the #124, #125 and #129 fixes as confirmed** — they have never run against a live session bus and a dispatcher together. The README's support matrix distinguishes *seen working* from *never observed* from *fixed but not re-tested* deliberately, and rule 6 applies to our own claims about our own app.
 
 `--diagnose` and `--probe` earned their keep here: the single report was legible enough to diagnose two distinct bugs without a follow-up question. When adding a Linux code path that a desktop could break, ask what a bug report against it would need to contain, and make sure one round trip can carry it.
 
