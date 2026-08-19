@@ -31,9 +31,15 @@ permissions:
 env:
   VERSION: ${{ github.event.inputs.version || '0.6.0-dev' }}
 
+# Every job here is bounded. Without these, a step that wedges runs to the Actions default
+# of six hours: on 2026-08-19 two separate runs sat on the Lintian step for over an hour
+# each, and a job's logs are not retrievable while it is still in progress, so the stall was
+# invisible from the outside. The numbers are several times each job's observed duration —
+# they exist to cap a hang, not to police a slow runner.
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -82,9 +88,28 @@ jobs:
       - name: Lintian
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq lintian
+
+          # Bounded, because on 2026-08-19 this step went from 29 s to over an hour on amd64
+          # while the arm64 job sat unchanged at under three minutes -- same runner image,
+          # same apt install, no packaging change on either side. Whatever the runner's
+          # lintian did there, an unbounded run silently consumed the job's entire budget and
+          # the logs were unreachable while it hung, which is the part that cost the time.
+          #
+          # 15 minutes is roughly thirty times the historical amd64 figure, so this cannot
+          # fire on a merely slow run, and a stall now fails with a sentence saying so.
+          set +e
+          timeout 900 lintian --fail-on error --no-tag-display-limit dist/o-view_*_${{ matrix.arch }}.deb
+          STATUS=$?
+          set -e
+
           # Warnings are triaged by a human; errors are not acceptable.
-          lintian --fail-on error --no-tag-display-limit dist/o-view_*_${{ matrix.arch }}.deb || {
-            echo "lintian reported an error"; exit 1; }
+          if [ "$STATUS" -eq 124 ]; then
+            echo "lintian did not finish within 15 minutes and was killed — this is the stall the bound exists for, not a package defect"
+            exit 1
+          elif [ "$STATUS" -ne 0 ]; then
+            echo "lintian reported an error"
+            exit 1
+          fi
 
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -95,6 +120,7 @@ jobs:
   install:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -152,6 +178,7 @@ jobs:
   upgrade:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -222,6 +249,8 @@ jobs:
   install-arm64:
     needs: build
     runs-on: ubuntu-latest
+    # The most generous bound here: everything inside runs through QEMU.
+    timeout-minutes: 40
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -245,6 +274,7 @@ jobs:
   tarball:
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
