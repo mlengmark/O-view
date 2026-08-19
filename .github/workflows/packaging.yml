@@ -39,7 +39,12 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # 45 rather than 30 because this job now carries two 900 s inner bounds — apt and lintian
+    # (#131). At 30 the two could add up to the job's own cap, and the job timeout kills the
+    # step before it can print the process trees that are the entire point of the inner
+    # bounds. The outer bound is the backstop; the inner ones are the diagnostic, so the
+    # outer one must not fire first. A healthy run is ~90 s.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -85,36 +90,70 @@ jobs:
           echo "--- control ---"
           dpkg-deb -I dist/o-view_*_${{ matrix.arch }}.deb
 
-      - name: Lintian
+      # Its OWN step, split out of Lintian on 2026-08-19 after the stall recurred (#131).
+      #
+      # The split is the diagnostic, and it costs nothing. When two jobs wedged again, every
+      # guard added after the first occurrence — the 900 s bound, the process sampler, the
+      # environment capture — sat AFTER this apt install inside one combined step, so none of
+      # them fired: the step ran 25 minutes without exiting 124, without a process tree, and
+      # without printing the environment. The wedged job's log then turned out not to be
+      # retrievable at all, even after cancelling.
+      #
+      # Separate steps mean the jobs API alone reports how long each half took, on every run,
+      # with no log needed. That matters precisely because the log is what went missing.
+      #
+      # And the successful sibling legs of those same two runs say this half is the suspect:
+      # apt took 621 s and 197 s while lintian itself took 7.5 s and 7.4 s, against 32 s for
+      # the whole step once it cleared. The standing hypothesis — lintian forking helpers
+      # over a few hundred files including large native .so's — predicts lintian being slow,
+      # and lintian was not slow.
+      #
+      # 900 s matches the lintian bound and is comfortably above the worst apt that actually
+      # finished (621 s), so it caps a hang without policing a slow runner.
+      - name: Install lintian
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq lintian
+          source .github/scripts/watched-run.sh
 
-          # The two environmental suspects from #131, recorded because neither was captured
-          # when this step stalled and both are the obvious things to compare a recurrence
-          # against. Printed BEFORE lintian runs, deliberately: a hung step still shows
-          # everything written before the hang, so these survive exactly the failure they
-          # exist to diagnose.
+          # Printed BEFORE apt runs, deliberately: a hung step still shows everything written
+          # before the hang, so these survive exactly the failure they exist to diagnose. The
+          # lintian version cannot be among them — it is not installed yet — so it is printed
+          # by the step below instead.
           echo "--- environment (see #131) ---"
-          echo "lintian:      $(lintian --version)"
           echo "runner image: ${ImageOS:-unknown} ${ImageVersion:-unknown}"
           echo "runner:       ${RUNNER_OS:-unknown}/${RUNNER_ARCH:-unknown}"
           echo "package:      $(basename dist/o-view_*_${{ matrix.arch }}.deb), $(stat -c%s dist/o-view_*_${{ matrix.arch }}.deb) bytes"
           echo "------------------------------"
 
+          set +e
+          watched_run "apt-get install lintian" 900 \
+            sudo sh -c 'apt-get update -qq && apt-get install -y -qq lintian'
+          STATUS=$?
+          set -e
+
+          # watched_run has already printed the sampled trees if this was a timeout.
+          if [ "$STATUS" -eq 124 ]; then
+            exit 1
+          elif [ "$STATUS" -ne 0 ]; then
+            echo "apt could not install lintian"
+            exit 1
+          fi
+
+      - name: Lintian
+        run: |
+          source .github/scripts/watched-run.sh
+
+          echo "lintian:      $(lintian --version)"
+
           # Bounded, after this step stalled on 2026-08-19 (#131): four job executions across
           # two runs never finished it -- 48, 48, 25 and 19 minutes before each was cancelled
           # by hand, against a normal time of one to three minutes. Those figures are lower
-          # bounds, since none of them was allowed to end on its own.
+          # bounds, since none of them was allowed to end on its own, and they are step-level:
+          # they cannot distinguish apt from lintian, which is why the step above now exists.
           #
           # Both architectures hung in the first run; only later executions split, which is
           # what made it look amd64-specific when it was not. No packaging change on either
           # branch, and it cleared without intervention, so it was the runner infrastructure
           # rather than the package or lintian itself. The cause is still unknown.
-          #
-          # The bound is here because of what the stall cost rather than what caused it: a
-          # job's logs cannot be retrieved while it is in progress, so 48 minutes of hanging
-          # showed nothing beyond the step name, and without timeout-minutes it would have
-          # run to the Actions default of six hours.
           #
           # 15 minutes is several times the observed duration, so it cannot fire on a merely
           # slow runner.
@@ -122,67 +161,15 @@ jobs:
           # --tag-display-limit 0 rather than --no-tag-display-limit: lintian prints "a future
           # release will drop" the latter. Same meaning, and it fails loudly today rather than
           # silently the week the runner image updates.
-          # Sample the process tree while lintian runs, so a stall can be attributed rather
-          # than only detected (#131). Killing the tree after the timeout fires would be too
-          # late: `timeout` takes the children with it, and the evidence is what they were
-          # doing beforehand.
-          #
-          # The question these answer is the one the stall left open. If lintian is WEDGED,
-          # the same child sits at the same wchan across every sample with its elapsed time
-          # climbing. If it is merely SLOW, the children churn between samples. Those need
-          # completely different fixes and look identical from outside the step.
-          #
-          # Most-recently-started 25 processes rather than the whole tree: lintian and its
-          # helpers are always the newest things on a runner that has just booted, and it
-          # bounds the output to something readable.
-          # ps output is captured before anything is written, so that a ps that rejects these
-          # options fails the function rather than appending a timestamp with nothing under
-          # it. Piping it directly would report the exit status of the trailing tail, which
-          # succeeds on empty input — the guard below would never fire and the degraded case
-          # would look identical to a healthy one.
-          sample_tree() {
-            local snapshot
-            snapshot="$(ps -eo pid,ppid,etime,stat,wchan:20,args --sort=start_time)" || return 1
-            {
-              echo "--- $(date -u +%H:%M:%SZ) ---"
-              printf '%s\n' "$snapshot" | { read -r header; echo "$header"; tail -n 25; }
-            } >> /tmp/lintian-tree.txt
-          }
-
-          # One sample before lintian starts. It is the "before" to compare a wedged tree
-          # against, and — the reason it is not optional — it is the only thing that
-          # exercises the ps invocation on a normal run. Without it the sampler's first call
-          # happens 120 s in, so on every healthy build this code never executes, and an
-          # unsupported ps option would be discovered during the incident it exists to
-          # diagnose. Non-fatal: a missing diagnostic must not fail a good package.
-          # Reported rather than left silent. A diagnostic whose only evidence of working is
-          # the absence of a warning is one nobody can trust at the moment they need it —
-          # "ps exited 0" is not "ps produced a tree". The count says so on every run, and
-          # costs one line.
-          : > /tmp/lintian-tree.txt
-          if sample_tree; then
-            echo "process sampling armed: baseline captured $(( $(wc -l < /tmp/lintian-tree.txt) - 2 )) processes"
-          else
-            echo "note: process sampling unavailable on this runner — #131 diagnostics degraded"
-          fi
-
-          ( while sleep 120; do sample_tree; done ) &
-          SAMPLER=$!
-
           set +e
-          timeout 900 lintian --fail-on error --tag-display-limit 0 dist/o-view_*_${{ matrix.arch }}.deb
+          watched_run lintian 900 \
+            lintian --fail-on error --tag-display-limit 0 dist/o-view_*_${{ matrix.arch }}.deb
           STATUS=$?
           set -e
 
-          # Nothing is printed on the happy path: lintian normally finishes inside the first
-          # sampling interval, so the file is usually empty and always unread.
-          kill "$SAMPLER" 2>/dev/null || true
-
-          # Warnings are triaged by a human; errors are not acceptable.
+          # Warnings are triaged by a human; errors are not acceptable. watched_run has
+          # already printed the sampled trees if this was a timeout.
           if [ "$STATUS" -eq 124 ]; then
-            echo "lintian did not finish within 15 minutes and was killed — this is the stall the bound exists for, not a package defect"
-            echo "Process tree sampled while it ran — see #131 for what to compare against:"
-            cat /tmp/lintian-tree.txt
             exit 1
           elif [ "$STATUS" -ne 0 ]; then
             echo "lintian reported an error"
