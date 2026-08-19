@@ -15,6 +15,9 @@ on:
       - "packaging/**"
       - "src/O-view.Linux/**"
       - ".github/workflows/packaging.yml"
+      # The lintian and apt steps source this (#131). Without it here, a change that breaks
+      # the watchdog runs no packaging job at all and lands green.
+      - ".github/scripts/**"
   workflow_dispatch:
     inputs:
       version:
