@@ -122,14 +122,59 @@ jobs:
           # --tag-display-limit 0 rather than --no-tag-display-limit: lintian prints "a future
           # release will drop" the latter. Same meaning, and it fails loudly today rather than
           # silently the week the runner image updates.
+          # Sample the process tree while lintian runs, so a stall can be attributed rather
+          # than only detected (#131). Killing the tree after the timeout fires would be too
+          # late: `timeout` takes the children with it, and the evidence is what they were
+          # doing beforehand.
+          #
+          # The question these answer is the one the stall left open. If lintian is WEDGED,
+          # the same child sits at the same wchan across every sample with its elapsed time
+          # climbing. If it is merely SLOW, the children churn between samples. Those need
+          # completely different fixes and look identical from outside the step.
+          #
+          # Most-recently-started 25 processes rather than the whole tree: lintian and its
+          # helpers are always the newest things on a runner that has just booted, and it
+          # bounds the output to something readable.
+          # ps output is captured before anything is written, so that a ps that rejects these
+          # options fails the function rather than appending a timestamp with nothing under
+          # it. Piping it directly would report the exit status of the trailing tail, which
+          # succeeds on empty input — the guard below would never fire and the degraded case
+          # would look identical to a healthy one.
+          sample_tree() {
+            local snapshot
+            snapshot="$(ps -eo pid,ppid,etime,stat,wchan:20,args --sort=start_time)" || return 1
+            {
+              echo "--- $(date -u +%H:%M:%SZ) ---"
+              printf '%s\n' "$snapshot" | { read -r header; echo "$header"; tail -n 25; }
+            } >> /tmp/lintian-tree.txt
+          }
+
+          # One sample before lintian starts. It is the "before" to compare a wedged tree
+          # against, and — the reason it is not optional — it is the only thing that
+          # exercises the ps invocation on a normal run. Without it the sampler's first call
+          # happens 120 s in, so on every healthy build this code never executes, and an
+          # unsupported ps option would be discovered during the incident it exists to
+          # diagnose. Non-fatal: a missing diagnostic must not fail a good package.
+          : > /tmp/lintian-tree.txt
+          sample_tree || echo "note: process sampling unavailable on this runner — #131 diagnostics degraded"
+
+          ( while sleep 120; do sample_tree; done ) &
+          SAMPLER=$!
+
           set +e
           timeout 900 lintian --fail-on error --tag-display-limit 0 dist/o-view_*_${{ matrix.arch }}.deb
           STATUS=$?
           set -e
 
+          # Nothing is printed on the happy path: lintian normally finishes inside the first
+          # sampling interval, so the file is usually empty and always unread.
+          kill "$SAMPLER" 2>/dev/null || true
+
           # Warnings are triaged by a human; errors are not acceptable.
           if [ "$STATUS" -eq 124 ]; then
             echo "lintian did not finish within 15 minutes and was killed — this is the stall the bound exists for, not a package defect"
+            echo "Process tree sampled while it ran — see #131 for what to compare against:"
+            cat /tmp/lintian-tree.txt
             exit 1
           elif [ "$STATUS" -ne 0 ]; then
             echo "lintian reported an error"
