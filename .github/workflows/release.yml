@@ -31,10 +31,20 @@ on:
 permissions:
   contents: read
 
+# Every job here carries timeout-minutes, and this is the workflow where it matters most.
+# Actions defaults to six hours, which on the tag-to-published-assets path means a wedged
+# step hangs a release half-published for most of a day, with no log readable while it does
+# it — a job's logs cannot be retrieved until it stops. That failure was measured on the
+# packaging workflow on 2026-08-19 (#131); nothing makes this one immune, and the cost here
+# is higher because a release in flight has a tag pushed and users on an auto-updater.
+#
+# Bounds are roughly fifteen times the observed durations (test 1.4 min, version seconds,
+# windows 2 min, linux 1 min, release 0.4 min at v0.6.4). They cap a hang, not a slow runner.
 jobs:
   # One gate, not one per matrix leg.
   test:
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
       # Pinned to SHAs — see the note in ci.yml.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -45,6 +55,7 @@ jobs:
 
   version:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     outputs:
       version: ${{ steps.v.outputs.version }}
       is_tag: ${{ steps.v.outputs.is_tag }}
@@ -84,6 +95,8 @@ jobs:
   windows:
     needs: [test, version]
     runs-on: windows-latest
+    # Publishes self-contained and then runs Inno Setup; the longest of the build jobs.
+    timeout-minutes: 30
     env:
       VERSION: ${{ needs.version.outputs.version }}
     steps:
@@ -131,6 +144,7 @@ jobs:
   linux:
     needs: [test, version]
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -163,6 +177,10 @@ jobs:
     # releases exist to prevent.
     needs: [version, windows, linux]
     runs-on: ubuntu-latest
+    # Uploads six assets, checksums and an attestation — network-bound, so the most generous
+    # of the short jobs. It is also the one job whose hanging leaves a tag published with
+    # assets missing, which is the state this bound most needs to fail out of rather than sit in.
+    timeout-minutes: 20
     # The only job that publishes, and so the only one that needs to be able to.
     #
     # id-token and attestations are the price of provenance. They are genuinely broader than
