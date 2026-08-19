@@ -72,9 +72,18 @@ public static class ClaudeDataRoots
     ///
     /// <para>Anthropic ships Claude Desktop for Linux through an apt repository, which does
     /// <i>not</i> redirect, so on a stock supported install this finds nothing and the
-    /// canonical path is the real one. It is here for unofficial Snap and Flatpak
-    /// repackagings, which exist and are widely used — and because this project has already
-    /// paid once for assuming the canonical path was the only one.</para>
+    /// canonical path is the real one.</para>
+    ///
+    /// <para><b>The Linux half is unconfirmed, and no machine can currently confirm it.</b>
+    /// As of 2026-08-19 there is no Snap or Flatpak build of Claude Desktop — not from
+    /// Anthropic, and not as a third-party repackaging of the <c>.deb</c>. The Snap Store's
+    /// two near-matches are unrelated apps (the current one is a browser wrapper, which
+    /// writes no plan-history file), and Flathub carries nothing under either name. So these
+    /// two layouts rest on the Snap and Flatpak specifications rather than on a directory
+    /// anyone has looked at, and they are kept only because they are pure, cheap, tested on
+    /// both runners, and cost nothing where the directories do not exist — while removing
+    /// them would re-open the canonical-path-only assumption that this class was written to
+    /// fix. See <c>docs/findings/claude-desktop-linux-packaging.md</c>.</para>
     /// </summary>
     public static IReadOnlyList<string> Redirected() =>
         OperatingSystem.IsWindows()
