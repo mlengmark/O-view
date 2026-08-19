@@ -9,21 +9,36 @@ public class PanelStatisticsTests : IDisposable
     private static readonly DateTimeOffset Now = new(2026, 7, 21, 12, 0, 0, TimeSpan.Zero);
 
     private readonly string _dir = Directory.CreateTempSubdirectory("oview-tests-").FullName;
+    private readonly List<RollupStore> _stores = [];
     private readonly RollupStore _store;
 
     public PanelStatisticsTests()
     {
-        _store = new RollupStore(Path.Combine(_dir, "usage.db"));
+        _store = NewStore();
     }
 
     public void Dispose()
     {
-        _store.Dispose();
+        foreach (var store in _stores)
+        {
+            store.Dispose();
+        }
         Directory.Delete(_dir, recursive: true);
     }
 
+    /// <summary>A fresh, independent store — for cases that need several first-recorded days.</summary>
+    private RollupStore NewStore()
+    {
+        var store = new RollupStore(Path.Combine(_dir, $"usage-{_stores.Count}.db"));
+        _stores.Add(store);
+        return store;
+    }
+
     private void Seed(string id, string date, long output, string model = "claude-opus-4-8") =>
-        _store.Ingest([new TranscriptRecord(id, DateTimeOffset.Parse(date + "T10:00:00Z"), model, 0, 0, 0, output)]);
+        Seed(_store, id, date, output, model);
+
+    private static void Seed(RollupStore store, string id, string date, long output, string model = "claude-opus-4-8") =>
+        store.Ingest([new TranscriptRecord(id, DateTimeOffset.Parse(date + "T10:00:00Z"), model, 0, 0, 0, output)]);
 
     [Fact]
     public void PreInstallDays_AreMarkedNoData_NotZero()
@@ -52,18 +67,81 @@ public class PanelStatisticsTests : IDisposable
         Assert.True(stats.HasPartialHistory);
     }
 
+    /// <summary>
+    /// Coverage counts days O-view has data <b>for</b>, not days with usage on them.
+    ///
+    /// <para>Seeded on the 18th, 20th and 21st: three days carry usage, but the 19th is a day
+    /// inside the recorded era that the user simply did not use Claude — a genuine zero. The
+    /// window is covered from the 18th onward, which is four days.</para>
+    /// </summary>
     [Fact]
-    public void Coverage_CountsRecordedDaysAgainstWindow()
+    public void Coverage_CountsDaysObservedNotDaysWithUsage()
     {
         Seed("r1", "2026-07-18", 10);
+        // nothing on 2026-07-19 — an idle day, not a missing one
         Seed("r2", "2026-07-20", 20);
         Seed("r3", "2026-07-21", 30);
 
         var stats = PanelStatistics.Build(_store, Now);
 
-        Assert.Equal(3, stats.RecordedDays);
+        Assert.Equal(4, stats.RecordedDays);
         Assert.Equal(31, stats.WindowDays);
         Assert.True(stats.HasPartialHistory);
+    }
+
+    /// <summary>
+    /// The reported case (issue #142): a gap in the middle of the window is not missing
+    /// history. Before the fix this said "2 of 31 days recorded" at a user whose history
+    /// covered the whole span — reading as short history when usage was merely low, which
+    /// inverts the caveat ADR-0006 requires.
+    /// </summary>
+    [Fact]
+    public void Coverage_AGapInTheMiddleIsNotMissingHistory()
+    {
+        Seed("r1", "2026-06-21", 10);   // the first day of the 31-day window
+        Seed("r2", "2026-07-21", 20);   // today — nothing at all in between
+
+        var stats = PanelStatistics.Build(_store, Now);
+
+        Assert.Equal(31, stats.RecordedDays);
+        Assert.False(stats.HasPartialHistory);
+        Assert.Equal("", stats.CoverageNote);
+    }
+
+    /// <summary>
+    /// The property that keeps the label and the chart from drifting apart again: they are one
+    /// derivation, so the caveat can never describe a different span from the graph's
+    /// pre-install region drawn directly beneath it.
+    /// </summary>
+    [Fact]
+    public void Coverage_AlwaysMatchesTheGraphsPreInstallBoundary()
+    {
+        foreach (var firstDay in new[] { "2026-05-01", "2026-06-21", "2026-07-10", "2026-07-21" })
+        {
+            var store = NewStore();
+            Seed(store, "r1", firstDay, 10);
+
+            var stats = PanelStatistics.Build(store, Now);
+
+            Assert.Equal(stats.DailySeries.Count(d => !d.PreInstall), stats.RecordedDays);
+        }
+    }
+
+    /// <summary>
+    /// History older than the window means the window is fully covered — and, with the caveat
+    /// suppressed, the 31-day figure stands on its own. That is the correct outcome: the
+    /// caveat is for short history, and this history is not short.
+    /// </summary>
+    [Fact]
+    public void Coverage_HistoryOlderThanTheWindowCarriesNoCaveat()
+    {
+        Seed("r0", "2026-05-01", 5);
+        Seed("r1", "2026-07-21", 40);
+
+        var stats = PanelStatistics.Build(_store, Now);
+
+        Assert.Equal(31, stats.RecordedDays);
+        Assert.Equal("", stats.CoverageNote);
     }
 
     [Fact]
