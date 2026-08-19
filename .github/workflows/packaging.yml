@@ -155,8 +155,16 @@ jobs:
           # happens 120 s in, so on every healthy build this code never executes, and an
           # unsupported ps option would be discovered during the incident it exists to
           # diagnose. Non-fatal: a missing diagnostic must not fail a good package.
+          # Reported rather than left silent. A diagnostic whose only evidence of working is
+          # the absence of a warning is one nobody can trust at the moment they need it —
+          # "ps exited 0" is not "ps produced a tree". The count says so on every run, and
+          # costs one line.
           : > /tmp/lintian-tree.txt
-          sample_tree || echo "note: process sampling unavailable on this runner — #131 diagnostics degraded"
+          if sample_tree; then
+            echo "process sampling armed: baseline captured $(( $(wc -l < /tmp/lintian-tree.txt) - 2 )) processes"
+          else
+            echo "note: process sampling unavailable on this runner — #131 diagnostics degraded"
+          fi
 
           ( while sleep 120; do sample_tree; done ) &
           SAMPLER=$!
