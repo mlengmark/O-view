@@ -32,10 +32,10 @@ env:
   VERSION: ${{ github.event.inputs.version || '0.6.0-dev' }}
 
 # Every job here is bounded. Without these, a step that wedges runs to the Actions default
-# of six hours: on 2026-08-19 two separate runs sat on the Lintian step for over an hour
-# each, and a job's logs are not retrievable while it is still in progress, so the stall was
-# invisible from the outside. The numbers are several times each job's observed duration —
-# they exist to cap a hang, not to police a slow runner.
+# of six hours: on 2026-08-19 four jobs across two runs sat on the Lintian step for over an
+# hour each, and a job's logs are not retrievable while it is still in progress, so the
+# stall was invisible from the outside until it was cancelled. The numbers are several times
+# each job's observed duration — they exist to cap a hang, not to police a slow runner.
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -89,16 +89,25 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq lintian
 
-          # Bounded, because on 2026-08-19 this step went from 29 s to over an hour on amd64
-          # while the arm64 job sat unchanged at under three minutes -- same runner image,
-          # same apt install, no packaging change on either side. Whatever the runner's
-          # lintian did there, an unbounded run silently consumed the job's entire budget and
-          # the logs were unreachable while it hung, which is the part that cost the time.
+          # Bounded, after this step stalled on 2026-08-19: four jobs across two runs sat
+          # here for over an hour each -- both architectures in the first run, amd64 only in
+          # the second -- against a normal time of roughly two minutes. No packaging change
+          # on either branch, and it cleared on its own within the hour, so it was the runner
+          # infrastructure rather than the package or lintian itself.
           #
-          # 15 minutes is roughly thirty times the historical amd64 figure, so this cannot
-          # fire on a merely slow run, and a stall now fails with a sentence saying so.
+          # The bound is here because of what the stall cost rather than what caused it: a
+          # job's logs cannot be retrieved while it is in progress, so an hour of hanging
+          # showed nothing beyond the step name, and without timeout-minutes it would have
+          # run to the Actions default of six hours.
+          #
+          # 15 minutes is several times the observed duration, so it cannot fire on a merely
+          # slow runner.
+          #
+          # --tag-display-limit 0 rather than --no-tag-display-limit: lintian prints "a future
+          # release will drop" the latter. Same meaning, and it fails loudly today rather than
+          # silently the week the runner image updates.
           set +e
-          timeout 900 lintian --fail-on error --no-tag-display-limit dist/o-view_*_${{ matrix.arch }}.deb
+          timeout 900 lintian --fail-on error --tag-display-limit 0 dist/o-view_*_${{ matrix.arch }}.deb
           STATUS=$?
           set -e
 
