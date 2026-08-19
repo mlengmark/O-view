@@ -101,6 +101,119 @@ public class UsageEngineTests
         Assert.Equal(2, notifications.Count);
     }
 
+    // ── the user-settable threshold (issue #141) ──────────────────────────────────
+
+    [Fact]
+    public void ThresholdPercentIsAppliedAndPersisted()
+    {
+        using var dir = new TempDir();
+        var (engine, _, _, _) = Build(dir);
+        using var _e = engine;
+
+        Assert.Equal(UsageLevels.CriticalPercent, engine.Settings.ThresholdPercent);   // the default
+        Assert.Equal(90, engine.SetThresholdPercent(90));
+        Assert.Equal(90, engine.Settings.ThresholdPercent);
+
+        // Reloaded from disk rather than trusted in memory: the menu passes state on every
+        // open, so a threshold that did not reach the file silently reverts on restart.
+        Assert.Equal(90, TraySettings.Load(dir.File("settings.json")).ThresholdPercent);
+    }
+
+    /// <summary>
+    /// The notification actually fires at the new threshold, not the old one — the whole
+    /// point, and the part a setter that only wrote settings would miss.
+    /// </summary>
+    [Fact]
+    public void NotificationFollowsTheNewThreshold()
+    {
+        using var dir = new TempDir();
+        var (engine, provider, timers, _) = Build(dir);
+        using var _e = engine;
+
+        var notifications = new List<AppNotification>();
+        engine.NotificationRequested += notifications.Add;
+        engine.SetThresholdPercent(90);
+
+        provider.SetSession(75);          // above the 70 default, below the chosen 90
+        engine.Start(timers);
+        Assert.Empty(notifications);
+
+        provider.SetSession(91);
+        timers.Poll.Tick();
+        Assert.Single(notifications);
+    }
+
+    /// <summary>
+    /// Lowering the threshold under usage that is already past it notifies on the next poll.
+    ///
+    /// <para>This is why <see cref="UsageEngine.SetThresholdPercent"/> rebuilds the watcher
+    /// rather than re-reading a field. The watcher is edge-triggered, so a stale "we are not
+    /// above" flag decided against the old threshold would keep it silent until a window
+    /// reset — leaving a user who just asked to be warned at 70%, while sitting at 75%,
+    /// hearing nothing for hours.</para>
+    /// </summary>
+    [Fact]
+    public void LoweringTheThresholdBelowCurrentUsageNotifiesOnTheNextPoll()
+    {
+        using var dir = new TempDir();
+        var (engine, provider, timers, _) = Build(dir);
+        using var _e = engine;
+
+        var notifications = new List<AppNotification>();
+        engine.NotificationRequested += notifications.Add;
+        engine.SetThresholdPercent(80);
+
+        provider.SetSession(75);
+        engine.Start(timers);
+        Assert.Empty(notifications);
+
+        engine.SetThresholdPercent(70);   // 75 is now over the line
+        timers.Poll.Tick();
+
+        Assert.Single(notifications);
+    }
+
+    /// <summary>And the converse: raising it past current usage must not fire.</summary>
+    [Fact]
+    public void RaisingTheThresholdAboveCurrentUsageStaysSilent()
+    {
+        using var dir = new TempDir();
+        var (engine, provider, timers, _) = Build(dir);
+        using var _e = engine;
+
+        var notifications = new List<AppNotification>();
+        engine.NotificationRequested += notifications.Add;
+
+        provider.SetSession(75);          // over the 70 default
+        engine.Start(timers);
+        Assert.Single(notifications);
+
+        engine.SetThresholdPercent(90);
+        timers.Poll.Tick();
+
+        Assert.Single(notifications);     // 75 < 90 — no second notification
+    }
+
+    /// <summary>
+    /// Clamped to the range <see cref="TraySettings.Load"/> accepts, so a caller cannot
+    /// install a threshold the settings file would reject and silently reset to the default
+    /// on the next launch.
+    /// </summary>
+    [Theory]
+    [InlineData(0, 1)]
+    [InlineData(-5, 1)]
+    [InlineData(101, 100)]
+    [InlineData(1000, 100)]
+    public void ThresholdPercentIsClampedToWhatSettingsWillLoadBack(int requested, int expected)
+    {
+        using var dir = new TempDir();
+        var (engine, _, _, _) = Build(dir);
+        using var _e = engine;
+
+        Assert.Equal(expected, engine.SetThresholdPercent(requested));
+        Assert.Equal(expected, TraySettings.Load(dir.File("settings.json")).ThresholdPercent);
+    }
+
     [Fact]
     public void ThresholdIsSilentWhenNotificationsAreOff()
     {

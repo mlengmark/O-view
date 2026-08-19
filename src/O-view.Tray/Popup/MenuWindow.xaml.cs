@@ -3,6 +3,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using OView.Core.Models;
 using OView.Tray.Tray;
 using Path = System.Windows.Shapes.Path;
 using Point = System.Windows.Point;
@@ -65,6 +66,36 @@ public partial class MenuWindow : Window, IFlyout
     /// <summary>As <see cref="SetRunAtStartup"/>, for the threshold-notification setting.</summary>
     public Func<bool, bool>? SetNotifyOnThreshold { get; set; }
 
+    /// <summary>
+    /// As <see cref="SetRunAtStartup"/>, for the notification threshold itself. Returns the
+    /// percentage as it actually stands after the write, so a settings file that could not be
+    /// saved leaves the pill showing the real value rather than the requested one.
+    /// </summary>
+    public Func<int, int>? SetThresholdPercent { get; set; }
+
+    /// <summary>
+    /// The percentages the selector offers. Three, deliberately: enough to cover "warn me
+    /// early" through "warn me only when it matters", few enough to stay one glance on a row
+    /// rather than a scrolling list.
+    /// </summary>
+    internal static readonly int[] ThresholdChoices = [70, 80, 90];
+
+    /// <summary>What the pill currently reads — the value the option marks are drawn from.</summary>
+    private int _thresholdPercent = UsageLevels.CriticalPercent;
+
+    /// <summary>
+    /// The words after the pill, giving the row its full reading: "Notify at [70% ⌄] usage".
+    ///
+    /// <para>The shorter wording is a deliberate choice (@mlengmark on issue #141), taken over
+    /// "session usage". The watcher reads <see cref="UsageSnapshot.SessionPercent"/> only, so
+    /// the row is silent about which of the panel's two meters it watches; what closes that gap
+    /// is the notification itself, which names the window explicitly — "Session usage is at N%
+    /// of the 5-hour limit". <b>If that balloon's copy is ever shortened, this row becomes the
+    /// only place the distinction could have been made, and it no longer makes it.</b>
+    /// </para>
+    /// </summary>
+    internal const string NotifySuffixText = "usage";
+
     public event EventHandler? CopyDiagnosticsRequested;
     public event EventHandler? CheckForUpdatesRequested;
     public event EventHandler? ExitRequested;
@@ -101,6 +132,24 @@ public partial class MenuWindow : Window, IFlyout
         // first, so a balloon or a modal never appears behind a topmost window.
         StartupRow.Click += (_, _) => Toggle(SetRunAtStartup, StartupCheck);
         NotifyRow.Click += (_, _) => Toggle(SetNotifyOnThreshold, NotifyCheck);
+
+        // Marked handled, or the Click bubbles to NotifyRow above and every interaction with
+        // the selector would silently switch the notification off as a side effect.
+        ThresholdPill.Click += (_, e) =>
+        {
+            e.Handled = true;
+            SetOptionsExpanded(ThresholdOptions.Visibility != Visibility.Visible);
+        };
+
+        foreach (var option in OptionRows)
+        {
+            option.Click += (sender, e) =>
+            {
+                e.Handled = true;
+                ChooseThreshold(ChoiceOf((FrameworkElement)sender));
+            };
+        }
+
         DiagnosticsRow.Click += (_, _) => Dismiss(CopyDiagnosticsRequested);
         UpdatesRow.Click += (_, _) => Dismiss(CheckForUpdatesRequested);
         ExitRow.Click += (_, _) => Dismiss(ExitRequested);
@@ -116,6 +165,10 @@ public partial class MenuWindow : Window, IFlyout
     {
         Populate(runAtStartup, notifyOnThreshold, thresholdPercent, version);
 
+        // The list always opens closed. Reopening the flyout with it still expanded would
+        // show a taller card with no explanation of why, and the choice has already been made.
+        SetOptionsExpanded(false, redock: false);
+
         // takeForeground: a tray-resident app owns no activated window, so Activate()
         // alone is not guaranteed the foreground — and without it the flyout never
         // receives the deactivation that dismisses it on an outside click (issue #11,
@@ -129,9 +182,69 @@ public partial class MenuWindow : Window, IFlyout
         PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
 
         VersionText.Text = $"v{version}";
-        NotifyLabel.Text = $"Notify at {thresholdPercent}% session usage";
+        NotifySuffix.Text = NotifySuffixText;
         SetChecked(StartupCheck, runAtStartup);
         SetChecked(NotifyCheck, notifyOnThreshold);
+        ShowThreshold(thresholdPercent);
+    }
+
+    /// <summary>
+    /// Draws a threshold onto the pill and the option marks.
+    ///
+    /// <para>The value is <b>rendered as it is</b>, not snapped to one of
+    /// <see cref="ThresholdChoices"/>. <c>TraySettings</c> accepts any 1–100 value and a
+    /// hand-edited settings.json is a legitimate way to hold one; showing 75 as "80%" would
+    /// be the menu asserting something about the machine that is not true.</para>
+    /// </summary>
+    private void ShowThreshold(int percent)
+    {
+        _thresholdPercent = percent;
+        ThresholdText.Text = $"{percent}%";
+
+        foreach (var (row, mark) in OptionRows.Zip(OptionMarks))
+        {
+            mark.Visibility = ChoiceOf(row) == percent ? Visibility.Visible : Visibility.Hidden;
+        }
+    }
+
+    private System.Windows.Controls.Button[] OptionRows => [Threshold70, Threshold80, Threshold90];
+
+    /// <summary>
+    /// The percentage an option row stands for. XAML <c>Tag</c> is a string — the first
+    /// version cast it straight to <c>int</c> and threw on the very first render.
+    /// </summary>
+    private static int ChoiceOf(FrameworkElement row) =>
+        int.Parse((string)row.Tag, System.Globalization.CultureInfo.InvariantCulture);
+
+    private System.Windows.Shapes.Ellipse[] OptionMarks => [Mark70, Mark80, Mark90];
+
+    /// <summary>
+    /// Applies a chosen percentage and closes the list. Renders what the setter
+    /// <em>returns</em>, exactly as the toggle rows do — a settings write can fail, and a
+    /// pill claiming a value that was never persisted is the same fabrication a tick that
+    /// lies about the registry would be (CLAUDE.md rule 6).
+    /// </summary>
+    private void ChooseThreshold(int percent)
+    {
+        ShowThreshold(SetThresholdPercent?.Invoke(percent) ?? percent);
+        SetOptionsExpanded(false);
+    }
+
+    /// <summary>
+    /// Opens or closes the option list, then re-docks — the card is <c>SizeToContent</c>, so
+    /// growing it downward from a fixed top would push the new rows into the taskbar, which
+    /// is the failure the docked placement exists to prevent (issue #33).
+    /// </summary>
+    private void SetOptionsExpanded(bool expanded, bool redock = true)
+    {
+        ThresholdOptions.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        ChevronRotation.Angle = expanded ? 180 : 0;
+
+        if (redock && IsVisible)
+        {
+            UpdateLayout();
+            _flyout.Redock(ActualWidth, ActualHeight);
+        }
     }
 
     private void Toggle(Func<bool, bool>? apply, Path check)
@@ -180,11 +293,42 @@ public partial class MenuWindow : Window, IFlyout
     /// keyboard both raise, so a verification run exercises the real handler rather than a
     /// parallel path that could pass while the real one is broken.
     /// </summary>
-    internal void InvokeRow(MenuRow row)
+    internal void InvokeRow(MenuRow row) => InvokeButton(RowButton(row));
+
+    private static void InvokeButton(System.Windows.Controls.Button button)
     {
-        var peer = new System.Windows.Automation.Peers.ButtonAutomationPeer(RowButton(row));
+        var peer = new System.Windows.Automation.Peers.ButtonAutomationPeer(button);
         ((System.Windows.Automation.Provider.IInvokeProvider)
             peer.GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke)).Invoke();
+    }
+
+    /// <summary>
+    /// Opens or closes the threshold list for an offscreen render. Skips the re-dock, which
+    /// needs a placed window; the sample renderer never shows one.
+    /// </summary>
+    internal void ExpandThresholdsForVerification(bool expanded) =>
+        SetOptionsExpanded(expanded, redock: false);
+
+    /// <summary>The pill's current text, so a verification run can assert what it reads.</summary>
+    internal string ThresholdLabel => ThresholdText.Text;
+
+    /// <summary>Whether the option list is open — the state a click on the pill must flip.</summary>
+    internal bool ThresholdOptionsOpen => ThresholdOptions.Visibility == Visibility.Visible;
+
+    /// <summary>
+    /// Activates the pill through its automation peer, exactly as <see cref="InvokeRow"/>
+    /// does for a row — so a verification run drives the real <c>Click</c> handler, including
+    /// the <c>e.Handled</c> that stops the click bubbling to the row underneath.
+    /// </summary>
+    internal void InvokeThresholdPill() => InvokeButton(ThresholdPill);
+
+    /// <summary>Activates one of the three choices. Unknown values are ignored, not guessed at.</summary>
+    internal void InvokeThresholdOption(int percent)
+    {
+        if (OptionRows.FirstOrDefault(r => ChoiceOf(r) == percent) is { } row)
+        {
+            InvokeButton(row);
+        }
     }
 
     /// <summary>Tick state of a toggle row, for asserting a toggle actually flipped.</summary>

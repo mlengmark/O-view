@@ -343,6 +343,9 @@ public partial class App : System.Windows.Application
             // now lives once, on IStartupRegistration.Apply, so both heads share it.
             SetRunAtStartup = _startup.Apply,
             SetNotifyOnThreshold = enable => _engine!.SetNotifyOnThreshold(enable),
+            // Same contract as the two above: the row renders what the engine returns, so a
+            // value that could not be applied is not drawn as though it had been.
+            SetThresholdPercent = percent => _engine!.SetThresholdPercent(percent),
         };
 
         // One-click support bundle: a blank panel is otherwise indistinguishable from

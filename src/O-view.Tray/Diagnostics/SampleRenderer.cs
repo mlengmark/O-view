@@ -149,16 +149,31 @@ internal static class SampleRenderer
         const double scale = 2.0;
         const double pad = 16;
 
+        // The threshold selector needs its OPEN state in the sheet, not just its closed one:
+        // the list is inline in the card (it is not a Popup, precisely so it can be rendered),
+        // and that is the frame showing whether the group reads as belonging to the row above
+        // it rather than as three more top-level items.
+        var cases = new (string Name, bool Startup, bool Notify, int Threshold, bool Open)[]
+        {
+            ("both-on", true, true, 70, false),
+            ("both-off", false, false, 70, false),
+            ("threshold-open", true, true, 70, true),
+            ("threshold-open-90", true, true, 90, true),
+            ("threshold-90", true, true, 90, false),
+            // A hand-edited settings.json value that is none of the three offered. It must
+            // render honestly rather than snap to the nearest option — TraySettings accepts
+            // any 1-100 value, and a pill reading "80%" over a stored 75 would be the menu
+            // asserting something untrue about the machine.
+            ("threshold-unlisted-75", true, true, 75, true),
+        };
+
         foreach (var light in new[] { true, false })
         {
-            foreach (var (name, startup, notify) in new (string, bool, bool)[]
-            {
-                ("both-on", true, true),
-                ("both-off", false, false),
-            })
+            foreach (var (name, startup, notify, threshold, open) in cases)
             {
                 var menu = new MenuWindow { ThemeOverride = light };
-                menu.Populate(startup, notify, 70, UpdateService.CurrentVersion);
+                menu.Populate(startup, notify, threshold, UpdateService.CurrentVersion);
+                menu.ExpandThresholdsForVerification(open);
                 var card = menu.RenderToBitmap(scale);
 
                 SavePng(
@@ -497,6 +512,7 @@ internal static class SampleRenderer
         {
             SetRunAtStartup = enable => enable,          // no registry writes in a check
             SetNotifyOnThreshold = enable => enable,
+            SetThresholdPercent = percent => percent,    // and no settings writes
         };
         menu.CopyDiagnosticsRequested += (_, _) => fired["diagnostics"]++;
         menu.CheckForUpdatesRequested += (_, _) => fired["updates"]++;
@@ -512,6 +528,7 @@ internal static class SampleRenderer
             report.AppendLine($"{label,-42} visible={menu.IsVisible,-5} closing={menu.IsClosing,-5} " +
                               $"ticks=[startup {Ticked(MenuWindow.MenuRow.Startup),-5} " +
                               $"notify {Ticked(MenuWindow.MenuRow.Notify),-5}] " +
+                              $"threshold=[{menu.ThresholdLabel,-4} open {menu.ThresholdOptionsOpen,-5}] " +
                               $"fired=[diag {fired["diagnostics"]}, upd {fired["updates"]}, exit {fired["exit"]}]");
 
         // A toggle row renders what its setter RETURNS, not what was requested — the whole
@@ -528,6 +545,22 @@ internal static class SampleRenderer
         var toggleFlips = 0;
         var toggleAttempts = 0;
         (MenuWindow.MenuRow Row, bool Before)? pendingToggle = null;
+
+        // The threshold selector's three properties, counted per cycle (issue #141).
+        //
+        // A cycle only counts as an attempt if the flyout was actually open when the threshold
+        // phase began. It sometimes is not: the flyout takes the foreground on Show, and on the
+        // first cycle of a freshly launched process something else occasionally still holds it,
+        // so the window is deactivated and dismisses itself before these steps run. That is the
+        // condition issue #11 is about and it is not what this counter is measuring — counting
+        // it as a failure would make the check fail for a reason unrelated to the selector.
+        // Skipped cycles are reported rather than quietly dropped.
+        var thresholdAttempts = 0;
+        var thresholdSkipped = 0;
+        var listOpened = 0;
+        var choiceApplied = 0;
+        var notifyTickBeforeThreshold = false;
+        var thresholdCycleUsable = false;
 
         void SettleToggle()
         {
@@ -568,6 +601,50 @@ internal static class SampleRenderer
             steps.Add(($"cycle {n}: toggle Run at startup", () => CheckedToggle(MenuWindow.MenuRow.Startup)));
             steps.Add(($"cycle {n}: toggle Notify", () => CheckedToggle(MenuWindow.MenuRow.Notify)));
             steps.Add(($"cycle {n}: toggles left it open", SettleToggle));
+
+            // The threshold selector (issue #141). Three properties that a still cannot show
+            // and a single activation cannot catch: the pill opens the list, choosing a value
+            // closes it and moves the label, and NEITHER action dismisses the flyout or
+            // flips the Notify tick — the pill is nested inside the Notify row, so a click
+            // that failed to mark itself handled would silently switch notifications off.
+            //
+            // Checked on the FOLLOWING step for the same reason the toggles are: InvokeButton
+            // goes through the automation peer, which raises Click on a later dispatcher turn.
+            steps.Add(($"cycle {n}: open threshold list", () =>
+            {
+                thresholdCycleUsable = menu.IsVisible && !menu.IsClosing;
+                if (thresholdCycleUsable)
+                {
+                    thresholdAttempts++;
+                }
+                else
+                {
+                    thresholdSkipped++;
+                }
+
+                notifyTickBeforeThreshold = Ticked(MenuWindow.MenuRow.Notify);
+                menu.InvokeThresholdPill();
+            }));
+            steps.Add(($"cycle {n}: list open, flyout alive", () =>
+            {
+                if (thresholdCycleUsable && menu.ThresholdOptionsOpen && menu.IsVisible && !menu.IsClosing)
+                {
+                    listOpened++;
+                }
+            }));
+            steps.Add(($"cycle {n}: choose 90%", () => menu.InvokeThresholdOption(90)));
+            steps.Add(($"cycle {n}: chosen, list closed", () =>
+            {
+                if (thresholdCycleUsable
+                    && !menu.ThresholdOptionsOpen
+                    && menu.IsVisible && !menu.IsClosing
+                    && menu.ThresholdLabel == "90%"
+                    && Ticked(MenuWindow.MenuRow.Notify) == notifyTickBeforeThreshold)
+                {
+                    choiceApplied++;
+                }
+            }));
+
             steps.Add(($"cycle {n}: dismiss (click-away)", menu.DismissNow));
             steps.Add(($"cycle {n}: settled after dismiss", () => { }));
         }
@@ -589,9 +666,18 @@ internal static class SampleRenderer
                 report.AppendLine($"activations of 'Check for updates…' : {fired["updates"]} of {expected} expected");
                 report.AppendLine($"activations of 'Copy diagnostics'   : {fired["diagnostics"]} of {expected} expected");
                 report.AppendLine($"toggles that moved their tick       : {toggleFlips} of {toggleAttempts} expected");
+                report.AppendLine($"pill opened the list, flyout alive  : {listOpened} of {thresholdAttempts} expected"
+                                  + (thresholdSkipped > 0
+                                      ? $"  ({thresholdSkipped} cycle(s) skipped — flyout was not open, see #11)"
+                                      : ""));
+                report.AppendLine($"choice applied, list closed, tick   : {choiceApplied} of {thresholdAttempts} expected");
                 var pass = fired["updates"] == expected
                            && fired["diagnostics"] == expected
-                           && toggleFlips == toggleAttempts;
+                           && toggleFlips == toggleAttempts
+                           // At least one cycle must have been testable, or this passes vacuously.
+                           && thresholdAttempts > 0
+                           && listOpened == thresholdAttempts
+                           && choiceApplied == thresholdAttempts;
                 report.AppendLine($"RESULT: {(pass ? "PASS" : "FAIL")}");
                 File.WriteAllText(path, report.ToString());
                 shutdown();

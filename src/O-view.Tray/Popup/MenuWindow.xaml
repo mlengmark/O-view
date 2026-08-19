@@ -72,6 +72,65 @@
             <Setter Property="TextTrimming" Value="CharacterEllipsis"/>
             <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
         </Style>
+
+        <!-- The threshold selector, sitting inline on the Notify row. A pill rather than a
+             system ComboBox: a ComboBox drops a Popup, and a Popup lives in its own HWND
+             outside this window's visual tree — so it would appear in no menu-samples render
+             at all, and the surface with the app's worst regression record would be the one
+             surface that could not be verified from an image. -->
+        <Style x:Key="SelectorPill" TargetType="Button">
+            <Setter Property="Height" Value="22"/>
+            <Setter Property="Padding" Value="8,0,6,0"/>
+            <Setter Property="Background" Value="{DynamicResource TileBg}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Pill" Background="{TemplateBinding Background}"
+                                BorderBrush="{DynamicResource PanelBorder}" BorderThickness="1"
+                                CornerRadius="5" Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Pill" Property="Background"
+                                        Value="{DynamicResource TileHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Pill" Property="Background"
+                                        Value="{DynamicResource TileHover}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Pill" Property="Background"
+                                        Value="{DynamicResource TilePressed}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- One choice in the opened list. Shorter than a menu row so the group reads as
+             belonging to the row above it rather than as three more top-level items. -->
+        <Style x:Key="OptionRow" TargetType="Button" BasedOn="{StaticResource MenuRow}">
+            <Setter Property="Height" Value="28"/>
+        </Style>
+
+        <!-- The selected marker: a filled dot, deliberately NOT the row checkmark. A tick
+             means "this setting is on"; these three are one value out of three, and reusing
+             the tick would read as three independent toggles. -->
+        <Style x:Key="OptionMark" TargetType="Ellipse">
+            <Setter Property="Width" Value="6"/>
+            <Setter Property="Height" Value="6"/>
+            <Setter Property="Fill" Value="{StaticResource BrandArc}"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="Margin" Value="2,0,0,0"/>
+        </Style>
     </Window.Resources>
 
     <Border Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource PanelBorder}"
@@ -114,12 +173,76 @@
                 <Grid>
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="22"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <Path x:Name="NotifyCheck" Grid.Column="0" Style="{StaticResource RowCheck}"/>
-                    <TextBlock x:Name="NotifyLabel" Grid.Column="1" Style="{StaticResource RowLabel}"/>
+                    <TextBlock x:Name="NotifyLabel" Grid.Column="1" Text="Notify at"
+                               Style="{StaticResource RowLabel}"/>
+
+                    <!-- Nested inside the row Button on purpose: the whole row still toggles
+                         the notification on and off, and only this pill opens the list. Click
+                         is a bubbling routed event, so the handler marks it handled or the
+                         row above would toggle every time the pill was pressed. -->
+                    <Button x:Name="ThresholdPill" Grid.Column="2" Margin="6,0,6,0"
+                            Style="{StaticResource SelectorPill}">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock x:Name="ThresholdText" FontSize="11" VerticalAlignment="Center"
+                                       Foreground="{DynamicResource TextPrimary}"/>
+                            <Path x:Name="ThresholdChevron" Data="M0,0 L4,4 L8,0" Margin="6,1,0,0"
+                                  Stroke="{DynamicResource TextSecondary}" StrokeThickness="1.4"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round" VerticalAlignment="Center"
+                                  RenderTransformOrigin="0.5,0.5">
+                                <Path.RenderTransform>
+                                    <RotateTransform x:Name="ChevronRotation" Angle="0"/>
+                                </Path.RenderTransform>
+                            </Path>
+                        </StackPanel>
+                    </Button>
+
+                    <TextBlock x:Name="NotifySuffix" Grid.Column="3" Style="{StaticResource RowLabel}"/>
                 </Grid>
             </Button>
+
+            <!-- The opened list. Inline in the card rather than a floating Popup, so it is
+                 part of the visual tree the verification renders capture, and so nothing can
+                 take activation away from the flyout and dismiss it mid-choice (issue #11).
+                 The card is SizeToContent, so opening this grows it — MenuWindow re-docks
+                 afterwards, which is what keeps the group clear of the taskbar. -->
+            <StackPanel x:Name="ThresholdOptions" Visibility="Collapsed" Margin="0,1,0,3">
+                <Button x:Name="Threshold70" Style="{StaticResource OptionRow}" Tag="70">
+                    <Grid Margin="22,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="18"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Ellipse x:Name="Mark70" Grid.Column="0" Style="{StaticResource OptionMark}"/>
+                        <TextBlock Grid.Column="1" Text="70%" Style="{StaticResource RowLabel}"/>
+                    </Grid>
+                </Button>
+                <Button x:Name="Threshold80" Style="{StaticResource OptionRow}" Tag="80">
+                    <Grid Margin="22,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="18"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Ellipse x:Name="Mark80" Grid.Column="0" Style="{StaticResource OptionMark}"/>
+                        <TextBlock Grid.Column="1" Text="80%" Style="{StaticResource RowLabel}"/>
+                    </Grid>
+                </Button>
+                <Button x:Name="Threshold90" Style="{StaticResource OptionRow}" Tag="90">
+                    <Grid Margin="22,0,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="18"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Ellipse x:Name="Mark90" Grid.Column="0" Style="{StaticResource OptionMark}"/>
+                        <TextBlock Grid.Column="1" Text="90%" Style="{StaticResource RowLabel}"/>
+                    </Grid>
+                </Button>
+            </StackPanel>
 
             <Border Height="1" Background="{DynamicResource PanelBorder}" Margin="8,5,8,5"/>
 
