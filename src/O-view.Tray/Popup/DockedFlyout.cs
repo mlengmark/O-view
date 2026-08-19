@@ -155,6 +155,13 @@ internal sealed class DockedFlyout(Window host)
             return;   // it is on its way out; moving it now only makes the fade travel
         }
 
+        // Before moving it, not after, and not left to the caller: the open transition clipped
+        // the content to the size it had when the flyout opened, so a surface that has grown
+        // is drawn with everything past that line sliced off — the window is the right size
+        // and the card inside it is not. Re-placing a surface and re-fitting it are the same
+        // event, so they live together rather than in two places one of which gets forgotten.
+        FlyoutAnimation.FitClipToContent(host);
+
         (host.Left, host.Top, _dockOrigin) = PopupPositioner.Place(widthDip, heightDip);
     }
 

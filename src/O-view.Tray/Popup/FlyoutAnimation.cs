@@ -145,6 +145,35 @@ internal static class FlyoutAnimation
     }
 
     /// <summary>
+    /// Re-fits the reveal clip to the content's size, for a surface that has changed size
+    /// while open.
+    ///
+    /// <para><b>Why this is needed at all.</b> <see cref="Open"/> clips the content to a
+    /// <see cref="Rect"/> measured when the flyout opened, and that rectangle is a fixed
+    /// number — it does not track the content. A surface that then grows is drawn only as far
+    /// as the old height and sliced off below it. The tray menu hit this the moment the
+    /// threshold list could expand: the window grew correctly and re-docked correctly, and
+    /// the card was still rendered at its former height, so the rows past the fold lost their
+    /// bottoms along with the border and the rounded corner.</para>
+    ///
+    /// <para><b>Releasing the animation first is mandatory, not tidiness.</b>
+    /// <c>BeginAnimation</c> defaults to <c>FillBehavior.HoldEnd</c>, so the animated
+    /// <c>Rect</c> goes on overriding local values for as long as it is attached — assigning
+    /// <c>clip.Rect</c> without clearing it first is silently ignored, and the fix would look
+    /// like it had been applied while changing nothing.</para>
+    /// </summary>
+    public static void FitClipToContent(Window window)
+    {
+        if (window.Content is not FrameworkElement content || content.Clip is not RectangleGeometry clip)
+        {
+            return;
+        }
+
+        clip.BeginAnimation(RectangleGeometry.RectProperty, null);
+        clip.Rect = new Rect(0, 0, content.ActualWidth, content.ActualHeight);
+    }
+
+    /// <summary>
     /// Clears any running animations and restores the surface to plain, fully visible
     /// state. Used by verification paths that need a still, and by an open that follows
     /// a cancelled close.
