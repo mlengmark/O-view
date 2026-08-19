@@ -29,12 +29,9 @@ public sealed class WeeklyResetLog : IWeeklyResetLog
         "O-view",
         "weekly-resets.json");
 
-    /// <summary>
-    /// Two observations closer together than this describe the same reset and are merged.
-    /// Real resets are a week apart, and the widest bracket a closed-overnight Desktop can
-    /// produce is well under a day, so there is a large margin either side.
-    /// </summary>
-    public static readonly TimeSpan MergeWindow = TimeSpan.FromHours(12);
+    // There was a 12-hour MergeWindow here, and removing it is the fix for issue #136: it
+    // merged two brackets that sat close together, which is only the same question as "the
+    // same reset" while brackets stay narrow. See Absorb and CouldBeSeparateResets.
 
     /// <summary>
     /// Cap on retained observations — over a year of weekly resets, and prediction only
@@ -105,16 +102,28 @@ public sealed class WeeklyResetLog : IWeeklyResetLog
             at - WeeklyResetDetector.PreciseBracket, at, orgUuid)));
 
     /// <summary>
-    /// Folds one observation into the set, merging it with an existing record of the same
-    /// reset. Merging keeps the INTERSECTION of the two brackets: both contain the reset,
-    /// so their overlap does too, and re-seeing a reset with better sampling on either side
-    /// sharpens the answer instead of duplicating it. Returns whether anything changed.
+    /// Folds one observation into the set. Returns whether anything changed.
+    ///
+    /// <para>Three outcomes, and which one applies is decided by the brackets themselves
+    /// rather than by how close together they happen to sit:</para>
+    ///
+    /// <list type="number">
+    ///   <item><description><b>Overlapping — one reset.</b> Some instant satisfies both, so
+    ///   they are the same reset. Keep the INTERSECTION: both brackets contain it, and
+    ///   re-seeing a reset with better sampling on either side sharpens the answer instead
+    ///   of duplicating it.</description></item>
+    ///   <item><description><b>Disjoint, and far enough apart to be a period apart — two
+    ///   resets.</b> Keep both. This is the case issue #136 was losing.</description></item>
+    ///   <item><description><b>Disjoint, but too close together for two resets —
+    ///   contradictory.</b> They cannot both be right and cannot be two weekly resets, so
+    ///   keep the tighter rather than inventing an inverted interval.</description></item>
+    /// </list>
     /// </summary>
     private static bool Absorb(List<WeeklyResetObservation> known, WeeklyResetObservation observation)
     {
         for (var i = 0; i < known.Count; i++)
         {
-            if (!IsSameReset(known[i], observation))
+            if (!IsSameOrg(known[i], observation))
             {
                 continue;
             }
@@ -122,18 +131,29 @@ public sealed class WeeklyResetLog : IWeeklyResetLog
             var earliest = Max(known[i].EarliestUtc, observation.EarliestUtc);
             var latest = Min(known[i].LatestUtc, observation.LatestUtc);
 
-            // Disjoint brackets cannot both be right about one reset — keep the tighter
-            // one rather than inventing an empty or inverted interval.
-            var merged = earliest <= latest
-                ? known[i] with { EarliestUtc = earliest, LatestUtc = latest }
-                : (known[i].Uncertainty <= observation.Uncertainty ? known[i] : observation);
+            if (earliest <= latest)
+            {
+                var merged = known[i] with { EarliestUtc = earliest, LatestUtc = latest };
+                if (merged == known[i])
+                {
+                    return false;
+                }
 
-            if (merged == known[i])
+                known[i] = merged;
+                return true;
+            }
+
+            if (CouldBeSeparateResets(known[i], observation))
+            {
+                continue;   // a different reset — keep looking, and add it if nothing claims it
+            }
+
+            if (known[i].Uncertainty <= observation.Uncertainty)
             {
                 return false;
             }
 
-            known[i] = merged;
+            known[i] = observation;
             return true;
         }
 
@@ -141,10 +161,32 @@ public sealed class WeeklyResetLog : IWeeklyResetLog
         return true;
     }
 
-    private static bool IsSameReset(WeeklyResetObservation a, WeeklyResetObservation b) =>
-        string.Equals(a.OrgUuid, b.OrgUuid, StringComparison.OrdinalIgnoreCase) &&
-        a.EarliestUtc - MergeWindow <= b.LatestUtc &&
-        b.EarliestUtc - MergeWindow <= a.LatestUtc;
+    private static bool IsSameOrg(WeeklyResetObservation a, WeeklyResetObservation b) =>
+        string.Equals(a.OrgUuid, b.OrgUuid, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Whether two non-overlapping brackets could hold resets a full period apart.
+    ///
+    /// <para><b>Width, not proximity, is what separates the two cases</b> — which is the
+    /// whole lesson of issue #136. The two brackets that triggered it were disjoint by
+    /// <i>47 minutes</i>, so every proximity test in the world calls them the same reset;
+    /// what makes them different resets is that each is ~6.7 days <i>wide</i>, so the
+    /// instants inside them can be a week apart and routinely are.</para>
+    ///
+    /// <para>The test is therefore the widest separation the two brackets admit. Two narrow
+    /// brackets an hour apart can only ever place their resets about a day apart, which no
+    /// weekly cadence explains, so they stay contradictory and the old behaviour is kept for
+    /// them. Two week-wide brackets can place theirs a week apart, so they are allowed to be
+    /// two resets.</para>
+    /// </summary>
+    private static bool CouldBeSeparateResets(WeeklyResetObservation a, WeeklyResetObservation b)
+    {
+        var widest = a.LatestUtc >= b.LatestUtc
+            ? a.LatestUtc - b.EarliestUtc
+            : b.LatestUtc - a.EarliestUtc;
+
+        return widest >= WeeklyResetDetector.WindowLength - WeeklyResetDetector.PeriodTolerance;
+    }
 
     private static DateTimeOffset Max(DateTimeOffset a, DateTimeOffset b) => a >= b ? a : b;
     private static DateTimeOffset Min(DateTimeOffset a, DateTimeOffset b) => a <= b ? a : b;

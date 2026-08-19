@@ -83,6 +83,66 @@ public class WeeklyResetLogTests : IDisposable
         Assert.Equal(2, log.GetObservations().Count);
     }
 
+    /// <summary>
+    /// Issue #136, with the exact brackets that produced it on the development machine.
+    ///
+    /// <para>Desktop was closed for a week at a time, so each reset is bracketed ~6.7 days
+    /// wide. The two brackets end up disjoint by <b>47 minutes</b> — close enough that the
+    /// old 12-hour proximity rule called them one reset, computed an inverted intersection,
+    /// and discarded the earlier one. The 2026-08-03 reset was detected and then thrown away,
+    /// and a weekly reset costs a week to re-observe.</para>
+    ///
+    /// <para>Written with literal timestamps rather than the <c>Observation</c> helper
+    /// because the 47-minute separation is the entire point and deriving it would hide it.</para>
+    /// </summary>
+    [Fact]
+    public void TwoWeekWideBrackets_AreSeparateResets_EvenWhenTheyNearlyTouch()
+    {
+        var log = new WeeklyResetLog(LogPath);
+
+        // sd 59 -> 3 across a 162.9 h sampling gap.
+        var earlier = new WeeklyResetObservation(
+            DateTimeOffset.Parse("2026-08-03T20:16:00Z"),
+            DateTimeOffset.Parse("2026-08-10T15:07:00Z"), Org);
+
+        // sd 3 -> 0 across a 158.4 h gap, starting 47 minutes after the first bracket ends.
+        var later = new WeeklyResetObservation(
+            DateTimeOffset.Parse("2026-08-10T15:54:00Z"),
+            DateTimeOffset.Parse("2026-08-17T06:17:00Z"), Org);
+
+        log.Record([earlier]);
+        log.Record([later]);
+
+        var stored = log.GetObservations(Org);
+
+        Assert.Equal(2, stored.Count);
+        Assert.Contains(stored, o => o.EarliestUtc == earlier.EarliestUtc && o.LatestUtc == earlier.LatestUtc);
+        Assert.Contains(stored, o => o.EarliestUtc == later.EarliestUtc && o.LatestUtc == later.LatestUtc);
+    }
+
+    /// <summary>
+    /// The other half of #136, and the reason the fix is not simply "keep everything
+    /// disjoint". Two <i>narrow</i> brackets an hour apart cannot be two weekly resets — no
+    /// cadence puts resets a day apart — so they still contradict, and the tighter still
+    /// wins. Removing the proximity rule must not lose this.
+    /// </summary>
+    [Fact]
+    public void TwoNarrowBracketsAnHourApart_StillContradict_AndTheTighterWins()
+    {
+        var log = new WeeklyResetLog(LogPath);
+
+        var loose = Observation("2026-07-28T06:00:00Z", TimeSpan.FromHours(2));
+        var tight = Observation("2026-07-28T09:00:00Z", TimeSpan.FromMinutes(10));
+
+        log.Record([loose]);
+        log.Record([tight]);
+
+        var stored = log.GetObservations(Org);
+
+        Assert.Single(stored);
+        Assert.Equal(tight.LatestUtc, stored[0].LatestUtc);
+    }
+
     [Fact]
     public void ObservationsAreScopedByOrg()
     {
