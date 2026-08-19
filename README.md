@@ -4,7 +4,7 @@ A notification-area (system tray) app that displays your Claude AI token usage a
 
 > **Status:** **Windows 11 and Linux are both supported as of [v0.6.0](https://github.com/mlengmark/O-view/releases/latest)**, which ships every platform's assets under one tag — Windows installer and portable exe, `.deb` for amd64 and arm64, and portable tarballs.
 >
-> Windows has been shipped and in daily use since v0.1.0. **Linux has now been run on a physical desktop once** — an Arch-based system on KDE Plasma under Wayland, reporting against v0.6.1. It confirmed that O-view finds and reads Claude's data correctly and that the tray icon appears; it also found two bugs that made the app unusable past that point, both fixed in v0.6.4 and **not yet re-tested**. Everything else in [Platform support](#platform-support) is still marked *never observed* and stays that way until someone reports back. See [`docs/adr/`](docs/adr/) for the decisions behind both.
+> Windows has been shipped and in daily use since v0.1.0. **Linux has now been run on a physical desktop once** — an Arch-based system on KDE Plasma under Wayland, reporting against v0.6.1. It confirmed that O-view finds and reads Claude's data correctly and that the tray icon appears; it also found two bugs that made the app unusable past that point. Those were fixed in v0.6.4, and a third failure of the same kind was found by reading the code and fixed in v0.6.5. **None of the three has been re-tested on hardware.** Everything else in [Platform support](#platform-support) is still marked *never observed* and stays that way until someone reports back. See [`docs/adr/`](docs/adr/) for the decisions behind both.
 
 ---
 
@@ -60,7 +60,7 @@ run Claude Desktop has nothing for O-view to read. **macOS is out of scope.** Se
 | Reading Claude's data | ✅ | ✅ **seen working** — every path resolved, 5,645 of 5,645 plan-history samples parsed, Cowork logs and account tier read |
 | Tray icon | ✅ | ✅ **seen working** on KDE Plasma / Wayland. **Needs a notification-area host** — GNOME ships none by default, see below |
 | Tooltip | ✅ | ✅ built, *never observed* |
-| Detail panel | ✅ docked flyout at the taskbar corner | ⚠️ a **plain centred window**, not docked — see below. *Never observed:* the one report could not open it (fixed in v0.6.4, not re-tested) |
+| Detail panel | ✅ docked flyout at the taskbar corner | ⚠️ a **plain centred window**, not docked — see below. *Never observed:* the one report could not open it. Two separate causes fixed since (v0.6.4, v0.6.5), neither re-tested |
 | Right-click menu | ✅ full: startup, notifications, diagnostics, updates, exit | ⚠️ **Run at startup and Exit.** Notifications, diagnostics and updates are not on the menu — `--diagnose` and `--probe` cover them from a terminal. *Rendering never observed;* took tens of seconds on the one report (fixed in v0.6.4, not re-tested) |
 | Notifications | ✅ balloon tip | ✅ freedesktop notifications, *never observed* |
 | Run at startup | ✅ registry `Run` key, toggled from the menu | ✅ XDG autostart `.desktop`, from the menu **or** `o-view --startup-on`, *menu rendering never observed* |
@@ -76,11 +76,17 @@ run Claude Desktop has nothing for O-view to read. **macOS is out of scope.** Se
   runs in clean Ubuntu 22.04, Ubuntu 24.04, Debian 12 and Fedora containers on every change.
   But a container is headless. That proves the package is sound, not that an icon appears in
   a panel, a tooltip is legible or a theme follows.
-- ***Fixed in v0.6.4, not re-tested*** — the one report found the app unusable past the tray
-  icon: the first left click deadlocked it, and the menu took tens of seconds. Both causes
-  were found and fixed, and the fixes are reasoned from the code and guarded by tests — but
-  no test can reach a live session bus and a dispatcher together, so nobody has seen them
-  work either.
+- ***Fixed, not re-tested*** — **three fixes now sit in this state.** The one report found
+  the app unusable past the tray icon: the first left click deadlocked it, and the menu took
+  tens of seconds. Both causes were found and fixed in v0.6.4. Reading that code turned up a
+  third failure nobody had hit yet — the panel dismissed itself when a compositor refused to
+  focus it — fixed in v0.6.5.
+
+  All three are reasoned from the code and guarded by tests, but **no test can reach a live
+  session bus and a dispatcher together**, which is exactly how the first one shipped. So
+  "fixed" here means found and understood, not seen working. The label deliberately does not
+  name a version: it applies to whatever is currently shipped and unverified, and pinning it
+  to one release just means editing it at the next.
 
 Rows are recorded this way rather than ticked because shipping something is not the same as
 having seen it work, and claiming otherwise would be exactly the kind of unearned assertion
