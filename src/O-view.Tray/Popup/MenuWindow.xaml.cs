@@ -84,13 +84,17 @@ public partial class MenuWindow : Window, IFlyout
     private int _thresholdPercent = UsageLevels.CriticalPercent;
 
     /// <summary>
-    /// The words after the pill. <b>"session" is load-bearing:</b> the watcher reads
-    /// <c>SessionPercent</c> only and the balloon says "of the 5-hour limit", so a row reading
-    /// "Notify at 90% usage" would not say which of the panel's two meters it means — and a
-    /// user who set it expecting the weekly window would be silently wrong. Held as a constant
-    /// so the design alternative can be rendered by changing one string.
+    /// The words after the pill, giving the row its full reading: "Notify at [70% ⌄] usage".
+    ///
+    /// <para>The shorter wording is a deliberate choice (@mlengmark on issue #141), taken over
+    /// "session usage". The watcher reads <see cref="UsageSnapshot.SessionPercent"/> only, so
+    /// the row is silent about which of the panel's two meters it watches; what closes that gap
+    /// is the notification itself, which names the window explicitly — "Session usage is at N%
+    /// of the 5-hour limit". <b>If that balloon's copy is ever shortened, this row becomes the
+    /// only place the distinction could have been made, and it no longer makes it.</b>
+    /// </para>
     /// </summary>
-    internal static string NotifySuffixText { get; set; } = "session usage";
+    internal const string NotifySuffixText = "usage";
 
     public event EventHandler? CopyDiagnosticsRequested;
     public event EventHandler? CheckForUpdatesRequested;
