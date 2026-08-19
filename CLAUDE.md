@@ -12,7 +12,7 @@ That one report is the whole of what anyone has seen, and it splits three ways:
 
 - **Confirmed working:** data resolution (every path, 5,645 of 5,645 plan-history samples, Cowork logs, account tier) and the tray icon appearing.
 - **Fixed, never re-tested — three of them:** the first left click deadlocked the app (#124) and the menu took tens of seconds (#125), both found by the report and fixed in v0.6.4; then reading that code turned up a third nobody had hit, the panel dismissing itself when a compositor refuses to focus it (#129), fixed in v0.6.5. All three are reasoned from the code and guarded by structural tests, but **no test can reach a live session bus and a dispatcher together** — which is exactly how the first one shipped.
-- **Still never observed:** the panel (nobody has seen it — it was blocked behind the deadlock), the tooltip, notifications, theme following, X11, GNOME without an AppIndicator extension, and the `.deb` on hardware.
+- **Still never observed:** the panel (nobody has seen it — it was blocked behind the deadlock), **including its work-area corner placement, added in #144 and never seen on a compositor**; the tooltip, notifications, theme following, X11, GNOME without an AppIndicator extension, and the `.deb` on hardware.
 
 **Released is not the same as verified, and neither is fixed. Do not describe Linux panel or theme behaviour as working, and do not describe #124, #125 or #129 as confirmed fixed** until a re-test lands. The README's support matrix carries these three states deliberately, and rule 6 applies to our own claims about our own app as much as to usage numbers.
 
@@ -45,7 +45,7 @@ Watch for macOS assumptions leaking in from AI training data, because the closes
 | Keychain | DPAPI / Windows Credential Manager | Secret Service (libsecret) — and v1 still handles no credentials at all (rule 3) |
 | `~/Library/Application Support` | `%APPDATA%` / `%LOCALAPPDATA%` | XDG: `~/.config`, `~/.local/share` |
 | LaunchAgents / `SMAppService` | `HKCU\...\CurrentVersion\Run` | `~/.config/autostart/*.desktop` |
-| `NSPopover` anchors itself | Position manually via `Shell_NotifyIconGetRect` + work area | **Worse than manual:** SNI cannot report where its icon was drawn, and Wayland clients cannot position their own surfaces |
+| `NSPopover` anchors itself | Position manually via `Shell_NotifyIconGetRect` + work area | **Worse than manual:** SNI cannot report where its icon was drawn, so *anchoring to the icon* is impossible. A work-area **corner** is achievable and is what ships (#144) — `Screens` gives both rectangles and `WorkAreaPlacement` is shared with Windows. Setting the position is still only a request a compositor may refuse |
 | Menu bar item always visible | Windows 11 hides new tray icons in the overflow flyout | **GNOME has no tray at all** without a third-party AppIndicator extension |
 
 ### 2. Clean-room — do not read existing usage monitors

@@ -52,6 +52,17 @@ Silently invisible is not an acceptable outcome. Neither is a message asserting 
 
 SNI exposes no icon rectangle — there is no `Shell_NotifyIconGetRect` equivalent — and Wayland clients generally cannot position their own surfaces. [#78](https://github.com/mlengmark/O-view/issues/78) should implement whatever positioning is genuinely achievable and stop there. A panel that lands in the wrong place every time reads as broken; a plainly-placed window does not.
 
+> **Followed up (2026-08-19, [#144](https://github.com/mlengmark/O-view/issues/144)) — "whatever is achievable" turned out to be the corner.**
+>
+> The first hardware report to reach the panel found the centred window wrong for the product, and it is worth separating the two things this decision ran together:
+>
+> - **Anchoring the panel under the tray icon is still impossible**, exactly as stated above, and is not attempted. SNI genuinely will not say where the host drew the icon.
+> - **A fixed work-area corner needs none of that.** The work area already excludes the desktop's panel bar wherever it publishes one, and Avalonia's `Screens` reports both rectangles — so the same corner the Windows head docks to is computable from screen geometry alone. The corner rule itself now lives in `OView.App.Rendering.WorkAreaPlacement`, shared with the Windows head rather than copied, because which corner and how much margin are answers a user expects both platforms to give the same way.
+>
+> **It remains a request, not a guarantee.** `Window.Position` is an X11 request a window manager may ignore, and a native Wayland compositor will refuse it outright — the reporting session reaches X11 through XWayland, where KWin generally honours it, but that is a reasonable expectation and not an observation. The panel therefore logs the position it asked for *and* the position it was given, so one round trip answers "did the corner take?". Where screen geometry cannot be read at all it still centres, for the reason above: half off-screen reads as broken where plainly-centred does not.
+>
+> This is a follow-through on decision 3, not a change to it. Nothing here promises the docked flyout.
+
 ### 4. ADR-0005's zero-dependency guarantee holds on Windows only
 
 [ADR-0005](0005-native-tray-integration.md) claimed **zero third-party runtime dependencies**, and that was worth having — it is why H.NotifyIcon was dropped.
