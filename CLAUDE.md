@@ -6,7 +6,15 @@ Guidance for AI coding assistants working in this repository. Read this before w
 
 A **desktop notification-area (system tray) application** that displays Claude AI token usage and time until the next usage-limit reset. **Windows 11 and Linux are both supported targets as of v0.6.0** ([ADR-0012](docs/adr/0012-linux-support.md)).
 
-Status: all build phases complete (see [docs/build-plan.md](docs/build-plan.md)). Windows has been working end to end and in daily use since v0.1.0. **Linux shipped in v0.6.0 but has still never run on a physical Linux desktop** — its packages are install-tested in headless containers on every change, which proves the package is sound and says nothing about whether the icon appears, the panel is legible, or the theme follows. **Released is not the same as verified: do not describe Linux tray, panel or theme behaviour as working** until a hardware report exists. The README's support matrix marks those rows *unverified* deliberately, and rule 6 applies to our own claims about our own app as much as to usage numbers.
+Status: all build phases complete (see [docs/build-plan.md](docs/build-plan.md)). Windows has been working end to end and in daily use since v0.1.0. Linux shipped in v0.6.0 and **has now been run on a physical desktop exactly once** — Arch-based, KDE Plasma, Wayland, tarball install, reporting against v0.6.1.
+
+That one report is the whole of what anyone has seen, and it splits three ways:
+
+- **Confirmed working:** data resolution (every path, 5,645 of 5,645 plan-history samples, Cowork logs, account tier) and the tray icon appearing.
+- **Confirmed broken, fixed in v0.6.4, never re-tested:** the first left click deadlocked the app (#124), and the menu took tens of seconds (#125). The fixes are reasoned from the code and guarded by structural tests, but no test can reach a live session bus and a dispatcher together — which is exactly how the bug shipped.
+- **Still never observed:** the panel (nobody has seen it — it was blocked behind the deadlock), the tooltip, notifications, theme following, X11, GNOME without an AppIndicator extension, and the `.deb` on hardware.
+
+**Released is not the same as verified, and neither is fixed. Do not describe Linux panel or theme behaviour as working, and do not describe #124 or #125 as confirmed fixed** until a re-test lands. The README's support matrix carries these three states deliberately, and rule 6 applies to our own claims about our own app as much as to usage numbers.
 
 The ADRs in `docs/adr/` are decided, not drafts — follow them. If you believe one is wrong, say so and propose superseding it; do not silently deviate. ADR-0009 carries a worked example of why: its Linux amendment asserted that `apt upgrade` handled updates, which was untrue in both halves and survived undetected until the release gate.
 
@@ -122,7 +130,11 @@ Available: `git`, `gh` (authenticated as `mlengmark`), `dotnet` 10.0.302. Not av
 
 Older runtimes (3.1, 6.0) are also present on the machine. Ignore them. Target **`net10.0`** everywhere except `O-view.Tray`, which is WPF and must be `net10.0-windows`. Everything else carries nothing Windows-specific and must build on Linux; CI enforces that on `ubuntu-latest`.
 
-**The development machine is Windows, and no Linux hardware is available here.** The Linux head is therefore verified by unit tests, by offscreen render hooks (`--samples`, `--panel-samples`, `--probe`, `--diagnose` — all of which run with no display and no bus), and by container installs in the packaging workflow. None of that is a desktop. **Do not describe Linux tray, panel or theme behaviour as verified** until someone reports it from real hardware; the README's support matrix marks those rows *unverified* deliberately, and rule 6 applies to our own claims about our own app.
+**The development machine is Windows, and no Linux hardware is available here.** The Linux head is therefore verified by unit tests, by offscreen render hooks (`--samples`, `--panel-samples`, `--probe`, `--diagnose` — all of which run with no display and no bus), and by container installs in the packaging workflow. None of that is a desktop.
+
+One hardware report exists (see *What this is* above) and it covers the tray icon and data resolution only. **Do not describe Linux panel or theme behaviour as verified, and do not treat the v0.6.4 fixes for #124/#125 as confirmed** — they have never run against a live session bus and a dispatcher together. The README's support matrix distinguishes *seen working* from *never observed* from *fixed but not re-tested* deliberately, and rule 6 applies to our own claims about our own app.
+
+`--diagnose` and `--probe` earned their keep here: the single report was legible enough to diagnose two distinct bugs without a follow-up question. When adding a Linux code path that a desktop could break, ask what a bug report against it would need to contain, and make sure one round trip can carry it.
 
 ## Intended structure
 

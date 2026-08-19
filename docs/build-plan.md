@@ -137,17 +137,24 @@ and the Linux head build and test on `ubuntu-latest`; the `.deb` installs, runs 
 cleanly in Ubuntu 22.04, Ubuntu 24.04 and Debian 12 containers, plus arm64 under emulation;
 the tarball runs on Fedora; a Linux build never offers itself a Windows installer.
 
-**But no part of this has run on a physical Linux desktop.** Containers are headless: they
-prove the package is sound, not that the icon appears, the panel is legible, or the theme
-follows. Those rows in the README's support matrix are marked *unverified on hardware*
-deliberately, and **they stay that way until a real user reports otherwise** — writing them as
-ticks would be rule 4 below applied to ourselves.
+**One physical Linux desktop has now reported** — Arch-based, KDE Plasma, Wayland, tarball
+install, against v0.6.1 (2026-08-18). It confirmed the half that containers cannot reach at
+all: every data path resolved, 5,645 of 5,645 plan-history samples parsed, Cowork logs and
+account tier read, and the tray icon appeared. It also found the app unusable past that
+point — the first left click deadlocked it, and the menu took tens of seconds. Both were
+fixed in v0.6.4 and **neither fix has been re-tested**.
 
-That report is the last acceptance criterion for the milestone, and the tag was cut **before**
-it rather than after: shipping is what puts installable packages in a tester's hands, so
-waiting for hardware confirmation before releasing would have been waiting for something that
-could not happen. Released and verified are different claims, and the milestone stays open on
-the second one.
+So the position is no longer "nothing has been seen" but "some of it has, some of it was
+seen broken, and most of it still has not". Containers remain headless and still prove the
+package is sound rather than that a panel is legible, so the remaining rows in the README's
+support matrix stay *never observed* — writing them as ticks would be rule 4 below applied
+to ourselves.
+
+The tag was cut **before** that report rather than after: shipping is what puts installable
+packages in a tester's hands, so waiting for hardware confirmation before releasing would
+have been waiting for something that could not happen. That judgement held — the report
+exists because v0.6.0 shipped. Released and verified are different claims, and the milestone
+stays open on the second one.
 
 ---
 
