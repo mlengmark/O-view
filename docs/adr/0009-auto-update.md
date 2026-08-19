@@ -1,6 +1,6 @@
 # ADR-0009: In-app auto-update via the GitHub release + existing installer
 
-- **Status:** Accepted *(relaunch amended by [0010](0010-post-update-relaunch.md); Linux behaviour and the unified-release model amended below, 2026-07-30 and 2026-08-02)*
+- **Status:** Accepted *(relaunch amended by [0010](0010-post-update-relaunch.md); Linux behaviour, the unified-release model, installer verification, and an opt-in automatic install amended below — 2026-07-30, 2026-08-02, 2026-08-03, 2026-08-18 and 2026-08-19)*
 - **Date:** 2026-07-24
 - **Deciders:** @mlengmark
 - **Resolves:** [#18](https://github.com/mlengmark/O-view/issues/18) — "No Auto Update Function"
@@ -38,7 +38,7 @@ Constraints inherited from earlier decisions shape the solution space:
 | **Squirrel.Windows / Clowd.Squirrel** | Purpose-built in-app updater with delta packages and background install. **Rejected:** it is a second packaging toolchain and runtime dependency ([ADR-0005](0005-native-tray-integration.md) chose zero), it wants its own `Setup.exe`/`RELEASES` feed rather than the Inno installer we already ship ([ADR-0008](0008-installer-distribution.md)), and its unsigned-update story is awkward. Heavy for a tray utility. |
 | **Velopack** (Squirrel's successor) | Same shape of objection: a new dependency and a parallel release format duplicating the installer we already build. The delta-update upside is marginal for a single ~small exe. |
 | **MSIX auto-update** | Clean OS-managed updates — but MSIX **cannot install unsigned** ([ADR-0008](0008-installer-distribution.md) rejected it for exactly this), so it is a non-starter here. |
-| **Fully silent background auto-install (Chrome-style)** | Closest to a literal reading of "without the user doing anything," but it silently downloads and executes a network binary with no consent, and can restart the app under the user without warning. Rejected in favour of a background *notification* plus a one-click confirmed install. |
+| **Fully silent background auto-install (Chrome-style)** | Closest to a literal reading of "without the user doing anything," but it silently downloads and executes a network binary with no consent, and can restart the app under the user without warning. Rejected in favour of a background *notification* plus a one-click confirmed install. **Partly revisited on 2026-08-19** — still rejected as a default and still never silent, but permitted as an opt-in the user turns on; see the amendment at the end of this file. |
 | **Download the portable exe and swap it in** | Avoids the installer, but a running single-file exe cannot replace itself, would need a helper process and hand-rolled file-swap/relaunch, and leaves the installed build's Start Menu entry and uninstall record stale. The installer already does all of this correctly. |
 | **Documentation only** ("check the releases page")| Zero engineering; does not resolve the issue's actual request for in-app discovery and update. |
 
@@ -305,3 +305,123 @@ open the releases page. Every other failure in this path means "try again by han
 means the file that arrived was not the file the release published, and routing the user to
 download it manually would hand them exactly what the check rejected. `UpdateVerificationException`
 exists to make that distinction catchable rather than left to a shared `catch`.
+
+---
+
+## Amendment (2026-08-19): an opt-in "Update automatically", default off
+
+Requested by @mlengmark in [#140](https://github.com/mlengmark/O-view/issues/140).
+
+### What is being reconsidered
+
+The *Alternatives considered* table above rejects **"Fully silent background auto-install
+(Chrome-style)"**:
+
+> Closest to a literal reading of "without the user doing anything," but it silently downloads
+> and executes a network binary with no consent, and can restart the app under the user
+> without warning. Rejected in favour of a background *notification* plus a one-click
+> confirmed install.
+
+and the decision body states that keeping fetch-and-execute behind an explicit, confirmed
+action is deliberate. This amendment does not pretend that was a mistake. It was the right
+call for the **default**, and the default does not change.
+
+**What it got wrong is treating "confirmed" and "per-release" as the same requirement.** The
+objection is to acting *without consent*. A toggle the user deliberately turns on is consent —
+given once, knowingly, about a standing behaviour, on a row that says what it will do. That is
+the same consent model this app already accepts for "Run at startup", which likewise changes
+what happens on the machine when nobody is watching.
+
+Two things have also moved since 2026-07-24, and both narrow the original objection rather
+than merely re-arguing it:
+
+- **The installer is checksum-verified before it is launched, and fails closed** (amendment of
+  2026-08-18). "Silently downloads and executes a network binary" is now "downloads a binary,
+  refuses it unless it matches the digest the release published, and only then runs it". Still
+  not proof the release is honest — that needs provenance attestation, still deferred — but no
+  longer the same sentence.
+- **The relaunch is a decided, debugged path** ([ADR-0010](0010-post-update-relaunch.md)),
+  not an open question. "Restart the app under the user" was a real unknown when it was
+  listed as a cost; it is now a mechanism with a known failure mode and a fix.
+
+### The decision
+
+**A "Update automatically" row is added to the tray menu, beneath "Run at startup", defaulting
+to off.** When it is on, the daily background check does the download-verify-install itself,
+skipping the confirmation dialog it would otherwise raise.
+
+Four constraints travel with it, and none is optional.
+
+**1. Off by default, and it stays a decision the user made.** A release must never turn this
+on, and a build that finds no setting treats it as off. The whole justification for this
+amendment is that the user chose it; a default would remove exactly the thing that makes it
+acceptable.
+
+**2. Offered only where it can actually work.** `UpdatePolicy.MayDownloadAndRun` is true for
+`WindowsInstaller` alone. A portable exe cannot replace itself while running, and a `.deb` or
+tarball build must never overwrite files it does not own. On those builds **the row does not
+appear** — it is not shown disabled, and it is certainly not shown ticked. A menu row implying
+a behaviour the build cannot perform is a fabricated claim about the machine, which rule 6
+forbids as firmly for settings as for numbers.
+
+`MayDownloadAndRun` remains the only thing deciding whether anything is fetched or executed.
+This amendment adds a second condition on top of it; it does not weaken it, and it does not
+touch `DetectionAsset` or the detection/permission separation the 2026-08-03 amendment drew.
+
+**3. It announces itself before it acts, and it says what it did.** Automatic is not silent.
+A balloon names the version being installed and warns that O-view will close and reopen,
+*before* the installer is launched. The rejected alternative's worst property was
+invisibility, not automation, and that half stays rejected.
+
+**4. Every existing failure path is unchanged.** A checksum mismatch still refuses the update,
+still says so, and still does **not** open the releases page — routing the user to download by
+hand exactly what the check rejected remains wrong whether or not the flow was automatic. A
+network failure still degrades quietly. `UpdateVerificationException` remains catchable
+separately for precisely this reason.
+
+### Where the setting lives
+
+`TraySettings`, in `settings.json`, alongside the notification preferences — **not** the
+registry. Run-at-startup is deliberately kept out of `TraySettings` because the `Run` key is
+its single source of truth and Task Manager edits that key directly, so two stores could
+disagree. Nothing outside O-view has an opinion about this preference, so that reasoning does
+not carry, and inventing a second registry value would create the divergence it avoids.
+
+### What this does not change
+
+- **The default experience.** An untouched install still checks daily, notifies once per
+  version, and installs nothing until asked. "Check for updates…" behaves exactly as before,
+  including its confirmation.
+- **Linux.** Neither build self-updates, so neither gets the row. The Linux head's menu
+  carries *Run at startup* and *Exit* and gains nothing here. The 2026-07-30 and 2026-08-03
+  amendments stand in full.
+- **Windows portable.** Still sent to the release page.
+- **Verification.** Unchanged, and now load-bearing for a flow with no human in it —
+  see below.
+
+### Consequences
+
+**Positive**
+- Answers the half of [#18](https://github.com/mlengmark/O-view/issues/18) that asked to
+  update "without the user manually downloading anything" for users who want it, without
+  imposing it on users who do not.
+- The consent is more informed than the per-release dialog it replaces, not less: a dialog
+  reading "Update now?" at a busy moment is approved reflexively, where a menu row is chosen
+  deliberately.
+
+**Negative**
+- **Checksum verification becomes the only thing standing between the release feed and code
+  execution on that machine.** With a confirmation dialog there was at least a human in the
+  loop who could decline. There is now a class of user for whom a compromised release is
+  installed with nobody watching, and that raises the priority of provenance attestation from
+  "better end state" to something worth scheduling.
+- The app can close and reopen while the user is working. Mitigated by the announcement in
+  constraint 3, not eliminated.
+- One more setting, one more menu row, and a menu whose contents now differ by install kind —
+  the first time that has been true, and a thing the verification renders must cover.
+
+### What would make this wrong
+
+If a user reports that O-view updated itself when they did not believe they had asked it to,
+this amendment has failed, and the failure will be in constraint 1 or 3 rather than in the
+principle. Both are cheap to check and worth checking first.
