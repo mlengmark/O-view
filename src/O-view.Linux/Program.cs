@@ -188,6 +188,10 @@ internal static class Program
 
         (string Name, UsageSnapshot Snapshot)[] states =
         [
+            // A measured zero — the one state with no arc, where the pupil fades to the track
+            // (issue #139). Rendered here as well as on the Windows head, because the fade is
+            // a shared decision and this sheet is where a Linux drift would show.
+            ("live-00", new(DataSource.Live, 0, 0, null, DateTimeOffset.UtcNow)),
             ("live-06", new(DataSource.Live, 6, 1, null, DateTimeOffset.UtcNow)),
             ("live-47", new(DataSource.Live, 47, 20, null, DateTimeOffset.UtcNow)),
             ("live-58", new(DataSource.Live, 58, 30, null, DateTimeOffset.UtcNow)),

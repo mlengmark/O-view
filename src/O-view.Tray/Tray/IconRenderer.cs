@@ -38,11 +38,12 @@ public static class IconRenderer
             size,
             TrayIconGeometry.FillPercent(snapshot) ?? 0,
             ToGdi(TrayIconGeometry.Foreground(snapshot, lightTaskbar)),
+            ToGdi(TrayIconGeometry.Pupil(snapshot, lightTaskbar)),
             lightTaskbar);
 
     private static Color ToGdi(IconColor c) => Color.FromArgb(c.A, c.R, c.G, c.B);
 
-    private static Bitmap RenderRing(int size, int fillPercent, Color color, bool lightTaskbar)
+    private static Bitmap RenderRing(int size, int fillPercent, Color color, Color pupilColor, bool lightTaskbar)
     {
         var bmp = new Bitmap(size, size, PixelFormat.Format32bppArgb);
         using var g = Graphics.FromImage(bmp);
@@ -68,9 +69,10 @@ public static class IconRenderer
             g.DrawArc(arc, rect, TrayIconGeometry.StartAngleDegrees, TrayIconGeometry.SweepDegrees(fillPercent));
         }
 
-        // Pupil: the brand "eye", centred in the ring's hole.
+        // Pupil: the brand "eye", centred in the ring's hole. Its own colour, not the arc's —
+        // at a measured 0% it fades to the track so the empty gauge reads as one thing (#139).
         var pupilRadius = TrayIconGeometry.PupilRadius(size);
-        using (var pupil = new SolidBrush(color))
+        using (var pupil = new SolidBrush(pupilColor))
         {
             g.FillEllipse(pupil, center - pupilRadius, center - pupilRadius, pupilRadius * 2f, pupilRadius * 2f);
         }
