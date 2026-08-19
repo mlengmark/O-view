@@ -89,14 +89,30 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq lintian
 
-          # Bounded, after this step stalled on 2026-08-19: four jobs across two runs sat
-          # here for over an hour each -- both architectures in the first run, amd64 only in
-          # the second -- against a normal time of roughly two minutes. No packaging change
-          # on either branch, and it cleared on its own within the hour, so it was the runner
-          # infrastructure rather than the package or lintian itself.
+          # The two environmental suspects from #131, recorded because neither was captured
+          # when this step stalled and both are the obvious things to compare a recurrence
+          # against. Printed BEFORE lintian runs, deliberately: a hung step still shows
+          # everything written before the hang, so these survive exactly the failure they
+          # exist to diagnose.
+          echo "--- environment (see #131) ---"
+          echo "lintian:      $(lintian --version)"
+          echo "runner image: ${ImageOS:-unknown} ${ImageVersion:-unknown}"
+          echo "runner:       ${RUNNER_OS:-unknown}/${RUNNER_ARCH:-unknown}"
+          echo "package:      $(basename dist/o-view_*_${{ matrix.arch }}.deb), $(stat -c%s dist/o-view_*_${{ matrix.arch }}.deb) bytes"
+          echo "------------------------------"
+
+          # Bounded, after this step stalled on 2026-08-19 (#131): four job executions across
+          # two runs never finished it -- 48, 48, 25 and 19 minutes before each was cancelled
+          # by hand, against a normal time of one to three minutes. Those figures are lower
+          # bounds, since none of them was allowed to end on its own.
+          #
+          # Both architectures hung in the first run; only later executions split, which is
+          # what made it look amd64-specific when it was not. No packaging change on either
+          # branch, and it cleared without intervention, so it was the runner infrastructure
+          # rather than the package or lintian itself. The cause is still unknown.
           #
           # The bound is here because of what the stall cost rather than what caused it: a
-          # job's logs cannot be retrieved while it is in progress, so an hour of hanging
+          # job's logs cannot be retrieved while it is in progress, so 48 minutes of hanging
           # showed nothing beyond the step name, and without timeout-minutes it would have
           # run to the Actions default of six hours.
           #
