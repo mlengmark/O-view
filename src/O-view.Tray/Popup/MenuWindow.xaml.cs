@@ -293,9 +293,11 @@ public partial class MenuWindow : Window, IFlyout
     /// keyboard both raise, so a verification run exercises the real handler rather than a
     /// parallel path that could pass while the real one is broken.
     /// </summary>
-    internal void InvokeRow(MenuRow row)
+    internal void InvokeRow(MenuRow row) => InvokeButton(RowButton(row));
+
+    private static void InvokeButton(System.Windows.Controls.Button button)
     {
-        var peer = new System.Windows.Automation.Peers.ButtonAutomationPeer(RowButton(row));
+        var peer = new System.Windows.Automation.Peers.ButtonAutomationPeer(button);
         ((System.Windows.Automation.Provider.IInvokeProvider)
             peer.GetPattern(System.Windows.Automation.Peers.PatternInterface.Invoke)).Invoke();
     }
@@ -309,6 +311,25 @@ public partial class MenuWindow : Window, IFlyout
 
     /// <summary>The pill's current text, so a verification run can assert what it reads.</summary>
     internal string ThresholdLabel => ThresholdText.Text;
+
+    /// <summary>Whether the option list is open — the state a click on the pill must flip.</summary>
+    internal bool ThresholdOptionsOpen => ThresholdOptions.Visibility == Visibility.Visible;
+
+    /// <summary>
+    /// Activates the pill through its automation peer, exactly as <see cref="InvokeRow"/>
+    /// does for a row — so a verification run drives the real <c>Click</c> handler, including
+    /// the <c>e.Handled</c> that stops the click bubbling to the row underneath.
+    /// </summary>
+    internal void InvokeThresholdPill() => InvokeButton(ThresholdPill);
+
+    /// <summary>Activates one of the three choices. Unknown values are ignored, not guessed at.</summary>
+    internal void InvokeThresholdOption(int percent)
+    {
+        if (OptionRows.FirstOrDefault(r => ChoiceOf(r) == percent) is { } row)
+        {
+            InvokeButton(row);
+        }
+    }
 
     /// <summary>Tick state of a toggle row, for asserting a toggle actually flipped.</summary>
     internal bool RowIsChecked(MenuRow row) =>

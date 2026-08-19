@@ -28,7 +28,12 @@ public sealed class UsageEngine : IDisposable
     private readonly RollupStore _store;
     private readonly IUsageProvider _provider;
     private readonly PlanHistoryProvider? _planHistory;
-    private readonly ThresholdWatcher _watcher;
+    /// <summary>
+    /// Not readonly: the threshold is user-settable from the menu (issue #141), and the
+    /// watcher carries the edge-trigger state that has to be rebuilt with it. See
+    /// <see cref="SetThresholdPercent"/>.
+    /// </summary>
+    private ThresholdWatcher _watcher;
     private readonly UsageEngineOptions _options;
     private readonly IClock _clock;
     private readonly IAppLog? _log;
@@ -319,6 +324,31 @@ public sealed class UsageEngine : IDisposable
         Settings = Settings with { NotifyOnThreshold = enable };
         Settings.Save(_options.SettingsPath);
         return Settings.NotifyOnThreshold;
+    }
+
+    /// <summary>
+    /// Applies and persists the notification threshold, returning the percentage now in
+    /// effect (issue #141).
+    ///
+    /// <para><b>The watcher is rebuilt, not just re-read.</b> It is edge-triggered — it fires
+    /// once per upward crossing and re-arms on a drop below — so it holds "we are currently
+    /// above" state that was decided against the OLD threshold. Rebuilding clears that, which
+    /// makes lowering the threshold behave the way a user asking for it means: someone sitting
+    /// at 75% who moves the threshold from 80 to 70 is notified on the next poll, rather than
+    /// waiting for a window reset to re-arm a watcher that never saw them cross.</para>
+    ///
+    /// <para>Raising it does the right thing for the same reason: from 70 to 90 at 75% usage,
+    /// the fresh watcher sees 75 &lt; 90 and stays silent.</para>
+    ///
+    /// <para>Clamped to the same 1–100 range <see cref="TraySettings.Load"/> enforces, so a
+    /// caller cannot install a threshold the settings file would refuse to load back.</para>
+    /// </summary>
+    public int SetThresholdPercent(int percent)
+    {
+        Settings = Settings with { ThresholdPercent = Math.Clamp(percent, 1, 100) };
+        Settings.Save(_options.SettingsPath);
+        _watcher = new ThresholdWatcher(Settings.ThresholdPercent);
+        return Settings.ThresholdPercent;
     }
 
     private void NotifyOnThreshold(UsageSnapshot snapshot)
