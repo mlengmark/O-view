@@ -321,8 +321,27 @@ public sealed class UsageEngine : IDisposable
     /// </summary>
     public bool SetNotifyOnThreshold(bool enable)
     {
+        var wasEnabled = Settings.NotifyOnThreshold;
+
         Settings = Settings with { NotifyOnThreshold = enable };
         Settings.Save(_options.SettingsPath);
+
+        // Re-armed on the off→on edge, for the same reason SetThresholdPercent rebuilds the
+        // watcher: it is edge-triggered, and while notifications are off it is never
+        // consulted — `Settings.NotifyOnThreshold && _watcher.ShouldNotify(...)` short-circuits
+        // — so its "we are currently above" flag freezes at whatever it held when they were
+        // switched off.
+        //
+        // Left stale, that silently swallows the next crossing. Notify at 95%, switch
+        // notifications off, let the window reset, switch them back on, climb past the
+        // threshold again: the watcher still believes it is above, returns false, and the user
+        // is never told. It stays stuck until usage happens to fall below the threshold during
+        // a period when notifications are on.
+        if (enable && !wasEnabled)
+        {
+            _watcher = new ThresholdWatcher(Settings.ThresholdPercent);
+        }
+
         return Settings.NotifyOnThreshold;
     }
 

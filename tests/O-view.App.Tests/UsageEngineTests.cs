@@ -143,6 +143,68 @@ public class UsageEngineTests
         Assert.True(reloaded.UpdateAutomatically);
     }
 
+    /// <summary>
+    /// Turning notifications off and on again must not swallow the next crossing.
+    ///
+    /// <para>The gate is <c>Settings.NotifyOnThreshold &amp;&amp; _watcher.ShouldNotify(...)</c>,
+    /// and <c>&amp;&amp;</c> short-circuits — so while notifications are off the watcher is
+    /// never consulted and its edge state freezes at whatever it held when they were switched
+    /// off. Notify once at 95%, switch off, let the window reset, switch back on, climb past
+    /// the threshold again: the watcher still believes it is above, and a genuine crossing is
+    /// never reported.</para>
+    /// </summary>
+    [Fact]
+    public void ReEnablingNotificationsDoesNotSwallowTheNextCrossing()
+    {
+        using var dir = new TempDir();
+        var (engine, provider, timers, _) = Build(dir);
+        using var _e = engine;
+
+        var notifications = new List<AppNotification>();
+        engine.NotificationRequested += notifications.Add;
+
+        provider.SetSession(95);          // crosses 70 — one notification
+        engine.Start(timers);
+        Assert.Single(notifications);
+
+        engine.SetNotifyOnThreshold(false);
+
+        provider.SetSession(5);           // the window resets while notifications are off
+        timers.Poll.Tick();
+
+        engine.SetNotifyOnThreshold(true);
+
+        provider.SetSession(80);          // a genuine new crossing
+        timers.Poll.Tick();
+
+        Assert.Equal(2, notifications.Count);
+    }
+
+    /// <summary>
+    /// The same defect from the other direction: switching notifications on while usage is
+    /// <i>already</i> past the threshold should report it, not stay silent until the next reset.
+    /// </summary>
+    [Fact]
+    public void EnablingNotificationsWhileAlreadyAboveTheThresholdReportsIt()
+    {
+        using var dir = new TempDir();
+        var (engine, provider, timers, _) = Build(dir);
+        using var _e = engine;
+
+        var notifications = new List<AppNotification>();
+        engine.NotificationRequested += notifications.Add;
+        engine.SetNotifyOnThreshold(false);
+
+        provider.SetSession(85);
+        engine.Start(timers);
+        Assert.Empty(notifications);      // off, so silent
+
+        engine.SetNotifyOnThreshold(true);
+        timers.Poll.Tick();
+
+        Assert.Single(notifications);
+    }
+
     // ── the user-settable threshold (issue #141) ──────────────────────────────────
 
     [Fact]
