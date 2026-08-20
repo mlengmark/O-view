@@ -12,10 +12,42 @@ namespace OView.Core.Providers.PlanHistory;
 public sealed class PlanHistoryProvider : IUsageProvider
 {
     /// <summary>
-    /// Desktop samples every ~300 s; three missed samples means it is very likely not
-    /// running, at which point the data stops tracking reality.
+    /// Maximum age at which a sample is still taken to describe <i>now</i>.
+    ///
+    /// <para><b>Measured, not assumed.</b> Across 1,828 consecutive gaps in a 30-day real
+    /// file: median 5.00 min, and 1,686 of them (92%) within a hair of 5 min. Desktop samples
+    /// every ~300 s, so 11 minutes tolerates two missed samples and a minute of slack.</para>
+    ///
+    /// <para>This was 15 minutes, on the reasoning that three missed samples means Desktop is
+    /// not running. That is true, but it is the wrong question: the cost is not "is Desktop
+    /// alive", it is "does this number still describe the window". Fifteen minutes let a
+    /// 14-minute-old sample render as a confident, unqualified reading (issue #161).</para>
     /// </summary>
-    public static readonly TimeSpan DefaultFreshness = TimeSpan.FromMinutes(15);
+    public static readonly TimeSpan DefaultFreshness = TimeSpan.FromMinutes(11);
+
+    /// <summary>
+    /// How long a five-hour reading of <b>zero</b> may be trusted — much shorter, because zero
+    /// is the one value whose staleness is both most likely and most costly.
+    ///
+    /// <para><b>Why zero is different.</b> Within a window, utilisation only ever rises. So an
+    /// aged sample is a <i>lower bound</i>, never a measurement, and the older it is the weaker
+    /// the bound. For a non-zero reading that degrades gracefully — 72% drifting to 75% is
+    /// still broadly the truth. For zero it degrades to nothing: "at least 0%" says precisely
+    /// nothing about the window, while <i>looking</i> like a precise finding that the window is
+    /// empty. It is the reading a user is most likely to act on and most likely to be wrong
+    /// about.</para>
+    ///
+    /// <para>And it is common, not exotic: 587 of 1,829 samples in that same real file read
+    /// zero — every window reset produces a run of them. The reported case was exactly this:
+    /// the window reset 72 → 0, Desktop sampled at that instant and then went quiet, and 14
+    /// minutes later O-view still showed an empty gauge while ~6% had been consumed
+    /// (issue #161).</para>
+    ///
+    /// <para>One sampling interval plus slack. In normal operation a fresh zero arrives every
+    /// ~5 minutes and nothing changes; this only bites once Desktop has actually stopped
+    /// reporting — which is exactly when O-view genuinely does not know.</para>
+    /// </summary>
+    public static readonly TimeSpan ZeroReadingFreshness = TimeSpan.FromMinutes(6);
 
     private readonly string _path;
     private readonly string? _orgUuid;
@@ -101,6 +133,23 @@ public sealed class PlanHistoryProvider : IUsageProvider
         return samples.Where(s => s.OrgUuid == latestOrg).ToList();
     }
 
+    /// <summary>
+    /// The five-hour reading, or <c>null</c> when it can no longer be trusted to describe now.
+    ///
+    /// <para>Only zero is discarded, and only once it has aged past
+    /// <see cref="ZeroReadingFreshness"/> — see there for why zero is the special case. Unknown
+    /// renders as the neutral icon and "usage % unknown", which is the honest statement: O-view
+    /// has lost contact and does not know. An empty gauge would be a claim it cannot support,
+    /// and is the one a user acts on (CLAUDE.md rule 6).</para>
+    ///
+    /// <para>The <b>weekly</b> figure is deliberately left alone. The same monotonic argument
+    /// applies to it, but its window is 7 days rather than 5 hours, so a sample minutes old
+    /// cannot have drifted meaningfully — discarding it would cost information and buy
+    /// nothing.</para>
+    /// </summary>
+    private static int? TrustedFiveHourPercent(int? fiveHourPercent, TimeSpan age) =>
+        fiveHourPercent is 0 && age > ZeroReadingFreshness ? null : fiveHourPercent;
+
     public UsageSnapshot GetSnapshot(DateTimeOffset utcNow)
     {
         var samples = ReadSamples();
@@ -122,7 +171,7 @@ public sealed class PlanHistoryProvider : IUsageProvider
 
         return new UsageSnapshot(
             source,
-            latest.FiveHourPercent,
+            TrustedFiveHourPercent(latest.FiveHourPercent, age),
             latest.SevenDayPercent,
             nextReset,
             latest.AtUtc,
