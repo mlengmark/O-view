@@ -209,6 +209,27 @@ Deliberately **not** in order of importance — in order of ascending unknowns:
 - Times stored and computed in UTC; converted to local only at the display edge
 - Tests use fixtures derived from real session files, with any identifying content scrubbed
 
+### Version numbers
+
+Tags are `vMAJOR.LARGE.MINOR` — major generation, substantial change, fix. **Not semver**: this
+is an application, nothing consumes it as an API, and no vector carries a breaking-change
+contract. Higher numbers are newer, compared **left to right, numerically per vector**.
+
+Four rules bind, and three of them exist because of a failure mode rather than a preference:
+
+- **Never compare a version as text.** `0.6.10` is newer than `0.6.9`; a string comparison says
+  the opposite, and the result is not an error — every installed copy reports "up to date"
+  forever. `ReleaseVersion` parses each vector to an `int`, and `ReleaseVersionTests` pins the
+  width-crossing cases (9→10, 99→100) in all three positions. Any new code that touches version
+  ordering goes through `ReleaseVersion`; do not hand-roll a comparison.
+- **No cap on a vector.** Any non-negative integer. There is no 0–99 ceiling, because nothing
+  enforces one and a cap only ever forces a higher vector to move for no reason.
+- **No leading zeros.** `release.yml` rejects them. `0.06.10` parses to 0.6.10, so the app would
+  report one string while the published asset names — built from the raw tag — carry another.
+- **Publish in ascending order.** The updater reads `releases/latest`, which is the most recently
+  *published* release, not the highest-numbered. A fix published to an older line after a newer
+  release is offered to everyone as an upgrade. ADR-0009 leans on this being true.
+
 ## Reference docs
 
 - [docs/adr/](docs/adr/) — decisions and their rationale

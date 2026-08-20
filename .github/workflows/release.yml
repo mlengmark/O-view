@@ -84,8 +84,21 @@ jobs:
             IS_TAG=false
           fi
 
-          if ! printf '%s' "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
-            echo "refusing to build '$VERSION': expected N.N.N with an optional -suffix" >&2
+          # Each vector is one or more digits with NO leading zero. Leading zeros are the one
+          # shape that passes a looser check and then means two different things: `0.06.10`
+          # parses to 0.6.10 and the app reports 0.6.10, but the asset names are built from
+          # this raw string, so the release would carry `o-view_0.06.10_amd64.deb` for a build
+          # that calls itself 0.6.10. One release, two version strings, and the mismatch only
+          # shows up in whatever reads the other one.
+          #
+          # No upper bound on a vector — comparison is numeric per component (ReleaseVersion),
+          # so 100 sorts above 99 exactly as 10 sorts above 9. A cap would be an arbitrary
+          # reason to bump a higher vector, and one nothing else in the chain enforces.
+          #
+          # The optional suffix stays: the dry run passes 0.0.0-dry through here.
+          if ! printf '%s' "$VERSION" \
+              | grep -qE '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z.]+)?$'; then
+            echo "refusing to build '$VERSION': expected N.N.N with no leading zeros, and an optional -suffix" >&2
             exit 1
           fi
 

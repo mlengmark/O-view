@@ -268,6 +268,25 @@ o-view --probe
 
 It contains no token and no conversation content.
 
+## Versioning
+
+Releases are tagged `vMAJOR.LARGE.MINOR` — three numbers, read left to right, **higher is newer**:
+
+| Vector | Bumped when |
+|---|---|
+| **Major** | A release large enough to be a different product generation |
+| **Large** | A substantial change — new surfaces, new platform support, reworked behaviour |
+| **Minor** | Fixes and small additions |
+
+Four rules, and the reasons they exist rather than the rules alone:
+
+- **Each vector is compared as a number, not as text.** `0.6.10` is newer than `0.6.9`, and `1.0.0` is newer than `0.99.99`. This is the one that has to be right: a text comparison puts `0.6.10` *below* `0.6.9`, so every installed copy would decide the newer release was older, report "up to date", and never update again — silently, with no error anywhere. `ReleaseVersion` compares each vector as an `int`, and the tests pin the inversion cases (9→10, 99→100) in all three positions.
+- **No upper bound.** A vector may be any non-negative integer; `0.6.100` follows `0.6.99` perfectly well. There is deliberately no cap, because nothing in the app, the release workflow or the installer enforces one — and a cap is only ever a reason to bump a higher vector for no engineering reason.
+- **No leading zeros.** `v0.06.10` is rejected by the release workflow. It would parse as `0.6.10` and the app would report `0.6.10`, but the published asset names are built from the raw tag — so one release would carry two different version strings, and the mismatch would only surface in whichever of them you happened to read.
+- **Releases are published in ascending order.** The updater reads GitHub's `releases/latest`, which returns the most recently *published* release rather than the highest-numbered one. Publishing a fix to an older line after a newer release would offer users the older build. Ship forward.
+
+This is **not** semantic versioning and carries no breaking-change contract — O-view is an application, not a library, and nothing consumes it as an API.
+
 ## Building from source
 
 ```bash
@@ -304,7 +323,7 @@ dotnet test tests/O-view.Core.Tests tests/O-view.App.Tests tests/O-view.Linux.Te
 
 That is precisely what the `ubuntu-latest` CI leg runs.
 
-Requires the .NET 10 SDK (10.0.302+). The test suite is 597 xUnit tests across `O-view.Core` (393), `O-view.App` (164) and `O-view.Linux` (40); CI builds and tests on **both** windows-latest and ubuntu-latest on every push and pull request, and tagging `v*` publishes all six assets — the Windows installer and portable exe, both `.deb` architectures, and both tarballs — to a single GitHub release.
+Requires the .NET 10 SDK (10.0.302+). The test suite is 613 xUnit tests across `O-view.Core` (407), `O-view.App` (166) and `O-view.Linux` (40); CI builds and tests on **both** windows-latest and ubuntu-latest on every push and pull request, and tagging `v*` publishes all six assets — the Windows installer and portable exe, both `.deb` architectures, and both tarballs — to a single GitHub release.
 
 Two verification hooks exist because unit tests genuinely cannot reach what they cover, and both write their findings to a file rather than to a screen you have to be watching:
 
