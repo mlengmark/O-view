@@ -21,7 +21,7 @@ O-view sits in the notification area and answers three questions at a glance:
 | Tray icon | A **ring gauge** filled in proportion to 5-hour usage, with the brand "eye" pupil at its centre — no digits. Colour-coded green (<50%) → amber (50–69%) → red (≥70%). A grey, unfilled ring means no authoritative data rather than a fabricated 0%. Geometry scales to the icon size, and the palette switches for a light or dark taskbar. |
 | Tooltip | `5h: 47% · resets 16:32 · 7d: 61%` — the exact number lives here, since the icon carries no text. Degrades honestly: `(as of 14:05)` when the data is stale, `local estimate · usage % unknown` on fallback data, `no usage data` when there is none. |
 | Detail panel | Left-click. Account header, session/weekly bars with reset times, four clickable stat tiles, a 31-day usage graph, and an off-plan section. Details below. |
-| Menu | Right-click. Run at startup · notify-at-threshold toggle · Copy diagnostics · Check for updates… · Exit. Rendered as an on-brand flyout docked to the taskbar corner, not a Win32 context menu, so it matches the panel. |
+| Menu | Right-click. Run at startup · Update automatically · notify-at-threshold, selectable between 70/80/90% · Copy diagnostics · Check for updates… · Exit. Rendered as an on-brand flyout docked to the taskbar corner, not a Win32 context menu, so it matches the panel. |
 
 A balloon notification fires once per session window when usage crosses the threshold — **70% by default**, the point at which the gauge turns red, so the notification and the colour never disagree.
 
@@ -65,7 +65,7 @@ run Claude Desktop has nothing for O-view to read. **macOS is out of scope.** Se
 | Notifications | ✅ balloon tip | ✅ freedesktop notifications, *never observed* |
 | Run at startup | ✅ registry `Run` key, toggled from the menu | ✅ XDG autostart `.desktop`, from the menu **or** `o-view --startup-on`, *menu rendering never observed* |
 | Light/dark theme | ✅ follows `AppsUseLightTheme` | ✅ XDG desktop portal, *never observed* — the portal read deadlocked the UI thread on the one report (fixed in v0.6.4, not re-tested) |
-| Auto-update | ✅ in-place, one confirmation | ⚠️ **notifies only, by design** — tells you once per version, installs nothing ([ADR-0009](docs/adr/0009-auto-update.md)) |
+| Auto-update | ✅ in-place, one confirmation — or none, if you turn on **Update automatically** (off by default) | ⚠️ **notifies only, by design** — tells you once per version, installs nothing ([ADR-0009](docs/adr/0009-auto-update.md)) |
 
 **What the Linux column's three states mean.** They are deliberately not two, because
 "shipped" and "seen working" are different claims and the difference is the whole point.

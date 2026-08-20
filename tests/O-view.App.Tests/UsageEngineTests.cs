@@ -101,6 +101,48 @@ public class UsageEngineTests
         Assert.Equal(2, notifications.Count);
     }
 
+    // ── automatic updates (ADR-0009 as amended, issue #140) ───────────────────────
+
+    [Fact]
+    public void UpdateAutomatically_IsOffUntilTheUserTurnsItOn()
+    {
+        using var dir = new TempDir();
+        var (engine, _, _, _) = Build(dir);
+        using var _e = engine;
+
+        Assert.False(engine.Settings.UpdateAutomatically);
+
+        Assert.True(engine.SetUpdateAutomatically(true));
+        Assert.True(engine.Settings.UpdateAutomatically);
+        Assert.True(TraySettings.Load(dir.File("settings.json")).UpdateAutomatically);
+
+        Assert.False(engine.SetUpdateAutomatically(false));
+        Assert.False(TraySettings.Load(dir.File("settings.json")).UpdateAutomatically);
+    }
+
+    /// <summary>
+    /// Turning one preference on must not disturb the others. They share one record and one
+    /// file, so a `with` that dropped a member would silently reset it — and the threshold
+    /// resetting to 70 because someone enabled auto-update is the kind of thing nobody
+    /// notices until a notification arrives early.
+    /// </summary>
+    [Fact]
+    public void UpdateAutomatically_LeavesTheOtherSettingsAlone()
+    {
+        using var dir = new TempDir();
+        var (engine, _, _, _) = Build(dir);
+        using var _e = engine;
+
+        engine.SetThresholdPercent(90);
+        engine.SetNotifyOnThreshold(false);
+        engine.SetUpdateAutomatically(true);
+
+        var reloaded = TraySettings.Load(dir.File("settings.json"));
+        Assert.Equal(90, reloaded.ThresholdPercent);
+        Assert.False(reloaded.NotifyOnThreshold);
+        Assert.True(reloaded.UpdateAutomatically);
+    }
+
     // ── the user-settable threshold (issue #141) ──────────────────────────────────
 
     [Fact]

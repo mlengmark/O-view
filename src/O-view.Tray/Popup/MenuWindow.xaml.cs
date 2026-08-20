@@ -66,6 +66,9 @@ public partial class MenuWindow : Window, IFlyout
     /// <summary>As <see cref="SetRunAtStartup"/>, for the threshold-notification setting.</summary>
     public Func<bool, bool>? SetNotifyOnThreshold { get; set; }
 
+    /// <summary>As <see cref="SetRunAtStartup"/>, for the automatic-update setting (issue #140).</summary>
+    public Func<bool, bool>? SetUpdateAutomatically { get; set; }
+
     /// <summary>
     /// As <see cref="SetRunAtStartup"/>, for the notification threshold itself. Returns the
     /// percentage as it actually stands after the write, so a settings file that could not be
@@ -131,6 +134,7 @@ public partial class MenuWindow : Window, IFlyout
         // Toggles leave the flyout open so the tick confirms the change; actions close it
         // first, so a balloon or a modal never appears behind a topmost window.
         StartupRow.Click += (_, _) => Toggle(SetRunAtStartup, StartupCheck);
+        UpdateAutoRow.Click += (_, _) => Toggle(SetUpdateAutomatically, UpdateAutoCheck);
         NotifyRow.Click += (_, _) => Toggle(SetNotifyOnThreshold, NotifyCheck);
 
         // Marked handled, or the Click bubbles to NotifyRow above and every interaction with
@@ -156,14 +160,34 @@ public partial class MenuWindow : Window, IFlyout
     }
 
     /// <summary>
+    /// Everything the menu draws, gathered at the moment it is opened.
+    ///
+    /// <para>A record rather than a parameter list: with the automatic-update row (issue #140)
+    /// the menu renders three independent booleans, and three adjacent <c>bool</c> arguments
+    /// is the shape where a transposed pair compiles cleanly and silently draws the wrong
+    /// ticks. Named members make the call sites say which is which.</para>
+    /// </summary>
+    /// <param name="CanUpdateAutomatically">
+    /// Whether this build can self-install at all (<c>UpdatePolicy.MayDownloadAndRun</c>).
+    /// False hides the row outright — see the XAML for why it is hidden and not disabled.
+    /// </param>
+    public readonly record struct MenuState(
+        bool RunAtStartup,
+        bool NotifyOnThreshold,
+        int ThresholdPercent,
+        bool UpdateAutomatically,
+        bool CanUpdateAutomatically,
+        string Version);
+
+    /// <summary>
     /// Fills the rows from the current state and docks the flyout at the tray corner.
-    /// Callers pass state on every open rather than caching it, because both settings can
+    /// Callers pass state on every open rather than caching it, because these settings can
     /// change outside the app (another instance, a manual registry edit, Task Manager's
     /// startup page).
     /// </summary>
-    public void ShowDocked(bool runAtStartup, bool notifyOnThreshold, int thresholdPercent, string version)
+    public void ShowDocked(MenuState state)
     {
-        Populate(runAtStartup, notifyOnThreshold, thresholdPercent, version);
+        Populate(state);
 
         // The list always opens closed. Reopening the flyout with it still expanded would
         // show a taller card with no explanation of why, and the choice has already been made.
@@ -177,15 +201,21 @@ public partial class MenuWindow : Window, IFlyout
     }
 
     /// <summary>Fills the rows without showing the window (also the verification-render path).</summary>
-    public void Populate(bool runAtStartup, bool notifyOnThreshold, int thresholdPercent, string version)
+    public void Populate(MenuState state)
     {
         PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
 
-        VersionText.Text = $"v{version}";
+        VersionText.Text = $"v{state.Version}";
         NotifySuffix.Text = NotifySuffixText;
-        SetChecked(StartupCheck, runAtStartup);
-        SetChecked(NotifyCheck, notifyOnThreshold);
-        ShowThreshold(thresholdPercent);
+        SetChecked(StartupCheck, state.RunAtStartup);
+        SetChecked(NotifyCheck, state.NotifyOnThreshold);
+        ShowThreshold(state.ThresholdPercent);
+
+        // Collapsed, not hidden: Hidden would keep the row's 34px of height and leave a gap
+        // under "Run at startup" on every build that cannot self-install, which is most Linux
+        // installs and every portable exe.
+        UpdateAutoRow.Visibility = state.CanUpdateAutomatically ? Visibility.Visible : Visibility.Collapsed;
+        SetChecked(UpdateAutoCheck, state.UpdateAutomatically && state.CanUpdateAutomatically);
     }
 
     /// <summary>
@@ -277,11 +307,12 @@ public partial class MenuWindow : Window, IFlyout
     // ── verification hooks (--menu-check) ──────────────────────────────────────
 
     /// <summary>The rows, so a verification run can name them without touching XAML fields.</summary>
-    internal enum MenuRow { Startup, Notify, Diagnostics, Updates, Exit }
+    internal enum MenuRow { Startup, UpdateAuto, Notify, Diagnostics, Updates, Exit }
 
     private System.Windows.Controls.Button RowButton(MenuRow row) => row switch
     {
         MenuRow.Startup => StartupRow,
+        MenuRow.UpdateAuto => UpdateAutoRow,
         MenuRow.Notify => NotifyRow,
         MenuRow.Diagnostics => DiagnosticsRow,
         MenuRow.Updates => UpdatesRow,
@@ -353,8 +384,16 @@ public partial class MenuWindow : Window, IFlyout
     }
 
     /// <summary>Tick state of a toggle row, for asserting a toggle actually flipped.</summary>
-    internal bool RowIsChecked(MenuRow row) =>
-        row == MenuRow.Startup ? IsChecked(StartupCheck) : IsChecked(NotifyCheck);
+    internal bool RowIsChecked(MenuRow row) => row switch
+    {
+        MenuRow.Startup => IsChecked(StartupCheck),
+        MenuRow.UpdateAuto => IsChecked(UpdateAutoCheck),
+        _ => IsChecked(NotifyCheck),
+    };
+
+    /// <summary>Whether a row is present at all — the automatic-update row is dropped on a
+    /// build that cannot self-install, and "absent" is a state worth asserting.</summary>
+    internal bool RowIsVisible(MenuRow row) => RowButton(row).Visibility == Visibility.Visible;
 
     /// <summary>Whether a close transition is in flight — the state that made rows dead.</summary>
     internal bool IsClosing => _flyout.IsClosing;

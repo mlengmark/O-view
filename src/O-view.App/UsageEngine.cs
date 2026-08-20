@@ -327,6 +327,23 @@ public sealed class UsageEngine : IDisposable
     }
 
     /// <summary>
+    /// Applies and persists the automatic-update preference, returning the state now in
+    /// effect (ADR-0009 as amended, issue #140).
+    ///
+    /// <para>The engine stores it and nothing more. <b>Whether a build may act on it is not
+    /// this class's decision</b> — <c>UpdatePolicy.MayDownloadAndRun</c> owns that, and the
+    /// head consults it before every install. Keeping the two apart is what stops a
+    /// preference read as permission: a tarball build can hold this setting true in a
+    /// settings file copied from a Windows machine and must still install nothing.</para>
+    /// </summary>
+    public bool SetUpdateAutomatically(bool enable)
+    {
+        Settings = Settings with { UpdateAutomatically = enable };
+        Settings.Save(_options.SettingsPath);
+        return Settings.UpdateAutomatically;
+    }
+
+    /// <summary>
     /// Applies and persists the notification threshold, returning the percentage now in
     /// effect (issue #141).
     ///

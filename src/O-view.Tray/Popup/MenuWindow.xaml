@@ -169,6 +169,21 @@
                 </Grid>
             </Button>
 
+            <!-- Directly beneath "Run at startup", as issue #140 asks. Collapsed entirely on
+                 a build that cannot self-install (portable exe, .deb, tarball) rather than
+                 shown disabled: a row implying a behaviour the build cannot perform is a
+                 claim about the machine that is not true. See ADR-0009's amendment. -->
+            <Button x:Name="UpdateAutoRow" Style="{StaticResource MenuRow}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="22"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Path x:Name="UpdateAutoCheck" Grid.Column="0" Style="{StaticResource RowCheck}"/>
+                    <TextBlock Grid.Column="1" Text="Update automatically" Style="{StaticResource RowLabel}"/>
+                </Grid>
+            </Button>
+
             <Button x:Name="NotifyRow" Style="{StaticResource MenuRow}">
                 <Grid>
                     <Grid.ColumnDefinitions>
