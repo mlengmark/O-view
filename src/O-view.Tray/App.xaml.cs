@@ -326,11 +326,16 @@ public partial class App : System.Windows.Application
         // State is passed on every open, never cached: both settings can change
         // externally (another instance, a manual registry edit, Task Manager's
         // startup page).
-        _menu.ShowDocked(
-            runAtStartup: _startup.IsEnabled(),
-            notifyOnThreshold: _engine!.Settings.NotifyOnThreshold,
-            thresholdPercent: _engine.Settings.ThresholdPercent,
-            version: UpdateService.CurrentVersion);
+        _menu.ShowDocked(new MenuWindow.MenuState(
+            RunAtStartup: _startup.IsEnabled(),
+            NotifyOnThreshold: _engine!.Settings.NotifyOnThreshold,
+            ThresholdPercent: _engine.Settings.ThresholdPercent,
+            UpdateAutomatically: _engine.Settings.UpdateAutomatically,
+            // Asked on every open rather than cached at startup, for the same reason the
+            // rest of this is: it is a fact about how this build was installed, and the
+            // policy is the single place that decides it (ADR-0009).
+            CanUpdateAutomatically: UpdatePolicy.MayDownloadAndRun(UpdateService.CurrentInstallKind),
+            Version: UpdateService.CurrentVersion));
     }
 
     private MenuWindow CreateMenu()
@@ -346,6 +351,7 @@ public partial class App : System.Windows.Application
             // Same contract as the two above: the row renders what the engine returns, so a
             // value that could not be applied is not drawn as though it had been.
             SetThresholdPercent = percent => _engine!.SetThresholdPercent(percent),
+            SetUpdateAutomatically = enable => _engine!.SetUpdateAutomatically(enable),
         };
 
         // One-click support bundle: a blank panel is otherwise indistinguishable from
@@ -424,13 +430,77 @@ public partial class App : System.Windows.Application
         }
 
         var result = await _updates.CheckAsync();
-        if (result is { Outcome: UpdateOutcome.UpdateAvailable, Available: { } update }
-            && _notifiedUpdateTag != update.Tag)
+        if (result is not { Outcome: UpdateOutcome.UpdateAvailable, Available: { } update }
+            || _notifiedUpdateTag == update.Tag)
         {
-            _notifiedUpdateTag = update.Tag;
-            _trayHost.ShowNotification("O-view update available",
-                $"Version {update.Version} is available (you have {UpdateService.CurrentVersion}). " +
-                "Right-click the icon → Check for updates to install.");
+            return;
+        }
+
+        _notifiedUpdateTag = update.Tag;
+
+        // Both conditions, every time. The setting alone is a preference; MayDownloadAndRun is
+        // the permission, and it stays the only thing deciding whether anything is fetched or
+        // executed (ADR-0009's amendment). A settings.json copied from a Windows machine onto a
+        // tarball install holds the preference true and must still install nothing.
+        if (_engine!.Settings.UpdateAutomatically
+            && UpdatePolicy.MayDownloadAndRun(UpdateService.CurrentInstallKind))
+        {
+            await InstallAutomaticallyAsync(update);
+            return;
+        }
+
+        _trayHost.ShowNotification("O-view update available",
+            $"Version {update.Version} is available (you have {UpdateService.CurrentVersion}). " +
+            "Right-click the icon → Check for updates to install.");
+    }
+
+    /// <summary>
+    /// The automatic path: install without the per-release confirmation, because the user
+    /// already gave it once by turning the setting on (ADR-0009 as amended, issue #140).
+    ///
+    /// <para><b>Automatic is not silent.</b> The balloon goes out <i>before</i> anything is
+    /// downloaded, naming the version and warning that O-view will close and reopen.
+    /// Invisibility was the worst property of the alternative ADR-0009 rejected, and it stays
+    /// rejected — what this removes is the per-release click, not the user's knowledge.</para>
+    ///
+    /// <para>Every failure path is the confirmed flow's, unchanged — including the deliberate
+    /// refusal to open the releases page after a checksum mismatch, which would hand the user
+    /// exactly the file the check just rejected.</para>
+    /// </summary>
+    private async Task InstallAutomaticallyAsync(AvailableUpdate update)
+    {
+        if (_updates is null || _trayHost is null || _updateFlowActive)
+        {
+            return;
+        }
+
+        _trayHost.ShowNotification("Installing O-view " + update.Version,
+            $"You have {UpdateService.CurrentVersion}. O-view will close briefly and reopen. "
+            + "Turn this off with Update automatically in the tray menu.");
+
+        _updateFlowActive = true;
+        try
+        {
+            var installer = await _updates.DownloadInstallerAsync(update);
+            _updates.LaunchInstaller(installer);
+            Shutdown();  // release the exe lock so the installer can replace it and relaunch
+        }
+        catch (UpdateVerificationException)
+        {
+            _updateFlowActive = false;
+            _trayHost.ShowNotification("Update not installed",
+                "The download didn't match the checksum published with this release, so O-view "
+                + "didn't run it. Your current version is untouched.");
+        }
+        catch (Exception)
+        {
+            // No releases page here. The confirmed flow opens it because a human is already
+            // in the loop and can decide; nobody is watching this one, so a browser window
+            // appearing unbidden is not a useful answer. It retries on the next daily check.
+            _updateFlowActive = false;
+            _trayHost.ShowNotification("Update didn't install",
+                $"O-view couldn't download version {update.Version}. It will try again later, "
+                + "or use Check for updates to install it now.");
         }
     }
 

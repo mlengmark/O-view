@@ -153,26 +153,38 @@ internal static class SampleRenderer
         // the list is inline in the card (it is not a Popup, precisely so it can be rendered),
         // and that is the frame showing whether the group reads as belonging to the row above
         // it rather than as three more top-level items.
-        var cases = new (string Name, bool Startup, bool Notify, int Threshold, bool Open)[]
+        MenuWindow.MenuState State(
+            bool startup, bool notify, int threshold, bool auto = false, bool canAuto = true) =>
+            new(startup, notify, threshold, auto, canAuto, UpdateService.CurrentVersion);
+
+        var cases = new (string Name, MenuWindow.MenuState State, bool Open)[]
         {
-            ("both-on", true, true, 70, false),
-            ("both-off", false, false, 70, false),
-            ("threshold-open", true, true, 70, true),
-            ("threshold-open-90", true, true, 90, true),
-            ("threshold-90", true, true, 90, false),
+            ("both-on", State(true, true, 70), false),
+            ("both-off", State(false, false, 70), false),
+            ("threshold-open", State(true, true, 70), true),
+            ("threshold-open-90", State(true, true, 90), true),
+            ("threshold-90", State(true, true, 90), false),
             // A hand-edited settings.json value that is none of the three offered. It must
             // render honestly rather than snap to the nearest option — TraySettings accepts
             // any 1-100 value, and a pill reading "80%" over a stored 75 would be the menu
             // asserting something untrue about the machine.
-            ("threshold-unlisted-75", true, true, 75, true),
+            ("threshold-unlisted-75", State(true, true, 75), true),
+
+            // The automatic-update row (issue #140), in all three states it can be in. The
+            // third is the one worth a sample: a build that cannot self-install must drop the
+            // row entirely, leaving no gap under "Run at startup" — and "a row that is not
+            // there" is precisely what no assertion elsewhere looks at.
+            ("update-auto-on", State(true, true, 70, auto: true), false),
+            ("update-auto-off", State(true, true, 70), false),
+            ("update-auto-unavailable", State(true, true, 70, auto: true, canAuto: false), false),
         };
 
         foreach (var light in new[] { true, false })
         {
-            foreach (var (name, startup, notify, threshold, open) in cases)
+            foreach (var (name, state, open) in cases)
             {
                 var menu = new MenuWindow { ThemeOverride = light };
-                menu.Populate(startup, notify, threshold, UpdateService.CurrentVersion);
+                menu.Populate(state);
                 menu.ExpandThresholdsForVerification(open);
                 var card = menu.RenderToBitmap(scale);
 
@@ -513,20 +525,30 @@ internal static class SampleRenderer
             SetRunAtStartup = enable => enable,          // no registry writes in a check
             SetNotifyOnThreshold = enable => enable,
             SetThresholdPercent = percent => percent,    // and no settings writes
+            SetUpdateAutomatically = enable => enable,
         };
         menu.CopyDiagnosticsRequested += (_, _) => fired["diagnostics"]++;
         menu.CheckForUpdatesRequested += (_, _) => fired["updates"]++;
         menu.ExitRequested += (_, _) => fired["exit"]++;
 
-        // Every open re-populates from these, so each cycle starts from both ticks ON and
-        // a toggle within the cycle must flip its row to OFF.
-        void Open() => menu.ShowDocked(true, true, 70, UpdateService.CurrentVersion);
+        // Every open re-populates from these, so each cycle starts from every tick ON and a
+        // toggle within the cycle must flip its row to OFF. canAuto is forced true so the
+        // automatic-update row is present to be toggled whatever this build actually is —
+        // the check is exercising the row, not the install policy.
+        void Open() => menu.ShowDocked(new MenuWindow.MenuState(
+            RunAtStartup: true,
+            NotifyOnThreshold: true,
+            ThresholdPercent: 70,
+            UpdateAutomatically: true,
+            CanUpdateAutomatically: true,
+            Version: UpdateService.CurrentVersion));
 
         bool Ticked(MenuWindow.MenuRow row) => menu.RowIsChecked(row);
 
         void Record(string label) =>
             report.AppendLine($"{label,-42} visible={menu.IsVisible,-5} closing={menu.IsClosing,-5} " +
                               $"ticks=[startup {Ticked(MenuWindow.MenuRow.Startup),-5} " +
+                              $"auto {Ticked(MenuWindow.MenuRow.UpdateAuto),-5} " +
                               $"notify {Ticked(MenuWindow.MenuRow.Notify),-5}] " +
                               $"threshold=[{menu.ThresholdLabel,-4} open {menu.ThresholdOptionsOpen,-5}] " +
                               $"fired=[diag {fired["diagnostics"]}, upd {fired["updates"]}, exit {fired["exit"]}]");
@@ -600,6 +622,7 @@ internal static class SampleRenderer
 
             steps.Add(($"cycle {n}: open for toggles", Open));
             steps.Add(($"cycle {n}: toggle Run at startup", () => CheckedToggle(MenuWindow.MenuRow.Startup)));
+            steps.Add(($"cycle {n}: toggle Update automatically", () => CheckedToggle(MenuWindow.MenuRow.UpdateAuto)));
             steps.Add(($"cycle {n}: toggle Notify", () => CheckedToggle(MenuWindow.MenuRow.Notify)));
             steps.Add(($"cycle {n}: toggles left it open", SettleToggle));
 

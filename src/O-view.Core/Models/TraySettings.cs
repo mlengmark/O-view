@@ -21,10 +21,25 @@ namespace OView.Core.Models;
 /// is designed to run for days: in-memory state would re-nag after every restart, and a
 /// notice the user has already acted on is noise. Empty means "never told".</para>
 /// </param>
+/// <param name="UpdateAutomatically">
+/// Whether the daily background check may install a newer release without asking each time
+/// (ADR-0009, amended 2026-08-19 for GitHub issue #140).
+///
+/// <para><b>Default false, and a release must never turn it on.</b> ADR-0009 rejected silent
+/// auto-install because it acts <i>without consent</i>; what makes this acceptable is that
+/// the user chose it, once, knowingly. A default would remove precisely that. The default
+/// here is also the fallback for a settings file that predates the field or fails to
+/// load — so an upgrade never switches it on behind the user.</para>
+///
+/// <para>It is <b>not</b> sufficient on its own: <c>UpdatePolicy.MayDownloadAndRun</c> still
+/// decides whether anything may be fetched or executed, and a portable, <c>.deb</c> or
+/// tarball build ignores this setting entirely.</para>
+/// </param>
 public sealed record TraySettings(
     bool NotifyOnThreshold = true,
     int ThresholdPercent = UsageLevels.CriticalPercent,
-    string LastUpdateNoticeTag = "")
+    string LastUpdateNoticeTag = "",
+    bool UpdateAutomatically = false)
 {
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
