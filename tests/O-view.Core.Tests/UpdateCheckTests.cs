@@ -40,14 +40,76 @@ public class ReleaseVersionTests
         Assert.True(Parse("0.10.0") > Parse("0.9.0"));
         Assert.True(Parse("1.0.0") > Parse("0.99.99"));
         Assert.True(Parse("0.4.3") > Parse("0.4.2"));
-        // The PATCH component crossing into two digits, which v0.5.10 is the first release
-        // to exercise. Lexicographically "0.5.10" < "0.5.9", so a string comparison would
-        // leave every user on 0.5.9 never offered the update — and silently, since the check
-        // would report "up to date" rather than fail.
+        // The third vector crossing into two digits, first exercised by v0.4.10.
+        // Lexicographically "0.5.10" < "0.5.9", so a string comparison would leave every user
+        // on 0.5.9 never offered the update — and silently, since the check would report
+        // "up to date" rather than fail.
         Assert.True(Parse("0.5.10") > Parse("0.5.9"));
         Assert.True(Parse("0.5.11") > Parse("0.5.10"));
         Assert.True(Parse("0.4.2") == Parse("0.4.2"));
         Assert.False(Parse("0.4.2") > Parse("0.4.2"));
+    }
+
+    /// <summary>
+    /// Every vector crosses into two digits independently, and each is compared by its own
+    /// <c>int</c>. The third vector has shipped past 9 three times (v0.4.10, v0.5.10, v0.5.11,
+    /// then v0.6.10) and the second is covered above; <b>the first had no coverage at all</b>
+    /// until this test, purely because the project has never left 0.x.
+    ///
+    /// <para>Written as a theory over all three positions so the guarantee is "no vector
+    /// compares lexicographically" rather than three separate assertions that happen to
+    /// exist.</para>
+    /// </summary>
+    [Theory]
+    // first vector
+    [InlineData("10.0.0", "9.0.0")]
+    [InlineData("11.0.0", "10.0.0")]
+    [InlineData("100.0.0", "99.0.0")]
+    // second vector
+    [InlineData("0.10.0", "0.9.0")]
+    [InlineData("0.100.0", "0.99.0")]
+    // third vector
+    [InlineData("0.0.10", "0.0.9")]
+    [InlineData("0.0.100", "0.0.99")]
+    public void Every_vector_crosses_into_two_digits_numerically(string newer, string older)
+    {
+        Assert.True(Parse(newer) > Parse(older), $"{newer} should be newer than {older}");
+        Assert.True(Parse(older) < Parse(newer), $"{older} should be older than {newer}");
+    }
+
+    /// <summary>
+    /// The specific shape a string comparison gets wrong, kept separate because it is narrower
+    /// than the theory above: the trap is a change of <b>digit width</b>, not two digits as
+    /// such. "11.0.0" sorts correctly above "10.0.0" as a string — both are the same width —
+    /// so pairing those would assert something untrue. It is 9→10 and 99→100 that invert.
+    /// </summary>
+    [Theory]
+    [InlineData("10.0.0", "9.0.0")]
+    [InlineData("100.0.0", "99.0.0")]
+    [InlineData("0.10.0", "0.9.0")]
+    [InlineData("0.100.0", "0.99.0")]
+    [InlineData("0.0.10", "0.0.9")]
+    [InlineData("0.0.100", "0.0.99")]
+    public void A_string_comparison_would_call_these_newer_versions_older(string newer, string older)
+    {
+        Assert.True(string.CompareOrdinal(newer, older) < 0,
+            $"{newer} should sort BELOW {older} as a string — that inversion is what this guards");
+
+        Assert.True(Parse(newer) > Parse(older));
+    }
+
+    /// <summary>
+    /// Vectors are unbounded non-negative integers, not capped at 99. Nothing in the app, the
+    /// release workflow or the installer enforces a ceiling, so documenting one would be a
+    /// rule that does not exist — and a cap would only ever be a reason to bump a higher
+    /// vector for no engineering reason.
+    /// </summary>
+    [Fact]
+    public void Vectors_are_not_capped_at_two_digits()
+    {
+        Assert.True(ReleaseVersion.TryParse("1.234.5678", out var big));
+        Assert.Equal(new ReleaseVersion(1, 234, 5678), big);
+        Assert.True(big > Parse("1.234.5677"));
     }
 
     private static ReleaseVersion Parse(string s)
