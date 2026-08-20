@@ -45,14 +45,22 @@ public sealed class FakeTimerFactory : ITimerFactory
 {
     public List<FakeTimer> Created { get; } = [];
 
-    /// <summary>The poll timer — the first the engine creates.</summary>
+    // These are positional, so they track the order UsageEngine.Start creates its timers.
+    // Inserting one in the middle silently re-points every accessor after it — which is how
+    // adding the plan-history cadence (issue #163) made the update-check test read the wrong
+    // timer. If another is added, fix the indices here rather than reordering Start.
+
+    /// <summary>The full poll — transcripts and the 31-day figures. Created first.</summary>
     public FakeTimer Poll => Created[0];
 
+    /// <summary>The plan-history-only cadence (issue #163).</summary>
+    public FakeTimer PlanPoll => Created[1];
+
     /// <summary>The one-shot first update check.</summary>
-    public FakeTimer FirstUpdateCheck => Created[1];
+    public FakeTimer FirstUpdateCheck => Created[2];
 
     /// <summary>The recurring update check.</summary>
-    public FakeTimer RecurringUpdateCheck => Created[2];
+    public FakeTimer RecurringUpdateCheck => Created[3];
 
     public IAppTimer Create(TimeSpan interval, Action onTick)
     {

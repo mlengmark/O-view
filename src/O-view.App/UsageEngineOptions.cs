@@ -14,8 +14,29 @@ namespace OView.App;
 /// </summary>
 public sealed record UsageEngineOptions
 {
-    /// <summary>Steady-state poll interval. 60 s by default (build-plan Phase 3).</summary>
+    /// <summary>
+    /// Steady-state interval for the <b>full</b> poll — the one that walks the transcripts and
+    /// rebuilds the 31-day figures. 60 s by default (build-plan Phase 3).
+    /// </summary>
     public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(60);
+
+    /// <summary>
+    /// Interval for the plan-history read alone — the session and weekly percentages the icon,
+    /// the tooltip and the bars are drawn from.
+    ///
+    /// <para><b>Why this is not <see cref="PollInterval"/>.</b> The two reads a poll performs
+    /// cost three orders of magnitude apart: measured on a real machine, the plan-history read,
+    /// parse and reset-scan is <b>3.3 ms</b>, while the transcript walk behind the token tiles
+    /// covers <b>32 files and 92 MB</b>. Sharing one timer meant the numbers on the icon waited
+    /// behind the ingest that froze the app on a large history (issue #125).</para>
+    ///
+    /// <para><b>Why 20 s and not less.</b> Claude Desktop writes that file every ~5 minutes —
+    /// measured median 5.00 min across 1,828 consecutive gaps in a 30-day file — and no poll
+    /// rate can beat its source. Twenty seconds removes O-view's own contribution to staleness
+    /// without re-reading an unchanged file for nothing; going lower buys accuracy that does
+    /// not exist.</para>
+    /// </summary>
+    public TimeSpan PlanPollInterval { get; init; } = TimeSpan.FromSeconds(20);
 
     /// <summary>
     /// Fast retry used while warming up before Claude Desktop has produced data. Never

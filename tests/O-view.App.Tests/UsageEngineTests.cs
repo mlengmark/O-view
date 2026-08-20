@@ -12,7 +12,11 @@ public class UsageEngineTests
     private static readonly DateTimeOffset T0 = new(2026, 7, 29, 12, 0, 0, TimeSpan.Zero);
 
     private static (UsageEngine Engine, FakeProvider Provider, FakeTimerFactory Timers, ListLog Log)
-        Build(TempDir dir, Action<UsageEngineOptions>? tweak = null)
+        // A transform, not an Action. UsageEngineOptions is a record with init-only members,
+        // so the previous `Action<UsageEngineOptions>` could not set anything — it compiled,
+        // ran, and silently changed nothing. Nothing had used it, which is why that went
+        // unnoticed; `o => o with { ... }` is the shape that actually works.
+        Build(TempDir dir, Func<UsageEngineOptions, UsageEngineOptions>? tweak = null)
     {
         var provider = new FakeProvider();
         var log = new ListLog();
@@ -25,7 +29,7 @@ public class UsageEngineTests
             WeeklyResetLogPath = dir.File("weekly-resets.json"),
             SettingsPath = dir.File("settings.json"),
         };
-        tweak?.Invoke(options);
+        options = tweak?.Invoke(options) ?? options;
         return (new UsageEngine(options), provider, new FakeTimerFactory(), log);
     }
 
@@ -99,6 +103,93 @@ public class UsageEngineTests
         provider.SetSession(90);          // crosses again
         timers.Poll.Tick();
         Assert.Equal(2, notifications.Count);
+    }
+
+    // ── the plan-history cadence, decoupled from ingestion (issue #163) ───────────
+
+    /// <summary>
+    /// Writes a real plan-history file, because the fast path deliberately reads
+    /// <c>PlanHistoryProvider</c> directly rather than the composite — that is the whole point
+    /// of the split, so faking the composite would test the wrong seam.
+    /// </summary>
+    private static string WritePlanHistory(TempDir dir, params (DateTimeOffset At, int Fh, int Sd)[] samples)
+    {
+        var rows = samples.Select(s =>
+            $"{{\"t\":{s.At.ToUnixTimeMilliseconds()},\"org\":\"org-a\",\"u\":{{\"fh\":{s.Fh},\"sd\":{s.Sd}}}}}");
+        var path = dir.File("plan-usage-history.json");
+        File.WriteAllText(path, $"{{\"version\":2,\"samples\":[{string.Join(',', rows)}]}}");
+        return path;
+    }
+
+    /// <summary>
+    /// The point of the split: a plan-history tick publishes new percentages without touching
+    /// the transcripts. Measured on a real machine, the two reads cost 3.3 ms and 92 MB
+    /// respectively, and they used to share one timer.
+    /// </summary>
+    [Fact]
+    public void APlanTick_PublishesFreshPercentages_WithoutAFullPoll()
+    {
+        using var dir = new TempDir();
+        var path = WritePlanHistory(dir, (T0.AddMinutes(-2), 40, 10));
+        var (engine, provider, timers, _) = Build(dir, o => o with { PlanHistoryPath = path });
+        using var _e = engine;
+
+        provider.SetSession(40);
+        engine.Start(timers);
+        var callsAfterStart = provider.Calls;
+
+        WritePlanHistory(dir, (T0.AddMinutes(-2), 40, 10), (T0.AddMinutes(-1), 55, 11));
+        timers.PlanPoll.Tick();
+
+        Assert.Equal(55, engine.Latest.SessionPercent);
+        Assert.Equal(callsAfterStart, provider.Calls);   // the composite was not re-read
+    }
+
+    /// <summary>
+    /// Crossing the threshold is noticed on the fast cadence rather than waiting for the full
+    /// poll — a real gain, not a side effect, since the notification only needs the percentage.
+    /// </summary>
+    [Fact]
+    public void APlanTick_CanRaiseTheThresholdNotification()
+    {
+        using var dir = new TempDir();
+        var path = WritePlanHistory(dir, (T0.AddMinutes(-2), 10, 5));
+        var (engine, provider, timers, _) = Build(dir, o => o with { PlanHistoryPath = path });
+        using var _e = engine;
+
+        var notifications = new List<AppNotification>();
+        engine.NotificationRequested += notifications.Add;
+
+        provider.SetSession(10);
+        engine.Start(timers);
+        Assert.Empty(notifications);
+
+        WritePlanHistory(dir, (T0.AddMinutes(-2), 10, 5), (T0.AddMinutes(-1), 95, 6));
+        timers.PlanPoll.Tick();
+
+        Assert.Single(notifications);
+    }
+
+    /// <summary>
+    /// A snapshot with nothing authoritative in it is dropped rather than published. The fast
+    /// path skips the composite, so it cannot see the JSONL estimate that would otherwise win —
+    /// publishing its <c>None</c> would blank a panel the full poll had correctly filled.
+    /// </summary>
+    [Fact]
+    public void APlanTickWithNoData_LeavesTheExistingSnapshotAlone()
+    {
+        using var dir = new TempDir();
+        var (engine, provider, timers, _) = Build(dir, o => o with { PlanHistoryPath = dir.File("absent.json") });
+        using var _e = engine;
+
+        provider.SetSession(37, DataSource.Estimate);
+        engine.Start(timers);
+        Assert.Equal(37, engine.Latest.SessionPercent);
+
+        timers.PlanPoll.Tick();   // the file does not exist
+
+        Assert.Equal(37, engine.Latest.SessionPercent);
+        Assert.Equal(DataSource.Estimate, engine.Latest.Source);
     }
 
     // ── automatic updates (ADR-0009 as amended, issue #140) ───────────────────────
