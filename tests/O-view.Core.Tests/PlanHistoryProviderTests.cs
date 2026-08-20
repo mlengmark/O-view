@@ -245,6 +245,84 @@ public class PlanHistoryProviderTests : IDisposable
     }
 
 
+    // ── an aged zero is not a measurement (issue #161) ────────────────────────────
+
+    /// <summary>
+    /// The reported case, reproduced exactly. The five-hour window reset (72 → 0), Desktop
+    /// sampled at that instant and then went quiet for 14 minutes while ~6% was consumed.
+    ///
+    /// <para>O-view showed an empty gauge the whole time, because 14 minutes was inside the
+    /// old 15-minute freshness allowance — so the reading was labelled Live and rendered as a
+    /// confident, unqualified 0%. Unknown is the honest answer: the window is not empty, and
+    /// O-view has no idea what it holds.</para>
+    /// </summary>
+    [Fact]
+    public void AZeroThatHasAgedPastASamplingInterval_IsUnknownRatherThanEmpty()
+    {
+        var path = WriteSamples(
+            (Now.AddMinutes(-30), "org-a", 68, 42),
+            (Now.AddMinutes(-22), "org-a", 72, 42),
+            (Now.AddMinutes(-14), "org-a", 0, 42));   // the reset, then silence
+
+        var snapshot = new PlanHistoryProvider(path, orgUuid: "org-a").GetSnapshot(Now);
+
+        Assert.Null(snapshot.SessionPercent);
+        Assert.Equal(42, snapshot.WeeklyPercent);   // the weekly figure is untouched
+    }
+
+    /// <summary>
+    /// A zero that is genuinely current still reads zero. This is the normal case immediately
+    /// after a reset — Desktop is sampling every ~5 minutes, so a fresh zero arrives and the
+    /// gauge legitimately shows an empty window.
+    /// </summary>
+    [Fact]
+    public void AFreshZero_IsStillReportedAsZero()
+    {
+        var path = WriteSamples(
+            (Now.AddMinutes(-8), "org-a", 72, 42),
+            (Now.AddMinutes(-2), "org-a", 0, 42));
+
+        var snapshot = new PlanHistoryProvider(path, orgUuid: "org-a").GetSnapshot(Now);
+
+        Assert.Equal(0, snapshot.SessionPercent);
+        Assert.Equal(DataSource.Live, snapshot.Source);
+    }
+
+    /// <summary>
+    /// Only zero is discarded. A non-zero reading of the same age is a lower bound that is
+    /// still broadly true — 72% drifting to 75% is information, where "at least 0%" is not.
+    /// </summary>
+    [Fact]
+    public void AnAgedNonZeroReading_IsKept()
+    {
+        var path = WriteSamples(
+            (Now.AddMinutes(-20), "org-a", 68, 42),
+            (Now.AddMinutes(-14), "org-a", 72, 42));
+
+        var snapshot = new PlanHistoryProvider(path, orgUuid: "org-a").GetSnapshot(Now);
+
+        Assert.Equal(72, snapshot.SessionPercent);
+    }
+
+    /// <summary>
+    /// The freshness allowance is anchored to the measured sampling cadence: median 5.00 min
+    /// across 1,828 consecutive gaps in a 30-day real file. Eleven minutes tolerates two
+    /// missed samples; the old fifteen tolerated three, which is how a 14-minute-old reading
+    /// came to be presented as current.
+    /// </summary>
+    [Theory]
+    [InlineData(9, DataSource.Live)]
+    [InlineData(12, DataSource.Stale)]
+    [InlineData(14, DataSource.Stale)]
+    public void SampleAgeDecidesLiveOrStale(int minutesOld, DataSource expected)
+    {
+        var path = WriteSamples(
+            (Now.AddMinutes(-minutesOld - 6), "org-a", 60, 42),
+            (Now.AddMinutes(-minutesOld), "org-a", 72, 42));
+
+        Assert.Equal(expected, new PlanHistoryProvider(path, orgUuid: "org-a").GetSnapshot(Now).Source);
+    }
+
     [Fact]
     public void CrossOrgSequence_DoesNotFakeADrop()
     {
