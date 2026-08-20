@@ -4,7 +4,7 @@ A notification-area (system tray) app that displays your Claude AI token usage a
 
 > **Status:** **Windows 11 and Linux are both supported as of [v0.6.0](https://github.com/mlengmark/O-view/releases/latest)**, which ships every platform's assets under one tag — Windows installer and portable exe, `.deb` for amd64 and arm64, and portable tarballs.
 >
-> Windows has been shipped and in daily use since v0.1.0. **Linux has now been run on a physical desktop once** — an Arch-based system on KDE Plasma under Wayland, reporting against v0.6.1. It confirmed that O-view finds and reads Claude's data correctly and that the tray icon appears; it also found two bugs that made the app unusable past that point. Those were fixed in v0.6.4, and a third failure of the same kind was found by reading the code and fixed in v0.6.5. **None of the three has been re-tested on hardware.** Everything else in [Platform support](#platform-support) is still marked *never observed* and stays that way until someone reports back. See [`docs/adr/`](docs/adr/) for the decisions behind both.
+> Windows has been shipped and in daily use since v0.1.0. **Linux has now been run on a physical desktop twice** — an Arch-based system on KDE Plasma under Wayland, tarball install, reporting against v0.6.1 and again against v0.6.5. Between them those reports confirmed that O-view finds and reads Claude's data correctly and that the tray icon appears, and found three separate faults that made the app unusable past that point: the first left click deadlocked it, then — after that was fixed — crashed it outright. A fourth was found by reading the code. **None of the four has been re-tested on hardware**, and nobody has yet seen the detail panel at all. Everything else in [Platform support](#platform-support) is still marked *never observed* and stays that way until someone reports back. See [`docs/adr/`](docs/adr/) for the decisions behind both.
 
 ---
 
@@ -18,12 +18,12 @@ O-view sits in the notification area and answers three questions at a glance:
 
 | Surface | Shows |
 |---|---|
-| Tray icon | A **ring gauge** filled in proportion to 5-hour usage, with the brand "eye" pupil at its centre — no digits. Colour-coded green (<50%) → amber (50–69%) → red (≥70%). A grey, unfilled ring means no authoritative data rather than a fabricated 0%. Geometry scales to the icon size, and the palette switches for a light or dark taskbar. |
+| Tray icon | A **ring gauge** filled in proportion to 5-hour usage, with the brand "eye" pupil at its centre — no digits. Colour-coded green (<50%) → amber (50–69%) → red (≥70%). At a measured 0% the pupil fades out with the ring, so an empty gauge reads as one thing rather than a live dot inside an empty circle. A grey, unfilled ring with a solid pupil is different again: it means no authoritative data, rather than a fabricated 0%. Geometry scales to the icon size, and the palette switches for a light or dark taskbar. |
 | Tooltip | `5h: 47% · resets 16:32 · 7d: 61%` — the exact number lives here, since the icon carries no text. Degrades honestly: `(as of 14:05)` when the data is stale, `local estimate · usage % unknown` on fallback data, `no usage data` when there is none. |
 | Detail panel | Left-click. Account header, session/weekly bars with reset times, four clickable stat tiles, a 31-day usage graph, and an off-plan section. Details below. |
 | Menu | Right-click. Run at startup · Update automatically · notify-at-threshold, selectable between 70/80/90% · Copy diagnostics · Check for updates… · Exit. Rendered as an on-brand flyout docked to the taskbar corner, not a Win32 context menu, so it matches the panel. |
 
-A balloon notification fires once per session window when usage crosses the threshold — **70% by default**, the point at which the gauge turns red, so the notification and the colour never disagree.
+A balloon notification fires once per session window when usage crosses the threshold — **70% by default**, the point at which the gauge turns red, so out of the box the notification and the colour never disagree. Pick **80%** or **90%** from the menu row if you would rather be told later; the gauge still turns red at 70, because the colour bands and the notification are separate signals.
 
 ### The detail panel
 
@@ -31,7 +31,7 @@ On Windows both flyouts dock to the taskbar corner like a system flyout and anim
 
 - **Account header** — display name, email, and plan-tier badge, read from `~/.claude.json`. No token, no network call.
 - **Session and weekly bars** — percentage, proportional fill in the same colour bands as the icon, and the derived reset time for each: `Resets in 2h 14m · 16:32` for the 5-hour window, `Resets in 6d 3h · Tue 06:28` for the weekly one. Reset times are *derived from observed drops*, not reported by any API. Before a drop has been seen the panel says so — the weekly row reads **"Waiting for first reset…"** — rather than guessing. A weekly reset that happened while Claude Desktop was closed is only bracketed to within a few hours, and is shown with a `~` and an explanation on hover instead of a made-up minute.
-- **Four stat tiles** — tokens today, Est. value today, tokens over 31 days, Est. value over 31 days. **Click any tile to flip it to a per-model breakdown**: a segmented bar with a consistent colour per model across the whole panel, and per-model token and cost figures on hover. Nothing is fetched on click; the split is already in hand.
+- **Four stat tiles** — tokens today, Est. value today, tokens over 31 days, Est. value over 31 days. **Click any tile to flip it to a per-model breakdown**: a segmented bar with a consistent colour per model across the whole panel, and per-model token and cost figures on hover. Nothing is fetched on click; the split is already in hand. A 31-day window O-view has not been installed for the whole of is captioned with its real coverage — `12 of 31 days recorded` — counting the days O-view has data **for**, not the days you happened to use Claude. A week away from Claude is low usage, not short history, and the caption no longer confuses the two.
 - **Usage graph — last 31 days** — daily bars with hover tooltips, and dotted gridlines at each **weekly limit reset** (falling back to Monday, labelled as such, until a reset has been observed). Because a reset happens at a time of day rather than at midnight, a gridline sits at its true position *inside* the day it falls in. Days before O-view's first recorded day are drawn as an explicit empty region, never as zero-height bars, because "no data" and "no usage" are different claims.
 - **Off-plan usage — last 31 days** — the estimated API-rate value of usage on models that bill as extra usage (currently Fable) rather than drawing from the plan window.
 - **Off-plan warning banner** — appears when the live divergence detector sees substantial local work against a flat plan meter, or when the plan window is exhausted. This exists because the tray once read a comfortable green 6% while ~€86 of credit usage was being billed; see [findings/credit-usage-divergence.md](docs/findings/credit-usage-divergence.md).
@@ -61,22 +61,23 @@ run Claude Desktop has nothing for O-view to read. **macOS is out of scope.** Se
 | Tray icon | ✅ | ✅ **seen working** on KDE Plasma / Wayland. **Needs a notification-area host** — GNOME ships none by default, see below |
 | Tooltip | ✅ | ✅ built, *never observed* |
 | Detail panel | ✅ docked flyout at the taskbar corner | ⚠️ a **plain window in the work area's corner**, not docked to the icon — see below. *Never observed:* neither report could open it — the left click first deadlocked the app, then crashed it. Three separate causes fixed since, none re-tested, and the corner placement has never been seen either |
-| Right-click menu | ✅ full: startup, notifications, diagnostics, updates, exit | ⚠️ **Run at startup and Exit.** Notifications, diagnostics and updates are not on the menu — `--diagnose` and `--probe` cover them from a terminal. *Rendering never observed;* took tens of seconds on the one report (fixed in v0.6.4, not re-tested) |
+| Right-click menu | ✅ full: startup, automatic updates, notification threshold, diagnostics, update check, exit | ⚠️ **Run at startup and Exit.** Notifications, diagnostics and updates are not on the menu — `--diagnose` and `--probe` cover them from a terminal. *Rendering never observed;* took tens of seconds on the first report (fixed in v0.6.4, not re-tested) |
 | Notifications | ✅ balloon tip | ✅ freedesktop notifications, *never observed* |
 | Run at startup | ✅ registry `Run` key, toggled from the menu | ✅ XDG autostart `.desktop`, from the menu **or** `o-view --startup-on`, *menu rendering never observed* |
-| Light/dark theme | ✅ follows `AppsUseLightTheme` | ✅ XDG desktop portal, *never observed* — the portal read deadlocked the UI thread on the one report (fixed in v0.6.4, not re-tested) |
+| Light/dark theme | ✅ follows `AppsUseLightTheme` | ✅ XDG desktop portal, *never observed* — the portal read deadlocked the UI thread on the first report (fixed in v0.6.4, not re-tested) |
 | Auto-update | ✅ in-place, one confirmation — or none, if you turn on **Update automatically** (off by default) | ⚠️ **notifies only, by design** — tells you once per version, installs nothing ([ADR-0009](docs/adr/0009-auto-update.md)) |
 
 **What the Linux column's three states mean.** They are deliberately not two, because
 "shipped" and "seen working" are different claims and the difference is the whole point.
 
-- ***Seen working*** — someone ran it on a physical Linux desktop and reported back. One
-  report exists: an Arch-based system, KDE Plasma, Wayland, tarball install, against v0.6.1.
+- ***Seen working*** — someone ran it on a physical Linux desktop and reported back. Two
+  reports exist, both from the same configuration: an Arch-based system, KDE Plasma, Wayland,
+  tarball install — the first against v0.6.1, the second against v0.6.5.
 - ***Never observed*** — the code ships and passes its tests, and the package installs and
   runs in clean Ubuntu 22.04, Ubuntu 24.04, Debian 12 and Fedora containers on every change.
   But a container is headless. That proves the package is sound, not that an icon appears in
   a panel, a tooltip is legible or a theme follows.
-- ***Fixed, not re-tested*** — **four fixes now sit in this state.** The one report found
+- ***Fixed, not re-tested*** — **four fixes now sit in this state.** The first report found
   the app unusable past the tray icon: the first left click deadlocked it, and the menu took
   tens of seconds. Both causes were found and fixed in v0.6.4. Reading that code turned up a
   third failure nobody had hit yet — the panel dismissed itself when a compositor refused to
@@ -100,7 +101,7 @@ Rows are recorded this way rather than ticked because shipping something is not 
 having seen it work, and claiming otherwise would be exactly the kind of unearned assertion
 the rest of this app refuses to make.
 
-**Not yet reported on at all:** X11 (the one report was Wayland), GNOME without an
+**Not yet reported on at all:** X11 (both reports were Wayland), GNOME without an
 AppIndicator extension, and the `.deb` on real hardware (that report was a tarball install).
 
 ### Why the icon may not appear on GNOME
@@ -169,7 +170,7 @@ O-view polls every 60 seconds (the underlying file only updates every ~300 s), w
 Only to its own directory — `%LOCALAPPDATA%\O-view\` on Windows, `~/.local/share/O-view/` on Linux. **Never to Claude's own files**, which are read-only to O-view on both platforms:
 
 - `usage.db` — SQLite daily rollups per model. Claude Code deletes transcripts at 30 days, so the 31-day figures need their own store ([ADR-0006](docs/adr/0006-local-rollup-store.md)). Ingestion is idempotent.
-- `settings.json` — notification preferences. Run-at-startup is not stored here; the registry `Run` key (Windows) or the XDG autostart `.desktop` file (Linux) is its single source of truth, so the two can never disagree.
+- `settings.json` — notification preferences (including which threshold you picked) and whether automatic updates are on. Run-at-startup is not stored here; the registry `Run` key (Windows) or the XDG autostart `.desktop` file (Linux) is its single source of truth, so the two can never disagree. Automatic updates have no such external owner, so they do live here — and default to off, so a copied or hand-edited settings file cannot switch them on for a build that could not act on it anyway.
 
 ## Install and run
 
@@ -183,7 +184,7 @@ Only to its own directory — `%LOCALAPPDATA%\O-view\` on Windows, `~/.local/sha
 [latest release](https://github.com/mlengmark/O-view/releases/latest):
 
 ```bash
-sudo apt install ./o-view_0.6.0_amd64.deb
+sudo apt install ./o-view_0.6.8_amd64.deb
 ```
 
 Self-contained: no .NET runtime needed. It adds an application-menu entry, and deliberately
@@ -239,7 +240,9 @@ appears on your desktop. That is the distinction the ⚠️ rows above are recor
 
 Either way: the icon lands in the taskbar overflow flyout (the `^` chevron) by default; drag it onto the taskbar to pin it. Left-click opens the panel, right-click the menu; clicking the icon again closes what is open.
 
-**Staying up to date.** O-view checks GitHub for a newer release in the background and shows a one-time balloon when one is available; right-click → **Check for updates…** at any time. For an installed copy it downloads `O-view-Setup.exe`, upgrades in place, and relaunches — all after a single confirmation. Portable copies are pointed at the release page. See [ADR-0009](docs/adr/0009-auto-update.md) and [ADR-0010](docs/adr/0010-post-update-relaunch.md).
+**Staying up to date.** O-view checks GitHub for a newer release in the background and shows a one-time balloon when one is available; right-click → **Check for updates…** at any time. For an installed copy it downloads `O-view-Setup.exe`, upgrades in place, and relaunches — all after a single confirmation. Portable copies are pointed at the release page.
+
+Prefer not to confirm each time? Tick **Update automatically** in the menu and the background check installs new versions on its own. It is **off unless you turn it on**, it still tells you *before* it downloads anything — naming the version and warning that O-view will close and reopen — and the downloaded installer is still checksum-verified before it runs. The row appears only on installed copies: a portable exe cannot replace itself while running, so it is not offered a setting it could not honour. See [ADR-0009](docs/adr/0009-auto-update.md) and [ADR-0010](docs/adr/0010-post-update-relaunch.md).
 
 > **SmartScreen, honestly:** neither the installer nor the executable is code-signed — a certificate costs more than a free tool justifies, which is also why there is no MSIX package (MSIX cannot install unsigned). Windows SmartScreen will warn on first run ("Windows protected your PC"); *More info → Run anyway* proceeds. The source is in this repository, and both the installer and the binary are built from it by the GitHub Actions workflow — verify rather than trust.
 
@@ -285,7 +288,7 @@ The Linux head, and the `.deb` and tarball around it — the same script CI runs
 build is the artefact, not an approximation of it:
 
 ```bash
-./packaging/linux/build.sh 0.6.0 linux-x64 dist
+./packaging/linux/build.sh 0.6.8 linux-x64 dist
 ```
 
 It needs `dpkg-deb`, so it runs on a Debian-family machine or in a container; `linux-arm64` is
@@ -301,7 +304,19 @@ dotnet test tests/O-view.Core.Tests tests/O-view.App.Tests tests/O-view.Linux.Te
 
 That is precisely what the `ubuntu-latest` CI leg runs.
 
-Requires the .NET 10 SDK (10.0.302+). The test suite is 424 xUnit tests across `O-view.Core`, `O-view.App` and `O-view.Linux`; CI builds and tests on **both** windows-latest and ubuntu-latest on every push and pull request, and tagging `v*` publishes all six assets — the Windows installer and portable exe, both `.deb` architectures, and both tarballs — to a single GitHub release.
+Requires the .NET 10 SDK (10.0.302+). The test suite is 597 xUnit tests across `O-view.Core` (393), `O-view.App` (164) and `O-view.Linux` (40); CI builds and tests on **both** windows-latest and ubuntu-latest on every push and pull request, and tagging `v*` publishes all six assets — the Windows installer and portable exe, both `.deb` architectures, and both tarballs — to a single GitHub release.
+
+Two verification hooks exist because unit tests genuinely cannot reach what they cover, and both write their findings to a file rather than to a screen you have to be watching:
+
+```bash
+O-view.Tray.exe --menu-samples out\   # renders every menu state offscreen, both themes
+```
+
+```bash
+O-view.Tray.exe --menu-check report.txt   # drives the real flyout through open/toggle/close cycles
+```
+
+`--menu-check` exists because the flyout's regressions have all been *stateful* — they appear on the second open, not the first — and because logical state and what is actually drawn have come apart before now: the threshold list once expanded correctly, reported every setting correctly, and rendered the card sliced in half.
 
 Runtime prerequisites: Windows 11 or a supported Linux (see [Platform support](#platform-support)), and Claude data present locally — [Claude Desktop](https://claude.ai/download) for authoritative percentages, and/or Claude Code transcripts under `%USERPROFILE%\.claude\` for token counts.
 
