@@ -39,17 +39,45 @@ public sealed class UsageEngine : IDisposable
     private readonly IAppLog? _log;
     private readonly TimeSpan _normalInterval;
     private readonly TimeSpan _warmupInterval;
+    private readonly TimeSpan _planInterval;
 
     private readonly List<IAppTimer> _timers = [];
     private IAppTimer? _pollTimer;
+
+    /// <summary>The cheap plan-history cadence. Fixed — <see cref="AdjustCadence"/> re-times
+    /// only the full poll, whose warm-up is already faster than this.</summary>
+    private IAppTimer? _planTimer;
+
     private DateTimeOffset _startedAt;
     private bool _offPlanNotified;
 
     /// <summary>Where a scheduled poll publishes back to. Null means "publish inline".</summary>
     private IUiDispatcher? _dispatcher;
 
-    /// <summary>1 while a scheduled poll is reading, so a slow one cannot stack.</summary>
-    private int _polling;
+    /// <summary>
+    /// One gate per cadence, so a read already in flight cannot stack another behind it.
+    /// They are deliberately separate — see <see cref="RunOffThread{T}"/>.
+    /// </summary>
+    private readonly PollGate _fullGate = new();
+    private readonly PollGate _planGate = new();
+
+    /// <summary>
+    /// Whether the plan-history provider this engine holds is one the caller actually asked
+    /// for, and so may be published from directly.
+    ///
+    /// <para>False in exactly one case: a caller injected a whole
+    /// <see cref="UsageEngineOptions.Provider"/> and said nothing about plan history. The
+    /// engine still builds a provider then, because the off-plan arithmetic needs one — but it
+    /// defaults to the <b>real machine's</b> <c>plan-usage-history.json</c>, and it is not part
+    /// of the injected chain. Publishing from it would put the developer's own Claude Desktop
+    /// usage over the caller's resolution, which in the test suite means results that depend
+    /// on whose machine is running them.</para>
+    ///
+    /// <para>Naming either <see cref="UsageEngineOptions.PlanHistory"/> or
+    /// <see cref="UsageEngineOptions.PlanHistoryPath"/> is enough — both say which file is
+    /// meant, which is the whole question.</para>
+    /// </summary>
+    private readonly bool _planHistoryIsAddressed;
 
     /// <summary>Most recent snapshot — what the panel opens with.</summary>
     public UsageSnapshot Latest { get; private set; } = UsageSnapshot.None;
@@ -73,6 +101,12 @@ public sealed class UsageEngine : IDisposable
         _log = _options.Log;
         _normalInterval = _options.PollInterval;
         _warmupInterval = Min(_options.WarmupInterval, _options.PollInterval);
+
+        // Clamped for the same reason the warm-up is, and it is the same diagnostic that
+        // forces it: --interval-ms drives PollInterval alone, so a sub-20 s value would leave
+        // the cheap read as the SLOWER of the two — the plan-history cadence running behind
+        // the full poll it exists to run ahead of.
+        _planInterval = Min(_options.PlanPollInterval, _options.PollInterval);
 
         _store = new RollupStore(_options.RollupDbPath);
 
@@ -101,6 +135,10 @@ public sealed class UsageEngine : IDisposable
             _planHistory,
             new JsonlUsageProvider(_store));
 
+        _planHistoryIsAddressed = _options.Provider is null
+            || _options.PlanHistory is not null
+            || _options.PlanHistoryPath is not null;
+
         Settings = TraySettings.Load(_options.SettingsPath);
         _watcher = new ThresholdWatcher(Settings.ThresholdPercent);
     }
@@ -119,6 +157,17 @@ public sealed class UsageEngine : IDisposable
 
         Poll();  // sets the initial cadence from the first result
         _pollTimer.Start();
+
+        // The cheap read, on its own faster cadence (issue #163). Started after the first full
+        // poll so the opening snapshot still comes from the composite provider — that one has
+        // to be able to fall back to the JSONL estimate, which this path deliberately cannot.
+        //
+        // Not re-timed by AdjustCadence: the warm-up exists to fill the bars quickly before
+        // Desktop has written anything, and at 3 s it is already faster than this. Leaving
+        // this one fixed keeps two independently-tuned cadences from fighting over one timer.
+        _planTimer = Track(timers.Create(_planInterval, PollPlanHistory));
+        _planTimer.Start();
+        _log?.Write($"plan-history interval={_planInterval.TotalSeconds}s");
 
         // Auto-update (ADR-0009): one check shortly after launch, then daily. The engine
         // owns only the *when*; the head performs the check and surfaces the result.
@@ -159,26 +208,71 @@ public sealed class UsageEngine : IDisposable
     /// <para>With no dispatcher the engine has no separate UI thread to protect and runs
     /// inline, which is what the tests rely on.</para>
     /// </summary>
-    private void Poll()
+    private void Poll() => RunOffThread(_fullGate, "poll", Read, Publish);
+
+    /// <summary>
+    /// The cheap half, on its own faster cadence: read the plan-history file and nothing else.
+    ///
+    /// <para><b>Why this is separate.</b> The two things a poll reads have costs three orders
+    /// of magnitude apart. Measured on a real machine: the plan-history read, parse and
+    /// reset-scan is <b>3.3 ms</b>; the transcript walk behind the token tiles is <b>32 files
+    /// and 92 MB</b>. They were on one 60-second timer, so the percentages — the thing the
+    /// icon and the bars actually show — waited on the ingest that froze the app on a large
+    /// history (issue #125).</para>
+    ///
+    /// <para>What this does <i>not</i> do is make the data fresher than its source. Claude
+    /// Desktop writes that file every ~5 minutes (measured median 5.00 min over 1,828 gaps),
+    /// and nothing here can beat it. What it removes is O-view's own contribution: up to a
+    /// full 60 s of extra lag on top, now at most <see cref="UsageEngineOptions.PlanPollInterval"/>.
+    /// Polling faster than Desktop writes would re-read an unchanged file for nothing.</para>
+    /// </summary>
+    private void PollPlanHistory()
+    {
+        // Nothing to publish from when the caller injected a provider chain and never said
+        // which plan-history file it stands for — see _planHistoryIsAddressed. Production
+        // always passes this; it is only reachable from a test.
+        if (!_planHistoryIsAddressed)
+        {
+            return;
+        }
+
+        RunOffThread(_planGate, "plan poll", ReadPlanHistory, PublishPlanHistory);
+    }
+
+    /// <summary>
+    /// Reads off the UI thread and publishes back onto it, under a gate so a slow read cannot
+    /// stack another behind it.
+    ///
+    /// <para>Shared by both cadences rather than written twice. The full poll and the
+    /// plan-only poll differ in <i>what</i> they read and publish; the threading, the
+    /// drop-don't-queue rule and the shutdown handling are identical, and this file's history
+    /// is one of behaviour written twice and fixed once.</para>
+    ///
+    /// <para>Each cadence carries its OWN gate. Sharing one would let a first-run ingest —
+    /// seconds long — swallow every plan-history tick underneath it, which is precisely the
+    /// coupling being removed.</para>
+    /// </summary>
+    private void RunOffThread<T>(PollGate gate, string what, Func<T> read, Action<T> publish)
     {
         if (_dispatcher is not { } dispatcher)
         {
-            Refresh();
+            // No separate UI thread to protect — run inline, which is what the tests rely on.
+            publish(read());
             return;
         }
 
         // A poll slower than the interval must not stack another behind it. Dropping the
         // tick is right rather than queueing it: the next one reads the same files and
         // reports the same state, so a queue would only replay stale work.
-        if (Interlocked.Exchange(ref _polling, 1) == 1)
+        if (!gate.TryEnter())
         {
-            _log?.Write("poll skipped — previous still running");
+            _log?.Write($"{what} skipped — previous still running");
             return;
         }
 
         _ = Task.Run(() =>
         {
-            var result = Read();
+            var result = read();
 
             try
             {
@@ -186,23 +280,104 @@ public sealed class UsageEngine : IDisposable
                 {
                     try
                     {
-                        Publish(result);
+                        publish(result);
                     }
                     finally
                     {
-                        Volatile.Write(ref _polling, 0);
+                        gate.Exit();
                     }
                 });
             }
             catch (Exception ex)
             {
-                // The dispatcher is gone — the app is shutting down. Release the guard so
+                // The dispatcher is gone — the app is shutting down. Release the gate so
                 // nothing is wedged, and drop the result: there is no longer anything to
                 // draw it on.
-                Volatile.Write(ref _polling, 0);
-                _log?.Write($"poll publish skipped {ex.GetType().Name}: {ex.Message}");
+                gate.Exit();
+                _log?.Write($"{what} publish skipped {ex.GetType().Name}: {ex.Message}");
             }
         });
+    }
+
+    /// <summary>Never throws: a bad read must not kill the cadence.</summary>
+    private UsageSnapshot ReadPlanHistory()
+    {
+        try
+        {
+            return _planHistory?.GetSnapshot(_clock.UtcNow) ?? UsageSnapshot.None;
+        }
+        catch (Exception ex)
+        {
+            _log?.Write($"plan read FAILED {ex.GetType().Name}: {ex.Message}");
+            return UsageSnapshot.None;
+        }
+    }
+
+    /// <summary>
+    /// Publishes a plan-history-only snapshot, and declines to in the two cases where it would
+    /// make the display worse than leaving it alone.
+    ///
+    /// <para><b>Non-authoritative results are dropped, not published.</b> This path skips the
+    /// composite provider, so it cannot see the JSONL estimate that would otherwise win when
+    /// plan history has nothing. Publishing its <c>None</c> would blank a panel that the full
+    /// poll had correctly filled with an estimate, and the display would flicker between the
+    /// two cadences.</para>
+    ///
+    /// <para><b>An older sample never replaces a newer one.</b> Two cadences now publish, and
+    /// a first-run full poll can spend seconds ingesting before posting a snapshot it read
+    /// before the plan tick did. Without this the bars would visibly jump backwards.</para>
+    ///
+    /// <para>Threshold notification runs here, which is a genuine gain rather than a side
+    /// effect: crossing 70% is now noticed within <see cref="UsageEngineOptions.PlanPollInterval"/>
+    /// rather than up to a minute later. Off-plan detection deliberately does not — it needs
+    /// the 31-day SQLite aggregate, which is the expensive half this path exists to avoid.</para>
+    /// </summary>
+    private void PublishPlanHistory(UsageSnapshot snapshot)
+    {
+        if (!PollingCadence.IsAuthoritative(snapshot.Source) || IsOlderThanLatest(snapshot))
+        {
+            return;
+        }
+
+        Latest = snapshot;
+        SnapshotUpdated?.Invoke(snapshot);
+        NotifyOnThreshold(snapshot);
+    }
+
+    /// <summary>
+    /// Whether this snapshot describes an older sample than the one already published.
+    ///
+    /// <para><b>Only ever compares two authoritative readings.</b> Both halves of that are
+    /// load-bearing. The incoming side has to be checked as well as the current one, because a
+    /// JSONL estimate <i>does</i> carry a capture time — the newest transcript activity — so a
+    /// live plan reading would otherwise block the fallback the composite resolved to, and
+    /// block it permanently: <c>Latest</c> stays Live, so every later estimate is compared
+    /// against the same frozen sample and dropped in turn. The panel would sit on a reading
+    /// that had stopped being true and never fall back.</para>
+    ///
+    /// <para>Comparing capture times rather than read times is deliberate. These stamps come
+    /// from Claude Desktop's own samples, so the ordering is the data's, not this process's —
+    /// which keeps it right across a wall-clock correction that would reorder read times.</para>
+    /// </summary>
+    private bool IsOlderThanLatest(UsageSnapshot snapshot) =>
+        PollingCadence.IsAuthoritative(snapshot.Source)
+        && PollingCadence.IsAuthoritative(Latest.Source)
+        && snapshot.CapturedAtUtc is { } incoming
+        && Latest.CapturedAtUtc is { } current
+        && incoming < current;
+
+    /// <summary>
+    /// One cadence's "a read is already in flight" flag. A type rather than an <c>int</c>
+    /// field because there are now two of them and <c>Interlocked</c> on a field cannot be
+    /// passed to the shared runner.
+    /// </summary>
+    private sealed class PollGate
+    {
+        private int _busy;
+
+        public bool TryEnter() => Interlocked.Exchange(ref _busy, 1) == 0;
+
+        public void Exit() => Volatile.Write(ref _busy, 0);
     }
 
     /// <summary>
@@ -256,6 +431,17 @@ public sealed class UsageEngine : IDisposable
     /// <summary>
     /// What a poll changes, on the head's own thread: the published snapshot, the
     /// notification decisions, and the cadence.
+    ///
+    /// <para><b>The ordering guard applies in this direction too.</b> The full poll is the
+    /// slow one, so it is the one most likely to lose the race: it can start reading, spend
+    /// seconds ingesting, and post a snapshot it took <i>before</i> a plan tick that has
+    /// already published. Guarding only the fast path leaves exactly the jump backwards the
+    /// guard exists to prevent — measured, the session percentage went 77 → 30.</para>
+    ///
+    /// <para><b>The cadence and the off-plan check run either way.</b> Both belong to this
+    /// poll alone — nothing else evaluates them — so skipping them when the snapshot happens
+    /// to be superseded would leave the engine stuck on its warm-up interval with nothing to
+    /// re-time it, and the divergence edge trigger unvisited.</para>
     /// </summary>
     private void Publish(PollResult result)
     {
@@ -266,13 +452,22 @@ public sealed class UsageEngine : IDisposable
             return;
         }
 
-        Latest = result.Snapshot;
+        if (!IsOlderThanLatest(result.Snapshot))
+        {
+            Latest = result.Snapshot;
 
-        _log?.Write($"refresh source={result.Snapshot.Source} " +
-                    $"session={result.Snapshot.SessionPercent?.ToString() ?? "null"}");
-        SnapshotUpdated?.Invoke(result.Snapshot);
+            _log?.Write($"refresh source={result.Snapshot.Source} " +
+                        $"session={result.Snapshot.SessionPercent?.ToString() ?? "null"}");
+            SnapshotUpdated?.Invoke(result.Snapshot);
 
-        NotifyOnThreshold(result.Snapshot);
+            NotifyOnThreshold(result.Snapshot);
+        }
+        else
+        {
+            _log?.Write($"refresh superseded — read a sample older than the one displayed " +
+                        $"({result.Snapshot.CapturedAtUtc:u} < {Latest.CapturedAtUtc:u})");
+        }
+
         CheckOffPlan(result.OffPlan);
 
         AdjustCadence(result.Snapshot.Source, result.UtcNow);
