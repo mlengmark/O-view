@@ -33,7 +33,7 @@ public sealed class TrayController : IDisposable
         _log = log;
 
         _engine.SnapshotUpdated += Render;
-        _engine.NotificationRequested += n => _host.ShowNotification(n.Title, n.Message);
+        _engine.NotificationRequested += n => _host.ShowNotification(n.Title, n.Message, n.Kind);
     }
 
     /// <summary>Most recent snapshot — what the popup opens with.</summary>

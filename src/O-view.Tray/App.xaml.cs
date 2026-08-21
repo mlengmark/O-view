@@ -147,7 +147,8 @@ public partial class App : System.Windows.Application
 
         if (args.ContainsKey("--test-notify"))
         {
-            _trayHost.ShowNotification("Claude usage", "Test notification (--test-notify).");
+            _trayHost.ShowNotification("Claude usage", "Test notification (--test-notify).",
+                NotificationKind.Information);
         }
 
         // Verification hook: force an interactive update check (as if from the menu).
@@ -380,13 +381,15 @@ public partial class App : System.Windows.Application
         {
             System.Windows.Clipboard.SetText(BuildDiagnostics());
             _trayHost?.ShowNotification("Diagnostics copied",
-                "Paste them into your bug report. No tokens or conversation content are included.");
+                "Paste them into your bug report. No tokens or conversation content are included.",
+                NotificationKind.Information);
         }
         catch (Exception)
         {
             // The clipboard can be locked by another process; failing to copy must not crash.
             _trayHost?.ShowNotification("Couldn't copy diagnostics",
-                "The clipboard was unavailable. Please try again.");
+                "The clipboard was unavailable. Please try again.",
+                NotificationKind.Warning);
         }
     }
 
@@ -451,7 +454,8 @@ public partial class App : System.Windows.Application
 
         _trayHost.ShowNotification("O-view update available",
             $"Version {update.Version} is available (you have {UpdateService.CurrentVersion}). " +
-            "Right-click the icon → Check for updates to install.");
+            "Right-click the icon → Check for updates to install.",
+            NotificationKind.Information);
     }
 
     /// <summary>
@@ -476,7 +480,8 @@ public partial class App : System.Windows.Application
 
         _trayHost.ShowNotification("Installing O-view " + update.Version,
             $"You have {UpdateService.CurrentVersion}. O-view will close briefly and reopen. "
-            + "Turn this off with Update automatically in the tray menu.");
+            + "Turn this off with Update automatically in the tray menu.",
+            NotificationKind.Information);
 
         _updateFlowActive = true;
         try
@@ -488,9 +493,12 @@ public partial class App : System.Windows.Application
         catch (UpdateVerificationException)
         {
             _updateFlowActive = false;
+            // The one case that earns Error. A checksum mismatch means the bytes that arrived
+            // were not the bytes the release published, and O-view refused to run them.
             _trayHost.ShowNotification("Update not installed",
                 "The download didn't match the checksum published with this release, so O-view "
-                + "didn't run it. Your current version is untouched.");
+                + "didn't run it. Your current version is untouched.",
+                NotificationKind.Error);
         }
         catch (Exception)
         {
@@ -500,7 +508,8 @@ public partial class App : System.Windows.Application
             _updateFlowActive = false;
             _trayHost.ShowNotification("Update didn't install",
                 $"O-view couldn't download version {update.Version}. It will try again later, "
-                + "or use Check for updates to install it now.");
+                + "or use Check for updates to install it now.",
+                NotificationKind.Warning);
         }
     }
 
@@ -538,7 +547,8 @@ public partial class App : System.Windows.Application
         {
             case UpdateOutcome.UpToDate:
                 _trayHost!.ShowNotification("O-view is up to date",
-                    $"You have the latest version ({UpdateService.CurrentVersion}).");
+                    $"You have the latest version ({UpdateService.CurrentVersion}).",
+                    NotificationKind.Information);
                 break;
 
             case UpdateOutcome.UpdateAvailable when result.Available is { } update:
@@ -546,8 +556,11 @@ public partial class App : System.Windows.Application
                 break;
 
             default:
+                // Warning, not Error: GitHub being briefly unreachable is a retryable
+                // condition on the user's own network, and nothing on the machine is wrong.
                 _trayHost!.ShowNotification("Couldn't check for updates",
-                    "O-view couldn't reach GitHub to check for a newer version. Please try again later.");
+                    "O-view couldn't reach GitHub to check for a newer version. Please try again later.",
+                    NotificationKind.Warning);
                 break;
         }
     }
@@ -602,15 +615,21 @@ public partial class App : System.Windows.Application
             // (CLAUDE.md rule 6); the installer has already been deleted, and nothing on the
             // machine has changed.
             _updateFlowActive = false;
+            // The one case that earns Error. A checksum mismatch means the bytes that arrived
+            // were not the bytes the release published, and O-view refused to run them.
             _trayHost.ShowNotification("Update not installed",
                 "The download didn't match the checksum published with this release, so O-view "
-                + "didn't run it. Your current version is untouched.");
+                + "didn't run it. Your current version is untouched.",
+                NotificationKind.Error);
         }
         catch (Exception)
         {
             _updateFlowActive = false;
+            // Warning rather than Error: the download failed, but the user is being handed a
+            // working way to finish the job on the next line.
             _trayHost.ShowNotification("Update failed",
-                "O-view couldn't download the update. Opening the releases page so you can download it manually.");
+                "O-view couldn't download the update. Opening the releases page so you can download it manually.",
+                NotificationKind.Warning);
             _updates.OpenInBrowser(UpdateService.ReleasePageUrl(update));
         }
     }

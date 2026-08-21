@@ -86,6 +86,12 @@ public sealed class LinuxApp : Application
         // No Post needed: the engine publishes through the dispatcher handed to Start below,
         // so this already arrives on the UI thread.
         engine.SnapshotUpdated += Render;
+        // n.Kind is deliberately dropped here rather than mapped. A freedesktop notification
+        // already shows O-view's own app icon, so there is no severity glyph to pick; the only
+        // severity channel the spec offers is the urgency hint, and marking anything critical
+        // makes it persist on screen until dismissed — wrong for all three kinds, and already
+        // decided against in FreedesktopNotifier. The Windows head needs the kind because its
+        // balloon draws a severity glyph whether you choose one or not.
         engine.NotificationRequested += n => _ = _notifier.ShowAsync(n.Title, n.Message);
 
         // Says a newer version exists; never downloads or runs anything (ADR-0009 as

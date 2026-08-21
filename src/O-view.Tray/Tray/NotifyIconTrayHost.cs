@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Windows.Forms;
+using OView.App;
 using OView.Core.Models;
 
 namespace OView.Tray.Tray;
@@ -34,8 +35,28 @@ public sealed class NotifyIconTrayHost : ITrayHost
         };
     }
 
-    public void ShowNotification(string title, string message) =>
-        _notifyIcon.ShowBalloonTip(10_000, title, message, ToolTipIcon.Warning);
+    public void ShowNotification(string title, string message,
+        NotificationKind kind = NotificationKind.Information) =>
+        _notifyIcon.ShowBalloonTip(10_000, title, message, GlyphFor(kind));
+
+    /// <summary>
+    /// The severity the app decided, in the four values <c>Shell_NotifyIcon</c> offers.
+    ///
+    /// <para>There is no "upgrading" glyph to reach for — <see cref="ToolTipIcon"/> is
+    /// <c>None</c>, <c>Info</c>, <c>Warning</c> and <c>Error</c>, and ADR-0005 rules out
+    /// adding a toast package to get a richer one. <c>Info</c> is the friendly one, and the
+    /// balloon already carries O-view's own icon in its header, so an update notification now
+    /// reads as the app telling the user something rather than as an alert.</para>
+    ///
+    /// <para><c>None</c> is unused deliberately: it renders no glyph at all, which reads as a
+    /// rendering failure rather than as a deliberately quiet notification.</para>
+    /// </summary>
+    private static ToolTipIcon GlyphFor(NotificationKind kind) => kind switch
+    {
+        NotificationKind.Warning => ToolTipIcon.Warning,
+        NotificationKind.Error => ToolTipIcon.Error,
+        _ => ToolTipIcon.Info,
+    };
 
     public void Update(Bitmap icon, string tooltip)
     {
