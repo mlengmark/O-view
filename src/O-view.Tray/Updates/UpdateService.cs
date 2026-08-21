@@ -118,6 +118,10 @@ public sealed class UpdateService
     /// release as the asset, so it proves the bytes are the ones that release published — not
     /// that the release itself is honest. A compromised account can replace both. Provenance
     /// attestation is the control for that; this is the one that costs nothing.</para>
+    ///
+    /// <para>Sweeps previously downloaded installers out of the temp directory on the way in
+    /// — see <see cref="InstallerDownloads"/> for why that has to happen here rather than
+    /// after a successful install.</para>
     /// </summary>
     public async Task<string> DownloadInstallerAsync(AvailableUpdate update, CancellationToken cancellation = default)
     {
@@ -137,8 +141,16 @@ public sealed class UpdateService
                 + "installer cannot be verified.");
         }
 
-        var dir = Path.Combine(Path.GetTempPath(), "O-view-update");
+        var dir = InstallerDownloads.DefaultDirectory;
         Directory.CreateDirectory(dir);
+
+        // Sweep before downloading, not after (issue #159). Nothing deletes the installer on
+        // the success path and nothing can: LaunchInstaller hands the file to another process
+        // and this one exits so its exe can be replaced. Since each download is named for its
+        // version, every release used to land as a permanent new ~71 MB file. This is the one
+        // moment the process is alive and knows the directory matters — and everything already
+        // here is by definition an installer that has already run or already failed.
+        InstallerDownloads.Prune(dir, _log);
 
         // Named from the PARSED version, never from update.Tag. The tag is a remote string,
         // and ReleaseVersion.TryParse truncates at the first '-' or '+' — so a tag of
