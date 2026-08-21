@@ -104,6 +104,17 @@ public sealed class RollupStore : IDisposable
     /// Move the malformed DB (and its WAL/SHM sidecars) aside rather than deleting them,
     /// so the corruption can still be examined. Best-effort: a file that cannot be moved
     /// is deleted instead, and even a total failure leaves a usable empty DB behind.
+    ///
+    /// <para>The stamp makes each set unique, which is the point — two corruptions a week
+    /// apart must not overwrite each other. It also means the directory only ever grows, so
+    /// older generations are pruned here, immediately after the move: this is the exact
+    /// moment the directory is known to have gained one, and nothing else in the app ever
+    /// looks at it (issue #160). What survives is named in the diagnostics bundle, which is
+    /// what makes discarding the rest defensible rather than destroying evidence.</para>
+    ///
+    /// <para>The prune never throws, for the same reason the move does not: this is the
+    /// self-heal path, and rule 7 / issue #16 require it to leave a usable empty database
+    /// behind whatever else fails.</para>
     /// </summary>
     private static void BackUpCorruptFiles(string path)
     {
@@ -113,13 +124,15 @@ public sealed class RollupStore : IDisposable
             if (!File.Exists(file)) continue;
             try
             {
-                File.Move(file, $"{file}.corrupt-{stamp}", overwrite: true);
+                File.Move(file, $"{file}{CorruptBackups.Marker}{stamp}", overwrite: true);
             }
             catch (IOException)
             {
                 try { File.Delete(file); } catch (IOException) { }
             }
         }
+
+        CorruptBackups.Prune(path);
     }
 
     private static void EnsureSchema(SqliteConnection connection)

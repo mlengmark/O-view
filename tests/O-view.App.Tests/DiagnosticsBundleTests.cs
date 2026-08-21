@@ -21,14 +21,15 @@ public class DiagnosticsBundleTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private string Build(DiagnosticsEnvironment environment) =>
+    private string Build(DiagnosticsEnvironment environment, CorruptBackupReport? corruptBackups = null) =>
         DiagnosticsBundle.Build(
             environment,
             PlanHistoryDiagnostics.Inspect(_dir.File("absent.json")),
             TranscriptScopeReport.Inspect(null, []),
             account: null,
             new WeeklyResetLog(_dir.File("weekly-resets.json")),
-            new DateTimeOffset(2026, 8, 2, 12, 0, 0, TimeSpan.Zero));
+            new DateTimeOffset(2026, 8, 2, 12, 0, 0, TimeSpan.Zero),
+            corruptBackups);
 
     private static DiagnosticsEnvironment Windows => new("0.6.0", "WindowsInstaller");
 
@@ -191,5 +192,49 @@ public class DiagnosticsBundleTests : IDisposable
             DateTimeOffset.UnixEpoch);
 
         Assert.Contains("weekly resets", bundle, StringComparison.Ordinal);
+    }
+
+    // ── quarantined rollup stores (issue #160) ──────────────────────────────────────
+
+    /// <summary>
+    /// The half of #160 that makes the pruning defensible. The <c>.corrupt-*</c> files were
+    /// retained "so the corruption can still be examined" while nothing surfaced them —
+    /// <c>--diagnose</c> did not list them, the bundle did not mention them, the panel said
+    /// nothing. A backup nobody is told about is residue, not evidence.
+    /// </summary>
+    [Fact]
+    public void QuarantinedStoresAreNamedWithTheirCountStampAndSize()
+    {
+        var bundle = Build(Windows, new CorruptBackupReport(2, "20260804-120000", 6 * 1024 * 1024));
+
+        Assert.Contains("corrupt stores", bundle, StringComparison.Ordinal);
+        Assert.Contains("2 quarantined", bundle, StringComparison.Ordinal);
+        Assert.Contains("20260804-120000", bundle, StringComparison.Ordinal);
+        Assert.Contains("6.0 MB", bundle, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Printed rather than omitted on a clean machine, so "no line" is never ambiguous between
+    /// "never corrupted" and "this field failed to render".
+    /// </summary>
+    [Fact]
+    public void ACleanMachineSaysSoRatherThanOmittingTheLine()
+    {
+        var bundle = Build(Windows);
+
+        Assert.Contains("corrupt stores: none", bundle, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The count is of files retained, which pruning caps — so the bundle prints the cap
+    /// beside it. Without that, a reader takes "2 quarantined" for the number of times the
+    /// store has corrupted, which after a prune it is not (rule 6).
+    /// </summary>
+    [Fact]
+    public void TheRetentionLimitIsPrintedBesideTheCountSoItIsNotReadAsATotal()
+    {
+        var bundle = Build(Windows, new CorruptBackupReport(2, "20260804-120000", 1024));
+
+        Assert.Contains($"keeping {CorruptBackups.KeepGenerations}", bundle, StringComparison.Ordinal);
     }
 }
