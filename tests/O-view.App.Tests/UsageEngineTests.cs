@@ -11,6 +11,9 @@ public class UsageEngineTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 7, 29, 12, 0, 0, TimeSpan.Zero);
 
+    /// <summary>How long a dispatcher-driven test waits for a thread-pool read to land.</summary>
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
+
     private static (UsageEngine Engine, FakeProvider Provider, FakeTimerFactory Timers, ListLog Log)
         // A transform, not an Action. UsageEngineOptions is a record with init-only members,
         // so the previous `Action<UsageEngineOptions>` could not set anything — it compiled,
@@ -190,6 +193,161 @@ public class UsageEngineTests
 
         Assert.Equal(37, engine.Latest.SessionPercent);
         Assert.Equal(DataSource.Estimate, engine.Latest.Source);
+    }
+
+    /// <summary>
+    /// The ordering guard has to work in both directions, and this is the direction that was
+    /// missing. The <b>full</b> poll is the slow one, so it is the one that loses the race: it
+    /// starts reading, spends seconds ingesting, and posts a snapshot it took before a plan
+    /// tick that has already published. Guarded only on the fast path, the session percentage
+    /// went 77 → 30 — the jump backwards the guard exists to prevent.
+    /// </summary>
+    [Fact]
+    public void ALateFullPoll_DoesNotOverwriteANewerPlanReading()
+    {
+        using var dir = new TempDir();
+        var path = WritePlanHistory(dir, (T0.AddMinutes(-3), 30, 10));
+        var (engine, provider, timers, _) = Build(dir, o => o with { PlanHistoryPath = path });
+        using var _e = engine;
+        using var ingesting = new ManualResetEventSlim(false);
+
+        var dispatcher = new FakeDispatcher();
+        provider.SetSession(30);
+        engine.Start(timers, dispatcher);
+        Assert.True(dispatcher.PumpWithin(Patience));
+
+        // A full poll starts reading and wedges inside the ingest.
+        provider.BlockUntil = ingesting;
+        timers.Poll.Tick();
+        SpinWait.SpinUntil(() => provider.Calls == 2, Patience);
+
+        // While it is stuck, Desktop writes a newer sample and the plan tick publishes it.
+        WritePlanHistory(dir, (T0.AddMinutes(-3), 30, 10), (T0.AddMinutes(-1), 77, 25));
+        timers.PlanPoll.Tick();
+        Assert.True(dispatcher.PumpWithin(Patience));
+        Assert.Equal(77, engine.Latest.SessionPercent);
+
+        // The full poll now completes, carrying the reading it took BEFORE that tick.
+        ingesting.Set();
+        Assert.True(dispatcher.PumpWithin(Patience), "the full poll never published");
+
+        Assert.Equal(77, engine.Latest.SessionPercent);
+    }
+
+    /// <summary>
+    /// Being superseded must not cost the full poll the two decisions only it makes. Nothing
+    /// else re-times the cadence, so an overtaken poll that skipped it would leave a warming-up
+    /// engine stuck at 3 s with nothing left to move it.
+    /// </summary>
+    [Fact]
+    public void AnOvertakenFullPoll_StillRetimesTheCadence()
+    {
+        using var dir = new TempDir();
+        var path = WritePlanHistory(dir, (T0.AddMinutes(-3), 30, 10));
+        var (engine, provider, timers, _) = Build(dir, o => o with { PlanHistoryPath = path });
+        using var _e = engine;
+        using var ingesting = new ManualResetEventSlim(false);
+
+        var dispatcher = new FakeDispatcher();
+        provider.Next = UsageSnapshot.None;
+        engine.Start(timers, dispatcher);
+        Assert.True(dispatcher.PumpWithin(Patience));
+        Assert.Equal(TimeSpan.FromSeconds(3), timers.Poll.Interval);   // warming up
+
+        provider.BlockUntil = ingesting;
+        provider.SetSession(30);
+        timers.Poll.Tick();
+        SpinWait.SpinUntil(() => provider.Calls == 2, Patience);
+
+        WritePlanHistory(dir, (T0.AddMinutes(-3), 30, 10), (T0.AddMinutes(-1), 77, 25));
+        timers.PlanPoll.Tick();
+        Assert.True(dispatcher.PumpWithin(Patience));
+
+        ingesting.Set();
+        Assert.True(dispatcher.PumpWithin(Patience));
+
+        Assert.Equal(77, engine.Latest.SessionPercent);              // its snapshot was dropped
+        Assert.Equal(TimeSpan.FromSeconds(60), timers.Poll.Interval); // its cadence decision was not
+    }
+
+    /// <summary>
+    /// The guard compares two authoritative readings, and the incoming side matters as much as
+    /// the current one. A JSONL estimate carries a capture time too — the newest transcript
+    /// activity — so comparing it against a live plan sample would block the fallback the
+    /// composite resolved to, and block it <i>permanently</i>: <c>Latest</c> stays Live, so
+    /// every later estimate is measured against the same frozen sample and dropped in turn.
+    /// The panel would sit on a reading that had stopped being true.
+    /// </summary>
+    [Fact]
+    public void AnEstimateIsNotHeldBackByTheLiveReadingItSucceeds()
+    {
+        using var dir = new TempDir();
+        var path = WritePlanHistory(dir, (T0.AddMinutes(-1), 64, 22));
+        var (engine, provider, timers, _) = Build(dir, o => o with { PlanHistoryPath = path });
+        using var _e = engine;
+
+        provider.SetSession(64);
+        engine.Start(timers);
+        timers.PlanPoll.Tick();
+        Assert.Equal(T0.AddMinutes(-1), engine.Latest.CapturedAtUtc);
+
+        // Plan history stops resolving; the composite falls back to the local estimate, whose
+        // capture time is older than the live sample now displayed.
+        provider.SetSession(37, DataSource.Estimate);
+        timers.Poll.Tick();
+
+        Assert.Equal(DataSource.Estimate, engine.Latest.Source);
+        Assert.Equal(37, engine.Latest.SessionPercent);
+    }
+
+    /// <summary>
+    /// Clamped for the same reason the warm-up interval is, and by the same diagnostic:
+    /// <c>--interval-ms</c> drives <c>PollInterval</c> alone, so a sub-20 s value would leave
+    /// the cheap read running behind the full poll it exists to run ahead of.
+    /// </summary>
+    [Fact]
+    public void ThePlanIntervalNeverExceedsThePollInterval()
+    {
+        using var dir = new TempDir();
+        var path = WritePlanHistory(dir, (T0.AddMinutes(-1), 40, 10));
+        var (engine, _, timers, _) = Build(dir, o => o with
+        {
+            PlanHistoryPath = path,
+            PollInterval = TimeSpan.FromSeconds(2),
+        });
+        using var _e = engine;
+
+        engine.Start(timers);
+
+        Assert.Equal(TimeSpan.FromSeconds(2), timers.PlanPoll.Interval);
+    }
+
+    /// <summary>
+    /// A caller that injects a whole provider chain and names no plan-history file gets no
+    /// fast path. The engine still builds a provider — the off-plan arithmetic needs one — but
+    /// it defaults to the <b>real machine's</b> plan-usage-history.json and is not part of the
+    /// injected chain, so publishing from it would put the developer's own Claude Desktop usage
+    /// over the caller's resolution.
+    ///
+    /// <para>Worth being straight about what this asserts where: on a machine with Claude
+    /// Desktop data it is a real assertion and fails without the guard, which is how it was
+    /// checked. On a CI runner there is no such file and it passes trivially. That asymmetry is
+    /// the defect exactly — a suite whose result depends on whose machine ran it.</para>
+    /// </summary>
+    [Fact]
+    public void AnInjectedProviderNamingNoPlanHistory_NeverPublishesFromTheRealMachinesFile()
+    {
+        using var dir = new TempDir();
+        var (engine, provider, timers, _) = Build(dir);   // no PlanHistoryPath, no PlanHistory
+        using var _e = engine;
+
+        provider.SetSession(37, DataSource.Estimate);
+        engine.Start(timers);
+
+        timers.PlanPoll.Tick();
+
+        Assert.Equal(DataSource.Estimate, engine.Latest.Source);
+        Assert.Equal(37, engine.Latest.SessionPercent);
     }
 
     // ── automatic updates (ADR-0009 as amended, issue #140) ───────────────────────

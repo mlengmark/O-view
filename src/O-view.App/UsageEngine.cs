@@ -39,6 +39,7 @@ public sealed class UsageEngine : IDisposable
     private readonly IAppLog? _log;
     private readonly TimeSpan _normalInterval;
     private readonly TimeSpan _warmupInterval;
+    private readonly TimeSpan _planInterval;
 
     private readonly List<IAppTimer> _timers = [];
     private IAppTimer? _pollTimer;
@@ -59,6 +60,24 @@ public sealed class UsageEngine : IDisposable
     /// </summary>
     private readonly PollGate _fullGate = new();
     private readonly PollGate _planGate = new();
+
+    /// <summary>
+    /// Whether the plan-history provider this engine holds is one the caller actually asked
+    /// for, and so may be published from directly.
+    ///
+    /// <para>False in exactly one case: a caller injected a whole
+    /// <see cref="UsageEngineOptions.Provider"/> and said nothing about plan history. The
+    /// engine still builds a provider then, because the off-plan arithmetic needs one — but it
+    /// defaults to the <b>real machine's</b> <c>plan-usage-history.json</c>, and it is not part
+    /// of the injected chain. Publishing from it would put the developer's own Claude Desktop
+    /// usage over the caller's resolution, which in the test suite means results that depend
+    /// on whose machine is running them.</para>
+    ///
+    /// <para>Naming either <see cref="UsageEngineOptions.PlanHistory"/> or
+    /// <see cref="UsageEngineOptions.PlanHistoryPath"/> is enough — both say which file is
+    /// meant, which is the whole question.</para>
+    /// </summary>
+    private readonly bool _planHistoryIsAddressed;
 
     /// <summary>Most recent snapshot — what the panel opens with.</summary>
     public UsageSnapshot Latest { get; private set; } = UsageSnapshot.None;
@@ -82,6 +101,12 @@ public sealed class UsageEngine : IDisposable
         _log = _options.Log;
         _normalInterval = _options.PollInterval;
         _warmupInterval = Min(_options.WarmupInterval, _options.PollInterval);
+
+        // Clamped for the same reason the warm-up is, and it is the same diagnostic that
+        // forces it: --interval-ms drives PollInterval alone, so a sub-20 s value would leave
+        // the cheap read as the SLOWER of the two — the plan-history cadence running behind
+        // the full poll it exists to run ahead of.
+        _planInterval = Min(_options.PlanPollInterval, _options.PollInterval);
 
         _store = new RollupStore(_options.RollupDbPath);
 
@@ -110,6 +135,10 @@ public sealed class UsageEngine : IDisposable
             _planHistory,
             new JsonlUsageProvider(_store));
 
+        _planHistoryIsAddressed = _options.Provider is null
+            || _options.PlanHistory is not null
+            || _options.PlanHistoryPath is not null;
+
         Settings = TraySettings.Load(_options.SettingsPath);
         _watcher = new ThresholdWatcher(Settings.ThresholdPercent);
     }
@@ -136,9 +165,9 @@ public sealed class UsageEngine : IDisposable
         // Not re-timed by AdjustCadence: the warm-up exists to fill the bars quickly before
         // Desktop has written anything, and at 3 s it is already faster than this. Leaving
         // this one fixed keeps two independently-tuned cadences from fighting over one timer.
-        _planTimer = Track(timers.Create(_options.PlanPollInterval, PollPlanHistory));
+        _planTimer = Track(timers.Create(_planInterval, PollPlanHistory));
         _planTimer.Start();
-        _log?.Write($"plan-history interval={_options.PlanPollInterval.TotalSeconds}s");
+        _log?.Write($"plan-history interval={_planInterval.TotalSeconds}s");
 
         // Auto-update (ADR-0009): one check shortly after launch, then daily. The engine
         // owns only the *when*; the head performs the check and surfaces the result.
@@ -197,7 +226,18 @@ public sealed class UsageEngine : IDisposable
     /// full 60 s of extra lag on top, now at most <see cref="UsageEngineOptions.PlanPollInterval"/>.
     /// Polling faster than Desktop writes would re-read an unchanged file for nothing.</para>
     /// </summary>
-    private void PollPlanHistory() => RunOffThread(_planGate, "plan poll", ReadPlanHistory, PublishPlanHistory);
+    private void PollPlanHistory()
+    {
+        // Nothing to publish from when the caller injected a provider chain and never said
+        // which plan-history file it stands for — see _planHistoryIsAddressed. Production
+        // always passes this; it is only reachable from a test.
+        if (!_planHistoryIsAddressed)
+        {
+            return;
+        }
+
+        RunOffThread(_planGate, "plan poll", ReadPlanHistory, PublishPlanHistory);
+    }
 
     /// <summary>
     /// Reads off the UI thread and publishes back onto it, under a gate so a slow read cannot
@@ -305,12 +345,23 @@ public sealed class UsageEngine : IDisposable
     }
 
     /// <summary>
-    /// Whether this snapshot describes an older sample than the one already published. Only
-    /// meaningful between two authoritative readings — an estimate carries no capture time to
-    /// compare, and must never be held back by one.
+    /// Whether this snapshot describes an older sample than the one already published.
+    ///
+    /// <para><b>Only ever compares two authoritative readings.</b> Both halves of that are
+    /// load-bearing. The incoming side has to be checked as well as the current one, because a
+    /// JSONL estimate <i>does</i> carry a capture time — the newest transcript activity — so a
+    /// live plan reading would otherwise block the fallback the composite resolved to, and
+    /// block it permanently: <c>Latest</c> stays Live, so every later estimate is compared
+    /// against the same frozen sample and dropped in turn. The panel would sit on a reading
+    /// that had stopped being true and never fall back.</para>
+    ///
+    /// <para>Comparing capture times rather than read times is deliberate. These stamps come
+    /// from Claude Desktop's own samples, so the ordering is the data's, not this process's —
+    /// which keeps it right across a wall-clock correction that would reorder read times.</para>
     /// </summary>
     private bool IsOlderThanLatest(UsageSnapshot snapshot) =>
-        PollingCadence.IsAuthoritative(Latest.Source)
+        PollingCadence.IsAuthoritative(snapshot.Source)
+        && PollingCadence.IsAuthoritative(Latest.Source)
         && snapshot.CapturedAtUtc is { } incoming
         && Latest.CapturedAtUtc is { } current
         && incoming < current;
@@ -380,6 +431,17 @@ public sealed class UsageEngine : IDisposable
     /// <summary>
     /// What a poll changes, on the head's own thread: the published snapshot, the
     /// notification decisions, and the cadence.
+    ///
+    /// <para><b>The ordering guard applies in this direction too.</b> The full poll is the
+    /// slow one, so it is the one most likely to lose the race: it can start reading, spend
+    /// seconds ingesting, and post a snapshot it took <i>before</i> a plan tick that has
+    /// already published. Guarding only the fast path leaves exactly the jump backwards the
+    /// guard exists to prevent — measured, the session percentage went 77 → 30.</para>
+    ///
+    /// <para><b>The cadence and the off-plan check run either way.</b> Both belong to this
+    /// poll alone — nothing else evaluates them — so skipping them when the snapshot happens
+    /// to be superseded would leave the engine stuck on its warm-up interval with nothing to
+    /// re-time it, and the divergence edge trigger unvisited.</para>
     /// </summary>
     private void Publish(PollResult result)
     {
@@ -390,13 +452,22 @@ public sealed class UsageEngine : IDisposable
             return;
         }
 
-        Latest = result.Snapshot;
+        if (!IsOlderThanLatest(result.Snapshot))
+        {
+            Latest = result.Snapshot;
 
-        _log?.Write($"refresh source={result.Snapshot.Source} " +
-                    $"session={result.Snapshot.SessionPercent?.ToString() ?? "null"}");
-        SnapshotUpdated?.Invoke(result.Snapshot);
+            _log?.Write($"refresh source={result.Snapshot.Source} " +
+                        $"session={result.Snapshot.SessionPercent?.ToString() ?? "null"}");
+            SnapshotUpdated?.Invoke(result.Snapshot);
 
-        NotifyOnThreshold(result.Snapshot);
+            NotifyOnThreshold(result.Snapshot);
+        }
+        else
+        {
+            _log?.Write($"refresh superseded — read a sample older than the one displayed " +
+                        $"({result.Snapshot.CapturedAtUtc:u} < {Latest.CapturedAtUtc:u})");
+        }
+
         CheckOffPlan(result.OffPlan);
 
         AdjustCadence(result.Snapshot.Source, result.UtcNow);
