@@ -151,18 +151,18 @@ O-view.slnx
 │   └── O-view.Linux/     # net10.0        Avalonia + SkiaSharp, SNI over D-Bus, freedesktop
 │                         #                notifications, XDG autostart, portal theme
 ├── tests/
-│   ├── O-view.Core.Tests/   # xUnit, 413
-│   ├── O-view.App.Tests/    # xUnit, 166
+│   ├── O-view.Core.Tests/   # xUnit, 425
+│   ├── O-view.App.Tests/    # xUnit, 184
 │   └── O-view.Linux.Tests/  # xUnit,  40
 └── packaging/linux/build.sh  # .deb + tarball; the same script CI runs
 ```
 
-Those counts are a **snapshot, not a contract** — measured 2026-08-21 against `main` at
-846f320, four commits past v0.6.10, and nothing enforces them. They are here for the shape
-they show (Core carries most of the logic, and that is the design working) rather than as
-figures to cite. If one matters to an argument, run the suite
-and use what it says; do not quote this block as evidence. The ADRs' own test counts are
-different and correctly so — those record what was true when each decision was taken.
+Those counts are a **snapshot, not a contract** — measured 2026-08-21, with #163 merged, and
+nothing enforces them. They are here for the shape they show (Core carries most of the logic,
+and that is the design working) rather than as figures to cite. If one matters to an argument,
+run the suite and use what it says; do not quote this block as evidence. The ADRs' own test
+counts are different and correctly so — those record what was true when each decision was
+taken.
 
 **Both heads are thin.** Anything a Linux user and a Windows user would expect to behave
 identically — what the countdown says, which release asset to offer, what the panel's text
