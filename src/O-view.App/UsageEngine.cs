@@ -587,7 +587,8 @@ public sealed class UsageEngine : IDisposable
         if (Settings.NotifyOnThreshold && _watcher.ShouldNotify(snapshot.SessionPercent))
         {
             NotificationRequested?.Invoke(new AppNotification("Claude usage",
-                $"Session usage is at {snapshot.SessionPercent}% of the 5-hour limit."));
+                $"Session usage is at {snapshot.SessionPercent}% of the 5-hour limit.",
+                NotificationKind.Warning));
         }
     }
 
@@ -627,8 +628,12 @@ public sealed class UsageEngine : IDisposable
         var spend = stats.EstOffPlanUsd is { } usd
             ? $" Est. {UsageFormatter.Usd(usd)} so far this window."
             : "";
+        // The two the engine raises are both genuine warnings, and they are the reason the
+        // kind exists: these are what the yellow triangle is FOR, and it meant nothing while
+        // every "up to date" balloon wore the same one.
         NotificationRequested?.Invoke(new AppNotification("Usage is billing beyond your plan",
-            $"Work this session isn't drawing from your plan allowance.{spend} Open O-view for detail."));
+            $"Work this session isn't drawing from your plan allowance.{spend} Open O-view for detail.",
+            NotificationKind.Warning));
     }
 
     /// <summary>
