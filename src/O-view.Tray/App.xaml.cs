@@ -555,6 +555,16 @@ public partial class App : System.Windows.Application
                 await OfferUpdateAsync(update);
                 break;
 
+            case UpdateOutcome.RateLimited:
+                // Named separately because the remedy is different and the cause is usually
+                // not this machine: GitHub's limit is 60/hour per IP address, so a shared
+                // network can exhaust it without this user making a request. Telling them
+                // their connection failed sent them to debug the wrong thing (issue #176).
+                _trayHost!.ShowNotification("Update check rate limited",
+                    PanelText.RateLimitedNotice(result.RetryAfterUtc, TimeZoneInfo.Local),
+                    NotificationKind.Warning);
+                break;
+
             default:
                 // Warning, not Error: GitHub being briefly unreachable is a retryable
                 // condition on the user's own network, and nothing on the machine is wrong.

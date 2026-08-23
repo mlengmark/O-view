@@ -13,6 +13,18 @@ public enum UpdateOutcome
 
     /// <summary>The feed could not be understood — no usable tag, or malformed JSON.</summary>
     Unknown,
+
+    /// <summary>
+    /// GitHub refused the request because its rate limit is exhausted.
+    ///
+    /// <para>Distinct from <see cref="Unknown"/> deliberately. Both mean "no answer", but
+    /// they have different causes, different remedies and different durations, and spelling
+    /// them the same told a throttled user their network was at fault (GitHub issue #176).
+    /// The limit is 60/hour <b>per IP</b> for unauthenticated callers, so a machine sharing
+    /// an address — an office, a VPN exit node — can hit it without this user having made a
+    /// single request.</para>
+    /// </summary>
+    RateLimited,
 }
 
 /// <summary>A newer release and the installer asset to fetch it from.</summary>
@@ -30,10 +42,22 @@ public sealed record AvailableUpdate(
     string? ChecksumsUrl = null);
 
 /// <summary>The outcome of comparing the current build against the latest release.</summary>
-public sealed record UpdateCheckResult(UpdateOutcome Outcome, AvailableUpdate? Available = null)
+/// <param name="RetryAfterUtc">
+/// When the rate limit resets, for <see cref="UpdateOutcome.RateLimited"/> only. Null on
+/// every other outcome, and null even here when GitHub sent no usable reset header — the
+/// caller then knows it was throttled but not for how long, which is still more than the
+/// old "could not reach GitHub" said.
+/// </param>
+public sealed record UpdateCheckResult(
+    UpdateOutcome Outcome,
+    AvailableUpdate? Available = null,
+    DateTimeOffset? RetryAfterUtc = null)
 {
     public static readonly UpdateCheckResult UpToDate = new(UpdateOutcome.UpToDate);
     public static readonly UpdateCheckResult Unknown = new(UpdateOutcome.Unknown);
+
+    public static UpdateCheckResult RateLimited(DateTimeOffset? retryAfterUtc = null) =>
+        new(UpdateOutcome.RateLimited, null, retryAfterUtc);
 }
 
 /// <summary>
