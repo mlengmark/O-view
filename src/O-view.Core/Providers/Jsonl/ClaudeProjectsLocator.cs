@@ -6,11 +6,15 @@ namespace OView.Core.Providers.Jsonl;
 /// </summary>
 public static class ClaudeProjectsLocator
 {
-    /// <summary>Default transcript root: %USERPROFILE%\.claude\projects</summary>
-    public static string DefaultRoot => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-        ".claude",
-        "projects");
+    /// <summary>
+    /// Default transcript root: <c>projects</c> under Claude Code's configuration directory.
+    ///
+    /// <para>Which is <c>%USERPROFILE%\.claude</c> unless <c>CLAUDE_CONFIG_DIR</c> says
+    /// otherwise — see <see cref="ClaudeConfigDir"/>. This used to hard-code the profile
+    /// path, so a user who had relocated their configuration had no transcripts found and a
+    /// token tile reading zero, with nothing to explain it.</para>
+    /// </summary>
+    public static string DefaultRoot => Path.Combine(ClaudeConfigDir.Path, "projects");
 
     /// <summary>
     /// All transcript files under the root. Empty if the root does not exist.

@@ -464,7 +464,7 @@ public sealed class UsageEngine : IDisposable
 
         try
         {
-            var snapshot = _provider.GetSnapshot(utcNow);
+            var snapshot = WithEnteredWeeklyReset(_provider.GetSnapshot(utcNow), utcNow);
             return new PollResult(snapshot, ReadOffPlan(), utcNow, Failed: false);
         }
         catch (Exception ex)
@@ -472,6 +472,49 @@ public sealed class UsageEngine : IDisposable
             _log?.Write($"refresh FAILED {ex.GetType().Name}: {ex.Message}");
             return new PollResult(UsageSnapshot.None, null, utcNow, Failed: true);
         }
+    }
+
+    /// <summary>
+    /// Carries the user's entered weekly reset onto a snapshot that has none.
+    ///
+    /// <para><b>The case this exists for is the one the feature was built for.</b>
+    /// <c>PlanHistoryProvider</c> resolves the entry itself — including checking it against
+    /// observed resets — but it returns <c>None</c> before reaching that code when there is
+    /// no plan-history file at all, and the composite then falls through to the JSONL
+    /// estimate, whose weekly reset is null. So a user with no Claude Desktop entered their
+    /// reset time and saw nothing change: exactly the population issue #186 was written for,
+    /// and the only one that cannot derive the value instead.</para>
+    ///
+    /// <para>Applied here rather than by widening the provider, because the entry is a user
+    /// setting rather than a reading of the plan-history file, and it should survive whichever
+    /// provider ends up winning the composite's tier resolution.</para>
+    ///
+    /// <para><b>Only fills a gap; never overrides.</b> A snapshot that already carries a
+    /// weekly reset has been through the provider's entry-versus-evidence rule, which is the
+    /// one place allowed to decide between them. Overwriting it here would reinstate an entry
+    /// that an observation had just disproved.</para>
+    /// </summary>
+    private UsageSnapshot WithEnteredWeeklyReset(UsageSnapshot snapshot, DateTimeOffset utcNow)
+    {
+        if (snapshot.WeeklyResetAtUtc is not null || Settings.WeeklyReset is not { } entry)
+        {
+            return snapshot;
+        }
+
+        // Nothing to attach a reset to: a panel with no data at all should stay blank rather
+        // than grow one lonely populated line.
+        if (snapshot.Source == DataSource.None)
+        {
+            return snapshot;
+        }
+
+        return snapshot with
+        {
+            WeeklyResetAtUtc = entry.NextAfter(utcNow, TimeZoneInfo.Local),
+            // Exact, so it renders without the "~" that marks a derived bracket.
+            WeeklyResetUncertainty = TimeSpan.Zero,
+            WeeklyResetPeriod = WeeklyResetDetector.WindowLength,
+        };
     }
 
     /// <summary>
