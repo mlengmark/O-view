@@ -148,13 +148,26 @@ internal static class SampleRenderer
             Sources = [new TranscriptSource("Claude Code", [@"C:\Users\<user>\.claude\projects"], 42, 6_700_000, capturedAt)],
         };
 
+        // Both transcript surfaces present, so the coverage line renders its full form
+        // (issue #171). Constructed rather than inspected for the same reason as the two
+        // above: a null scope would make these samples reflect whichever surfaces this
+        // developer happens to use, which is not a fixture.
+        var bothSourcesScope = cliOnlyScope with
+        {
+            Sources =
+            [
+                new TranscriptSource("Claude Code", [@"C:\Users\<user>\.claude\projects"], 42, 6_700_000, capturedAt),
+                new TranscriptSource("Cowork", [@"C:\Users\<user>\AppData\Roaming\Claude\local-agent-mode-sessions"], 3, 220_000, capturedAt),
+            ],
+        };
+
         var cases = new (string Name, UsageSnapshot Snapshot, PanelStatistics Stats,
             TranscriptScopeReport? Scope, PlanHistoryReport? Plan)[]
         {
-            ("plan-weeks", live, stats, null, null),
+            ("plan-weeks", live, stats, bothSourcesScope, null),
             // No reset observed: Monday-midnight gridlines, and "Waiting for first reset…".
             ("awaiting-first-reset", new UsageSnapshot(DataSource.Live, 25, 3,
-                capturedAt.AddHours(3), capturedAt), stats, null, null),
+                capturedAt.AddHours(3), capturedAt), stats, bothSourcesScope, null),
             // The token-scope note, which appears in no other state.
             ("no-local-transcripts", live, noLocalUsage, emptyScope, null),
             // The CLI-only banner and its "needs Claude Desktop" gauges. Estimate, not None:

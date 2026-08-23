@@ -112,6 +112,12 @@
             <TextBlock x:Name="TokenCompositionHint" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"
                        Foreground="{DynamicResource TextSecondary}" Visibility="Collapsed"/>
 
+            <!-- Which surfaces the figures above are made of (issue #171). A user could not
+                 otherwise tell a low number caused by using Claude less from one caused by
+                 O-view not looking where they work — the shared root of #44, #58 and #170. -->
+            <TextBlock x:Name="TokenCoverageLine" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"
+                       Foreground="{DynamicResource TextMuted}" Visibility="Collapsed"/>
+
             <!-- Scope note. The bars above and the tiles here measure DIFFERENT things:
                  the plan meters cover all Claude usage, the token tiles only usage that
                  leaves a Claude Code transcript. A Desktop-only user therefore sees a
