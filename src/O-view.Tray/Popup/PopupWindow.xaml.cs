@@ -105,6 +105,16 @@ public partial class PopupWindow : Window, IFlyout
     /// </summary>
     public TranscriptScopeReport? ScopeReport { get; set; }
 
+    /// <summary>
+    /// The settings behind this render, so the weekly line can say when the reset shown is
+    /// one the user entered rather than one O-view derived (issue #186). Null falls back to
+    /// treating everything as derived, which is the honest default for a render with no
+    /// settings behind it.
+    /// </summary>
+    public TraySettings? SettingsForDisplay { get; set; }
+
+    private TraySettings? _lastSettings;
+
     public void ShowNearTrayIcon(UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account)
     {
         PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
@@ -257,6 +267,7 @@ public partial class PopupWindow : Window, IFlyout
     {
         _lastStats = stats;
         _lastSnapshot = snapshot;
+        _lastSettings = SettingsForDisplay;
 
         var local = TimeZoneInfo.Local;
 
@@ -350,11 +361,18 @@ public partial class PopupWindow : Window, IFlyout
         {
             var bracket = snapshot.WeeklyResetUncertainty ?? TimeSpan.Zero;
 
+            // A user-supplied reset is exact, so it carries no "~" — and it is labelled, so
+            // an unexpectedly precise time is explained rather than mysterious (issue #186).
+            var userSupplied = _lastSettings?.WeeklyReset is not null && bracket == TimeSpan.Zero;
+
             WeeklyResetText.Text = PanelText.WeeklyReset(
-                reset, snapshot.WeeklyResetUncertainty, Now(TimeZoneInfo.Utc), local);
-            WeeklyResetText.ToolTip = PanelText.IsApproximate(snapshot.WeeklyResetUncertainty)
-                ? HoverCard.Text(this, PanelText.WeeklyResetApproximateHint(bracket))
-                : null;
+                reset, snapshot.WeeklyResetUncertainty, Now(TimeZoneInfo.Utc), local)
+                + (userSupplied ? $" · {PanelText.WeeklyResetUserSupplied}" : "");
+            WeeklyResetText.ToolTip = userSupplied
+                ? HoverCard.Text(this, PanelText.WeeklyResetUserSuppliedHint)
+                : PanelText.IsApproximate(snapshot.WeeklyResetUncertainty)
+                    ? HoverCard.Text(this, PanelText.WeeklyResetApproximateHint(bracket))
+                    : null;
             HoverCard.ApplyTiming(WeeklyResetText);
             WeeklyResetText.Visibility = Visibility.Visible;
             return;

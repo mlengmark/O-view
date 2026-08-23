@@ -261,6 +261,28 @@
 
             <Border Height="1" Background="{DynamicResource PanelBorder}" Margin="8,5,8,5"/>
 
+            <!-- The weekly reset the user read off Claude, which outranks the one O-view
+                 derives from a ~10 hour overnight bracket (issue #186). The trailing label
+                 says which is in effect, so the row states the current answer rather than
+                 only offering to change it. -->
+            <Button x:Name="WeeklyResetRow" Style="{StaticResource MenuRow}">
+                <!-- Two real columns, not overlaid children: a single-cell Grid lets the
+                     label and the trailing value draw over each other, which is exactly what
+                     "Weekly reset time…derived" looked like. The value keeps its width and
+                     the label gives way. -->
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="Weekly reset…" Style="{StaticResource RowLabel}"
+                               Margin="22,0,8,0" TextTrimming="CharacterEllipsis"/>
+                    <TextBlock x:Name="WeeklyResetValue" Grid.Column="1" Margin="0,0,4,0"
+                               VerticalAlignment="Center" FontSize="11"
+                               Foreground="{DynamicResource TextMuted}"/>
+                </Grid>
+            </Button>
+
             <Button x:Name="DiagnosticsRow" Style="{StaticResource MenuRow}">
                 <TextBlock Text="Copy diagnostics" Style="{StaticResource RowLabel}" Margin="22,0,0,0"/>
             </Button>

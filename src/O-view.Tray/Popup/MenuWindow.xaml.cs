@@ -99,6 +99,9 @@ public partial class MenuWindow : Window, IFlyout
     /// </summary>
     internal const string NotifySuffixText = "usage";
 
+    /// <summary>The user asked to set or clear the weekly reset time (issue #186).</summary>
+    public event EventHandler? WeeklyResetRequested;
+
     public event EventHandler? CopyDiagnosticsRequested;
     public event EventHandler? CheckForUpdatesRequested;
     public event EventHandler? ExitRequested;
@@ -154,6 +157,7 @@ public partial class MenuWindow : Window, IFlyout
             };
         }
 
+        WeeklyResetRow.Click += (_, _) => Dismiss(WeeklyResetRequested);
         DiagnosticsRow.Click += (_, _) => Dismiss(CopyDiagnosticsRequested);
         UpdatesRow.Click += (_, _) => Dismiss(CheckForUpdatesRequested);
         ExitRow.Click += (_, _) => Dismiss(ExitRequested);
@@ -171,13 +175,18 @@ public partial class MenuWindow : Window, IFlyout
     /// Whether this build can self-install at all (<c>UpdatePolicy.MayDownloadAndRun</c>).
     /// False hides the row outright — see the XAML for why it is hidden and not disabled.
     /// </param>
+    /// <param name="WeeklyReset">
+    /// The entered weekly reset as the row should show it, or empty when O-view is deriving
+    /// it (issue #186).
+    /// </param>
     public readonly record struct MenuState(
         bool RunAtStartup,
         bool NotifyOnThreshold,
         int ThresholdPercent,
         bool UpdateAutomatically,
         bool CanUpdateAutomatically,
-        string Version);
+        string Version,
+        string WeeklyReset = "");
 
     /// <summary>
     /// Fills the rows from the current state and docks the flyout at the tray corner.
@@ -206,6 +215,9 @@ public partial class MenuWindow : Window, IFlyout
         PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
 
         VersionText.Text = $"v{state.Version}";
+        // States the answer in effect, not just the affordance: "derived" tells a user who
+        // has never opened this dialog what O-view is currently doing.
+        WeeklyResetValue.Text = state.WeeklyReset.Length > 0 ? state.WeeklyReset : "derived";
         NotifySuffix.Text = NotifySuffixText;
         SetChecked(StartupCheck, state.RunAtStartup);
         SetChecked(NotifyCheck, state.NotifyOnThreshold);
