@@ -184,4 +184,25 @@ public static class PanelText
 
     /// <summary>Sub-label noting that an off-plan figure includes work billed outside the plan.</summary>
     public static string OffPlanNote(bool offPlan) => offPlan ? "incl. off-plan usage" : "";
+
+    /// <summary>
+    /// Why an update check came back empty when GitHub throttled it (issue #176).
+    ///
+    /// <para>It says the limit is shared, because for most people hitting it that is the
+    /// whole explanation: 60 requests an hour is counted <b>per IP address</b> for an
+    /// unauthenticated caller, so an office or a VPN exit node reaches it without this user
+    /// having done anything. The previous wording blamed their connection and sent them to
+    /// debug a network that was working.</para>
+    ///
+    /// <para>The retry time is stated only when GitHub sent one. Inventing "try again in an
+    /// hour" would be a fabricated number (rule 6), and the honest version still tells the
+    /// reader more than the message it replaces.</para>
+    /// </summary>
+    public static string RateLimitedNotice(DateTimeOffset? retryAfterUtc, TimeZoneInfo local) =>
+        "GitHub limits how often it answers without an account, and that limit is shared by "
+        + "everyone on your network. O-view will try again "
+        + (retryAfterUtc is { } at
+            ? $"after {TimeZoneInfo.ConvertTime(at, local):HH:mm}."
+            : "on its next check.")
+        + " Nothing is wrong with your connection or your install.";
 }

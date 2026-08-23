@@ -48,8 +48,28 @@ public sealed record UsageEngineOptions
     /// <summary>First update check, deliberately after launch so it neither slows startup nor races the first refresh (ADR-0009).</summary>
     public TimeSpan FirstUpdateCheckDelay { get; init; } = TimeSpan.FromSeconds(30);
 
-    /// <summary>Update re-check cadence after the first.</summary>
-    public TimeSpan UpdateCheckInterval { get; init; } = TimeSpan.FromHours(24);
+    /// <summary>
+    /// Update re-check cadence after the first, before jitter (<see cref="UpdateSchedule"/>).
+    ///
+    /// <para><b>Six hours, not twenty-four and not minutes</b> (ADR-0009 as amended
+    /// 2026-08-23). Twenty-four left an app designed to run for days waiting up to a day to
+    /// notice a release, which is the gap that prompted the change. Minutes would spend a
+    /// resource that is not this instance's to spend: GitHub allows an unauthenticated caller
+    /// 60 requests per hour <b>per IP</b>, so a ten-minute cadence has ten copies behind one
+    /// NAT consuming the whole budget for that address — and conditional requests buy no
+    /// exemption without an <c>Authorization</c> header, which rule 3 forbids this app from
+    /// holding.</para>
+    ///
+    /// <para>Six hours is four requests a day per instance, and caps the worst case at six
+    /// hours instead of twenty-four.</para>
+    /// </summary>
+    public TimeSpan UpdateCheckInterval { get; init; } = TimeSpan.FromHours(6);
+
+    /// <summary>
+    /// Randomness source for the cadence jitter. Injectable so a test can pin the interval
+    /// rather than assert against a range that a bad implementation would also satisfy.
+    /// </summary>
+    public Random UpdateJitter { get; init; } = Random.Shared;
 
     public IClock Clock { get; init; } = SystemClock.Instance;
 

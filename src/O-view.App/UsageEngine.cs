@@ -1,4 +1,5 @@
 using OView.App.Platform;
+using OView.App.Updates;
 using OView.Core.Models;
 using OView.Core.Providers;
 using OView.Core.Providers.Jsonl;
@@ -169,8 +170,9 @@ public sealed class UsageEngine : IDisposable
         _planTimer.Start();
         _log?.Write($"plan-history interval={_planInterval.TotalSeconds}s");
 
-        // Auto-update (ADR-0009): one check shortly after launch, then daily. The engine
-        // owns only the *when*; the head performs the check and surfaces the result.
+        // Auto-update (ADR-0009 as amended): one check shortly after launch, then every six
+        // hours. The engine owns only the *when*; the head performs the check and surfaces
+        // the result.
         IAppTimer? initial = null;
         initial = Track(timers.Create(_options.FirstUpdateCheckDelay, () =>
         {
@@ -179,7 +181,12 @@ public sealed class UsageEngine : IDisposable
         }));
         initial.Start();
 
-        Track(timers.Create(_options.UpdateCheckInterval, () => UpdateCheckDue?.Invoke())).Start();
+        // Jittered once, here, so two instances that start together do not stay in step for
+        // as long as they run. The rate limit is per IP, not per user, so synchronised
+        // instances behind one address are the one way this cadence could cost anything.
+        var recheck = UpdateSchedule.Jittered(_options.UpdateCheckInterval, _options.UpdateJitter);
+        Track(timers.Create(recheck, () => UpdateCheckDue?.Invoke())).Start();
+        _log?.Write($"update check interval={recheck.TotalMinutes:0} min (base {_options.UpdateCheckInterval.TotalMinutes:0})");
     }
 
     /// <summary>

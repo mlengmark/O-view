@@ -425,3 +425,78 @@ not carry, and inventing a second registry value would create the divergence it 
 If a user reports that O-view updated itself when they did not believe they had asked it to,
 this amendment has failed, and the failure will be in constraint 1 or 3 rather than in the
 principle. Both are cheap to check and worth checking first.
+
+## Amendment (2026-08-23): six-hour cadence with jitter, and a named rate limit
+
+The original decision above costs "a **daily** background HTTP request to GitHub.
+Unauthenticated, well within the 60/hour anonymous rate limit". Both halves of that sentence
+have since been tested against reality, and each moved in a different direction.
+
+**Twenty-four hours is too slow for the app this became.** O-view is designed to sit in a tray
+for days, so the recurring check — not the launch check — is what most users actually rely on.
+A release cut an hour after an instance's daily check is invisible to it for the next
+twenty-three. That was reported directly: a machine running v0.6.11 had not noticed v0.6.12
+ninety minutes after it was published, and would not have for most of a day.
+
+**Ten minutes, the obvious correction, is worse.** Measured against the live API on
+2026-08-23, and confirmed against GitHub's documentation:
+
+- "The primary rate limit for unauthenticated requests is 60 requests per hour."
+- "Unauthenticated requests are associated with the **originating IP address**, not with the
+  user or application that made the request."
+
+The budget is therefore **per address, not per user**, and is shared with every other
+unauthenticated GitHub API caller behind the same NAT. At ten minutes each running instance
+consumes 6/hour, so ten copies behind one office, lab or VPN exit node exhaust the address's
+entire allowance — and leave nothing for anything else on it.
+
+The usual mitigation does not reach us. Conditional requests are exempt only when
+authenticated: "Making a conditional request does not count against your primary rate limit if
+a `304` response is returned **and the request was made while correctly authorized with an
+`Authorization` header**." O-view holds no credentials by [ADR-0007](0007-plan-history-primary-provider.md)
+and rule 3, so an ETag would save bandwidth and buy no exemption. Anyone reaching for one
+expecting relief from the rate limit should stop here.
+
+### Decision
+
+**Six hours, jittered ±15%, applied once at startup.** Four requests a day per instance, and a
+worst case of six hours rather than twenty-four. One `releases/latest` response measured at
+17,491 bytes, so the daily cost per instance is ~70 KB.
+
+Jitter is the part that matters and is easy to skip. A fixed interval keeps instances that
+started together — a mass reboot, a lab, a fleet behind one VPN — arriving in the same second
+for as long as they run. A single offset at startup de-synchronises them permanently, which is
+the whole objective; re-rolling per tick would add variance nobody benefits from.
+
+**The launch check is unchanged at 30 s.** It is what catches a release cut while the machine
+was off, it costs one request, and it is the half of the schedule that was never the problem.
+
+### A rate limit is now a distinct outcome
+
+The original decision's "graceful when it cannot check" degraded *every* HTTP failure to
+`Unknown`. A GitHub throttle is a 403, so it landed there too — indistinguishable from a dead
+network, with `x-ratelimit-reset` ignored and the next check retrying straight into the same
+wall (issue #176). On a busy shared address that could persist indefinitely while the app said
+nothing, which is rule 6 failing quietly.
+
+`UpdateOutcome.RateLimited` now carries the reset instant. `ReleaseFeed` holds the cooldown so
+neither head grows the logic, and the interactive message names the shared limit rather than
+blaming the user's connection — for most people who hit this, the cause is not their machine.
+
+A 403 must be corroborated by `x-ratelimit-remaining: 0` or a `Retry-After` before it counts:
+GitHub uses 403 for causes a cooldown would not fix, and excusing those as "try again later"
+would bury a real fault behind a wait.
+
+**Negative**
+- Four times the requests of the original decision. Still two orders of magnitude below the
+  per-address allowance for a single instance, and the jitter is what keeps that true for a
+  fleet.
+- One more outcome for both heads to handle, and a cooldown that is invisible in the UI while
+  it holds — a check skipped before the reset returns the same answer as the one that set it.
+
+### What would make this wrong
+
+A report of O-view being rate-limited on a normal home connection. At four requests a day that
+should be unreachable, and would mean either the jitter is not being applied or something else
+on that address is spending the budget — both worth knowing, and distinguishable now that the
+log names the throttle instead of calling it a network failure.

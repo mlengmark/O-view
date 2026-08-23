@@ -28,8 +28,20 @@ public sealed class ReleaseFeed
     private static readonly HttpClient Http = CreateClient();
 
     private readonly IAppLog? _log;
+    private readonly Func<DateTimeOffset> _utcNow;
 
-    public ReleaseFeed(IAppLog? log = null) => _log = log;
+    /// <summary>
+    /// When GitHub's rate limit lifts. Held here rather than in either head so both get the
+    /// cooldown without either growing the logic — and because this class is the only one
+    /// that ever sees the headers (GitHub issue #176).
+    /// </summary>
+    private DateTimeOffset? _rateLimitedUntilUtc;
+
+    public ReleaseFeed(IAppLog? log = null, Func<DateTimeOffset>? utcNow = null)
+    {
+        _log = log;
+        _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
+    }
 
     /// <summary>
     /// The running build's version, from the assembly version stamped at release time
@@ -57,10 +69,37 @@ public sealed class ReleaseFeed
         ReleaseAssetSelector asset,
         CancellationToken cancellation = default)
     {
+        // Still throttled from a previous answer: do not spend a request finding that out
+        // again. The old code retried straight back into the limit on every check.
+        if (_rateLimitedUntilUtc is { } until && _utcNow() < until)
+        {
+            _log?.Write($"update check skipped — rate limited until {until:u}");
+            return UpdateCheckResult.RateLimited(until);
+        }
+
         try
         {
             using var response = await Http.GetAsync(LatestReleaseApi, cancellation).ConfigureAwait(false);
+
+            // Before EnsureSuccessStatusCode, which cannot tell a throttle from a dead
+            // network once it has thrown. A 403 needs the headers to agree before it counts
+            // as one — GitHub uses 403 for things a cooldown would not fix.
+            if (RateLimitResponse.IsRateLimited(
+                    (int)response.StatusCode,
+                    Header(response, "x-ratelimit-remaining"),
+                    Header(response, "x-ratelimit-reset"),
+                    Header(response, "retry-after"),
+                    _utcNow(),
+                    out var retryAfterUtc))
+            {
+                _rateLimitedUntilUtc = retryAfterUtc;
+                _log?.Write($"update check rate limited status={(int)response.StatusCode} " +
+                            $"retry-after={(retryAfterUtc is { } r ? r.ToString("u") : "unknown")}");
+                return UpdateCheckResult.RateLimited(retryAfterUtc);
+            }
+
             response.EnsureSuccessStatusCode();
+            _rateLimitedUntilUtc = null;
             var json = await response.Content.ReadAsStringAsync(cancellation).ConfigureAwait(false);
 
             var result = UpdateCheck.Evaluate(currentVersion, json, asset);
@@ -75,6 +114,10 @@ public sealed class ReleaseFeed
             return UpdateCheckResult.Unknown;
         }
     }
+
+    /// <summary>First value of a header, or null. Header names are case-insensitive here.</summary>
+    private static string? Header(HttpResponseMessage response, string name) =>
+        response.Headers.TryGetValues(name, out var values) ? values.FirstOrDefault() : null;
 
     private static HttpClient CreateClient()
     {
