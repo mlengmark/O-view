@@ -290,7 +290,7 @@ public partial class PopupWindow : Window, IFlyout
         PopulateBar(SessionPctText, SessionBar, SessionBarFill,
             authoritative ? snapshot.SessionPercent : null, placeholder);
         SessionResetText.Text = PanelText.SessionReset(
-            snapshot.SessionResetAtUtc, Now(TimeZoneInfo.Utc), local);
+            snapshot.SessionResetAtUtc, Now(TimeZoneInfo.Utc), local, snapshot.SessionResetUncertainty);
 
         PopulateBar(WeeklyPctText, WeeklyBar, WeeklyBarFill,
             authoritative ? snapshot.WeeklyPercent : null, placeholder);

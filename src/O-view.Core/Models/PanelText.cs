@@ -36,13 +36,27 @@ public static class PanelText
                 : string.Create(CultureInfo.InvariantCulture, $"{t.Minutes}m");
 
     /// <summary>
-    /// The session-reset line. Before any drop has been observed the reset time is
+    /// The session-reset line. Before a window start has been observed the reset time is
     /// genuinely unknown, and says so rather than guessing (ADR-0011, rule 6).
+    ///
+    /// <para>Carries the same <c>~</c> as the weekly line when the start was only bracketed
+    /// — which is every start inferred across a sampling gap, because Desktop was closed when
+    /// the window actually began. Printing <c>22:47</c> to the minute for a boundary known to
+    /// a quarter of an hour is the shape of the bug this line was reported for (issue
+    /// #180).</para>
     /// </summary>
-    public static string SessionReset(DateTimeOffset? resetAtUtc, DateTimeOffset utcNow, TimeZoneInfo local) =>
-        resetAtUtc is { } reset
-            ? $"Resets in {Countdown(reset - utcNow)} · {TimeZoneInfo.ConvertTime(reset, local):HH:mm}"
-            : "Reset time unknown (no reset observed yet)";
+    public static string SessionReset(
+        DateTimeOffset? resetAtUtc, DateTimeOffset utcNow, TimeZoneInfo local,
+        TimeSpan? uncertainty = null)
+    {
+        if (resetAtUtc is not { } reset)
+        {
+            return "Reset time unknown (no reset observed yet)";
+        }
+
+        var at = TimeZoneInfo.ConvertTime(reset, local);
+        return $"Resets in {Countdown(reset - utcNow)} · {(IsApproximate(uncertainty) ? "~" : "")}{at:HH:mm}";
+    }
 
     /// <summary>
     /// The weekly-reset line. Carries the weekday, because a reset a week out needs one,

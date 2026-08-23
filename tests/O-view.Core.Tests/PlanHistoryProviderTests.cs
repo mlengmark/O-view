@@ -180,17 +180,61 @@ public class PlanHistoryProviderTests : IDisposable
         Assert.Null(provider.GetSnapshot(Now).SessionResetAtUtc);
     }
 
+    /// <summary>
+    /// The window runs from <b>first use</b>, not from the drop that ended the previous one
+    /// (GitHub issue #180). Here the meter resets to 0 an hour ago and nothing is used for
+    /// another 55 minutes — so the current window began at that first use, and the reset is
+    /// five hours after it.
+    ///
+    /// <para>This previously asserted drop + 5 h, which is the grid model: it treated the
+    /// end of the old window as the start of the new one. They coincide only when usage
+    /// resumes within a sampling interval.</para>
+    /// </summary>
     [Fact]
-    public void ObservedDrop_YieldsDropPlusFiveHours()
+    public void TheWindowRunsFromFirstUse_NotFromTheDropThatEndedTheLastOne()
     {
         var drop = Now.AddHours(-1);
+        var firstUse = Now.AddMinutes(-5);
         var path = WriteSamples(
             (drop.AddMinutes(-5), "org-a", 31, 6),
             (drop, "org-a", 0, 6),
+            (firstUse, "org-a", 12, 7));
+        var provider = new PlanHistoryProvider(path);
+
+        Assert.Equal(firstUse.AddHours(5), provider.GetSnapshot(Now).SessionResetAtUtc);
+    }
+
+    /// <summary>
+    /// The bracket reaches the snapshot, so the panel can mark a gap-inferred boundary
+    /// approximate instead of printing it to the minute (rule 6).
+    /// </summary>
+    [Fact]
+    public void AGapInferredWindowCarriesItsUncertainty()
+    {
+        var path = WriteSamples(
+            (Now.AddHours(-2), "org-a", 0, 6),
             (Now.AddMinutes(-5), "org-a", 12, 7));
         var provider = new PlanHistoryProvider(path);
 
-        Assert.Equal(drop.AddHours(5), provider.GetSnapshot(Now).SessionResetAtUtc);
+        var snapshot = provider.GetSnapshot(Now);
+
+        Assert.Equal(TimeSpan.FromMinutes(115), snapshot.SessionResetUncertainty);
+    }
+
+    /// <summary>
+    /// An expired window is unknown, not extrapolated. The old detector stepped a stale
+    /// anchor forward until it landed in the future, which always produced a confident time.
+    /// </summary>
+    [Fact]
+    public void AWindowThatHasAlreadyEndedReportsNoResetTime()
+    {
+        var path = WriteSamples(
+            (Now.AddHours(-8), "org-a", 40, 6),
+            (Now.AddHours(-7), "org-a", 2, 6),
+            (Now.AddHours(-6), "org-a", 30, 7));
+        var provider = new PlanHistoryProvider(path);
+
+        Assert.Null(provider.GetSnapshot(Now).SessionResetAtUtc);
     }
 
     [Fact]

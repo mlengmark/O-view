@@ -92,7 +92,7 @@ public sealed class PanelContent : Border
         var placeholder = banner?.GaugePlaceholder ?? PanelBanner.UnknownGauge;
 
         AddBar("Current session", authoritative ? snapshot.SessionPercent : null,
-            PanelText.SessionReset(snapshot.SessionResetAtUtc, utcNow, local), placeholder);
+            PanelText.SessionReset(snapshot.SessionResetAtUtc, utcNow, local, snapshot.SessionResetUncertainty), placeholder);
 
         AddBar("Weekly", authoritative ? snapshot.WeeklyPercent : null,
             WeeklyResetLine(snapshot, authoritative, utcNow, local), placeholder);

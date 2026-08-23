@@ -58,34 +58,147 @@ public class ResetDetectorTests
         Assert.Equal(T0.AddMinutes(305), ResetDetector.FindLastDrop(samples));
     }
 
+    // ── the current window ──────────────────────────────────────────────────────────
+
     [Fact]
-    public void PredictNextReset_NoAnchor_ReturnsNull_NeverGuesses()
+    public void PredictNextReset_NoWindow_ReturnsNull_NeverGuesses()
     {
         Assert.Null(ResetDetector.PredictNextReset(null, T0));
     }
 
+    /// <summary>A drop seen while Desktop was sampling: the window starts at the drop.</summary>
     [Fact]
-    public void PredictNextReset_IsAnchorPlusFiveHours()
+    public void AnObservedDropStartsTheWindow()
     {
-        var next = ResetDetector.PredictNextReset(T0, T0.AddHours(1));
+        var samples = new[] { At(0, 60), At(5, 1), At(10, 4) };
 
-        Assert.Equal(T0.AddHours(5), next);
+        var start = ResetDetector.FindCurrentWindowStart(samples);
+
+        Assert.NotNull(start);
+        Assert.Equal(T0.AddMinutes(5), start.LatestUtc);
+        Assert.Equal(T0.AddMinutes(5).AddHours(5), start.ResetAtUtc);
+    }
+
+    /// <summary>
+    /// The reported case (GitHub issue #180). A drop, then a long sampling gap, then a run
+    /// that begins at zero and climbs. There is <b>no drop</b> in the new run — the meter had
+    /// already reset while Desktop was closed — so the old detector stayed anchored on the
+    /// pre-gap drop and stepped it forward on a five-hour grid.
+    /// </summary>
+    [Fact]
+    public void AWindowThatBeganDuringASamplingGapIsFoundWithoutADrop()
+    {
+        var samples = new[]
+        {
+            At(0, 78),
+            At(15, 0),                       // the old window resets, then Desktop closes
+            At(2 * 24 * 60, 0),              // two days later: back, still nothing used
+            At(2 * 24 * 60 + 15, 7),         // first use — THIS starts the current window
+            At(2 * 24 * 60 + 30, 16),
+            At(2 * 24 * 60 + 45, 26),
+        };
+
+        var start = ResetDetector.FindCurrentWindowStart(samples);
+
+        Assert.NotNull(start);
+        Assert.Equal(T0.AddMinutes(2 * 24 * 60 + 15), start.LatestUtc);
+
+        // Not the pre-gap drop stepped forward, which is what produced 22:47 against
+        // Desktop's 21:01 on the machine this was reported from.
+        var reset = ResetDetector.PredictNextReset(start, T0.AddMinutes(2 * 24 * 60 + 45));
+        Assert.Equal(T0.AddMinutes(2 * 24 * 60 + 15).AddHours(5), reset);
+    }
+
+    /// <summary>
+    /// The bracket: the start fell after the last zero and at or before the first use, so it
+    /// is known to one sampling interval and no better. Rendering it to the minute would be
+    /// a fabricated number (rule 6).
+    /// </summary>
+    [Fact]
+    public void AGapInferredStartIsBracketedByTheSamplesStraddlingIt()
+    {
+        var samples = new[] { At(0, 0), At(45, 9) };
+
+        var start = ResetDetector.FindCurrentWindowStart(samples);
+
+        Assert.NotNull(start);
+        Assert.Equal(T0, start.EarliestUtc);
+        Assert.Equal(T0.AddMinutes(45), start.LatestUtc);
+        Assert.Equal(TimeSpan.FromMinutes(45), start.Uncertainty);
+    }
+
+    // ── what must NOT happen ────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The regression itself. A window whose end has passed yields <c>unknown</c>, never a
+    /// grid-stepped guess — the old code always produced a confident time and was wrong by
+    /// up to five hours.
+    /// </summary>
+    [Fact]
+    public void AnExpiredWindowIsUnknown_NotSteppedForward()
+    {
+        var start = new SessionWindowStart(T0, T0.AddMinutes(5));
+
+        Assert.Null(ResetDetector.PredictNextReset(start, T0.AddHours(11)));
+        Assert.Null(ResetDetector.PredictNextReset(start, T0.AddHours(6)));
+    }
+
+    /// <summary>
+    /// <c>fh = 0</c> means nothing has been used, and the window starts on first use — so no
+    /// window is running and there is no reset to predict. Reporting one would describe a
+    /// window that has not begun.
+    /// </summary>
+    [Fact]
+    public void NoWindowIsRunningWhileTheMeterReadsZero()
+    {
+        var samples = new[] { At(0, 60), At(5, 0), At(10, 0) };
+
+        Assert.Null(ResetDetector.FindCurrentWindowStart(samples));
+    }
+
+    /// <summary>A series that only ever rises began before the data; that is unknown, not zero.</summary>
+    [Fact]
+    public void ASeriesWithNoBoundaryYieldsNoWindow()
+    {
+        var samples = new[] { At(0, 12), At(5, 20), At(10, 31) };
+
+        Assert.Null(ResetDetector.FindCurrentWindowStart(samples));
     }
 
     [Fact]
-    public void PredictNextReset_RollsForwardAcrossMissedWindows()
+    public void EmptyAndSingleSampleSeries_YieldNoWindow()
     {
-        // Idle across two boundaries: anchor+5h and anchor+10h have both passed.
-        var next = ResetDetector.PredictNextReset(T0, T0.AddHours(11));
-
-        Assert.Equal(T0.AddHours(15), next);
+        Assert.Null(ResetDetector.FindCurrentWindowStart([]));
+        Assert.Null(ResetDetector.FindCurrentWindowStart([At(0, 50)]));
     }
 
-    [Fact]
-    public void PredictNextReset_ExactlyOnBoundary_RollsToNextWindow()
-    {
-        var next = ResetDetector.PredictNextReset(T0, T0.AddHours(5));
+    // ── the common case is untouched ────────────────────────────────────────────────
 
-        Assert.Equal(T0.AddHours(10), next);
+    /// <summary>
+    /// Continuous usage across a boundary still behaves exactly as before: the drop is the
+    /// start, and the reset is five hours after it. The fix must not retune the case that
+    /// was already right.
+    /// </summary>
+    [Fact]
+    public void ContinuousUsageAcrossABoundaryIsUnchanged()
+    {
+        var samples = new[] { At(0, 20), At(295, 96), At(300, 2), At(305, 9) };
+
+        var start = ResetDetector.FindCurrentWindowStart(samples);
+        var reset = ResetDetector.PredictNextReset(start, T0.AddMinutes(310));
+
+        Assert.Equal(T0.AddMinutes(300).AddHours(5), reset);
+    }
+
+    /// <summary>The latest boundary wins, not the first — several can sit in one series.</summary>
+    [Fact]
+    public void TheMostRecentBoundaryWins()
+    {
+        var samples = new[] { At(0, 40), At(5, 1), At(300, 88), At(305, 3), At(310, 11) };
+
+        var start = ResetDetector.FindCurrentWindowStart(samples);
+
+        Assert.NotNull(start);
+        Assert.Equal(T0.AddMinutes(305), start.LatestUtc);
     }
 }

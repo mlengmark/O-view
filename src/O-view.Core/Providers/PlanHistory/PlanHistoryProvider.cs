@@ -92,9 +92,18 @@ public sealed class PlanHistoryProvider : IUsageProvider
             return (utcNow, []);
         }
 
-        // Anchor on the last reset so the window never spans one — a reset would show
-        // as a large negative rise and mask real divergence.
-        var windowStart = ResetDetector.FindLastDrop(samples) ?? samples[0].AtUtc;
+        // Anchor on the current window's start so the span never crosses a boundary — a
+        // reset would show as a large negative rise and mask real divergence.
+        //
+        // The current window, not merely the last drop: after an idle gap the last drop can
+        // be days old, and summing output tokens since then would compare a two-day total
+        // against a five-hour meter (issue #180). Falls back to the last drop, and then to
+        // the series start, because a divergence window that is too wide is a missed signal
+        // where no window at all is a crash.
+        var windowStart =
+            ResetDetector.FindCurrentWindowStart(samples)?.LatestUtc
+            ?? ResetDetector.FindLastDrop(samples)
+            ?? samples[0].AtUtc;
         var inWindow = samples.Where(s => s.AtUtc >= windowStart).ToList();
 
         return (windowStart, inWindow.Select(s => s.FiveHourPercent).ToList());
@@ -159,8 +168,11 @@ public sealed class PlanHistoryProvider : IUsageProvider
         var age = utcNow - latest.AtUtc;
         var source = age <= _freshness ? DataSource.Live : DataSource.Stale;
 
-        var lastDrop = ResetDetector.FindLastDrop(samples);
-        var nextReset = ResetDetector.PredictNextReset(lastDrop, utcNow);
+        // The window that is running now, bracketed by the samples straddling its start —
+        // not a grid stepped forward from the last drop, which after an idle gap describes
+        // a window that never existed (issue #180).
+        var windowStart = ResetDetector.FindCurrentWindowStart(samples);
+        var nextReset = ResetDetector.PredictNextReset(windowStart, utcNow);
 
         // Weekly reset (issue #6, ADR-0011). This IS the discovery loop: every poll
         // re-scans the whole retained series for `sd` drops and folds them into the
@@ -177,7 +189,10 @@ public sealed class PlanHistoryProvider : IUsageProvider
             latest.AtUtc,
             weeklyReset?.AtUtc,
             weeklyReset?.Uncertainty,
-            weeklyReset?.Period);
+            weeklyReset?.Period,
+            // How wide the bracket is, so a start inferred across a sampling gap is marked
+            // approximate rather than printed to the minute (rule 6).
+            windowStart?.Uncertainty);
     }
 
     /// <summary>
