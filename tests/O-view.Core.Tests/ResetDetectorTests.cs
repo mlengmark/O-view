@@ -190,6 +190,83 @@ public class ResetDetectorTests
         Assert.Equal(T0.AddMinutes(300).AddHours(5), reset);
     }
 
+    // ── narrowing with local activity (issue #185) ──────────────────────────────────
+
+    /// <summary>
+    /// A request inside the bracket proves the window was already running then, so it is a
+    /// better-evidenced upper bound than the sample that first noticed the new window.
+    /// Desktop samples every ~15 minutes, which left the forecast about half an interval
+    /// late.
+    /// </summary>
+    [Fact]
+    public void ActivityInsideTheBracketTightensTheUpperBound()
+    {
+        var bracket = new SessionWindowStart(T0, T0.AddMinutes(15));
+
+        var narrowed = bracket.NarrowedTo(T0.AddMinutes(9));
+
+        Assert.Equal(T0.AddMinutes(9), narrowed.LatestUtc);
+        Assert.Equal(T0, narrowed.EarliestUtc);
+        Assert.Equal(T0.AddMinutes(9).AddHours(5), narrowed.ResetAtUtc);
+        Assert.Equal(TimeSpan.FromMinutes(9), narrowed.Uncertainty);
+    }
+
+    /// <summary>
+    /// The safety property, and the reason this is allowed at all under ADR-0011: narrowing
+    /// can only ever move the forecast <b>earlier or nowhere</b>. A rule that could push it
+    /// later would be inventing headroom.
+    /// </summary>
+    [Fact]
+    public void NarrowingNeverMovesTheForecastLater()
+    {
+        var bracket = new SessionWindowStart(T0, T0.AddMinutes(15));
+
+        foreach (var candidate in new DateTimeOffset?[]
+                 {
+                     null, T0.AddMinutes(-30), T0, T0.AddMinutes(1),
+                     T0.AddMinutes(14), T0.AddMinutes(15), T0.AddMinutes(90),
+                 })
+        {
+            Assert.True(bracket.NarrowedTo(candidate).ResetAtUtc <= bracket.ResetAtUtc);
+        }
+    }
+
+    /// <summary>
+    /// Activity at or before the lower bound belongs to the <i>previous</i> window — the one
+    /// that was ending — so it says nothing about this one and must be ignored rather than
+    /// used to widen the bracket downwards.
+    /// </summary>
+    [Fact]
+    public void ActivityBeforeTheBracketIsIgnored()
+    {
+        var bracket = new SessionWindowStart(T0, T0.AddMinutes(15));
+
+        Assert.Equal(bracket, bracket.NarrowedTo(T0));
+        Assert.Equal(bracket, bracket.NarrowedTo(T0.AddMinutes(-1)));
+    }
+
+    /// <summary>Activity after the bracket is a request made after a start already bound.</summary>
+    [Fact]
+    public void ActivityAfterTheBracketIsIgnored()
+    {
+        var bracket = new SessionWindowStart(T0, T0.AddMinutes(15));
+
+        Assert.Equal(bracket, bracket.NarrowedTo(T0.AddMinutes(15)));
+        Assert.Equal(bracket, bracket.NarrowedTo(T0.AddHours(3)));
+    }
+
+    /// <summary>
+    /// No local record is the normal case for a chat or Desktop-app user, not a failure. It
+    /// degrades to exactly the plan-history bracket.
+    /// </summary>
+    [Fact]
+    public void NoActivityLeavesTheBracketUnchanged()
+    {
+        var bracket = new SessionWindowStart(T0, T0.AddMinutes(15));
+
+        Assert.Equal(bracket, bracket.NarrowedTo(null));
+    }
+
     /// <summary>The latest boundary wins, not the first — several can sit in one series.</summary>
     [Fact]
     public void TheMostRecentBoundaryWins()

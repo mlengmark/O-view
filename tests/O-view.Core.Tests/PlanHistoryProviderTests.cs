@@ -380,4 +380,67 @@ public class PlanHistoryProviderTests : IDisposable
 
         Assert.Null(provider.GetSnapshot(Now).SessionResetAtUtc);
     }
+
+    // ── narrowing with local activity (issue #185) ──────────────────────────────────
+
+    /// <summary>
+    /// The measured case. Desktop samples every ~15 minutes, so the window's start is only
+    /// bracketed to that — and forecasting from the upper bound left the reset about half an
+    /// interval late (~8m53s against Desktop on 2026-08-23). A local request inside the
+    /// bracket proves the window was already running, tightening the bound.
+    /// </summary>
+    [Fact]
+    public void ARequestInsideTheBracketTightensTheReset()
+    {
+        var lastZero = Now.AddMinutes(-20);
+        var firstSeen = Now.AddMinutes(-5);
+        var firstRequest = Now.AddMinutes(-14);
+
+        var path = WriteSamples(
+            (lastZero, "org-a", 0, 6),
+            (firstSeen, "org-a", 9, 7));
+        var provider = new PlanHistoryProvider(path,
+            earliestActivity: (from, to) => firstRequest > from && firstRequest <= to ? firstRequest : null);
+
+        var snapshot = provider.GetSnapshot(Now);
+
+        Assert.Equal(firstRequest.AddHours(5), snapshot.SessionResetAtUtc);
+        Assert.Equal(TimeSpan.FromMinutes(6), snapshot.SessionResetUncertainty);
+    }
+
+    /// <summary>
+    /// No transcript in the bracket — a chat-only or Desktop-only user — falls back to
+    /// exactly the plan-history behaviour. This may only ever improve a figure.
+    /// </summary>
+    [Fact]
+    public void NoLocalActivityFallsBackToThePlanHistoryBracket()
+    {
+        var firstSeen = Now.AddMinutes(-5);
+        var path = WriteSamples(
+            (Now.AddMinutes(-20), "org-a", 0, 6),
+            (firstSeen, "org-a", 9, 7));
+
+        var withoutLookup = new PlanHistoryProvider(path).GetSnapshot(Now);
+        var withEmptyLookup = new PlanHistoryProvider(path, earliestActivity: (_, _) => null).GetSnapshot(Now);
+
+        Assert.Equal(firstSeen.AddHours(5), withoutLookup.SessionResetAtUtc);
+        Assert.Equal(withoutLookup.SessionResetAtUtc, withEmptyLookup.SessionResetAtUtc);
+    }
+
+    /// <summary>
+    /// A refinement must never take down the reading it refines. A store that throws leaves
+    /// the plan-history answer intact rather than blanking the panel.
+    /// </summary>
+    [Fact]
+    public void AFailingActivityLookupLeavesTheResetIntact()
+    {
+        var firstSeen = Now.AddMinutes(-5);
+        var path = WriteSamples(
+            (Now.AddMinutes(-20), "org-a", 0, 6),
+            (firstSeen, "org-a", 9, 7));
+        var provider = new PlanHistoryProvider(path,
+            earliestActivity: (_, _) => throw new InvalidOperationException("store is busy"));
+
+        Assert.Equal(firstSeen.AddHours(5), provider.GetSnapshot(Now).SessionResetAtUtc);
+    }
 }

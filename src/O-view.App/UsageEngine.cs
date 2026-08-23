@@ -130,7 +130,11 @@ public sealed class UsageEngine : IDisposable
         _planHistory = _options.PlanHistory ?? new PlanHistoryProvider(
             path: _options.PlanHistoryPath,
             orgUuid: account?.OrganizationUuid,
-            weeklyResetLog: weeklyResets);
+            weeklyResetLog: weeklyResets,
+            // Local request times tighten the five-hour window's start bracket (issue #185).
+            // The engine owns both halves, so the wiring lives here rather than teaching the
+            // plan-history provider about the rollup store.
+            earliestActivity: _store.EarliestRequestBetween);
 
         _provider = _options.Provider ?? new CompositeUsageProvider(
             _planHistory,

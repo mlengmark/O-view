@@ -101,4 +101,64 @@ public class RollupStoreTests : IDisposable
         // The corrupt original was preserved for post-mortem, not silently destroyed.
         Assert.NotEmpty(Directory.GetFiles(_dir, "corrupt.db.corrupt-*"));
     }
+
+    // ── earliest request in an interval (issue #185) ────────────────────────────────
+
+    private static TranscriptRecord At(string id, string timestamp) =>
+        new(id, DateTimeOffset.Parse(timestamp), "claude-opus-5", 10, 100, 200, 50);
+
+    /// <summary>
+    /// Used to tighten the five-hour window's start bracket: the earliest request in the
+    /// interval is the moment the window is first known to have been running.
+    /// </summary>
+    [Fact]
+    public void EarliestRequestBetween_ReturnsTheFirstRequestInTheInterval()
+    {
+        _store.Ingest([
+            At("a", "2026-08-23T18:50:00Z"),
+            At("b", "2026-08-23T19:02:00Z"),
+            At("c", "2026-08-23T19:05:00Z"),
+        ]);
+
+        var earliest = _store.EarliestRequestBetween(
+            DateTimeOffset.Parse("2026-08-23T18:52:00Z"),
+            DateTimeOffset.Parse("2026-08-23T19:07:00Z"));
+
+        Assert.Equal(DateTimeOffset.Parse("2026-08-23T19:02:00Z"), earliest);
+    }
+
+    /// <summary>
+    /// Exclusive at the lower end: a request exactly at the previous sample belongs to the
+    /// window that was ending, and admitting it would widen the bracket rather than narrow it.
+    /// </summary>
+    [Fact]
+    public void EarliestRequestBetween_ExcludesTheLowerBoundAndIncludesTheUpper()
+    {
+        _store.Ingest([At("lower", "2026-08-23T18:52:00Z"), At("upper", "2026-08-23T19:07:00Z")]);
+
+        var found = _store.EarliestRequestBetween(
+            DateTimeOffset.Parse("2026-08-23T18:52:00Z"),
+            DateTimeOffset.Parse("2026-08-23T19:07:00Z"));
+
+        Assert.Equal(DateTimeOffset.Parse("2026-08-23T19:07:00Z"), found);
+    }
+
+    /// <summary>No activity is the normal case for a chat-only user, not an error.</summary>
+    [Fact]
+    public void EarliestRequestBetween_IsNullWhenNothingFallsInside()
+    {
+        _store.Ingest([At("a", "2026-08-23T12:00:00Z")]);
+
+        Assert.Null(_store.EarliestRequestBetween(
+            DateTimeOffset.Parse("2026-08-23T18:52:00Z"),
+            DateTimeOffset.Parse("2026-08-23T19:07:00Z")));
+    }
+
+    [Fact]
+    public void EarliestRequestBetween_IsNullOnAnEmptyStore()
+    {
+        Assert.Null(_store.EarliestRequestBetween(
+            DateTimeOffset.Parse("2026-08-23T00:00:00Z"),
+            DateTimeOffset.Parse("2026-08-24T00:00:00Z")));
+    }
 }
