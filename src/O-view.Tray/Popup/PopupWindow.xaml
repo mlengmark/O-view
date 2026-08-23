@@ -186,23 +186,37 @@
 
             <!-- Credits: deferred pending a data source (ui-spec.md) -->
             <Separator x:Name="CreditsSeparator" Margin="0,12,0,10" Background="{DynamicResource PanelBorder}"/>
-            <Grid>
-                <TextBlock Text="Off-plan usage · last 31 days" FontSize="12" FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextPrimary}"/>
-                <Border x:Name="CreditsBadge" Background="{DynamicResource WarnBg}" CornerRadius="4"
-                        Padding="6,1" HorizontalAlignment="Right">
-                    <TextBlock x:Name="CreditsBadgeText" FontSize="10" Foreground="{DynamicResource WarnText}"/>
-                </Border>
-            </Grid>
-            <Grid Margin="0,6,0,0">
-                <TextBlock x:Name="CreditsSpendLabel" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
-                <TextBlock x:Name="CreditsSpendValue" FontSize="17" FontWeight="SemiBold"
-                           HorizontalAlignment="Right" Foreground="{DynamicResource TextPrimary}"/>
-            </Grid>
-            <TextBlock x:Name="CreditsCoverage" FontSize="10" Margin="0,2,0,0"
-                       Foreground="{DynamicResource WarnText}"/>
-            <TextBlock x:Name="CreditsNote" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
-                       Foreground="{DynamicResource TextSecondary}"/>
+            <!-- The whole block is the hover target (issue #181): the caveat used to sit
+                 below as two or three permanent lines, which is a lot of standing text for
+                 something most users read once. It moves to a hover card covering both the
+                 heading and the spend figure — the two places a reader's eye actually lands
+                 when asking "what is this number?".
+
+                 Background="Transparent" is load-bearing. A panel with no background has no
+                 hit-testing in the gaps between its children, so the tooltip would appear
+                 over the text and nowhere else — which is exactly the fiddly behaviour the
+                 issue is trying to get away from. -->
+            <StackPanel x:Name="CreditsSection" Background="Transparent">
+                <Grid>
+                    <TextBlock Text="Off-plan usage · last 31 days" FontSize="12" FontWeight="SemiBold"
+                               Foreground="{DynamicResource TextPrimary}"/>
+                    <Border x:Name="CreditsBadge" Background="{DynamicResource WarnBg}" CornerRadius="4"
+                            Padding="6,1" HorizontalAlignment="Right">
+                        <TextBlock x:Name="CreditsBadgeText" FontSize="10" Foreground="{DynamicResource WarnText}"/>
+                    </Border>
+                </Grid>
+                <Grid Margin="0,6,0,0">
+                    <TextBlock x:Name="CreditsSpendLabel" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+                    <TextBlock x:Name="CreditsSpendValue" FontSize="17" FontWeight="SemiBold"
+                               HorizontalAlignment="Right" Foreground="{DynamicResource TextPrimary}"/>
+                </Grid>
+                <!-- The coverage caveat STAYS on screen. It qualifies the figure directly
+                     above it — "30 of 31 days recorded" is the difference between a real
+                     total and a partial one — and rule 6 makes that a requirement rather
+                     than a nicety. Only the explanatory prose moves to hover. -->
+                <TextBlock x:Name="CreditsCoverage" FontSize="10" Margin="0,2,0,0"
+                           Foreground="{DynamicResource WarnText}"/>
+            </StackPanel>
 
         </StackPanel>
     </Border>

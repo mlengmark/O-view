@@ -149,4 +149,39 @@ public class PanelTextTests
         Assert.Equal("", PanelText.OffPlanNote(offPlan: false));
         Assert.Equal("incl. off-plan usage", PanelText.OffPlanNote(offPlan: true));
     }
+
+    /// <summary>
+    /// The off-plan explanation moved from standing text to a hover card (issue #181), and
+    /// the risk in that move is losing the caveat rather than relocating it. Both wordings
+    /// must still say the figure is not what was charged — an "Est." number presented without
+    /// that reads as money taken (rule 6).
+    /// </summary>
+    [Fact]
+    public void TheOffPlanHintKeepsItsCaveatInBothStates()
+    {
+        var withUsage = PanelText.OffPlanHint(hasCreditUsage: true);
+        Assert.Contains("Estimated at published API rates", withUsage, StringComparison.Ordinal);
+        Assert.Contains("billing page", withUsage, StringComparison.Ordinal);
+        Assert.Contains("cannot read your credit balance", withUsage, StringComparison.Ordinal);
+
+        // The zero state has its own caveat, and it is the more important of the two: a
+        // confident "$0.00" is only honest alongside "usage while O-view wasn't running
+        // isn't captured".
+        var without = PanelText.OffPlanHint(hasCreditUsage: false);
+        Assert.Contains("No credit-billed usage", without, StringComparison.Ordinal);
+        Assert.Contains("wasn't running isn't captured", without, StringComparison.Ordinal);
+    }
+
+    /// <summary>Both wordings name the models, so "credit-billed" is never an unexplained label.</summary>
+    [Fact]
+    public void TheOffPlanHintNamesTheCreditBilledModels()
+    {
+        foreach (var hasUsage in new[] { true, false })
+        {
+            Assert.Contains(
+                CreditBilledModels.DisplayList,
+                PanelText.OffPlanHint(hasUsage),
+                StringComparison.Ordinal);
+        }
+    }
 }
