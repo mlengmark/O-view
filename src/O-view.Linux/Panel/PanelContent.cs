@@ -55,17 +55,22 @@ public sealed class PanelContent : Border
         AddHeader(snapshot, account, local, utcNow);
 
         // Explain a blank panel rather than leaving the user to guess (rule 6). Only shown
-        // when the figures are genuinely unavailable.
-        if (!authoritative && dataReport?.Explain() is { Length: > 0 } explanation)
+        // when the figures are genuinely unavailable, and worded from both reports together
+        // — a missing plan file beside working transcripts is a CLI-only user, not a fault
+        // (issue #170).
+        var banner = PanelBanner.Resolve(authoritative, dataReport, scopeReport, stats.Tokens31Days);
+        if (banner is not null)
         {
-            AddBanner("No usage data", explanation);
+            AddBanner(banner.Title, banner.Detail);
         }
 
+        var placeholder = banner?.GaugePlaceholder ?? PanelBanner.UnknownGauge;
+
         AddBar("Current session", authoritative ? snapshot.SessionPercent : null,
-            PanelText.SessionReset(snapshot.SessionResetAtUtc, utcNow, local));
+            PanelText.SessionReset(snapshot.SessionResetAtUtc, utcNow, local), placeholder);
 
         AddBar("Weekly", authoritative ? snapshot.WeeklyPercent : null,
-            WeeklyResetLine(snapshot, authoritative, utcNow, local));
+            WeeklyResetLine(snapshot, authoritative, utcNow, local), placeholder);
 
         AddTiles(stats);
         AddGraph(stats);
@@ -136,11 +141,11 @@ public sealed class PanelContent : Border
     /// A usage bar. A null percentage draws the track alone — never a fabricated fill, and
     /// never a zero that would read as "no usage" when the truth is "not known" (rule 6).
     /// </summary>
-    private void AddBar(string label, int? percent, string? resetLine)
+    private void AddBar(string label, int? percent, string? resetLine, string placeholder)
     {
         var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         header.Children.Add(Text(label, 14, _theme["TextPrimary"], FontWeight.SemiBold));
-        var value = Text(percent is { } p ? $"{p}% used" : "unknown", 14, _theme["TextSecondary"]);
+        var value = Text(percent is { } p ? $"{p}% used" : placeholder, 14, _theme["TextSecondary"]);
         value.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetColumn(value, 1);
         header.Children.Add(value);

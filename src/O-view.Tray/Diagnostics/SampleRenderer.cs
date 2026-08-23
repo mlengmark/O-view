@@ -6,6 +6,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using OView.Core.Models;
 using OView.Core.Providers.Jsonl;
+using OView.Core.Providers.PlanHistory;
 using OView.Tray.Popup;
 using OView.Tray.Tray;
 using OView.Tray.Updates;
@@ -109,14 +110,45 @@ internal static class SampleRenderer
             projectsRoot: @"C:\Users\<user>\.claude\projects",
             coworkRoots: [@"C:\Users\<user>\AppData\Roaming\Claude\local-agent-mode-sessions"]);
 
-        var cases = new (string Name, UsageSnapshot Snapshot, PanelStatistics Stats, TranscriptScopeReport? Scope)[]
+        // A Claude Code CLI user: no plan-history file to read, so the two gauges have no
+        // source — while the token tiles are filled from their own transcripts. Both reports
+        // are constructed with fixed values so the sample is deterministic and leaks no real
+        // path. This state had never been rendered, which is how the banner came to say
+        // "No usage data" above two populated tiles and tell the reader to start an
+        // application they do not use (issue #170).
+        var cliOnlyPlan = new PlanHistoryReport(
+            PlanDataStatus.FileMissing,
+            @"C:\Users\<user>\AppData\Roaming\Claude\plan-usage-history.json",
+            FileExists: false, FileBytes: 0, RawSampleCount: 0, ValidSampleCount: 0,
+            Orgs: [], LatestSampleAge: null, Detail: null)
         {
-            ("plan-weeks", live, stats, null),
+            Searched = [@"C:\Users\<user>\AppData\Roaming\Claude\plan-usage-history.json"],
+        };
+
+        var cliOnlyScope = TranscriptScopeReport.Inspect(
+            projectsRoot: @"C:\Users\<user>\.claude\projects",
+            coworkRoots: []) with
+        {
+            // Inspect finds nothing under a path that does not exist here, and the point of
+            // this sample is the opposite case: transcripts present, plan file absent.
+            Sources = [new TranscriptSource("Claude Code", [@"C:\Users\<user>\.claude\projects"], 42, 6_700_000, capturedAt)],
+        };
+
+        var cases = new (string Name, UsageSnapshot Snapshot, PanelStatistics Stats,
+            TranscriptScopeReport? Scope, PlanHistoryReport? Plan)[]
+        {
+            ("plan-weeks", live, stats, null, null),
             // No reset observed: Monday-midnight gridlines, and "Waiting for first reset…".
             ("awaiting-first-reset", new UsageSnapshot(DataSource.Live, 25, 3,
-                capturedAt.AddHours(3), capturedAt), stats, null),
+                capturedAt.AddHours(3), capturedAt), stats, null, null),
             // The token-scope note, which appears in no other state.
-            ("no-local-transcripts", live, noLocalUsage, emptyScope),
+            ("no-local-transcripts", live, noLocalUsage, emptyScope, null),
+            // The CLI-only banner and its "needs Claude Desktop" gauges. Estimate, not None:
+            // the transcripts do resolve, so the composite labels the snapshot a local
+            // estimate and the header reads that way — it just carries no percentages,
+            // because no true percentage-of-limit is derivable from JSONL (ADR-0002).
+            ("cli-only", new UsageSnapshot(DataSource.Estimate, null, null, null, capturedAt),
+                stats, cliOnlyScope, cliOnlyPlan),
         };
 
         foreach (var light in new[] { true, false })
@@ -128,9 +160,9 @@ internal static class SampleRenderer
                 [.. new PopupWindow { ThemeOverride = light }.BuildSampleHoverCards(light)],
                 "graph-hover-cards");
 
-            foreach (var (name, snapshot, caseStats, scope) in cases)
+            foreach (var (name, snapshot, caseStats, scope, plan) in cases)
             {
-                var popup = new PopupWindow { ThemeOverride = light, ScopeReport = scope };
+                var popup = new PopupWindow { ThemeOverride = light, ScopeReport = scope, DataReport = plan };
                 var bitmap = popup.RenderToBitmap(snapshot, caseStats, account, scale);
 
                 SavePng(bitmap, Path.Combine(dir, $"panel-{name}-{(light ? "light" : "dark")}.png"));
