@@ -77,6 +77,39 @@ public static class PanelText
     public static bool IsApproximate(TimeSpan? uncertainty) =>
         (uncertainty ?? TimeSpan.Zero) > WeeklyResetDetector.PreciseBracket;
 
+    /// <summary>
+    /// Marks a weekly reset the user entered rather than one O-view inferred (issue #186).
+    /// Short, because it sits beside the time rather than under it — the reasoning belongs in
+    /// <see cref="WeeklyResetUserSuppliedHint"/>.
+    /// </summary>
+    public const string WeeklyResetUserSupplied = "you set this";
+
+    /// <summary>Hover text explaining why an entered reset outranks a derived one.</summary>
+    public const string WeeklyResetUserSuppliedHint =
+        "You entered this from Claude's own Settings → Usage, so O-view shows it exactly "
+        + "rather than the time it derives by watching the weekly percentage fall. It keeps "
+        + "deriving in the background and will tell you if an observed reset ever disagrees.";
+
+    /// <summary>
+    /// Told to the user when an observed reset disproves what they entered (issue #186).
+    ///
+    /// <para>Says what was observed and what to do, and does not decide for them which is
+    /// wrong: a plan change, a typo and a genuine schedule change all look identical from
+    /// here. The entry has already been set aside in favour of the observation — a number
+    /// O-view has evidence against must not stay on screen (rule 6) — so this explains a
+    /// change that has already happened rather than asking permission for one.</para>
+    /// </summary>
+    public static string WeeklyResetConflict(
+        DateTimeOffset observedEarliestUtc, DateTimeOffset observedLatestUtc, TimeZoneInfo local)
+    {
+        var from = TimeZoneInfo.ConvertTime(observedEarliestUtc, local);
+        var to = TimeZoneInfo.ConvertTime(observedLatestUtc, local);
+
+        return $"O-view saw the weekly limit reset between {from:ddd HH:mm} and {to:ddd HH:mm}, "
+            + "which does not match the time you entered. It is using what it observed. "
+            + "Check Settings → Usage in Claude and re-enter the time if your plan changed.";
+    }
+
     /// <summary>Hover text for an approximate weekly reset, naming how wide the bracket is.</summary>
     public static string WeeklyResetApproximateHint(TimeSpan uncertainty) =>
         $"The weekly reset was observed while Claude Desktop wasn't sampling, so it is "

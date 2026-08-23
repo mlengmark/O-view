@@ -443,4 +443,137 @@ public class PlanHistoryProviderTests : IDisposable
 
         Assert.Equal(firstSeen.AddHours(5), provider.GetSnapshot(Now).SessionResetAtUtc);
     }
+
+    // ── the entered weekly reset (issue #186) ───────────────────────────────────────
+
+    /// <summary>
+    /// Precedence over inference. The user read this off Claude's Settings → Usage; O-view
+    /// derives its own from a ~10 hour overnight bracket. The entry wins, and carries zero
+    /// uncertainty so it does not wear the "~" that marks an approximation.
+    /// </summary>
+    /// <summary>
+    /// The most recent occurrence of <paramref name="entry"/> strictly before
+    /// <paramref name="before"/>, so a test can build an observation that agrees with it.
+    /// </summary>
+    private static DateTimeOffset PreviousBoundary(ManualWeeklyReset entry, DateTimeOffset before) =>
+        entry.NextAfter(before.AddDays(-8), TimeZoneInfo.Local) is var first && first < before
+            ? Enumerable.Range(0, 8)
+                .Select(i => entry.NextAfter(before.AddDays(-8 + i), TimeZoneInfo.Local))
+                .Last(at => at < before)
+            : first;
+
+    [Fact]
+    public void AnEnteredWeeklyResetBeatsTheDerivedOne()
+    {
+        var entry = new ManualWeeklyReset(DayOfWeek.Monday, new TimeOnly(22, 59));
+
+        // An observation that AGREES with the entry — a bracket straddling its boundary.
+        // The derived forecast would still carry that bracket's uncertainty; the entry
+        // replaces it with an exact time.
+        var boundary = PreviousBoundary(entry, Now);
+        var log = new MemoryResetLog();
+        log.Record([new WeeklyResetObservation(
+            boundary.AddHours(-4), boundary.AddHours(4), "org-a")]);
+
+        var path = WriteSamples((Now.AddMinutes(-5), "org-a", 20, 60));
+        var provider = new PlanHistoryProvider(path, weeklyResetLog: log) { ManualWeeklyReset = entry };
+
+        var snapshot = provider.GetSnapshot(Now);
+
+        Assert.Null(provider.ManualWeeklyResetConflict);
+        Assert.Equal(TimeSpan.Zero, snapshot.WeeklyResetUncertainty);
+        Assert.Equal(DayOfWeek.Monday,
+            TimeZoneInfo.ConvertTime(snapshot.WeeklyResetAtUtc!.Value, TimeZoneInfo.Local).DayOfWeek);
+        Assert.Equal(new TimeOnly(22, 59),
+            TimeOnly.FromDateTime(TimeZoneInfo.ConvertTime(
+                snapshot.WeeklyResetAtUtc!.Value, TimeZoneInfo.Local).DateTime));
+    }
+
+    /// <summary>
+    /// With nothing entered, nothing changes — the derived forecast still runs and still
+    /// carries its bracket.
+    /// </summary>
+    [Fact]
+    public void WithNoEntryTheDerivedForecastIsUnchanged()
+    {
+        var log = new MemoryResetLog();
+        log.Record([new WeeklyResetObservation(
+            Now.AddDays(-7).AddHours(-10), Now.AddDays(-7), "org-a")]);
+
+        var path = WriteSamples((Now.AddMinutes(-5), "org-a", 20, 60));
+        var snapshot = new PlanHistoryProvider(path, weeklyResetLog: log).GetSnapshot(Now);
+
+        Assert.NotNull(snapshot.WeeklyResetAtUtc);
+        Assert.True(snapshot.WeeklyResetUncertainty > TimeSpan.Zero);
+    }
+
+    /// <summary>
+    /// Entry loses to evidence. The reset demonstrably happened inside the observed bracket,
+    /// so an entry outside it cannot also be true — and a number O-view has evidence against
+    /// must not stay on screen (rule 6). It falls back to the observation AND records the
+    /// conflict, because silently overriding leaves the user believing what they typed.
+    /// </summary>
+    [Fact]
+    public void AnObservationThatDisprovesTheEntryWinsAndIsRecorded()
+    {
+        // Observed reset on a Thursday; the entry claims Monday.
+        var observedFrom = Now.AddDays(-2).Date.AddHours(6);
+        while (TimeZoneInfo.ConvertTime(new DateTimeOffset(observedFrom, TimeSpan.Zero), TimeZoneInfo.Local)
+               .DayOfWeek == DayOfWeek.Monday)
+        {
+            observedFrom = observedFrom.AddDays(1);
+        }
+
+        var observation = new WeeklyResetObservation(
+            new DateTimeOffset(observedFrom, TimeSpan.Zero),
+            new DateTimeOffset(observedFrom.AddHours(2), TimeSpan.Zero),
+            "org-a");
+
+        var log = new MemoryResetLog();
+        log.Record([observation]);
+
+        var path = WriteSamples((Now.AddMinutes(-5), "org-a", 20, 60));
+        var provider = new PlanHistoryProvider(path, weeklyResetLog: log)
+        {
+            ManualWeeklyReset = new ManualWeeklyReset(DayOfWeek.Monday, new TimeOnly(22, 59)),
+        };
+
+        var snapshot = provider.GetSnapshot(Now);
+
+        Assert.NotNull(provider.ManualWeeklyResetConflict);
+        Assert.Equal(observation, provider.ManualWeeklyResetConflict);
+
+        // Fell back to the derived value, which carries a bracket rather than zero.
+        Assert.True(snapshot.WeeklyResetUncertainty > TimeSpan.Zero);
+    }
+
+    /// <summary>
+    /// The conflict clears once the entry and the evidence agree again — otherwise a single
+    /// bad week would nag forever after the user corrected it.
+    /// </summary>
+    [Fact]
+    public void TheConflictClearsWhenTheEntryAgreesAgain()
+    {
+        var log = new MemoryResetLog();
+        log.Record([new WeeklyResetObservation(
+            Now.AddDays(-7).AddHours(-10), Now.AddDays(-7), "org-a")]);
+
+        var path = WriteSamples((Now.AddMinutes(-5), "org-a", 20, 60));
+        var provider = new PlanHistoryProvider(path, weeklyResetLog: log)
+        {
+            ManualWeeklyReset = new ManualWeeklyReset(DayOfWeek.Sunday, new TimeOnly(3, 0)),
+        };
+
+        provider.GetSnapshot(Now);
+        var flaggedFirst = provider.ManualWeeklyResetConflict is not null;
+
+        // Re-enter a time that sits inside the observed bracket.
+        var inBracket = TimeZoneInfo.ConvertTime(Now.AddDays(-7).AddHours(-5), TimeZoneInfo.Local);
+        provider.ManualWeeklyReset = new ManualWeeklyReset(
+            inBracket.DayOfWeek, TimeOnly.FromDateTime(inBracket.DateTime));
+        provider.GetSnapshot(Now);
+
+        Assert.True(flaggedFirst, "a Sunday 03:00 entry should conflict with the observed bracket");
+        Assert.Null(provider.ManualWeeklyResetConflict);
+    }
 }

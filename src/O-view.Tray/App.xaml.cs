@@ -140,6 +140,11 @@ public partial class App : System.Windows.Application
         _updates = new UpdateService(log);
         _engine.UpdateCheckDue += () => _ = BackgroundCheckAsync();
 
+        // A conflict is discovered while resolving the weekly reset, which happens on every
+        // poll — so this rides the same signal rather than needing its own schedule. The
+        // notice itself fires once per conflicting observation (issue #186).
+        _engine.SnapshotUpdated += _ => NotifyWeeklyResetConflict();
+
         // Ticks arrive on the UI thread; the reading happens off it and comes back through
         // the dispatcher, so a first ingest over a large transcript history cannot hold the
         // message pump (issue #125).
@@ -279,6 +284,7 @@ public partial class App : System.Windows.Application
         // roots and real file counts, never a hard-coded path (issue #58).
         popup.DataReport = PlanHistoryDiagnostics.Inspect();
         popup.ScopeReport = TranscriptScopeReport.Inspect();
+        popup.SettingsForDisplay = _engine.Settings;
         popup.ShowNearTrayIcon(
             _engine.Latest,
             _engine.BuildStatistics(),
@@ -336,7 +342,64 @@ public partial class App : System.Windows.Application
             // rest of this is: it is a fact about how this build was installed, and the
             // policy is the single place that decides it (ADR-0009).
             CanUpdateAutomatically: UpdatePolicy.MayDownloadAndRun(UpdateService.CurrentInstallKind),
-            Version: UpdateService.CurrentVersion));
+            Version: UpdateService.CurrentVersion,
+            WeeklyReset: WeeklyResetRowLabel()));
+    }
+
+    /// <summary>
+    /// What the menu row shows on its right: the entered reset, or empty when O-view is
+    /// deriving one. Reads the engine on every open rather than caching — the same rule the
+    /// rest of the menu state follows.
+    /// </summary>
+    private string WeeklyResetRowLabel() =>
+        _engine?.Settings.WeeklyReset is { } reset ? $"{reset.DayText[..3]} {reset.TimeText}" : "";
+
+    /// <summary>
+    /// Opens the weekly-reset entry (issue #186), applies whatever comes back, and refreshes
+    /// so the panel and the graph's week gridlines move with it — the gridlines read the
+    /// snapshot's weekly reset, so they follow without separate wiring.
+    /// </summary>
+    private void EditWeeklyReset()
+    {
+        if (_engine is null)
+        {
+            return;
+        }
+
+        var (entry, changed) = WeeklyResetDialog.Show(_engine.Settings.WeeklyReset);
+        if (!changed)
+        {
+            return;
+        }
+
+        _engine.SetWeeklyReset(entry);
+        _engine.Refresh();
+    }
+
+    /// <summary>
+    /// Tells the user once when an observed reset disproves what they entered (issue #186).
+    ///
+    /// <para>The provider has already set the entry aside in favour of the observation — a
+    /// number O-view has evidence against must not stay on screen — so this explains a change
+    /// that has already happened. Silence would leave them believing the time they typed.</para>
+    ///
+    /// <para>Once per conflicting observation, not once per poll: the check runs every
+    /// refresh, and a warning that reappears every 20 seconds is one people learn to
+    /// dismiss.</para>
+    /// </summary>
+    private void NotifyWeeklyResetConflict()
+    {
+        if (_engine?.WeeklyResetConflict is not { } conflict
+            || !_engine.IsWeeklyResetConflictUnseen(conflict))
+        {
+            return;
+        }
+
+        _engine.MarkWeeklyResetConflictNoticed(conflict);
+        _trayHost?.ShowNotification(
+            "Weekly reset time doesn't match",
+            PanelText.WeeklyResetConflict(conflict.EarliestUtc, conflict.LatestUtc, TimeZoneInfo.Local),
+            NotificationKind.Warning);
     }
 
     private MenuWindow CreateMenu()
@@ -358,6 +421,7 @@ public partial class App : System.Windows.Application
         // One-click support bundle: a blank panel is otherwise indistinguishable from
         // "Desktop missing", "unexpected file format", or "file unreadable", and asking
         // users to run PowerShell by hand is not a diagnosis path.
+        menu.WeeklyResetRequested += (_, _) => EditWeeklyReset();
         menu.CopyDiagnosticsRequested += (_, _) => CopyDiagnostics();
         // "Check for updates" sits directly above Exit, as requested in issue #18.
         menu.CheckForUpdatesRequested += async (_, _) => await CheckForUpdatesInteractiveAsync();

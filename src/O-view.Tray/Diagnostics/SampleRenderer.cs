@@ -435,6 +435,23 @@ internal static class SampleRenderer
                     ComposeOnBackdrop(card, light, scale, pad),
                     Path.Combine(dir, $"dialog-{name}-{(light ? "light" : "dark")}.png"));
             }
+
+            // The weekly-reset entry (issue #186). Rendered because it is the first surface
+            // in the app carrying input controls, and WPF's stock TextBox and ComboBox come
+            // with system chrome that no unit test can see — a white field on a dark panel
+            // looks like a different program and is invisible in the source.
+            foreach (var (name, entry, error) in new (string, ManualWeeklyReset?, string?)[]
+                     {
+                         ("empty", null, null),
+                         ("set", new ManualWeeklyReset(DayOfWeek.Monday, new TimeOnly(22, 59)), null),
+                         ("invalid", null, "'10:59 PM' is not a 24-hour time. Enter it as HH:mm — 22:59, not 10:59 PM."),
+                     })
+            {
+                var entryDialog = new WeeklyResetDialog { ThemeOverride = light };
+                SavePng(
+                    ComposeOnBackdrop(entryDialog.RenderToBitmap(entry, scale, error), light, scale, pad),
+                    Path.Combine(dir, $"weekly-reset-{name}-{(light ? "light" : "dark")}.png"));
+            }
         }
     }
 

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using OView.Core.Providers.PlanHistory;
 
 namespace OView.Core.Models;
 
@@ -35,12 +36,31 @@ namespace OView.Core.Models;
 /// decides whether anything may be fetched or executed, and a portable, <c>.deb</c> or
 /// tarball build ignores this setting entirely.</para>
 /// </param>
+/// <param name="WeeklyResetDay">
+/// Weekday of the user's weekly reset, as read from Claude's Settings → Usage. Empty means
+/// "not set", and O-view derives the reset instead (GitHub issue #186).
+///
+/// <para><b>Deliberately not org-scoped</b>, unlike the observation log. Windows are
+/// per-organization, so an account that switches org would carry the wrong entry across —
+/// but a settings file is the natural home for something the user typed, and the failure is
+/// visible and one edit to fix. Revisit if multi-org turns out to be common.</para>
+/// </param>
+/// <param name="WeeklyResetTime">
+/// Time of day of that reset, <c>HH:mm</c>, local. Stored as text so the file stays legible
+/// and no enum ordinal can shift meaning underneath it.
+/// </param>
 public sealed record TraySettings(
     bool NotifyOnThreshold = true,
     int ThresholdPercent = UsageLevels.CriticalPercent,
     string LastUpdateNoticeTag = "",
-    bool UpdateAutomatically = false)
+    bool UpdateAutomatically = false,
+    string WeeklyResetDay = "",
+    string WeeklyResetTime = "",
+    string WeeklyResetConflictNoticed = "")
 {
+    /// <summary>The user's entered reset, or null when unset or unreadable.</summary>
+    public ManualWeeklyReset? WeeklyReset => ManualWeeklyReset.Parse(WeeklyResetDay, WeeklyResetTime);
+
     public static string DefaultPath => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "O-view",

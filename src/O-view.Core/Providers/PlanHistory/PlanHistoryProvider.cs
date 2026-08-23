@@ -245,6 +245,19 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// Scoped to the org the samples belong to: windows are per-organization, and an
     /// account that switches org must not have the two sets of resets averaged together.
     /// </summary>
+    /// <summary>
+    /// The weekly reset the user entered, when they have entered one. Set by the head from
+    /// settings; null means derive it (GitHub issue #186).
+    /// </summary>
+    public ManualWeeklyReset? ManualWeeklyReset { get; set; }
+
+    /// <summary>
+    /// The observation that disproved the entered reset, if one has. Read by the head so it
+    /// can tell the user once — a wrong entry that is silently overridden is worse than no
+    /// entry, because they go on believing the number they typed.
+    /// </summary>
+    public WeeklyResetObservation? ManualWeeklyResetConflict { get; private set; }
+
     private WeeklyResetForecast? ForecastWeeklyReset(
         IReadOnlyList<PlanHistorySample> samples, DateTimeOffset utcNow)
     {
@@ -256,8 +269,10 @@ public sealed class PlanHistoryProvider : IUsageProvider
         try
         {
             _weeklyResetLog.Record(WeeklyResetDetector.FindResets(samples));
-            return WeeklyResetDetector.PredictNextReset(
-                _weeklyResetLog.GetObservations(samples[^1].OrgUuid), utcNow);
+            var observations = _weeklyResetLog.GetObservations(samples[^1].OrgUuid);
+            var derived = WeeklyResetDetector.PredictNextReset(observations, utcNow);
+
+            return ResolveWeeklyReset(derived, observations, utcNow);
         }
         catch (Exception)
         {
@@ -266,5 +281,53 @@ public sealed class PlanHistoryProvider : IUsageProvider
             // percentages, which do not depend on it. Degrade to unknown and carry on.
             return null;
         }
+    }
+
+    /// <summary>
+    /// Chooses between what the user entered and what O-view derived (GitHub issue #186).
+    ///
+    /// <para><b>The entry wins over inference, and loses to evidence.</b> Anthropic assigns
+    /// the weekly reset as a fixed time the user can read directly, so an entered value comes
+    /// from the authoritative source while the derived one is inferred from a ~10-hour
+    /// sampling gap. That justifies precedence — but not immunity.</para>
+    ///
+    /// <para>An observed bracket is proof of <i>within what</i> the reset fell. If the entered
+    /// boundary lies outside every such bracket, the two cannot both be true, and continuing
+    /// to show the entry would be displaying a number O-view has evidence against — the exact
+    /// thing rule 6 forbids. So a contradiction hands the answer back to the derived value
+    /// <b>and</b> is recorded for the head to surface. Flagging while still showing the
+    /// disproven number would be the worst of both.</para>
+    ///
+    /// <para>The most recent observation decides. An older one can legitimately disagree
+    /// because the account's schedule changed — which is the case where the newest evidence is
+    /// the only relevant evidence.</para>
+    /// </summary>
+    private WeeklyResetForecast? ResolveWeeklyReset(
+        WeeklyResetForecast? derived,
+        IReadOnlyList<WeeklyResetObservation> observations,
+        DateTimeOffset utcNow)
+    {
+        ManualWeeklyResetConflict = null;
+
+        if (ManualWeeklyReset is not { } manual)
+        {
+            return derived;
+        }
+
+        var local = TimeZoneInfo.Local;
+        var newest = observations.Count > 0
+            ? observations.OrderByDescending(o => o.LatestUtc).First()
+            : null;
+
+        if (newest is not null && manual.IsContradictedBy(newest, local))
+        {
+            ManualWeeklyResetConflict = newest;
+            return derived;
+        }
+
+        // Zero uncertainty: the user read this off Claude, so it is not an approximation and
+        // must not wear the "~" that marks one.
+        return new WeeklyResetForecast(
+            manual.NextAfter(utcNow, local), TimeSpan.Zero, WeeklyResetDetector.WindowLength);
     }
 }

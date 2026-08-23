@@ -146,7 +146,64 @@ public sealed class UsageEngine : IDisposable
 
         Settings = TraySettings.Load(_options.SettingsPath);
         _watcher = new ThresholdWatcher(Settings.ThresholdPercent);
+        ApplyWeeklyResetSetting();
     }
+
+    /// <summary>
+    /// Pushes the user's entered weekly reset into the provider (GitHub issue #186). Called
+    /// on construction and after every change, so the two can never disagree about what is
+    /// set — the shape of bug where a preference is saved and does not take effect until a
+    /// restart.
+    /// </summary>
+    private void ApplyWeeklyResetSetting()
+    {
+        if (_planHistory is not null)
+        {
+            _planHistory.ManualWeeklyReset = Settings.WeeklyReset;
+        }
+    }
+
+    /// <summary>
+    /// Applies and persists the user's weekly reset time, returning what is now in effect.
+    /// Null clears it and returns to deriving.
+    /// </summary>
+    public ManualWeeklyReset? SetWeeklyReset(ManualWeeklyReset? reset)
+    {
+        Settings = Settings with
+        {
+            WeeklyResetDay = reset?.DayText ?? "",
+            WeeklyResetTime = reset?.TimeText ?? "",
+            // A new entry is a fresh claim: any conflict already reported was about the old
+            // one, so re-arm the notice rather than staying silent about the new value.
+            WeeklyResetConflictNoticed = "",
+        };
+        Settings.Save(_options.SettingsPath);
+        ApplyWeeklyResetSetting();
+
+        _log?.Write($"weekly reset {(reset is null ? "cleared — deriving" : $"set to {reset.DayText} {reset.TimeText} local")}");
+        return Settings.WeeklyReset;
+    }
+
+    /// <summary>
+    /// An observation that disproved the entered weekly reset, or null. Surfaced so the head
+    /// can tell the user once — silently overriding a wrong entry leaves them believing the
+    /// number they typed.
+    /// </summary>
+    public WeeklyResetObservation? WeeklyResetConflict => _planHistory?.ManualWeeklyResetConflict;
+
+    /// <summary>
+    /// Records that the user has been told about <paramref name="conflict"/>, so the notice
+    /// fires once per conflicting observation rather than on every poll.
+    /// </summary>
+    public void MarkWeeklyResetConflictNoticed(WeeklyResetObservation conflict)
+    {
+        Settings = Settings with { WeeklyResetConflictNoticed = conflict.LatestUtc.ToString("o") };
+        Settings.Save(_options.SettingsPath);
+    }
+
+    /// <summary>Whether this conflict is new to the user.</summary>
+    public bool IsWeeklyResetConflictUnseen(WeeklyResetObservation conflict) =>
+        Settings.WeeklyResetConflictNoticed != conflict.LatestUtc.ToString("o");
 
     /// <summary>
     /// Starts polling. Refreshes once immediately so the first result sets the cadence,
