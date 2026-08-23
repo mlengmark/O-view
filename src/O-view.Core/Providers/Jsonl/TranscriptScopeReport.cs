@@ -64,6 +64,14 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
     /// <summary>Every directory searched, across all sources — the evidence behind a "found none".</summary>
     public IReadOnlyList<string> SearchedRoots => Sources.SelectMany(s => s.Roots).ToList();
 
+    /// <summary>
+    /// Labels of the surfaces that actually have transcripts here, for copy that names the
+    /// user's own sources rather than the full list O-view knows how to read. Naming a
+    /// surface a user does not use is the mistake issue #58 was about, pointed the other way.
+    /// </summary>
+    public IReadOnlyList<string> PresentSources =>
+        Sources.Where(s => s.FileCount > 0).Select(s => s.Label).ToList();
+
     public DateTimeOffset? NewestWriteUtc =>
         Sources.Select(s => s.NewestWriteUtc).OfType<DateTimeOffset>() is { } times && times.Any()
             ? times.Max()

@@ -33,11 +33,21 @@ public class DiagnosticsHintTests : IDisposable
         Directory.CreateDirectory(unreadableDir);   // a directory where a file is expected
         var unreadable = PlanHistoryDiagnostics.Inspect(unreadableDir);
 
+        // The CLI-only banner (issue #170) points at diagnostics too — for the user who does
+        // run Desktop but whose packaged install redirected the file out of reach. Both of
+        // its wordings compose the instruction, so both belong under these invariants.
+        var projects = Path.Combine(_dir, "projects", "proj-a");
+        Directory.CreateDirectory(projects);
+        File.WriteAllText(Path.Combine(projects, "session.jsonl"), "{}\n");
+        var scope = TranscriptScopeReport.Inspect(Path.Combine(_dir, "projects"), []);
+
         return
         [
             missing.Explain(),
             unreadable.Explain(),
             TranscriptScopeReport.Inspect(null, []).Explain(),
+            PanelBanner.Resolve(false, missing, scope, tokens31Days: 1)!.Detail,
+            PanelBanner.Resolve(false, missing, scope, tokens31Days: 0)!.Detail,
         ];
     }
 

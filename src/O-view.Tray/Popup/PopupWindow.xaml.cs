@@ -150,12 +150,14 @@ public partial class PopupWindow : Window, IFlyout
         var authoritative = snapshot.Source is DataSource.Live or DataSource.Stale;
 
         // Explain a blank panel rather than leaving the user to guess (rule 6: if data is
-        // unavailable, say so). Only shown when the figures are actually unavailable.
-        var explanation = !authoritative ? DataReport?.Explain() : null;
-        if (explanation is { Length: > 0 })
+        // unavailable, say so). Only shown when the figures are actually unavailable, and
+        // worded from both reports together — a missing plan file beside working transcripts
+        // is a CLI-only user, not a fault (issue #170).
+        var banner = PanelBanner.Resolve(authoritative, DataReport, ScopeReport, stats.Tokens31Days);
+        if (banner is not null)
         {
-            NoDataTitle.Text = "No usage data";
-            NoDataDetail.Text = explanation;
+            NoDataTitle.Text = banner.Title;
+            NoDataDetail.Text = banner.Detail;
             NoDataBanner.Visibility = Visibility.Visible;
         }
         else
@@ -163,13 +165,15 @@ public partial class PopupWindow : Window, IFlyout
             NoDataBanner.Visibility = Visibility.Collapsed;
         }
 
+        var placeholder = banner?.GaugePlaceholder ?? PanelBanner.UnknownGauge;
+
         PopulateBar(SessionPctText, SessionBar, SessionBarFill,
-            authoritative ? snapshot.SessionPercent : null);
+            authoritative ? snapshot.SessionPercent : null, placeholder);
         SessionResetText.Text = PanelText.SessionReset(
             snapshot.SessionResetAtUtc, Now(TimeZoneInfo.Utc), local);
 
         PopulateBar(WeeklyPctText, WeeklyBar, WeeklyBarFill,
-            authoritative ? snapshot.WeeklyPercent : null);
+            authoritative ? snapshot.WeeklyPercent : null, placeholder);
         PopulateWeeklyReset(snapshot, authoritative, local);
 
         PopulateTiles(stats);
@@ -342,7 +346,7 @@ public partial class PopupWindow : Window, IFlyout
         }
     }
 
-    private void PopulateBar(TextBlock pctText, Grid bar, Border fill, int? percent)
+    private void PopulateBar(TextBlock pctText, Grid bar, Border fill, int? percent, string placeholder)
     {
         System.Windows.Data.BindingOperations.ClearBinding(fill, WidthProperty);
 
@@ -366,7 +370,7 @@ public partial class PopupWindow : Window, IFlyout
         }
         else
         {
-            pctText.Text = "unknown";
+            pctText.Text = placeholder;
             fill.Width = 0;
         }
     }
