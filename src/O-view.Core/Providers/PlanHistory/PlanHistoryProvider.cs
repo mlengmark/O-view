@@ -70,13 +70,24 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// retention (issue #6, ADR-0011). Null disables weekly-reset prediction — fine for
     /// tests and for the JSONL-only fallback.
     /// </param>
+    /// <summary>
+    /// Earliest local request in an interval, used to tighten the five-hour window's start
+    /// bracket (GitHub issue #185). A delegate rather than the store itself: this provider
+    /// reads one file and knows nothing about SQLite, and the rule stays unit-testable
+    /// without a database. Null disables the narrowing entirely, which is the fallback for
+    /// a user whose first use leaves no local transcript.
+    /// </summary>
+    private readonly Func<DateTimeOffset, DateTimeOffset, DateTimeOffset?>? _earliestActivity;
+
     public PlanHistoryProvider(string? path = null, string? orgUuid = null, TimeSpan? freshness = null,
-        IWeeklyResetLog? weeklyResetLog = null)
+        IWeeklyResetLog? weeklyResetLog = null,
+        Func<DateTimeOffset, DateTimeOffset, DateTimeOffset?>? earliestActivity = null)
     {
         _path = path ?? PlanHistoryFile.DefaultPath;
         _orgUuid = orgUuid;
         _freshness = freshness ?? DefaultFreshness;
         _weeklyResetLog = weeklyResetLog;
+        _earliestActivity = earliestActivity;
     }
 
     /// <summary>
@@ -156,6 +167,35 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// cannot have drifted meaningfully — discarding it would cost information and buy
     /// nothing.</para>
     /// </summary>
+    /// <summary>
+    /// Pulls a window's upper bound down to the first local request inside it, when there is
+    /// one (issue #185).
+    ///
+    /// <para>Every failure here is a silent no-op, and deliberately: no lookup configured, no
+    /// activity in the bracket, or a store that throws mid-query all leave the plan-history
+    /// bracket exactly as it was. This only ever <i>improves</i> a figure that is already
+    /// correct-but-imprecise, so it must never be able to make one worse — and a user whose
+    /// first use was chat or the Desktop app has no transcript to find, which is normal
+    /// rather than exceptional.</para>
+    /// </summary>
+    private SessionWindowStart? NarrowWithLocalActivity(SessionWindowStart? window)
+    {
+        if (window is not { } bracket || _earliestActivity is null)
+        {
+            return window;
+        }
+
+        try
+        {
+            return bracket.NarrowedTo(_earliestActivity(bracket.EarliestUtc, bracket.LatestUtc));
+        }
+        catch (Exception ex) when (ex is IOException or InvalidOperationException)
+        {
+            // A precision refinement must never take down the reading it refines.
+            return bracket;
+        }
+    }
+
     private static int? TrustedFiveHourPercent(int? fiveHourPercent, TimeSpan age) =>
         fiveHourPercent is 0 && age > ZeroReadingFreshness ? null : fiveHourPercent;
 
@@ -171,7 +211,12 @@ public sealed class PlanHistoryProvider : IUsageProvider
         // The window that is running now, bracketed by the samples straddling its start —
         // not a grid stepped forward from the last drop, which after an idle gap describes
         // a window that never existed (issue #180).
-        var windowStart = ResetDetector.FindCurrentWindowStart(samples);
+        //
+        // Then tightened by local activity: a request inside the bracket proves the window
+        // was already running then, so it is a better-evidenced upper bound than the sample
+        // that first noticed the new window (issue #185). Desktop samples every ~15 minutes,
+        // which was leaving the forecast systematically about half an interval late.
+        var windowStart = NarrowWithLocalActivity(ResetDetector.FindCurrentWindowStart(samples));
         var nextReset = ResetDetector.PredictNextReset(windowStart, utcNow);
 
         // Weekly reset (issue #6, ADR-0011). This IS the discovery loop: every poll

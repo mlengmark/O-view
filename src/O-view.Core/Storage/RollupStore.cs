@@ -324,6 +324,44 @@ public sealed class RollupStore : IDisposable
     /// rollups are too coarse for a 5-hour window, so this reads the request ledger
     /// directly — the same de-duplicated rows, just filtered by time rather than day.
     /// </summary>
+    /// <summary>
+    /// Earliest recorded request in <c>(afterUtc, throughUtc]</c>, or null when there was no
+    /// activity in that span.
+    ///
+    /// <para>Exists to narrow the five-hour window's start bracket (GitHub issue #185). A
+    /// request at time T proves the window was already running at T, so T is a valid — and
+    /// usually much tighter — upper bound than the plan-history sample that first observed
+    /// the new window. The bound is only ever moved <i>down</i>, so this cannot make a
+    /// forecast later or claim a reset earlier than the evidence allows.</para>
+    ///
+    /// <para>Exclusive at the lower end deliberately: a request exactly at the previous
+    /// sample belongs to the window that was ending, and admitting it would widen the
+    /// bracket instead of narrowing it.</para>
+    ///
+    /// <para>The column holds the <i>last</i> occurrence of each request id (rule 4's
+    /// de-duplication keeps the final streamed row). That is still a valid upper bound —
+    /// the request demonstrably existed by then — and is at most a few seconds late.</para>
+    /// </summary>
+    public DateTimeOffset? EarliestRequestBetween(DateTimeOffset afterUtc, DateTimeOffset throughUtc)
+    {
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                SELECT MIN(last_timestamp) FROM ingested_requests
+                WHERE last_timestamp > $after AND last_timestamp <= $through
+                """;
+            cmd.Parameters.AddWithValue("$after", afterUtc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
+            cmd.Parameters.AddWithValue("$through", throughUtc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
+
+            return cmd.ExecuteScalar() is string text
+                && DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var at)
+                ? at
+                : null;
+        }
+    }
+
     public IReadOnlyList<DailyRollup> GetUsageSince(DateTimeOffset sinceUtc)
     {
         lock (_gate)

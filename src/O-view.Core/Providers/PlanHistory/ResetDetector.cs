@@ -20,6 +20,25 @@ public sealed record SessionWindowStart(DateTimeOffset EarliestUtc, DateTimeOffs
     /// they forecast from.
     /// </summary>
     public DateTimeOffset ResetAtUtc => LatestUtc + ResetDetector.WindowLength;
+
+    /// <summary>
+    /// The same window, with its upper bound pulled down to <paramref name="activityUtc"/> —
+    /// a moment the window is known to have already been running (GitHub issue #185).
+    ///
+    /// <para>Narrowing, never widening. Evidence outside the bracket says nothing about this
+    /// window: earlier than <see cref="EarliestUtc"/> it belongs to the previous one, later
+    /// than <see cref="LatestUtc"/> it is simply a request made after a start we already
+    /// bound. Either would loosen a bound the data supports, so both are ignored.</para>
+    ///
+    /// <para>This is what keeps ADR-0011's guarantee intact while improving accuracy. The
+    /// ADR rejected taking a point <i>inside</i> the bracket — "can claim a reset has
+    /// happened before it has" — and that reasoning is untouched here: the forecast still
+    /// comes from an upper bound, the bound is just better evidenced.</para>
+    /// </summary>
+    public SessionWindowStart NarrowedTo(DateTimeOffset? activityUtc) =>
+        activityUtc is { } at && at > EarliestUtc && at < LatestUtc
+            ? this with { LatestUtc = at }
+            : this;
 }
 
 /// <summary>
