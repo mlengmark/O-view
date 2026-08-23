@@ -274,8 +274,29 @@ public class PanelBannerTests : IDisposable
             authoritative: false, MissingPlanFile(), ClaudeCodeOnly(), tokens31Days: 1);
 
         Assert.NotNull(banner);
-        Assert.Contains("location(s) it checked", banner.Detail, StringComparison.Ordinal);
+        Assert.Contains("1 location it checked", banner.Detail, StringComparison.Ordinal);
         Assert.DoesNotContain("not installed", banner.Detail, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("isn't installed", banner.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The count is evidence for a rule-6 claim, so it reads as a sentence rather than as
+    /// "location(s)". One and many are both real: a packaged Desktop install adds package
+    /// stores to the candidate list, so plural is the normal case on those machines.
+    /// </summary>
+    [Fact]
+    public void TheSearchedLocationCountIsPluralisedRatherThanBracketed()
+    {
+        var scope = ClaudeCodeOnly();
+
+        var one = PanelBanner.Resolve(false, MissingPlanFile(), scope, 1);
+        Assert.NotNull(one);
+        Assert.Contains("1 location it checked", one.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("location(s)", one.Detail, StringComparison.Ordinal);
+
+        var many = MissingPlanFile() with { Searched = ["a.json", "b.json", "c.json"] };
+        var three = PanelBanner.Resolve(false, many, scope, 1);
+        Assert.NotNull(three);
+        Assert.Contains("3 locations it checked", three.Detail, StringComparison.Ordinal);
     }
 }

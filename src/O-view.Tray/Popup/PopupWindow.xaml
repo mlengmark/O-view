@@ -8,9 +8,43 @@
         TextOptions.TextFormattingMode="Display">
 
     <Window.Resources>
-        <!-- The shared hover card, so the graph's bars and gridlines carry the same
-             branding as the tiles instead of falling back to system chrome. -->
-        <ResourceDictionary Source="HoverCard.xaml"/>
+        <ResourceDictionary>
+            <!-- The shared hover card, so the graph's bars and gridlines carry the same
+                 branding as the tiles instead of falling back to system chrome. -->
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="HoverCard.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- A text disclosure. A Button rather than a clickable TextBlock for the same
+                 reason StatTile is one: it keeps keyboard focus and Space/Enter activation,
+                 which a MouseLeftButtonUp handler silently does not. -->
+            <Style x:Key="DisclosureButton" TargetType="Button">
+                <Setter Property="Background" Value="Transparent"/>
+                <Setter Property="BorderThickness" Value="0"/>
+                <Setter Property="Padding" Value="0,1"/>
+                <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Bd" Background="{TemplateBinding Background}"
+                                    CornerRadius="3" Padding="{TemplateBinding Padding}"
+                                    SnapsToDevicePixels="True">
+                                <ContentPresenter x:Name="Content" Opacity="0.75"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Content" Property="Opacity" Value="1"/>
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Content" Property="Opacity" Value="1"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+        </ResourceDictionary>
     </Window.Resources>
 
     <Border Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource PanelBorder}"
@@ -109,14 +143,30 @@
                  compared. Both are Collapsed when there is nothing to break down. -->
             <TextBlock x:Name="TokenCompositionLine" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"
                        Foreground="{DynamicResource TextPrimary}" Visibility="Collapsed"/>
-            <TextBlock x:Name="TokenCompositionHint" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"
-                       Foreground="{DynamicResource TextSecondary}" Visibility="Collapsed"/>
 
-            <!-- Which surfaces the figures above are made of (issue #171). A user could not
-                 otherwise tell a low number caused by using Claude less from one caused by
-                 O-view not looking where they work — the shared root of #44, #58 and #170. -->
-            <TextBlock x:Name="TokenCoverageLine" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"
-                       Foreground="{DynamicResource TextMuted}" Visibility="Collapsed"/>
+            <!-- The figures are the answer for a reader who already knows what they mean;
+                 the prose behind this toggle is for the one who does not, and it was four
+                 lines of standing text every user read every time. Folded away, but one
+                 click from the panel that prompted the question. -->
+            <Button x:Name="TokenExplainToggle" Style="{StaticResource DisclosureButton}"
+                    HorizontalAlignment="Left" Margin="0,3,0,0" Cursor="Hand" Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="TokenExplainLabel" FontSize="11"
+                               Foreground="{DynamicResource TextMuted}"/>
+                    <Path x:Name="TokenExplainChevron" VerticalAlignment="Center" Margin="5,1,0,0"
+                          Stroke="{DynamicResource TextMuted}" StrokeThickness="1.4"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                </StackPanel>
+            </Button>
+
+            <!-- Why the total is so large (issue #169), and which surfaces it is made of
+                 (issue #171). Both answer "is this number right?", so they fold together. -->
+            <StackPanel x:Name="TokenExplainBody" Visibility="Collapsed">
+                <TextBlock x:Name="TokenCompositionHint" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Foreground="{DynamicResource TextSecondary}"/>
+                <TextBlock x:Name="TokenCoverageLine" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"
+                           Foreground="{DynamicResource TextMuted}"/>
+            </StackPanel>
 
             <!-- Scope note. The bars above and the tiles here measure DIFFERENT things:
                  the plan meters cover all Claude usage, the token tiles only usage that

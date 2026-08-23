@@ -170,11 +170,17 @@ public static class PanelText
         // the INVARIANT culture as well as most European ones. The panel states its own
         // figures rather than inheriting the desktop's, and invariant alone does not get
         // there here.
-        $"Cache reads are {(c.CacheReadShare * 100).ToString("0", CultureInfo.InvariantCulture)}% of this "
-        + "total: every turn re-sends the conversation, and caching bills that re-send. It counts "
-        + "every request added up, so it is not the context figure Claude's own UI shows — that is "
-        + "one conversation at one moment. Excluding cache reads: "
-        + $"{UsageFormatter.Tokens(c.ExcludingCacheReads)}.";
+        $"Cache reads are {(c.CacheReadShare * 100).ToString("0", CultureInfo.InvariantCulture)}% of this: "
+        + "every turn re-sends the conversation and caching bills the re-send. It adds up every "
+        + "request, so it is not the context figure Claude's UI shows — that is one conversation "
+        + $"at one moment. Without cache reads: {UsageFormatter.Tokens(c.ExcludingCacheReads)}.";
+
+    /// <summary>
+    /// The disclosure that reveals <see cref="TokenCompositionHint"/>. Phrased as the
+    /// question the reader is actually asking — the one that opened issue #169 — rather
+    /// than as a label for what is behind it.
+    /// </summary>
+    public const string TokenExplainToggleLabel = "Why so large?";
 
     /// <summary>Sub-label noting that an off-plan figure includes work billed outside the plan.</summary>
     public static string OffPlanNote(bool offPlan) => offPlan ? "incl. off-plan usage" : "";
