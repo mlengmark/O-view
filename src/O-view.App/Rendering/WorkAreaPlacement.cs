@@ -52,6 +52,21 @@ public static class WorkAreaPlacement
     public const int DefaultMarginPx = 12;
 
     /// <summary>
+    /// How much height a flyout actually has, once both margins are taken — what
+    /// <see cref="PanelDensity.For"/> measures the panel against.
+    ///
+    /// <para>It does not cap anything. <see cref="Place"/> already handles a surface too
+    /// large by pinning it to the top, which keeps the header on screen and is the right
+    /// answer to "where"; this is the input to the separate question of whether the surface
+    /// should have been that size at all.</para>
+    ///
+    /// <para>Never returns less than 1: a non-positive height is not a smaller window, it is
+    /// a layout pass with no solution.</para>
+    /// </summary>
+    public static int AvailableHeightPx(PixelBox work, int marginPx = DefaultMarginPx) =>
+        Math.Max(1, work.Height - (2 * marginPx));
+
+    /// <summary>
     /// Top-left corner for a flyout of <paramref name="widthPx"/> × <paramref name="heightPx"/>,
     /// plus the corner it docked to.
     ///

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using OView.App.Rendering;
 using OView.Core.Models;
 using Brush = System.Windows.Media.Brush;
 using Orientation = System.Windows.Controls.Orientation;
@@ -60,6 +61,20 @@ public partial class StatTile : UserControl
 
     /// <summary>Renders one slice's measure for the legend — supplied by the panel, which owns formatting.</summary>
     public Func<ModelSlice, string> FormatSlice { get; set; } = _ => "";
+
+    /// <summary>
+    /// Inset inside the tile. Set by the panel from <see cref="PanelDensity"/> rather than
+    /// fixed in the style, because two tile rows make this one of the larger pieces of
+    /// spacing the panel can give back on a display too short for it.
+    ///
+    /// <para>Applies to <c>Root</c>, not to this control: the padding lives on the templated
+    /// button, and setting it on the <c>UserControl</c> would silently do nothing.</para>
+    /// </summary>
+    public Thickness TilePadding
+    {
+        get => Root.Padding;
+        set => Root.Padding = value;
+    }
 
     /// <summary>
     /// Which measure this tile splits by. Named SplitBy rather than Measure because

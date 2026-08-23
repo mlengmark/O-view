@@ -39,6 +39,42 @@ internal static class PopupPositioner
     /// </summary>
     public static (double LeftDip, double TopDip, Point Origin) Place(double widthDip, double heightDip)
     {
+        var (mon, work, scale) = CurrentMonitor();
+
+        // The tray sits at the right (horizontal taskbars) or bottom (vertical ones)
+        // end of the bar, so the shared rule docks to the work-area corner nearest it.
+        // Auto-hide taskbars leave no inset; bottom-right is the Windows 11 default.
+        var (left, top, corner) = WorkAreaPlacement.Place(
+            ToBox(mon), ToBox(work),
+            (int)Math.Round(widthDip * scale),
+            (int)Math.Round(heightDip * scale));
+
+        return (left / scale, top / scale, RenderTransformOrigin(corner));
+    }
+
+    /// <summary>
+    /// Height available to a flyout on the monitor it is about to open on, in DIPs — the
+    /// figure <see cref="PanelDensity.For"/> measures the panel against.
+    ///
+    /// <para>Per-monitor, not per-desktop: a laptop beside an external display can differ in
+    /// both work area and scale factor, and the panel opens on whichever one the tray was
+    /// clicked on.</para>
+    /// </summary>
+    public static double AvailableHeightDip()
+    {
+        var (_, work, scale) = CurrentMonitor();
+        return WorkAreaPlacement.AvailableHeightPx(ToBox(work)) / scale;
+    }
+
+    /// <summary>
+    /// The monitor whose tray was clicked, its work area, and its effective scale.
+    ///
+    /// <para>The cursor selects the monitor and nothing else — the flyout docks to a corner
+    /// rather than following the pointer. Falls back to a plausible 1080p work area when the
+    /// query fails, because a flyout placed slightly wrong beats one not shown.</para>
+    /// </summary>
+    private static (RECT Monitor, RECT Work, double Scale) CurrentMonitor()
+    {
         GetCursorPos(out var anchor);
         var monitor = MonitorFromPoint(anchor, MONITOR_DEFAULTTONEAREST);
 
@@ -58,15 +94,7 @@ internal static class PopupPositioner
             ? dpiX / 96.0
             : 1.0;
 
-        // The tray sits at the right (horizontal taskbars) or bottom (vertical ones)
-        // end of the bar, so the shared rule docks to the work-area corner nearest it.
-        // Auto-hide taskbars leave no inset; bottom-right is the Windows 11 default.
-        var (left, top, corner) = WorkAreaPlacement.Place(
-            ToBox(mon), ToBox(work),
-            (int)Math.Round(widthDip * scale),
-            (int)Math.Round(heightDip * scale));
-
-        return (left / scale, top / scale, RenderTransformOrigin(corner));
+        return (mon, work, scale);
     }
 
     private static PixelBox ToBox(RECT r) => new(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
