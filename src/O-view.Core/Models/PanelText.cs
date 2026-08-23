@@ -186,6 +186,23 @@ public static class PanelText
     public static string OffPlanNote(bool offPlan) => offPlan ? "incl. off-plan usage" : "";
 
     /// <summary>
+    /// What the off-plan section means, shown on hover rather than as standing text
+    /// (GitHub issue #181).
+    ///
+    /// <para><b>Moving it must not lose it.</b> Both wordings carry a rule-6 caveat that the
+    /// figure is not what was charged — "Estimated at published API rates" and "check your
+    /// billing page for exact figures" in one, "isn't captured" in the other — and relocating
+    /// a caveat behind a hover is the obvious way to quietly drop it. It lives here so it has
+    /// one definition and can be asserted, which is why it moved out of the head rather than
+    /// simply being reassigned to a tooltip in place.</para>
+    /// </summary>
+    public static string OffPlanHint(bool hasCreditUsage) => hasCreditUsage
+        ? $"Estimated at published API rates for models billed as extra usage ({CreditBilledModels.DisplayList}). "
+          + "O-view cannot read your credit balance; check your billing page for exact figures."
+        : $"No credit-billed usage ({CreditBilledModels.DisplayList}) recorded in the last 31 days. "
+          + "Off-plan usage while O-view wasn't running isn't captured.";
+
+    /// <summary>
     /// Why an update check came back empty when GitHub throttled it (issue #176).
     ///
     /// <para>It says the limit is shared, because for most people hitting it that is the

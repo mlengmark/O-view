@@ -505,11 +505,6 @@ public partial class PopupWindow : Window, IFlyout
             CreditsSpendLabel.Text = "Est. credit spend";
             CreditsSpendValue.Text = FormatUsd(stats.EstCredit31DaysUsd);
             CreditsCoverage.Text = stats.CoverageNote;
-            // Issue #32: trimmed to two clauses. What remains still carries the rule-6
-            // caveat — "Estimated at published API rates" and "check your billing page for
-            // exact figures" both say this is not the charged number.
-            CreditsNote.Text = $"Estimated at published API rates for models billed as extra usage ({CreditBilledModels.DisplayList}). "
-                + "O-view cannot read your credit balance; check your billing page for exact figures.";
         }
         else
         {
@@ -517,9 +512,14 @@ public partial class PopupWindow : Window, IFlyout
             CreditsSpendLabel.Text = "Est. credit spend";
             CreditsSpendValue.Text = "$0.00";
             CreditsCoverage.Text = "";
-            CreditsNote.Text = $"No credit-billed usage ({CreditBilledModels.DisplayList}) recorded in the last 31 days. "
-                + "Off-plan usage while O-view wasn't running isn't captured.";
         }
+
+        // The explanation is on hover now rather than standing under the figure (issue #181).
+        // Both wordings still carry the rule-6 caveat that this is not what was charged —
+        // moving a caveat behind a hover is the obvious way to lose one, so the sentences
+        // live in PanelText where they have one definition and a test can assert them.
+        CreditsSection.ToolTip = HoverCard.Text(this, PanelText.OffPlanHint(stats.HasCreditUsage));
+        HoverCard.ApplyTiming(CreditsSection);
     }
 
     private void PopulateBar(TextBlock pctText, Grid bar, Border fill, int? percent, string placeholder)
