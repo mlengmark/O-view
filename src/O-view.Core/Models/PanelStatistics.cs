@@ -59,6 +59,15 @@ public sealed record PanelStatistics(
     public IReadOnlyList<ModelSlice> Models31Days { get; init; } = [];
 
     /// <summary>
+    /// What <see cref="TokensToday"/> is made of. Cache reads dominate it — see
+    /// <see cref="TokenComposition"/> for the measurement and why the total keeps them.
+    /// </summary>
+    public TokenComposition CompositionToday { get; init; } = TokenComposition.Empty;
+
+    /// <summary>What <see cref="Tokens31Days"/> is made of. See <see cref="CompositionToday"/>.</summary>
+    public TokenComposition Composition31Days { get; init; } = TokenComposition.Empty;
+
+    /// <summary>
     /// Which models get their own colour, in slot order — one answer for the whole panel
     /// so a model wears the same colour on every tile. Derived from the 31-day window
     /// because it is the superset the other tiles draw from.
@@ -163,6 +172,10 @@ public sealed record PanelStatistics(
             ModelsToday = SliceByModel(todayRollups),
             Models31Days = SliceByModel(rollups),
             ModelColourOrder = ModelBreakdown.ColourOrder(SliceByModel(rollups)),
+            // Same rollups the totals above are summed from, split by token kind rather
+            // than by model — so the composition cannot disagree with the figure it explains.
+            CompositionToday = TokenComposition.From(todayRollups),
+            Composition31Days = TokenComposition.From(rollups),
         };
     }
 

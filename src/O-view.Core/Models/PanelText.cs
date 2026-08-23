@@ -120,9 +120,61 @@ public static class PanelText
     /// </summary>
     public const string Est31DaysLabel = "Est. value · 31 days";
 
-    public const string TokensTodayLabel = "Tokens today";
+    /// <summary>
+    /// The token tile headings, which name what they count.
+    ///
+    /// <para>They read "Tokens today" alone until a user reported the figure as inflated:
+    /// <c>235.6M</c> beside the thousands Claude's own UI shows (issue #169). The sum was
+    /// right — roughly 90% of it is cached prompt re-reads, which are billed and counted —
+    /// but an unqualified "Tokens today" invites the comparison that makes it look like a
+    /// 1000× over-count. The qualifier is the headline's share of rule 6: a figure states
+    /// what it measures, and the detail follows in <see cref="TokenCompositionLine"/>.</para>
+    /// </summary>
+    public const string TokensTodayLabel = "Tokens today · incl. cache";
 
-    public const string Tokens31DaysLabel = "Tokens · 31 days";
+    /// <inheritdoc cref="TokensTodayLabel"/>
+    public const string Tokens31DaysLabel = "Tokens · 31 days · incl. cache";
+
+    /// <summary>
+    /// The four-way split behind a token total, as one line:
+    /// <c>Today: input 14 · cache write 44.3K · cache read 398.1K · output 3.7K</c>.
+    ///
+    /// <para>Named "cache write" rather than "cache creation" because the pair reads as a
+    /// pair — a user scanning the line needs to see at once that two of the four entries
+    /// are cache traffic, which is the whole point of showing it.</para>
+    ///
+    /// <para><paramref name="scope"/> names which total is being explained, so the line can
+    /// never be read against the wrong tile. Only the daily one is rendered today; the
+    /// parameter is here because a line that says "input 14" beside two different totals
+    /// with no scope word is exactly the ambiguity this whole issue was about.</para>
+    /// </summary>
+    public static string TokenCompositionLine(TokenComposition c, string scope) =>
+        $"{scope}: input {UsageFormatter.Tokens(c.Input)} · cache write {UsageFormatter.Tokens(c.CacheCreation)}"
+        + $" · cache read {UsageFormatter.Tokens(c.CacheRead)} · output {UsageFormatter.Tokens(c.Output)}";
+
+    /// <summary>Scope word for the daily composition line.</summary>
+    public const string TokenCompositionTodayScope = "Today";
+
+    /// <summary>
+    /// Why that total is so much larger than the number Claude's own UI shows — the
+    /// sentence the whole of issue #169 comes down to.
+    ///
+    /// <para>It states the share rather than asserting a fixed ratio: the proportion moves
+    /// with how long conversations run, and a hard-coded "about 90%" would be a fabricated
+    /// number on a machine where it is 60% (rule 6). It also names the comparison being
+    /// warned against explicitly, because a user who has already made that comparison is
+    /// the reader this line exists for.</para>
+    /// </summary>
+    public static string TokenCompositionHint(TokenComposition c) =>
+        // Built rather than formatted with "P0", which renders "89 %" — with a space — under
+        // the INVARIANT culture as well as most European ones. The panel states its own
+        // figures rather than inheriting the desktop's, and invariant alone does not get
+        // there here.
+        $"Cache reads are {(c.CacheReadShare * 100).ToString("0", CultureInfo.InvariantCulture)}% of this "
+        + "total: every turn re-sends the conversation, and caching bills that re-send. It counts "
+        + "every request added up, so it is not the context figure Claude's own UI shows — that is "
+        + "one conversation at one moment. Excluding cache reads: "
+        + $"{UsageFormatter.Tokens(c.ExcludingCacheReads)}.";
 
     /// <summary>Sub-label noting that an off-plan figure includes work billed outside the plan.</summary>
     public static string OffPlanNote(bool offPlan) => offPlan ? "incl. off-plan usage" : "";

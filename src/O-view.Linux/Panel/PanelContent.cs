@@ -190,6 +190,17 @@ public sealed class PanelContent : Border
         _root.Children.Add(TileRow(
             Tile(PanelText.Tokens31DaysLabel, UsageFormatter.Tokens(stats.Tokens31Days), caveat),
             Tile(PanelText.Est31DaysLabel, UsageFormatter.Usd(stats.Est31DaysUsd), caveat)));
+
+        // What today's total is made of, and why it dwarfs the context figure in Claude's
+        // own UI (issue #169). Omitted when there is nothing to break down — a composition
+        // of zero explains nothing.
+        if (stats.CompositionToday.HasTokens)
+        {
+            _root.Children.Add(Text(
+                PanelText.TokenCompositionLine(stats.CompositionToday, PanelText.TokenCompositionTodayScope),
+                11, _theme["TextPrimary"]));
+            _root.Children.Add(Muted(PanelText.TokenCompositionHint(stats.CompositionToday)));
+        }
     }
 
     private Grid TileRow(Control left, Control right)

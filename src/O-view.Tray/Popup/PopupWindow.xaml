@@ -102,6 +102,16 @@
                 <local:StatTile x:Name="TileEst31" Margin="4,4,0,0"/>
             </UniformGrid>
 
+            <!-- What the token totals are made of (issue #169). ~90% of a Claude Code
+                 total is cached prompt re-reads, which is why the tiles read in millions
+                 where Claude's own context figure reads in thousands. The composition is
+                 the evidence; the hint below it is the sentence that stops the two being
+                 compared. Both are Collapsed when there is nothing to break down. -->
+            <TextBlock x:Name="TokenCompositionLine" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"
+                       Foreground="{DynamicResource TextPrimary}" Visibility="Collapsed"/>
+            <TextBlock x:Name="TokenCompositionHint" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"
+                       Foreground="{DynamicResource TextSecondary}" Visibility="Collapsed"/>
+
             <!-- Scope note. The bars above and the tiles here measure DIFFERENT things:
                  the plan meters cover all Claude usage, the token tiles only usage that
                  leaves a Claude Code transcript. A Desktop-only user therefore sees a

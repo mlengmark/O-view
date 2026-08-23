@@ -288,6 +288,32 @@ public partial class PopupWindow : Window, IFlyout
         TileEst31.Populate(
             PanelText.Est31DaysLabel, FormatUsd(stats.Est31DaysUsd), coverage,
             stats.Models31Days, BreakdownMeasure.EstValue, stats.ModelColourOrder);
+
+        PopulateComposition(stats.CompositionToday);
+    }
+
+    /// <summary>
+    /// The four-way split behind today's token total, and why it dwarfs the context figure
+    /// in Claude's own UI (issue #169).
+    ///
+    /// <para>Hidden rather than shown empty when there is nothing to break down: a
+    /// composition of zero explains nothing, and the scope note that appears in that state
+    /// is already saying the useful thing.</para>
+    /// </summary>
+    private void PopulateComposition(TokenComposition composition)
+    {
+        var show = composition.HasTokens;
+        TokenCompositionLine.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        TokenCompositionHint.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!show)
+        {
+            return;
+        }
+
+        TokenCompositionLine.Text = PanelText.TokenCompositionLine(
+            composition, PanelText.TokenCompositionTodayScope);
+        TokenCompositionHint.Text = PanelText.TokenCompositionHint(composition);
     }
 
     /// <summary>
