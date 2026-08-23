@@ -103,14 +103,13 @@ public sealed record PanelBanner(string Title, string Detail, string GaugePlaceh
     /// O-view did not look, which is why the diagnostics offer stays.
     /// </summary>
     private static string ScopeDetail(PlanHistoryReport plan, TranscriptScopeReport scope) =>
-        $"The token figures below are read from your {SourceList(scope)} sessions on this "
-        + "machine and are unaffected. The session and weekly percentages come from a usage "
-        + "file that only the Claude Desktop app writes, and O-view found none in the "
-        + $"{plan.SearchedCount} location(s) it checked — so those two gauges stay blank. "
+        $"Only Claude Desktop writes the usage file these two gauges need, and O-view found "
+        + $"none in the {Locations(plan)} it checked. Your {SourceList(scope)} token figures "
+        + "below are unaffected. "
         // The instruction opens its own sentence: it is a capitalised imperative phrase on
         // Windows ("Right-click the tray icon → …"), which reads as a typo mid-sentence.
-        + $"{DiagnosticsHint.Instruction} if you do use Claude Desktop — O-view may be "
-        + "looking in the wrong place for how it is installed here.";
+        + $"Using Desktop? {DiagnosticsHint.Instruction} — O-view may be looking in the "
+        + "wrong place for how it is installed here.";
 
     /// <summary>
     /// The same situation, but with nothing ingested from the transcripts that were found.
@@ -118,11 +117,17 @@ public sealed record PanelBanner(string Title, string Detail, string GaugePlaceh
     /// tiles is exactly the reader this whole class exists for.
     /// </summary>
     private static string ScopeDetailWithNothingRecorded(PlanHistoryReport plan, TranscriptScopeReport scope) =>
-        $"The session and weekly percentages come from a usage file that only the Claude "
-        + $"Desktop app writes, and O-view found none in the {plan.SearchedCount} location(s) "
-        + "it checked, so those two gauges stay blank. O-view did find "
-        + $"{scope.TotalFiles} local transcript file(s) from {SourceList(scope)}, but recorded "
-        + $"no usage from them, which is unexpected. {DiagnosticsHint.Instruction} and report this.";
+        $"Only Claude Desktop writes the usage file these two gauges need, and O-view found "
+        + $"none in the {Locations(plan)} it checked. It did find {scope.TotalFiles} "
+        + $"{SourceList(scope)} transcript{(scope.TotalFiles == 1 ? "" : "s")} but recorded no "
+        + $"usage from them, which is unexpected. {DiagnosticsHint.Instruction} and report this.";
+
+    /// <summary>
+    /// "1 location" or "3 locations" — pluralised rather than written "location(s)". The
+    /// count is evidence for a rule-6 claim, and evidence reads better without a bracket.
+    /// </summary>
+    private static string Locations(PlanHistoryReport plan) =>
+        $"{plan.SearchedCount} location{(plan.SearchedCount == 1 ? "" : "s")}";
 
     /// <summary>
     /// Names the surfaces the scan actually found, never a literal — a Cowork-only user

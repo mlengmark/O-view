@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
 using OView.Core.Models;
@@ -194,20 +195,62 @@ public sealed class PanelContent : Border
         // What today's total is made of, and why it dwarfs the context figure in Claude's
         // own UI (issue #169). Omitted when there is nothing to break down — a composition
         // of zero explains nothing.
-        if (stats.CompositionToday.HasTokens)
+        if (!stats.CompositionToday.HasTokens)
         {
-            _root.Children.Add(Text(
-                PanelText.TokenCompositionLine(stats.CompositionToday, PanelText.TokenCompositionTodayScope),
-                11, _theme["TextPrimary"]));
-            _root.Children.Add(Muted(PanelText.TokenCompositionHint(stats.CompositionToday)));
+            return;
         }
+
+        _root.Children.Add(Text(
+            PanelText.TokenCompositionLine(stats.CompositionToday, PanelText.TokenCompositionTodayScope),
+            11, _theme["TextPrimary"]));
+
+        // The figures stay; the prose folds away. Four lines of standing text answering a
+        // question only some readers have — but the ones who have it are looking straight at
+        // the number that prompted it, so it stays one click from here.
+        var body = new StackPanel { Spacing = 3, IsVisible = false };
+        body.Children.Add(Text(PanelText.TokenCompositionHint(stats.CompositionToday), 11, _theme["TextSecondary"]));
 
         // Which surfaces these figures are made of. Empty when nothing was found at all —
         // the scope note owns that state and says considerably more (issue #171).
         if ((scopeReport ?? TranscriptScopeReport.Inspect()).CoverageLine() is { Length: > 0 } coverage)
         {
-            _root.Children.Add(Muted(coverage));
+            body.Children.Add(Muted(coverage));
         }
+
+        _root.Children.Add(Disclosure(PanelText.TokenExplainToggleLabel, body));
+        _root.Children.Add(body);
+    }
+
+    /// <summary>
+    /// A text disclosure that shows or hides <paramref name="body"/>. Avalonia has no
+    /// borderless text button by default, so this is a Button with its chrome stripped —
+    /// a Button rather than a clickable TextBlock so it keeps keyboard focus and Space/Enter
+    /// activation, matching the Windows head (which learned the same lesson in StatTile).
+    /// </summary>
+    private Button Disclosure(string label, Control body)
+    {
+        var chevron = Text("⌄", 11, _theme["TextMuted"]);
+        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
+        content.Children.Add(Text(label, 11, _theme["TextMuted"]));
+        content.Children.Add(chevron);
+
+        var button = new Button
+        {
+            Content = content,
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0, 1),
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Cursor = new Cursor(StandardCursorType.Hand),
+        };
+
+        button.Click += (_, _) =>
+        {
+            body.IsVisible = !body.IsVisible;
+            chevron.Text = body.IsVisible ? "⌃" : "⌄";
+        };
+
+        return button;
     }
 
     private Grid TileRow(Control left, Control right)

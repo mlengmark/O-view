@@ -194,6 +194,14 @@ internal static class SampleRenderer
 
                 SavePng(bitmap, Path.Combine(dir, $"panel-{name}-{(light ? "light" : "dark")}.png"));
             }
+
+            // The token explanation with its disclosure open. It resets on every Populate,
+            // so this state exists in no other render — and a state nothing renders is how
+            // the no-data banner spent its life saying the wrong thing (#58, #170).
+            var expanded = new PopupWindow { ThemeOverride = light, ScopeReport = bothSourcesScope };
+            SavePng(
+                expanded.RenderToBitmap(live, stats, account, scale, expandComposition: true),
+                Path.Combine(dir, $"panel-tokens-explained-{(light ? "light" : "dark")}.png"));
         }
     }
 

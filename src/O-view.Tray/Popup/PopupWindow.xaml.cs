@@ -53,7 +53,16 @@ public partial class PopupWindow : Window, IFlyout
         _flyout = new DockedFlyout(this);
         Deactivated += (_, _) => _flyout.OnDeactivated();
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) _flyout.BeginClose(); };
+        TokenExplainToggle.Click += (_, _) => SetCompositionExpanded(!_compositionExpanded);
     }
+
+    /// <summary>
+    /// Opens the token explanation for a verification render. The disclosure resets on every
+    /// Populate, so a sample of the expanded state cannot be produced any other way — and an
+    /// unrendered state is how the no-data banner spent its whole life saying the wrong
+    /// thing (issues #58, #170).
+    /// </summary>
+    internal void ExpandCompositionForVerification() => SetCompositionExpanded(true);
 
     /// <summary>
     /// Closes the panel from outside — the tray icon completing a toggle. Idempotent, so
@@ -105,14 +114,24 @@ public partial class PopupWindow : Window, IFlyout
     /// places — which is precisely what this hook is meant to catch.</para>
     /// </summary>
     internal System.Windows.Media.Imaging.BitmapSource RenderToBitmap(
-        UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account, double scale)
+        UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account, double scale,
+        bool expandComposition = false)
     {
         PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
         Populate(snapshot, stats, account);
 
         // The second layout pass is the whole reason betweenPasses exists — see the
-        // remarks above and on VisualRenderer.RenderContent.
-        return VisualRenderer.RenderContent(this, scale, betweenPasses: () => BuildGraph(stats, snapshot));
+        // remarks above and on VisualRenderer.RenderContent. The disclosure is opened here
+        // rather than before it, because Populate resets it.
+        return VisualRenderer.RenderContent(this, scale, betweenPasses: () =>
+        {
+            if (expandComposition)
+            {
+                ExpandCompositionForVerification();
+            }
+
+            BuildGraph(stats, snapshot);
+        });
     }
 
     /// <summary>
@@ -289,13 +308,11 @@ public partial class PopupWindow : Window, IFlyout
             PanelText.Est31DaysLabel, FormatUsd(stats.Est31DaysUsd), coverage,
             stats.Models31Days, BreakdownMeasure.EstValue, stats.ModelColourOrder);
 
-        PopulateComposition(stats.CompositionToday);
-
         // Which surfaces these figures are made of. Empty when nothing was found at all —
         // the scope note owns that state and says considerably more (issue #171).
-        var coverageLine = (ScopeReport ?? TranscriptScopeReport.Inspect()).CoverageLine();
-        TokenCoverageLine.Text = coverageLine;
-        TokenCoverageLine.Visibility = coverageLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        PopulateComposition(
+            stats.CompositionToday,
+            (ScopeReport ?? TranscriptScopeReport.Inspect()).CoverageLine());
     }
 
     /// <summary>
@@ -305,22 +322,48 @@ public partial class PopupWindow : Window, IFlyout
     /// <para>Hidden rather than shown empty when there is nothing to break down: a
     /// composition of zero explains nothing, and the scope note that appears in that state
     /// is already saying the useful thing.</para>
+    ///
+    /// <para>The figures stay on screen; the prose folds behind a disclosure. It was four
+    /// lines of standing text that every user read on every open, and it answers a question
+    /// only some of them have — but the ones who do have it are looking straight at the
+    /// number that prompted it, so the answer stays one click away rather than moving to a
+    /// document nobody opens.</para>
+    ///
+    /// <para>Collapsed on every Populate, deliberately: the panel is a transient view, not a
+    /// setting, and StatTile resets its own expansion for the same reason.</para>
     /// </summary>
-    private void PopulateComposition(TokenComposition composition)
+    private void PopulateComposition(TokenComposition composition, string coverageLine)
     {
         var show = composition.HasTokens;
         TokenCompositionLine.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        TokenCompositionHint.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        TokenExplainToggle.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
 
         if (!show)
         {
+            TokenExplainBody.Visibility = Visibility.Collapsed;
             return;
         }
 
         TokenCompositionLine.Text = PanelText.TokenCompositionLine(
             composition, PanelText.TokenCompositionTodayScope);
         TokenCompositionHint.Text = PanelText.TokenCompositionHint(composition);
+        TokenExplainLabel.Text = PanelText.TokenExplainToggleLabel;
+
+        TokenCoverageLine.Text = coverageLine;
+        TokenCoverageLine.Visibility = coverageLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+
+        SetCompositionExpanded(false);
     }
+
+    /// <summary>Shows or hides the explanation, and points the chevron the way it will move.</summary>
+    private void SetCompositionExpanded(bool expanded)
+    {
+        _compositionExpanded = expanded;
+        TokenExplainBody.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        TokenExplainChevron.Data = Geometry.Parse(expanded ? "M0,4 L4,0 L8,4" : "M0,0 L4,4 L8,0");
+    }
+
+    private bool _compositionExpanded;
 
     /// <summary>
     /// Surfaces off-plan usage in two distinct registers:
