@@ -213,7 +213,7 @@ public class CoverageMatrixTests : IDisposable
     [Fact]
     public void IngestingTwiceDoesNotDoubleTheTotals()
     {
-        GiveClaudeCodeSession("req_idempotent");
+        GiveClaudeCodeSession("req_twice");
 
         Assert.Equal(1052, IngestedTokens());
         Assert.Equal(1052, IngestedTokens());
