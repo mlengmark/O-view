@@ -37,7 +37,8 @@ public sealed record UsageSnapshot(
     DateTimeOffset? CapturedAtUtc,
     DateTimeOffset? WeeklyResetAtUtc = null,
     TimeSpan? WeeklyResetUncertainty = null,
-    TimeSpan? WeeklyResetPeriod = null)
+    TimeSpan? WeeklyResetPeriod = null,
+    TimeSpan? SessionResetUncertainty = null)
 {
     /// <summary>The canonical "no data" snapshot.</summary>
     public static UsageSnapshot None { get; } = new(DataSource.None, null, null, null, null);
