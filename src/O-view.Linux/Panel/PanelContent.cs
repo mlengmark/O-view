@@ -72,7 +72,7 @@ public sealed class PanelContent : Border
         AddBar("Weekly", authoritative ? snapshot.WeeklyPercent : null,
             WeeklyResetLine(snapshot, authoritative, utcNow, local), placeholder);
 
-        AddTiles(stats);
+        AddTiles(stats, scopeReport);
         AddGraph(stats);
 
         // Nothing recorded at all while the plan meters show real usage: the tiles are
@@ -178,7 +178,7 @@ public sealed class PanelContent : Border
         _root.Children.Add(block);
     }
 
-    private void AddTiles(PanelStatistics stats)
+    private void AddTiles(PanelStatistics stats, TranscriptScopeReport? scopeReport)
     {
         var caveat = PanelText.Caveat(stats);
         var offPlan = stats.IsOffPlan;
@@ -200,6 +200,13 @@ public sealed class PanelContent : Border
                 PanelText.TokenCompositionLine(stats.CompositionToday, PanelText.TokenCompositionTodayScope),
                 11, _theme["TextPrimary"]));
             _root.Children.Add(Muted(PanelText.TokenCompositionHint(stats.CompositionToday)));
+        }
+
+        // Which surfaces these figures are made of. Empty when nothing was found at all —
+        // the scope note owns that state and says considerably more (issue #171).
+        if ((scopeReport ?? TranscriptScopeReport.Inspect()).CoverageLine() is { Length: > 0 } coverage)
+        {
+            _root.Children.Add(Muted(coverage));
         }
     }
 

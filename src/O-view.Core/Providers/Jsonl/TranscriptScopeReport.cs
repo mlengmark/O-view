@@ -80,6 +80,40 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
     public TranscriptScopeStatus Status =>
         TotalFiles == 0 ? TranscriptScopeStatus.NoTranscripts : TranscriptScopeStatus.TranscriptsPresent;
 
+    /// <summary>Never counted, and never can be — chat keeps no local usage record at all.</summary>
+    public const string ChatNote = "Chat keeps no local record.";
+
+    /// <summary>
+    /// The standing coverage line beneath the token tiles: which surfaces this machine's
+    /// figures are actually made of (GitHub issue #171).
+    ///
+    /// <para>Until now a user could not tell a low number caused by using Claude less from
+    /// one caused by O-view not looking where they work. That ambiguity is the shared root
+    /// of three separate bugs — Cowork usage silently uncounted (#44), a Cowork user told
+    /// their source was not read (#58), and a CLI-only user told they had no usage data at
+    /// all (#170) — and in every one of them the panel had the facts and did not say
+    /// them.</para>
+    ///
+    /// <para>An absent surface is named rather than omitted: "Counting: Claude Code" alone
+    /// cannot be distinguished from a build that forgot Cowork existed, which is precisely
+    /// how #44 stayed invisible. Empty when nothing was found at all — <see cref="Explain"/>
+    /// owns that state and says considerably more about it.</para>
+    /// </summary>
+    public string CoverageLine()
+    {
+        if (Status == TranscriptScopeStatus.NoTranscripts)
+        {
+            return "";
+        }
+
+        var absent = Sources.Where(s => s.FileCount == 0).Select(s => s.Label).ToList();
+        var missing = absent.Count > 0
+            ? $" — no {string.Join(" or ", absent)} sessions found"
+            : "";
+
+        return $"Counting: {string.Join(" · ", PresentSources)}{missing}. {ChatNote}";
+    }
+
     /// <summary>
     /// The panel's note when the token tiles read zero while the plan meters show real
     /// usage. States what was checked and what was found, and names the surfaces rather

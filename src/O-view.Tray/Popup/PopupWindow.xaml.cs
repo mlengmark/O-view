@@ -290,6 +290,12 @@ public partial class PopupWindow : Window, IFlyout
             stats.Models31Days, BreakdownMeasure.EstValue, stats.ModelColourOrder);
 
         PopulateComposition(stats.CompositionToday);
+
+        // Which surfaces these figures are made of. Empty when nothing was found at all —
+        // the scope note owns that state and says considerably more (issue #171).
+        var coverageLine = (ScopeReport ?? TranscriptScopeReport.Inspect()).CoverageLine();
+        TokenCoverageLine.Text = coverageLine;
+        TokenCoverageLine.Visibility = coverageLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>
