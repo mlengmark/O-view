@@ -78,7 +78,17 @@ internal static class SampleRenderer
             Tokens31Days: 684_600_000, Est31DaysUsd: 492.52m,
             RecordedDays: 10, WindowDays: 31,
             DailySeries: series,
-            CreditTokens31Days: 40_000_000, EstCredit31DaysUsd: 92.75m);
+            CreditTokens31Days: 40_000_000, EstCredit31DaysUsd: 92.75m)
+        {
+            // Compositions that sum exactly to the totals above, in the proportions measured
+            // on real transcripts — ~89% cache reads (issue #169). A sample carrying a
+            // plausible-looking but non-summing split would render a panel contradicting
+            // itself, which is the one thing these images exist to catch.
+            CompositionToday = new TokenComposition(
+                Input: 1_400, CacheCreation: 1_270_000, CacheRead: 11_300_000, Output: 128_600),
+            Composition31Days = new TokenComposition(
+                Input: 75_000, CacheCreation: 68_460_000, CacheRead: 609_294_000, Output: 6_771_000),
+        };
 
         var capturedAt = new DateTimeOffset(today.ToDateTime(new TimeOnly(10, 47)), TimeSpan.Zero);
         var account = new ClaudeAccount("Maximilian", "sample@example.com", "claude_pro", "sample-org");
@@ -102,6 +112,10 @@ internal static class SampleRenderer
             RecordedDays = 0,
             DailySeries = [.. series.Select(d => d with { TotalTokens = 0, PreInstall = true })],
             CreditTokens31Days = 0, EstCredit31DaysUsd = 0m,
+            // Nothing recorded means nothing to break down: the composition lines are
+            // hidden here, and the scope note carries the explanation instead.
+            CompositionToday = TokenComposition.Empty,
+            Composition31Days = TokenComposition.Empty,
         };
 
         // Fixed roots rather than the real machine's, so the note is deterministic and the
