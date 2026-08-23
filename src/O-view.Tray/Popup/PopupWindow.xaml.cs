@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using OView.App.Rendering;
 using OView.Core.Models;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
@@ -53,7 +54,27 @@ public partial class PopupWindow : Window, IFlyout
         _flyout = new DockedFlyout(this);
         Deactivated += (_, _) => _flyout.OnDeactivated();
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) _flyout.BeginClose(); };
-        TokenExplainToggle.Click += (_, _) => SetCompositionExpanded(!_compositionExpanded);
+        TokenExplainToggle.Click += (_, _) =>
+        {
+            SetCompositionExpanded(!_compositionExpanded);
+
+            // Expanding is exactly when the panel crosses the work area, so the density is
+            // re-decided here rather than only at open — a panel that fitted closed and does
+            // not fit open is the whole reported case.
+            if (_lastStats is { } stats && _lastSnapshot is { } snapshot)
+            {
+                FitToWorkArea(stats, snapshot);
+            }
+
+            // Re-dock, exactly as the menu does when its threshold list opens (issue #33).
+            // The panel is docked by its top-left and is SizeToContent, so growing it without
+            // this pushes the new content down into the taskbar — which is the failure the
+            // docked placement was introduced to avoid, reintroduced the moment the panel
+            // gained something that could grow. It also re-fits the open animation's clip,
+            // without which the window is the right size and the card inside it is not.
+            UpdateLayout();
+            _flyout.Redock(ActualWidth, ActualHeight);
+        };
     }
 
     /// <summary>
@@ -91,7 +112,36 @@ public partial class PopupWindow : Window, IFlyout
 
         // The chart is a Canvas — its ActualWidth is only known after layout, so it is
         // drawn between the flyout's layout pass and its placement rather than in Populate.
-        _flyout.Show(afterLayout: () => BuildGraph(stats, snapshot));
+        // FitToWorkArea does that drawing, because choosing a density resizes the canvas.
+        _flyout.Show(afterLayout: () => FitToWorkArea(stats, snapshot));
+    }
+
+    /// <summary>
+    /// Picks the density this display can actually fit, then draws the chart at it.
+    ///
+    /// <para><b>Measured, not guessed.</b> The natural layout is applied first and laid out,
+    /// because the panel's height depends on what is in it — a no-data banner, an off-plan
+    /// section, an expanded explanation — and a threshold on the work area alone would be
+    /// wrong for most of those combinations. The extra layout pass costs nothing next to the
+    /// two the flyout already runs.</para>
+    ///
+    /// <para>The chart is drawn last and unconditionally: its bars are laid out against the
+    /// canvas height, so a canvas that just changed size would otherwise keep the previous
+    /// drawing at the previous scale.</para>
+    /// </summary>
+    private void FitToWorkArea(PanelStatistics stats, UsageSnapshot snapshot)
+    {
+        ApplyDensity(PanelDensity.Normal);
+        UpdateLayout();
+
+        var density = PanelDensity.For(ActualHeight, PopupPositioner.AvailableHeightDip());
+        if (density.IsCompact)
+        {
+            ApplyDensity(density);
+            UpdateLayout();
+        }
+
+        BuildGraph(stats, snapshot);
     }
 
     /// <summary>
@@ -115,9 +165,10 @@ public partial class PopupWindow : Window, IFlyout
     /// </summary>
     internal System.Windows.Media.Imaging.BitmapSource RenderToBitmap(
         UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account, double scale,
-        bool expandComposition = false)
+        bool expandComposition = false, PanelDensity? density = null)
     {
         PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
+        ApplyDensity(density ?? PanelDensity.Normal);
         Populate(snapshot, stats, account);
 
         // The second layout pass is the whole reason betweenPasses exists — see the
@@ -153,10 +204,60 @@ public partial class PopupWindow : Window, IFlyout
         ];
     }
 
+    /// <summary>
+    /// Lays the panel out at the given density (<see cref="PanelDensity"/>) — the response to
+    /// a display too short for the natural size.
+    ///
+    /// <para>Only spacing moves. Every figure, caveat and section is present at either
+    /// density: a panel that dropped a section to fit would make a number quietly absent,
+    /// which reads as a number that is zero (rule 6).</para>
+    ///
+    /// <para>The graph canvas is the one non-spacing change, and it is the reason this is
+    /// worth doing at all — 86 px of hard-coded height that never asked how much room
+    /// existed. Callers must redraw the chart after this: its bars are laid out against the
+    /// canvas height, so a canvas that changed size leaves the previous drawing behind.</para>
+    /// </summary>
+    internal void ApplyDensity(PanelDensity density)
+    {
+        PanelRoot.Padding = new Thickness(density.RootPadding);
+
+        HeaderSeparator.Margin = new Thickness(0, density.SeparatorGap, 0, density.SeparatorGap);
+        CreditsSeparator.Margin = new Thickness(0, density.SeparatorGap, 0, density.CreditsSeparatorBottom);
+
+        WeeklyHeading.Margin = new Thickness(0, density.SectionGap, 0, 0);
+        TileGrid.Margin = new Thickness(0, density.TileGridTop, 0, 0);
+
+        GraphHeading.Margin = new Thickness(
+            0, density.GraphHeadingTop, 0, density.GraphHeadingBottom);
+        GraphHost.Height = density.GraphHeight;
+
+        // Four arguments: WPF's Thickness has no (horizontal, vertical) overload — that is
+        // Avalonia's, and the two heads sit close enough together to invite the mistake.
+        var tilePadding = new Thickness(
+            density.TilePaddingX, density.TilePaddingY, density.TilePaddingX, density.TilePaddingY);
+        TileTokensToday.TilePadding = tilePadding;
+        TileEstToday.TilePadding = tilePadding;
+        TileTokens31.TilePadding = tilePadding;
+        TileEst31.TilePadding = tilePadding;
+    }
+
     // ── data ───────────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// What the panel is currently showing, so the disclosure can re-decide the density and
+    /// redraw the chart without the caller handing them back. Set by every
+    /// <see cref="Populate"/>, so they can never describe a different panel than the one on
+    /// screen.
+    /// </summary>
+    private PanelStatistics? _lastStats;
+
+    private UsageSnapshot? _lastSnapshot;
 
     private void Populate(UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account)
     {
+        _lastStats = stats;
+        _lastSnapshot = snapshot;
+
         var local = TimeZoneInfo.Local;
 
         UpdatedText.Text = $"Updated {Now(local):HH:mm} · {SourceLabel(snapshot, local)}";
@@ -476,8 +577,15 @@ public partial class PopupWindow : Window, IFlyout
         }
 
         var width = GraphHost.ActualWidth > 0 ? GraphHost.ActualWidth : 344;
-        const double barAreaHeight = 52;
-        const double labelTop = 58;
+
+        // Derived from the canvas rather than fixed at 52. The canvas height is no longer a
+        // constant — a display too short for the panel gets a shorter one (PanelDensity) —
+        // and a fixed bar area meant the rotated date labels below it simply ran off the
+        // bottom and collided with the next section. Caught by rendering it; the constants
+        // alone look fine. At the normal 86 px canvas this is 52, exactly as before.
+        const double labelAreaHeight = 34;
+        var barAreaHeight = Math.Max(18, GraphHost.Height - labelAreaHeight);
+        var labelTop = barAreaHeight + 6;
         var col = width / series.Count;
         var globalMax = Math.Max(1, series.Max(d => d.TotalTokens));
 

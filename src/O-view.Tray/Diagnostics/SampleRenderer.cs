@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using OView.App.Rendering;
 using OView.Core.Models;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
@@ -202,6 +203,16 @@ internal static class SampleRenderer
             SavePng(
                 expanded.RenderToBitmap(live, stats, account, scale, expandComposition: true),
                 Path.Combine(dir, $"panel-tokens-explained-{(light ? "light" : "dark")}.png"));
+
+            // The same panel at compact density — what a display too short for the natural
+            // layout gets. Expanded, because that is the tallest the panel ever is and so the
+            // case the density exists for. Rendered rather than reasoned about: whether a
+            // tightened layout still reads as sections cannot be judged from the constants.
+            var compact = new PopupWindow { ThemeOverride = light, ScopeReport = bothSourcesScope };
+            SavePng(
+                compact.RenderToBitmap(live, stats, account, scale,
+                    expandComposition: true, density: PanelDensity.Compact),
+                Path.Combine(dir, $"panel-compact-{(light ? "light" : "dark")}.png"));
         }
     }
 

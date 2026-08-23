@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
+using OView.App.Rendering;
 using OView.Core.Models;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
@@ -23,6 +24,22 @@ namespace OView.Linux.Panel;
 public sealed class PanelContent : Border
 {
     private const double PanelWidth = 400;
+
+    /// <summary>Gap between sections at the natural density — this head's own constant.</summary>
+    private const double NaturalRootSpacing = 10;
+
+    /// <summary>Height of the bar strip at the natural density. The Windows chart is 86.</summary>
+    private const double NaturalGraphHeight = 60;
+
+    /// <summary>Inset inside a stat tile at the natural density.</summary>
+    private const double NaturalTilePadding = 10;
+
+    /// <summary>
+    /// How tightly to pack, for a display too short for the natural layout
+    /// (<see cref="PanelDensity"/>). Set before <see cref="Populate"/>; defaults to the
+    /// shipped layout, so a head that never sets it is unchanged.
+    /// </summary>
+    public PanelDensity Density { get; set; } = PanelDensity.Normal;
 
     private readonly LinuxPanelTheme _theme;
     private readonly StackPanel _root;
@@ -50,6 +67,13 @@ public sealed class PanelContent : Border
         DateTimeOffset utcNow)
     {
         _root.Children.Clear();
+
+        // Applied here rather than in the constructor: the density depends on the screen this
+        // open lands on, and a multi-monitor desktop can move between them. Normal reproduces
+        // the shipped layout exactly (PanelDensity).
+        Padding = new Thickness(Density.RootPadding);
+        _root.Spacing = NaturalRootSpacing * Density.SpacingScale;
+
         var local = TimeZoneInfo.Local;
         var authoritative = snapshot.Source is DataSource.Live or DataSource.Stale;
 
@@ -276,7 +300,7 @@ public sealed class PanelContent : Border
         {
             Background = _theme["TileBg"],
             CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(10),
+            Padding = new Thickness(NaturalTilePadding * Density.SpacingScale),
             Child = stack,
         };
     }
@@ -295,14 +319,17 @@ public sealed class PanelContent : Border
         }
 
         var peak = series.Where(d => !d.PreInstall).Select(d => d.TotalTokens).DefaultIfEmpty(0).Max();
-        var bars = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Height = 60 };
+        // Scaled by the density ratio rather than given the Windows chart height: this head
+        // ships a 60 px strip, and a display with room must keep exactly that.
+        var barArea = NaturalGraphHeight * Density.GraphScale;
+        var bars = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2, Height = barArea };
 
         foreach (var day in series)
         {
             bars.Children.Add(new Border
             {
                 Width = 9,
-                Height = day.PreInstall || peak == 0 ? 0 : Math.Max(2, 60.0 * day.TotalTokens / peak),
+                Height = day.PreInstall || peak == 0 ? 0 : Math.Max(2, barArea * day.TotalTokens / peak),
                 VerticalAlignment = VerticalAlignment.Bottom,
                 Background = day.PreInstall ? null : _theme["Series1"],
                 CornerRadius = new CornerRadius(1),
@@ -325,7 +352,7 @@ public sealed class PanelContent : Border
         {
             Background = _theme["WarnBg"],
             CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(10),
+            Padding = new Thickness(NaturalTilePadding * Density.SpacingScale),
             Child = stack,
         });
     }

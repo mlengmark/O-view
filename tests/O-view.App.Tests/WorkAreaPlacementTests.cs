@@ -194,4 +194,48 @@ public class WorkAreaPlacementTests
 
         Assert.Equal(1920 - 40 - 300, left);
     }
+
+    // ── available height ────────────────────────────────────────────────────────────
+
+    /// <summary>Both margins come out, so a surface sized to this lands inside the work area.</summary>
+    [Fact]
+    public void AvailableHeightLeavesRoomForTheMarginAtBothEnds()
+    {
+        Assert.Equal(1040 - (2 * Margin), WorkAreaPlacement.AvailableHeightPx(WorkAreaWithBarAt("bottom")));
+    }
+
+    /// <summary>
+    /// The property that makes it the right input for a density decision: a surface of exactly
+    /// this height is placed with its top AND its bottom inside the work area, on every bar
+    /// edge. Anything taller is what <see cref="PanelDensity"/> exists to shrink.
+    /// </summary>
+    [Fact]
+    public void ASurfaceOfTheAvailableHeightFitsEntirelyInsideTheWorkArea()
+    {
+        foreach (var edge in new[] { "top", "left", "right", "bottom" })
+        {
+            var work = WorkAreaWithBarAt(edge);
+            var height = WorkAreaPlacement.AvailableHeightPx(work);
+
+            var (_, top, _) = WorkAreaPlacement.Place(Monitor, work, 400, height);
+
+            Assert.True(top >= work.Y, $"{edge}: top {top} above work area {work.Y}");
+            Assert.True(top + height <= work.Bottom,
+                $"{edge}: bottom {top + height} below work area {work.Bottom}");
+        }
+    }
+
+    /// <summary>
+    /// A work area no larger than its own margins still yields a usable height. A non-positive
+    /// constraint is not a smaller window — on a SizeToContent surface it is a layout pass with
+    /// no solution.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2 * WorkAreaPlacement.DefaultMarginPx)]
+    public void AnAbsurdlyShortWorkAreaStillYieldsAPositiveHeight(int height)
+    {
+        Assert.True(WorkAreaPlacement.AvailableHeightPx(new PixelBox(0, 0, 1920, height)) >= 1);
+    }
 }

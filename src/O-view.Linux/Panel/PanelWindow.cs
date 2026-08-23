@@ -132,10 +132,53 @@ public sealed class PanelWindow : Window
 
         if (placeable)
         {
+            FitToScreen(snapshot, stats, account, dataReport, scopeReport, utcNow);
             PlaceAtWorkAreaCorner();
         }
 
         Activate();
+    }
+
+    /// <summary>
+    /// Re-lays the panel out compactly when this screen is too short for the natural layout
+    /// (<see cref="PanelDensity"/>), so the bottom sections stay above the desktop's panel bar
+    /// rather than under it.
+    ///
+    /// <para>Measured after <c>Show</c>, because <see cref="Window.SizeToContent"/> gives no
+    /// height until the first layout pass — the same reason placement happens there. A
+    /// threshold on the screen alone would be a guess: the panel's height depends on whether a
+    /// banner, an off-plan section or an expanded explanation is present.</para>
+    ///
+    /// <para>Re-populating rebuilds the whole tree, which is why this only runs when the panel
+    /// actually overflows. A display with room does one pass, exactly as before.</para>
+    /// </summary>
+    private void FitToScreen(
+        UsageSnapshot snapshot,
+        PanelStatistics stats,
+        ClaudeAccount? account,
+        PlanHistoryReport? dataReport,
+        TranscriptScopeReport? scopeReport,
+        DateTimeOffset utcNow)
+    {
+        if (TargetScreen() is not { } screen)
+        {
+            return;
+        }
+
+        var scaling = screen.Scaling > 0 ? screen.Scaling : 1.0;
+        var available = WorkAreaPlacement.AvailableHeightPx(ToBox(screen.WorkingArea)) / scaling;
+        var natural = (FrameSize ?? ClientSize).Height;
+
+        var density = PanelDensity.For(natural, available);
+        if (!density.IsCompact)
+        {
+            return;
+        }
+
+        _content.Density = density;
+        _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow);
+        _log?.Write(
+            $"panel density: compact (natural {natural:0} dip > available {available:0} dip)");
     }
 
     /// <summary>
