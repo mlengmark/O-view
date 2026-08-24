@@ -39,36 +39,17 @@ namespace OView.Tray.Popup;
 /// </summary>
 internal static class FlyoutAnimation
 {
-    /// <summary>
-    /// The entrance and exit durations, from the trace in the class remarks.
-    ///
-    /// <para>Internal for the same reason as the curves below: a transition that travels a
-    /// shorter distance is <b>scaled from these</b> rather than timed independently
-    /// (<see cref="DisclosureAnimation"/>), so the in : out ratio the platform uses survives
-    /// wherever it is applied.</para>
-    /// </summary>
-    internal static readonly Duration OpenDuration = new(TimeSpan.FromMilliseconds(230));
-
-    /// <inheritdoc cref="OpenDuration"/>
-    internal static readonly Duration CloseDuration = new(TimeSpan.FromMilliseconds(150));
+    private static readonly Duration OpenDuration = new(TimeSpan.FromMilliseconds(230));
+    private static readonly Duration CloseDuration = new(TimeSpan.FromMilliseconds(150));
 
     /// <summary>How far the content travels into place, on top of the reveal.</summary>
     private const double SlideDistance = 20;
 
-    /// <summary>
-    /// The fitted decelerate curve. See the class remarks for the fit.
-    ///
-    /// <para>Internal rather than private because it is the app's motion vocabulary, not this
-    /// file's private constant: <see cref="DisclosureAnimation"/> folds the panel's token
-    /// explanation open on the same curve, so an in-place reveal and a surface entrance move
-    /// the same way. Fitting it a second time by eye is how two surfaces end up with two
-    /// different ideas of what "smooth" means here.</para>
-    /// </summary>
-    internal static readonly KeySpline Decelerate = new(0.02, 0.16, 0.20, 0.96);
+    /// <summary>The fitted decelerate curve. See the class remarks for the fit.</summary>
+    private static readonly KeySpline Decelerate = new(0.02, 0.16, 0.20, 0.96);
 
     /// <summary>Its mirror, for getting out of the way.</summary>
-    internal static readonly KeySpline Accelerate = new(0.80, 0.04, 0.98, 0.84);
-
+    private static readonly KeySpline Accelerate = new(0.80, 0.04, 0.98, 0.84);
 
     public static void Open(Window window, Point origin)
     {

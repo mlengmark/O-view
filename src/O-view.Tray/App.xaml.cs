@@ -99,17 +99,6 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        // The disclosure fold, sampled on the real desktop over ~2 s: a per-frame geometry
-        // trace plus filmstrips grabbed off the screen. Same shape as the two above and
-        // pre-mutex for the same reason — it drives a panel of its own and must not fight the
-        // running instance for the tray or the display. Takes a DIRECTORY, like the sample
-        // renderers, because it writes several files.
-        if (args.TryGetValue("--fold-check", out var foldCheckDir))
-        {
-            SampleRenderer.RunFoldCheck(foldCheckDir ?? "fold-check", Shutdown);
-            return;
-        }
-
         _instance = new MutexSingleInstanceGuard();
         if (!_instance.TryAcquire())
         {

@@ -1,7 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using OView.Core.Models;
-using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Core.Storage;
@@ -135,34 +134,9 @@ public static class DiagnosticsBundle
         text.AppendLine($"  process       : {Environment.ProcessPath}");
     }
 
-    /// <summary>
-    /// The account read, and <b>every candidate it considered</b>.
-    ///
-    /// <para>One line saying "not readable" was actively misleading on 2026-08-24: Claude Code
-    /// had created a second <c>.claude.json</c> carrying only migration keys, O-view resolved to
-    /// it because it existed, and the bundle reported a failure to read a file that read
-    /// perfectly — while the populated one sat unmentioned. A resolution that picks between
-    /// candidates has to show the picking, or the next report of this costs another round trip
-    /// to discover which file was even opened.</para>
-    /// </summary>
-    private static void AppendAccount(StringBuilder text, ClaudeAccount? account)
-    {
-        text.AppendLine($"  account file  : {(account is null ? "no candidate has an account" : "read ok")}"
+    private static void AppendAccount(StringBuilder text, ClaudeAccount? account) =>
+        text.AppendLine($"  account file  : {(account is null ? "not readable" : "read ok")}"
                         + $" (org {account?.OrganizationUuid ?? "n/a"}, tier {account?.Tier ?? "n/a"})");
-
-        foreach (var candidate in ClaudeAccount.Candidates())
-        {
-            var state = !File.Exists(candidate) ? "missing"
-                : ClaudeAccount.TryRead(candidate) is not null ? "has oauthAccount"
-                : "no oauthAccount";
-            var cached = File.Exists(candidate) && CachedUtilization.TryRead(candidate) is { } u
-                ? $", cached figures {(DateTimeOffset.UtcNow - u.FetchedAtUtc).TotalMinutes:0} min old"
-                : File.Exists(candidate) ? ", no cached figures" : "";
-
-            // Paths are redacted by Redact.Bundle on the way out, as everywhere else here.
-            text.AppendLine($"    candidate   : {candidate}  <-- {state}{cached}");
-        }
-    }
 
     /// <summary>
     /// What the weekly-reset discovery has actually found (ADR-0011). "Weekly says waiting"

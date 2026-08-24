@@ -20,80 +20,6 @@ namespace OView.Core.Models;
 public static class PanelText
 {
     /// <summary>
-    /// The header's freshness line: <c>As of now</c>, <c>As of 11:34</c>,
-    /// <c>Local estimate · as of 11:34</c>, <c>No data</c>.
-    ///
-    /// <para><b>It describes the reading, not the repaint.</b> The line it replaces read
-    /// <c>Updated 11:34 · live</c>, where the clock time was the moment the panel was drawn
-    /// and "live" was a claim about the pipeline rather than about the number beside it. Both
-    /// halves overstated: O-view holds whatever the last poll returned, and the source itself
-    /// samples on its own schedule, so the figures on screen are always a log of a past
-    /// moment (GitHub issue #192). The time shown is now
-    /// <see cref="UsageSnapshot.CapturedAtUtc"/> — when the sample was actually taken.</para>
-    ///
-    /// <para>"now" is claimed only for a reading captured within the current clock minute;
-    /// once that minute has passed the reading is a past log and is stamped with its own
-    /// time. That also keeps the stamp from ever reading as the current minute, which would
-    /// invite exactly the "this is happening now" reading the issue is about.</para>
-    ///
-    /// <para>The <see cref="DataSource"/> tiers collapse here on purpose: a capture time says
-    /// how old a reading is far more precisely than the Live/Stale split it replaces, and
-    /// both tiers are authoritative figures either way. What does <b>not</b> collapse is
-    /// <see cref="DataSource.Estimate"/> — a JSONL-derived figure must still say it is a local
-    /// estimate (rule 6, ADR-0002), with its age beside it rather than instead of it.</para>
-    /// </summary>
-    public static string Freshness(UsageSnapshot snapshot, DateTimeOffset utcNow, TimeZoneInfo local)
-    {
-        var age = AsOf(snapshot.CapturedAtUtc, utcNow, local);
-
-        return snapshot.Source switch
-        {
-            DataSource.Live or DataSource.Stale => age is null ? CaptureTimeUnknown : $"As of {age}",
-            DataSource.Estimate => age is null ? "Local estimate" : $"Local estimate · as of {age}",
-            _ => "No data",
-        };
-    }
-
-    /// <summary>
-    /// Said when an authoritative figure arrived without a capture time. Rare — every shipped
-    /// provider stamps one — but the alternative is stamping it with the repaint clock, which
-    /// is the bug this line was rewritten to remove.
-    /// </summary>
-    public const string CaptureTimeUnknown = "Reading time unknown";
-
-    /// <summary>
-    /// <c>now</c> for a sample taken in the current clock minute, otherwise its local
-    /// <c>HH:mm</c>. Null when there is no capture time to report.
-    /// </summary>
-    private static string? AsOf(DateTimeOffset? capturedAtUtc, DateTimeOffset utcNow, TimeZoneInfo local)
-    {
-        if (capturedAtUtc is not { } at)
-        {
-            return null;
-        }
-
-        var captured = TimeZoneInfo.ConvertTime(at, local);
-        var now = TimeZoneInfo.ConvertTime(utcNow, local);
-
-        // Both conditions are needed. The elapsed check alone would call a 40-second-old
-        // reading "now" across a minute boundary, which is the past log the issue asks to be
-        // stamped; the clock-minute check alone misreads the DST fall-back hour, where an
-        // instant 40 minutes ago carries a *later* local minute than now. A capture in the
-        // future is a clock adjustment, not a prediction — report it as now rather than
-        // stamping the panel with a time that has not happened.
-        var elapsed = utcNow - at;
-        var withinThisMinute = elapsed < TimeSpan.FromMinutes(1)
-            && (elapsed < TimeSpan.Zero || Minute(captured) == Minute(now));
-
-        return withinThisMinute
-            ? "now"
-            : string.Create(CultureInfo.InvariantCulture, $"{captured:HH:mm}");
-    }
-
-    private static DateTime Minute(DateTimeOffset t) =>
-        new(t.Year, t.Month, t.Day, t.Hour, t.Minute, 0);
-
-    /// <summary>
     /// A duration as the panel says it: <c>3d 4h</c>, <c>2h 14m</c>, <c>14m</c>, or
     /// <c>under a minute</c>.
     ///
@@ -302,32 +228,6 @@ public static class PanelText
     /// than as a label for what is behind it.
     /// </summary>
     public const string TokenExplainToggleLabel = "Why so large?";
-
-    /// <summary>
-    /// What the divergence banner says when local work is running past a meter that is not
-    /// moving.
-    ///
-    /// <para><b>It states the observation and stops there.</b> The wording it replaces ended
-    /// "that work is billing elsewhere — most likely extra-usage credits", which is a claim
-    /// about the user's billing that O-view cannot see and, on the machine that reported it,
-    /// was false: their account had extra usage switched off, and Claude Code's own cache says
-    /// so in <c>extra_usage.user_disabled</c>. Naming a cause is not the panel's job — the two
-    /// numbers are, and they are what the reader can check (rule 6).</para>
-    ///
-    /// <para>The wording also names the meter as the thing that did not move, rather than the
-    /// usage as the thing that went astray. Those describe the same observation and read very
-    /// differently when the meter is the part at fault.</para>
-    /// </summary>
-    public static string DivergenceDetail(long outputTokens, int risePoints) =>
-        $"About {UsageFormatter.Tokens(outputTokens)} output tokens ran in this window while the "
-        + $"plan meter moved {risePoints} point{(risePoints == 1 ? "" : "s")}. Usage that a plan "
-        + "meter does not account for is billed some other way — O-view cannot see your billing, "
-        + "so check Settings → Usage in Claude for what it was.";
-
-    /// <inheritdoc cref="DivergenceDetail"/>
-    public const string PlanLimitReachedDetail =
-        "The 5-hour window is exhausted, so continued work is not drawing from it. Whether that "
-        + "bills as extra usage depends on your account settings, which O-view cannot read.";
 
     /// <summary>Sub-label noting that an off-plan figure includes work billed outside the plan.</summary>
     public static string OffPlanNote(bool offPlan) => offPlan ? "incl. off-plan usage" : "";
