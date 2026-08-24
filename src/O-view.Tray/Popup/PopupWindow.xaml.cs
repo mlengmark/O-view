@@ -54,27 +54,61 @@ public partial class PopupWindow : Window, IFlyout
         _flyout = new DockedFlyout(this);
         Deactivated += (_, _) => _flyout.OnDeactivated();
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) _flyout.BeginClose(); };
-        TokenExplainToggle.Click += (_, _) =>
-        {
-            SetCompositionExpanded(!_compositionExpanded);
-
-            // Expanding is exactly when the panel crosses the work area, so the density is
-            // re-decided here rather than only at open — a panel that fitted closed and does
-            // not fit open is the whole reported case.
-            if (_lastStats is { } stats && _lastSnapshot is { } snapshot)
-            {
-                FitToWorkArea(stats, snapshot);
-            }
-
+        _disclosure = new DisclosureAnimation(
+            this, TokenExplainBody, TokenExplainChevronRotation,
             // Re-dock, exactly as the menu does when its threshold list opens (issue #33).
             // The panel is docked by its top-left and is SizeToContent, so growing it without
             // this pushes the new content down into the taskbar — which is the failure the
             // docked placement was introduced to avoid, reintroduced the moment the panel
             // gained something that could grow. It also re-fits the open animation's clip,
             // without which the window is the right size and the card inside it is not.
-            UpdateLayout();
-            _flyout.Redock(ActualWidth, ActualHeight);
-        };
+            //
+            // The fold calls this on every frame it changes the window's height, so the
+            // bottom edge stays pinned to the docked corner for the whole transition.
+            () => _flyout.Redock(ActualWidth, DockHeight));
+
+        TokenExplainToggle.Click += (_, _) => ToggleComposition();
+    }
+
+    /// <summary>
+    /// Opens or closes the token explanation, as a fold rather than as a jump.
+    ///
+    /// <para><b>The panel is never laid out at the far end of the fold.</b> The obvious order —
+    /// apply the final state, lay it out, then animate back from where the fold was — puts the
+    /// window at its full height for the length of that layout, still docked for the height it
+    /// had. It does not stay there, but it is presented: <c>--fold-check</c>'s screen grabs
+    /// caught the frame, a whole panel 72 px down with its bottom inside the taskbar. So the
+    /// end point is measured off the body alone, the body is pinned at the fold's starting
+    /// height, and every size the window takes from here is one the fold puts it at and
+    /// re-docks it for.</para>
+    /// </summary>
+    private void ToggleComposition()
+    {
+        var expanded = !_compositionExpanded;
+
+        // Captured before the state flips, so a click landing mid-fold continues from what is
+        // on screen rather than snapping to one end and travelling the whole way again.
+        var (fromHeight, fromAngle) = _disclosure.Current;
+
+        // The panel's text column, which is what the explanation wraps within.
+        var toHeight = expanded ? _disclosure.MeasureNatural(TokenCompositionLine.ActualWidth) : 0;
+
+        _compositionExpanded = expanded;
+        _disclosure.Prepare(fromHeight);
+
+        // Expanding is exactly when the panel crosses the work area, so the density is
+        // re-decided here rather than only at open — a panel that fitted closed and does
+        // not fit open is the whole reported case. It is told what the fold is about to add,
+        // because the panel in front of it is still the size it was before the fold.
+        if (_lastStats is { } stats && _lastSnapshot is { } snapshot)
+        {
+            FitToWorkArea(stats, snapshot, pendingGrowth: toHeight - fromHeight);
+        }
+
+        UpdateLayout();
+        _flyout.Redock(ActualWidth, DockHeight);
+
+        _disclosure.Run(expanded, fromHeight, fromAngle, toHeight);
     }
 
     /// <summary>
@@ -84,6 +118,72 @@ public partial class PopupWindow : Window, IFlyout
     /// thing (issues #58, #170).
     /// </summary>
     internal void ExpandCompositionForVerification() => SetCompositionExpanded(true);
+
+    /// <summary>
+    /// Folds the explanation from outside, for <c>--fold-check</c>. The real transition,
+    /// not the instant state: an animation's completion is the thing being checked, and this
+    /// app has shipped a missed one before (<see cref="FlyoutAnimation"/>).
+    /// </summary>
+    internal void ToggleCompositionForVerification() => ToggleComposition();
+
+    /// <summary>
+    /// The height to dock against: the content's freshly measured size, not the window's.
+    ///
+    /// <para>A <c>SizeToContent</c> window's <c>ActualHeight</c> trails the layout pass that
+    /// produced it by a frame, and the fold changes that height sixty times a second. Docking
+    /// against the trailing number places the panel for the height it had a frame ago — which
+    /// <c>--fold-check</c> caught twice: 72 px out for one frame when the fold starts, and a
+    /// collapse settling 13 px above its docked edge and staying there. <c>DesiredSize</c> is
+    /// the measure that the window's own size is about to follow.</para>
+    /// </summary>
+    private double DockHeight =>
+        Content is FrameworkElement root && root.DesiredSize.Height > 0
+            ? root.DesiredSize.Height
+            : ActualHeight;
+
+    /// <summary>
+    /// Where the disclosure row sits on the physical screen, so <c>--fold-check</c> can cut
+    /// its filmstrip to the band that actually moves rather than to the whole panel.
+    /// </summary>
+    internal double DisclosureScreenTop => TokenExplainToggle.PointToScreen(new Point(0, 0)).Y;
+
+    /// <summary>
+    /// The folding body's current height — what <c>--fold-check</c> samples.
+    ///
+    /// <para>Read from the <c>Height</c> property rather than from <c>ActualHeight</c>: a
+    /// dependency property returns its animated value, while <c>ActualHeight</c> reported the
+    /// settled layout throughout the first trace and made a working fold look instant. Auto
+    /// (NaN) means nothing is animating, so the arranged height is the answer.</para>
+    /// </summary>
+    internal double DisclosureHeight
+    {
+        get
+        {
+            if (TokenExplainBody.Visibility != Visibility.Visible)
+            {
+                return 0;
+            }
+
+            var height = (double)TokenExplainBody.GetValue(HeightProperty);
+            return double.IsNaN(height) ? TokenExplainBody.ActualHeight : height;
+        }
+    }
+
+    /// <summary>
+    /// Freezes the disclosure partway open for a verification render. On a real desktop this
+    /// state exists for about a tenth of a second, which is long enough to look wrong and far
+    /// too short to inspect — and the failure it guards against, content drawn outside the
+    /// height it has been given, is invisible at both ends of the fold.
+    /// </summary>
+    /// <param name="fraction">How far open, 0–1.</param>
+    internal void RevealCompositionForVerification(double fraction)
+    {
+        // Laid out fully open first: the fold's geometry is a fraction of the body's natural
+        // height, which is only known once it has been measured at that height.
+        SetCompositionExpanded(true);
+        UpdateLayout();
+        _disclosure.ApplyPartial(fraction, TokenExplainBody.ActualHeight);
+    }
 
     /// <summary>
     /// Closes the panel from outside — the tray icon completing a toggle. Idempotent, so
@@ -139,12 +239,19 @@ public partial class PopupWindow : Window, IFlyout
     /// canvas height, so a canvas that just changed size would otherwise keep the previous
     /// drawing at the previous scale.</para>
     /// </summary>
-    private void FitToWorkArea(PanelStatistics stats, UsageSnapshot snapshot)
+    /// <param name="pendingGrowth">
+    /// Height the panel is about to gain or lose but has not yet — the disclosure fold, which
+    /// is measured before it plays so that the window is never laid out at the far end of it
+    /// (<see cref="ToggleComposition"/>). Zero everywhere else, where what is on screen and
+    /// what is being measured are the same panel.
+    /// </param>
+    private void FitToWorkArea(PanelStatistics stats, UsageSnapshot snapshot, double pendingGrowth = 0)
     {
         ApplyDensity(PanelDensity.Normal);
         UpdateLayout();
 
-        var density = PanelDensity.For(ActualHeight, PopupPositioner.AvailableHeightDip());
+        var density = PanelDensity.For(
+            ActualHeight + pendingGrowth, PopupPositioner.AvailableHeightDip());
         if (density.IsCompact)
         {
             ApplyDensity(density);
@@ -175,7 +282,7 @@ public partial class PopupWindow : Window, IFlyout
     /// </summary>
     internal System.Windows.Media.Imaging.BitmapSource RenderToBitmap(
         UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account, double scale,
-        bool expandComposition = false, PanelDensity? density = null)
+        bool expandComposition = false, PanelDensity? density = null, double? compositionReveal = null)
     {
         PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
         ApplyDensity(density ?? PanelDensity.Normal);
@@ -186,7 +293,11 @@ public partial class PopupWindow : Window, IFlyout
         // rather than before it, because Populate resets it.
         return VisualRenderer.RenderContent(this, scale, betweenPasses: () =>
         {
-            if (expandComposition)
+            if (compositionReveal is { } fraction)
+            {
+                RevealCompositionForVerification(fraction);
+            }
+            else if (expandComposition)
             {
                 ExpandCompositionForVerification();
             }
@@ -474,15 +585,20 @@ public partial class PopupWindow : Window, IFlyout
         SetCompositionExpanded(false);
     }
 
-    /// <summary>Shows or hides the explanation, and points the chevron the way it will move.</summary>
+    /// <summary>
+    /// Puts the explanation in a finished state at once — open or closed, nothing in flight.
+    /// The interactive path goes through <see cref="ToggleComposition"/>, which folds; this
+    /// is what <c>Populate</c> and the verification renders use.
+    /// </summary>
     private void SetCompositionExpanded(bool expanded)
     {
         _compositionExpanded = expanded;
-        TokenExplainBody.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-        TokenExplainChevron.Data = Geometry.Parse(expanded ? "M0,4 L4,0 L8,4" : "M0,0 L4,4 L8,0");
+        _disclosure.Apply(expanded);
     }
 
     private bool _compositionExpanded;
+
+    private readonly DisclosureAnimation _disclosure;
 
     /// <summary>
     /// Surfaces off-plan usage in two distinct registers:

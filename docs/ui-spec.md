@@ -337,6 +337,39 @@ Closing defers `Hide()` to the end of the animation, since hiding first would ma
 
 `--popup-pin` and `--menu-pin` skip the animation entirely: a verification still needs the finished state, not a frame from the middle of a fade.
 
+### The disclosure fold
+
+"Why so large?" **folds**, on the same curve as the entrance: the explanation's height animates
+from zero and its content is clipped to it, so the text slides out from behind the fold edge
+while the panel grows *upward* out of the docked corner. It used to appear whole — the body,
+the `SizeToContent` window's height and the re-dock all changing in one frame, three
+discontinuities in the one surface on screen that had been tuned against a trace of the
+platform.
+
+Durations are **scaled** from the entrance's, not chosen: **191 ms** open and **125 ms** close,
+the traced 230 : 150 at 0.83. The fold covers a twelfth of the entrance's distance, and giving
+60 px the time 700 px needs reads as hesitation. There is deliberately **no fade** — the same
+reasoning that made the entrance a geometric reveal rather than a dissolve — and the chevron
+rotates 180° over the same curve instead of swapping glyph.
+
+**Two failures here are invisible to any offscreen render**, and both were found by
+[`--fold-check`](../src/O-view.Tray/Diagnostics/SampleRenderer.cs), which drives the real panel
+and grabs the pixels the compositor actually presented:
+
+- **The window must never be laid out at the far end of the fold.** Applying the open state and
+  laying it out — the obvious way to measure where the fold ends — resizes a window docked by
+  its top-left, and that HWND is presented before the re-dock catches up: one frame of
+  full-height panel 72 px down, its bottom inside the taskbar. The end point is measured off
+  the explanation alone instead, and the body is pinned at the fold's starting height before
+  any layout runs, so every size the window takes is one the fold docks it for.
+- **Dock against the content's `DesiredSize`, never the window's `ActualHeight`.** A
+  `SizeToContent` window's own size trails the layout pass that produced it, and the fold
+  changes that height sixty times a second; docking against the trailing number left a collapse
+  settled 13 px above its edge.
+
+Measured over the fold, per rendered frame: the body steps 0 → 22.6 → 35.4 → 47.3 → … → 72.0 px
+opening and mirrors it closing, with the docked edge holding to within half a pixel throughout.
+
 ### Clicking the icon toggles
 
 The tray icon **opens and closes** the surface, as every taskbar flyout does. Left-click toggles the panel, right-click toggles the menu.
