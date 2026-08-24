@@ -14,16 +14,30 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// <summary>
     /// Maximum age at which a sample is still taken to describe <i>now</i>.
     ///
-    /// <para><b>Measured, not assumed.</b> Across 1,828 consecutive gaps in a 30-day real
-    /// file: median 5.00 min, and 1,686 of them (92%) within a hair of 5 min. Desktop samples
-    /// every ~300 s, so 11 minutes tolerates two missed samples and a minute of slack.</para>
+    /// <para><b>Measured, not assumed — and re-measured, because Claude Desktop changed it.</b>
+    /// The original calibration read: across 1,828 consecutive gaps in a 30-day real file,
+    /// median 5.00 min, 92% within a hair of 5 min; 11 minutes then tolerated two missed
+    /// samples and a minute of slack. That was true of every Desktop build up to
+    /// <b>2026-08-10</b>.</para>
     ///
-    /// <para>This was 15 minutes, on the reasoning that three missed samples means Desktop is
-    /// not running. That is true, but it is the wrong question: the cost is not "is Desktop
-    /// alive", it is "does this number still describe the window". Fifteen minutes let a
-    /// 14-minute-old sample render as a confident, unqualified reading (issue #161).</para>
+    /// <para>On that date the cadence changed to <b>15 minutes</b> and has held there since.
+    /// Measured on the same machine's file, 1,443 gaps: 1,234 at 5 min (all before 08-10),
+    /// then 15 min throughout — 31 of them on 08-23 alone, with nothing at 5 min. Desktop
+    /// samples on launch and every 15 minutes it stays active.</para>
+    ///
+    /// <para><b>Eleven minutes was therefore shorter than the interval itself</b>, which made
+    /// "Live" unreachable for four minutes of every fifteen: a reading taken as recently as
+    /// Desktop can take one was labelled stale while it was still the newest that could
+    /// possibly exist. One interval plus a minute of slack restores the meaning the bound is
+    /// supposed to carry — stale means <i>the next sample is overdue</i>, not merely that
+    /// Desktop paused between two of them.</para>
+    ///
+    /// <para>The question this answers is unchanged (issue #161): not "is Desktop alive" but
+    /// "does this number still describe the window". Two missed samples at the new cadence
+    /// would be 31 minutes, which is far too long to render as a confident reading — so the
+    /// tolerance shrinks from two intervals to one as the interval grows.</para>
     /// </summary>
-    public static readonly TimeSpan DefaultFreshness = TimeSpan.FromMinutes(11);
+    public static readonly TimeSpan DefaultFreshness = TimeSpan.FromMinutes(16);
 
     /// <summary>
     /// How long a five-hour reading of <b>zero</b> may be trusted — much shorter, because zero
@@ -43,9 +57,22 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// minutes later O-view still showed an empty gauge while ~6% had been consumed
     /// (issue #161).</para>
     ///
-    /// <para>One sampling interval plus slack. In normal operation a fresh zero arrives every
-    /// ~5 minutes and nothing changes; this only bites once Desktop has actually stopped
-    /// reporting — which is exactly when O-view genuinely does not know.</para>
+    /// <para>Six minutes, and <b>deliberately not raised alongside
+    /// <see cref="DefaultFreshness"/></b> when Desktop's cadence went from 5 minutes to 15 on
+    /// 2026-08-10. Raising it was tried and reverted: at 16 minutes a 14-minute-old zero
+    /// renders as a confident empty window again, which is issue #161 verbatim.</para>
+    ///
+    /// <para>The two bounds answer different questions, and only one of them is about
+    /// Desktop's cadence. "Is this snapshot current?" is — it can only ever be as current as
+    /// the sampler allows. "Does <i>at least 0%</i> tell the user anything?" is not: fourteen
+    /// minutes of Claude Code can move an empty window well into double digits whether or not
+    /// Desktop was due to sample, so the reading is worthless at the same age regardless of
+    /// why it is that age.</para>
+    ///
+    /// <para>The cost is real and accepted: after a reset the gauge now reads <i>unknown</i>
+    /// for nine minutes out of every fifteen rather than six out of every ten. Unknown is not
+    /// a wrong answer — it is the absence of one, which is what rule 6 asks for when the
+    /// alternative is a precise-looking figure O-view cannot stand behind.</para>
     /// </summary>
     public static readonly TimeSpan ZeroReadingFreshness = TimeSpan.FromMinutes(6);
 
