@@ -95,12 +95,19 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// plus that window's start — the inputs the divergence detector needs. Empty
     /// when no data is available.
     /// </summary>
-    public (DateTimeOffset WindowStartUtc, IReadOnlyList<int> Percents) GetCurrentWindow(DateTimeOffset utcNow)
+    /// <returns>
+    /// The window's start, its meter samples, and <b>how old the newest of them is</b>. The age
+    /// travels with the series because the two are only meaningful together: Claude Desktop
+    /// samples while it runs and not at all otherwise, so a flat series says nothing until you
+    /// know whether it is still being written (<see cref="DivergenceDetector.MaxMeterAge"/>).
+    /// </returns>
+    public (DateTimeOffset WindowStartUtc, IReadOnlyList<int> Percents, TimeSpan MeterAge)
+        GetCurrentWindow(DateTimeOffset utcNow)
     {
         var samples = ReadSamples();
         if (samples.Count == 0)
         {
-            return (utcNow, []);
+            return (utcNow, [], TimeSpan.MaxValue);
         }
 
         // Anchor on the current window's start so the span never crosses a boundary — a
@@ -117,7 +124,13 @@ public sealed class PlanHistoryProvider : IUsageProvider
             ?? samples[0].AtUtc;
         var inWindow = samples.Where(s => s.AtUtc >= windowStart).ToList();
 
-        return (windowStart, inWindow.Select(s => s.FiveHourPercent).ToList());
+        // Measured against the newest sample in the FILE, not in the window: a window whose
+        // samples all predate a long silence is exactly the case being guarded against, and
+        // taking the age from inside it would report the silence as freshness.
+        var age = utcNow - samples[^1].AtUtc;
+
+        return (windowStart, inWindow.Select(s => s.FiveHourPercent).ToList(),
+            age > TimeSpan.Zero ? age : TimeSpan.Zero);
     }
 
     /// <summary>

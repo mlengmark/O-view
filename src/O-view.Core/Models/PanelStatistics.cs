@@ -103,11 +103,18 @@ public sealed record PanelStatistics(
     /// <see cref="Build"/> because it needs the plan-meter series, which lives in the
     /// provider layer — Core stays free of file-format knowledge here.
     /// </summary>
-    public PanelStatistics WithDivergence(RollupStore store, DateTimeOffset windowStartUtc, IReadOnlyList<int> planPercentsInWindow)
+    /// <param name="meterAge">
+    /// Age of the newest sample in <paramref name="planPercentsInWindow"/>. A series that has
+    /// stopped being written is flat whatever the user is doing, so it is passed through rather
+    /// than assumed current — see <see cref="DivergenceDetector.MaxMeterAge"/>.
+    /// </param>
+    public PanelStatistics WithDivergence(
+        RollupStore store, DateTimeOffset windowStartUtc, IReadOnlyList<int> planPercentsInWindow,
+        TimeSpan meterAge)
     {
         var windowUsage = store.GetUsageSince(windowStartUtc);
         var outputTokens = windowUsage.Sum(r => r.OutputTokens);
-        var result = DivergenceDetector.Evaluate(planPercentsInWindow, outputTokens);
+        var result = DivergenceDetector.Evaluate(planPercentsInWindow, outputTokens, meterAge);
 
         // Only price the window when it is actually off-plan: otherwise this figure
         // would read as money spent when it is plan usage costing nothing marginal.

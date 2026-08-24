@@ -303,6 +303,32 @@ public static class PanelText
     /// </summary>
     public const string TokenExplainToggleLabel = "Why so large?";
 
+    /// <summary>
+    /// What the divergence banner says when local work is running past a meter that is not
+    /// moving.
+    ///
+    /// <para><b>It states the observation and stops there.</b> The wording it replaces ended
+    /// "that work is billing elsewhere — most likely extra-usage credits", which is a claim
+    /// about the user's billing that O-view cannot see and, on the machine that reported it,
+    /// was false: their account had extra usage switched off, and Claude Code's own cache says
+    /// so in <c>extra_usage.user_disabled</c>. Naming a cause is not the panel's job — the two
+    /// numbers are, and they are what the reader can check (rule 6).</para>
+    ///
+    /// <para>The wording also names the meter as the thing that did not move, rather than the
+    /// usage as the thing that went astray. Those describe the same observation and read very
+    /// differently when the meter is the part at fault.</para>
+    /// </summary>
+    public static string DivergenceDetail(long outputTokens, int risePoints) =>
+        $"About {UsageFormatter.Tokens(outputTokens)} output tokens ran in this window while the "
+        + $"plan meter moved {risePoints} point{(risePoints == 1 ? "" : "s")}. Usage that a plan "
+        + "meter does not account for is billed some other way — O-view cannot see your billing, "
+        + "so check Settings → Usage in Claude for what it was.";
+
+    /// <inheritdoc cref="DivergenceDetail"/>
+    public const string PlanLimitReachedDetail =
+        "The 5-hour window is exhausted, so continued work is not drawing from it. Whether that "
+        + "bills as extra usage depends on your account settings, which O-view cannot read.";
+
     /// <summary>Sub-label noting that an off-plan figure includes work billed outside the plan.</summary>
     public static string OffPlanNote(bool offPlan) => offPlan ? "incl. off-plan usage" : "";
 

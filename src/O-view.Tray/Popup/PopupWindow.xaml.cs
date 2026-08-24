@@ -627,9 +627,8 @@ public partial class PopupWindow : Window, IFlyout
                 ? "Plan limit reached — usage is billing beyond your plan"
                 : "This session's usage is not drawing from your plan";
             DivergenceDetail.Text = limitReached
-                ? "The 5-hour window is exhausted, so continued work bills as extra usage at API rates."
-                : $"About {FormatTokens(d.OutputTokensInWindow)} output tokens ran this window while the plan meter moved "
-                  + $"{d.PlanRisePoints} point{(d.PlanRisePoints == 1 ? "" : "s")}. That work is billing elsewhere — most likely extra-usage credits.";
+                ? PanelText.PlanLimitReachedDetail
+                : PanelText.DivergenceDetail(d.OutputTokensInWindow, d.PlanRisePoints);
         }
 
         // ── standing 31-day off-plan spend (issue #3) ────────────────────────────
