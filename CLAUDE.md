@@ -180,15 +180,24 @@ Keep `Core` free of UI and Win32 dependencies so the accounting logic stays test
 
 ```
 IUsageProvider
- ├─ PlanHistoryProvider  (primary)   → session/weekly %, derived reset times
- ├─ OAuthUsageProvider   (deferred)  → post-v1 enhancement only
- ├─ JsonlUsageProvider   (fallback)  → local token counts, offline (Claude Code + Cowork)
- └─ CompositeUsageProvider           → resolution, caching, source labelling
+ ├─ PlanHistoryProvider       (primary)  → session/weekly %, derived reset times
+ ├─ CachedUtilizationProvider (primary)  → session/weekly % AND exact reset times, from
+ │                                         Claude Code's ~/.claude.json cache
+ ├─ OAuthUsageProvider        (deferred) → post-v1 enhancement only
+ ├─ JsonlUsageProvider        (fallback) → local token counts, offline (Claude Code + Cowork)
+ └─ CompositeUsageProvider               → resolution, caching, source labelling
 ```
 
-Resolution: fresh plan-history → OAuth if it ever exists → JSONL (labelled estimate) → no data. See [ADR-0002](docs/adr/0002-usage-data-providers.md) and [ADR-0007](docs/adr/0007-plan-history-primary-provider.md).
+Resolution: fresh plan-history → Claude Code's cached figures → OAuth if it ever exists → JSONL (labelled estimate) → no data. See [ADR-0002](docs/adr/0002-usage-data-providers.md) and [ADR-0007](docs/adr/0007-plan-history-primary-provider.md).
 
-**Reset times are derived, not reported.** Both windows work the same way: detect a decrease of ≥2 points, anchor on it, step forward by the window length — **5h** from `fh`, **7 days** from `sd` ([ADR-0011](docs/adr/0011-weekly-reset-derivation.md); both lengths are measured, and 72h for the weekly window is disproved). Before any drop is observed the reset time is genuinely **unknown** — show it as unknown, never guessed.
+**The percentages are no longer Desktop-only.** Claude Code caches the figures behind `/status` → Usage in `~/.claude.json` → `cachedUsageUtilization`, so a machine with no Claude Desktop can fill the top two bars from a local file — the population that used to see two permanently empty gauges. Same rules as every other source: local, read-only, no token, no network (rule 3). Details and the shape: [findings/cached-usage-utilization.md](docs/findings/cached-usage-utilization.md).
+
+**Reset times are derived unless Claude Code has reported them.** Prefer a reported instant whenever one exists, and derive only as the fallback:
+
+- **Reported** — `cachedUsageUtilization.utilization.{five_hour,seven_day}.resets_at`. Exact, so it carries **zero uncertainty** and must render without the `~` that marks an approximation. `UsageEngine.WithReportedResets` folds these onto whichever snapshot wins the chain, *overriding* both the derived value and the user's entered one — those are attempts to recover a number this states outright. It is the only exact reset time O-view has ever had.
+- **Derived** — the fallback, and unchanged. Detect a decrease of ≥2 points, anchor on it, step forward by the window length: **5h** from `fh`, **7 days** from `sd` ([ADR-0011](docs/adr/0011-weekly-reset-derivation.md); both lengths are measured, and 72h for the weekly window is disproved). Before any drop is observed the reset time is genuinely **unknown** — show it as unknown, never guessed.
+
+**A cached percentage whose window has rolled over is not a reading.** Claude Code refreshes that file while it runs, so leave it closed across a boundary and it still reports the old window's figure — 91% for a window that reset to nothing hours ago. Each bar carries its own `resets_at`, so this is checkable; check it, and report unknown rather than the stale number. And **never step a passed `resets_at` forward** to the next window: for the five-hour window that rebuilds the grid bug #180 removed, and for the weekly one it dresses an inference in a reported value's zero uncertainty.
 
 Two things about the weekly one are easy to "tidy up" back into the bug they fix:
 

@@ -2,6 +2,7 @@ using OView.App.Platform;
 using OView.App.Updates;
 using OView.Core.Models;
 using OView.Core.Providers;
+using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Core.Storage;
@@ -29,6 +30,12 @@ public sealed class UsageEngine : IDisposable
     private readonly RollupStore _store;
     private readonly IUsageProvider _provider;
     private readonly PlanHistoryProvider? _planHistory;
+
+    /// <summary>
+    /// Claude Code's cached usage figures, held directly as well as through the chain — see
+    /// <see cref="WithReportedResets"/> for why the chain alone is not enough.
+    /// </summary>
+    private readonly IUsageProvider _cachedUtilization;
     /// <summary>
     /// Not readonly: the threshold is user-settable from the menu (issue #141), and the
     /// watcher carries the edge-trigger state that has to be rebuilt with it. See
@@ -136,8 +143,26 @@ public sealed class UsageEngine : IDisposable
             // plan-history provider about the rollup store.
             earliestActivity: _store.EarliestRequestBetween);
 
+        // Claude Code's own cached figures. Placed below plan history and above the JSONL
+        // estimate: Desktop samples on a timer whenever it runs, so where both are fresh its
+        // percentages are the better-maintained pair — but this one carries real percentages
+        // where the estimate carries none, and on a machine without Desktop it is the only
+        // source of the top two bars at all. The composite's tier rule sorts out the rest,
+        // preferring whichever is actually Live.
+        //
+        // A caller that supplies its own Provider has described the whole world, so the real
+        // file is left alone unless it also supplies this. Without that, WithReportedResets
+        // would read the developer's own ~/.claude.json during tests and fold live reset times
+        // onto fixtures — passing on a CI runner, which has no such file, and failing on the
+        // machine of whoever last used Claude Code. Reaching past an injected provider to real
+        // user data is the bug, not the test that caught it.
+        _cachedUtilization = _options.CachedUtilization ?? (_options.Provider is null
+            ? new CachedUtilizationProvider()
+            : new CachedUtilizationProvider(() => null));
+
         _provider = _options.Provider ?? new CompositeUsageProvider(
             _planHistory,
+            _cachedUtilization,
             new JsonlUsageProvider(_store));
 
         _planHistoryIsAddressed = _options.Provider is null
@@ -464,7 +489,10 @@ public sealed class UsageEngine : IDisposable
 
         try
         {
+            // Order matters. The entry fills a gap; the reported timestamps then override
+            // whatever is there, entry included — see WithReportedResets.
             var snapshot = WithEnteredWeeklyReset(_provider.GetSnapshot(utcNow), utcNow);
+            snapshot = WithReportedResets(snapshot, utcNow);
             return new PollResult(snapshot, ReadOffPlan(), utcNow, Failed: false);
         }
         catch (Exception ex)
@@ -515,6 +543,79 @@ public sealed class UsageEngine : IDisposable
             WeeklyResetUncertainty = TimeSpan.Zero,
             WeeklyResetPeriod = WeeklyResetDetector.WindowLength,
         };
+    }
+
+    /// <summary>
+    /// Replaces derived reset times with the ones Claude actually reported, wherever Claude
+    /// Code has cached them (<see cref="CachedUtilization"/>).
+    ///
+    /// <para><b>These are the only exact reset times O-view has.</b> Every other one is inferred
+    /// from a drop in a sampled series, so its precision is bounded by the gap between samples:
+    /// about half an interval for the five-hour window even after local transcripts narrow the
+    /// bracket (issue #185), and roughly ten hours for the weekly one, whose resets land
+    /// overnight while Desktop is closed (ADR-0011) — the imprecision that made the manual entry
+    /// of issue #186 worth building in the first place. A reported timestamp needs none of that
+    /// machinery. It is simply correct.</para>
+    ///
+    /// <para><b>So this overrides rather than fills a gap</b> — the opposite of
+    /// <see cref="WithEnteredWeeklyReset"/>, and the difference is the point. A derived bracket
+    /// and a typed-in time are both attempts to recover a number that this source states
+    /// outright; leaving either in place ahead of it would be preferring a guess to the
+    /// answer.</para>
+    ///
+    /// <para>Applied to the winning snapshot rather than left to the provider chain, because
+    /// the chain resolves on <em>percentages</em>: a machine running Claude Desktop takes its
+    /// percentages from plan history and would otherwise keep plan history's derived reset
+    /// times too, discarding exact ones that were sitting on disk the whole time. The two
+    /// questions have different best answers, so they are answered separately.</para>
+    ///
+    /// <para>Silent when there is nothing to say: no cache, a window that has already rolled
+    /// past its cached boundary, or a reader that throws all leave the snapshot untouched
+    /// (<see cref="CachedUtilizationProvider"/> returns those as nulls). This only ever
+    /// replaces an approximation with a fact, so it must never be able to remove one.</para>
+    /// </summary>
+    private UsageSnapshot WithReportedResets(UsageSnapshot snapshot, DateTimeOffset utcNow)
+    {
+        // Nothing to attach a reset to: a panel with no data at all should stay blank rather
+        // than grow one lonely populated line (same rule as the entered reset).
+        if (snapshot.Source == DataSource.None)
+        {
+            return snapshot;
+        }
+
+        UsageSnapshot reported;
+        try
+        {
+            reported = _cachedUtilization.GetSnapshot(utcNow);
+        }
+        catch (Exception ex)
+        {
+            // A precision refinement must never take down the reading it refines.
+            _log?.Write($"reported resets skipped: {ex.GetType().Name}: {ex.Message}");
+            return snapshot;
+        }
+
+        if (reported.SessionResetAtUtc is { } sessionReset)
+        {
+            snapshot = snapshot with
+            {
+                SessionResetAtUtc = sessionReset,
+                // Exact, so it renders without the "~" that marks a derived bracket.
+                SessionResetUncertainty = TimeSpan.Zero,
+            };
+        }
+
+        if (reported.WeeklyResetAtUtc is { } weeklyReset)
+        {
+            snapshot = snapshot with
+            {
+                WeeklyResetAtUtc = weeklyReset,
+                WeeklyResetUncertainty = TimeSpan.Zero,
+                WeeklyResetPeriod = reported.WeeklyResetPeriod ?? WeeklyResetDetector.WindowLength,
+            };
+        }
+
+        return snapshot;
     }
 
     /// <summary>
