@@ -705,21 +705,23 @@ public sealed class UsageEngine : IDisposable
             return stats;
         }
 
-        var (windowStart, percents) = _planHistory.GetCurrentWindow(utcNow);
+        var (windowStart, percents, meterAge) = _planHistory.GetCurrentWindow(utcNow);
 
         if (_options.SimulateDivergence is { } mode)
         {
             // Feed the real detector synthetic inputs rather than faking its output,
-            // so the simulation exercises the same code path the real case would.
+            // so the simulation exercises the same code path the real case would. The meter is
+            // stated as current, because a simulation of divergence against a stopped meter
+            // would now correctly render nothing at all.
             var fake = mode == "limit" ? new[] { 99, 100 } : [6, 6, 6];
-            return stats.WithDivergence(_store, windowStart, fake) with
+            return stats.WithDivergence(_store, windowStart, fake, TimeSpan.Zero) with
             {
                 EstOffPlanUsd = 92.75m,
-                Divergence = DivergenceDetector.Evaluate(fake, 69_091),
+                Divergence = DivergenceDetector.Evaluate(fake, 69_091, TimeSpan.Zero),
             };
         }
 
-        return stats.WithDivergence(_store, windowStart, percents);
+        return stats.WithDivergence(_store, windowStart, percents, meterAge);
     }
 
     /// <summary>

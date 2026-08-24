@@ -215,6 +215,41 @@ public class PanelTextTests
             "3 of 31 days recorded · excludes claude-x, claude-y (no published rate)",
             PanelText.Caveat(Stats(3, "claude-x", "claude-y")));
 
+    // ── divergence wording ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The banner reports two numbers and names no cause. It used to end "that work is billing
+    /// elsewhere — most likely extra-usage credits", which is a claim about the reader's billing
+    /// that O-view cannot see — and on the machine that reported it (2026-08-24) was false: the
+    /// account had extra usage switched off, which Claude Code's own cache records in
+    /// <c>extra_usage.user_disabled</c>. A figure O-view cannot check is not a figure it states.
+    /// </summary>
+    [Fact]
+    public void TheDivergenceBannerStatesTheObservationAndNamesNoCause()
+    {
+        var text = PanelText.DivergenceDetail(126_900, 0);
+
+        Assert.Contains("126.9K output tokens", text, StringComparison.Ordinal);
+        Assert.Contains("moved 0 points", text, StringComparison.Ordinal);
+        Assert.Contains("cannot see your billing", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("most likely", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("credits", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void OnePointIsNotPluralised() =>
+        Assert.Contains("moved 1 point.", PanelText.DivergenceDetail(60_000, 1), StringComparison.Ordinal);
+
+    /// <summary>An exhausted window is stated as such, without asserting how it bills.</summary>
+    [Fact]
+    public void TheLimitReachedWordingDoesNotAssertHowItBills()
+    {
+        Assert.Contains("exhausted", PanelText.PlanLimitReachedDetail, StringComparison.Ordinal);
+        Assert.Contains("O-view cannot read", PanelText.PlanLimitReachedDetail, StringComparison.Ordinal);
+        Assert.DoesNotContain("bills as extra usage at API rates",
+            PanelText.PlanLimitReachedDetail, StringComparison.Ordinal);
+    }
+
     // ── tile labels ─────────────────────────────────────────────────────────────────
 
     /// <summary>
