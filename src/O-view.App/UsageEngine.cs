@@ -143,12 +143,13 @@ public sealed class UsageEngine : IDisposable
             // plan-history provider about the rollup store.
             earliestActivity: _store.EarliestRequestBetween);
 
-        // Claude Code's own cached figures. Placed below plan history and above the JSONL
-        // estimate: Desktop samples on a timer whenever it runs, so where both are fresh its
-        // percentages are the better-maintained pair — but this one carries real percentages
-        // where the estimate carries none, and on a machine without Desktop it is the only
-        // source of the top two bars at all. The composite's tier rule sorts out the rest,
-        // preferring whichever is actually Live.
+        // Claude Code's own cached figures — real percentages where the JSONL estimate has
+        // none, and on a machine without Desktop the only source of the top two bars at all.
+        //
+        // Position here is a tie-break, not a precedence: the composite picks whichever
+        // snapshot reports the most meters, most recently. Desktop samples every ~5 minutes
+        // while this refreshes on use, so neither is reliably the fresher one and neither
+        // deserves a standing preference.
         //
         // A caller that supplies its own Provider has described the whole world, so the real
         // file is left alone unless it also supplies this. Without that, WithReportedResets

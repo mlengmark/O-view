@@ -188,7 +188,11 @@ IUsageProvider
  └─ CompositeUsageProvider               → resolution, caching, source labelling
 ```
 
-Resolution: fresh plan-history → Claude Code's cached figures → OAuth if it ever exists → JSONL (labelled estimate) → no data. See [ADR-0002](docs/adr/0002-usage-data-providers.md) and [ADR-0007](docs/adr/0007-plan-history-primary-provider.md).
+Resolution: authoritative percentages → OAuth if it ever exists → JSONL (labelled estimate) → no data. See [ADR-0002](docs/adr/0002-usage-data-providers.md) and [ADR-0007](docs/adr/0007-plan-history-primary-provider.md).
+
+**Within a tier, the most accurate reading wins — not the first one listed.** Two sources now report the same meters (Desktop's sampled series and Claude Code's cache), so `CompositeUsageProvider` picks the snapshot that carries **more meters** first, and among equals the one **captured most recently**; ties fall back to argument order so the result stays deterministic. Desktop samples every ~5 minutes while the cache refreshes on use, so neither is reliably fresher and neither gets a standing preference. Do not reintroduce a fixed precedence between them.
+
+**Snapshots are chosen whole, never merged field-by-field.** A session figure from one source beside a weekly figure from another describes an account state that existed at no instant, under a single `Source` label that can only be true of one of them — a rule 6 fabrication that looks entirely real on screen.
 
 **The percentages are no longer Desktop-only.** Claude Code caches the figures behind `/status` → Usage in `~/.claude.json` → `cachedUsageUtilization`, so a machine with no Claude Desktop can fill the top two bars from a local file — the population that used to see two permanently empty gauges. Same rules as every other source: local, read-only, no token, no network (rule 3). Details and the shape: [findings/cached-usage-utilization.md](docs/findings/cached-usage-utilization.md).
 
