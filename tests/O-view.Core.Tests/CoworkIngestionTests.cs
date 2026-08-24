@@ -228,7 +228,14 @@ public class CoworkIngestionTests : IDisposable
     {
         // MSIX redirection can expose one set of files through both the canonical and
         // packaged paths — observed on the dev machine, identical session ids and totals.
-        // Scanning both must not double the tokens.
+        // Scanning both must not double the tokens, and must not double the FILE COUNT
+        // either: the diagnostics bundle reported "Cowork: 8 file(s), 23,660,406 bytes" for
+        // four files totalling 11,830,203 (2026-08-24).
+        //
+        // Path text cannot collapse them — the two paths differ as strings — and neither can
+        // the platform: Directory.ResolveLinkTarget reports "not a link" for an MSIX
+        // redirect, because it uses a reparse tag .NET does not classify as one. The session's
+        // path relative to its own root is what settles it.
         var mirrorA = Path.Combine(_dir, "rootA");
         var mirrorB = Path.Combine(_dir, "rootB");
         foreach (var root in new[] { mirrorA, mirrorB })
@@ -240,11 +247,64 @@ public class CoworkIngestionTests : IDisposable
                 [AuditLine("req_A", "2026-07-20T12:00:00.000Z", output: 120)]);
         }
 
-        Assert.Equal(2, CoworkAuditLocator.FindAuditLogs([mirrorA, mirrorB]).Count);
+        Assert.Single(CoworkAuditLocator.FindAuditLogs([mirrorA, mirrorB]));
 
         var provider = new JsonlUsageProvider(_store, null, [mirrorA, mirrorB]);
         provider.GetSnapshot(DateTimeOffset.Parse("2026-07-20T13:00:00Z"));
 
         Assert.Equal(120, TotalOutputTokens());
+    }
+
+    /// <summary>
+    /// Two roots holding the same session must collapse to the <b>newer</b> file, not to
+    /// whichever root was listed first. One of them can be an old install's leftovers, and a
+    /// stale copy shadowing the live one is the failure that ran through three resolvers this
+    /// week (the account stub, the abandoned cache, the plan-history path).
+    /// </summary>
+    [Fact]
+    public void WhenTwoRootsHoldOneSession_TheNewerFileWins()
+    {
+        var stale = Path.Combine(_dir, "leftover");
+        var live = Path.Combine(_dir, "current");
+
+        foreach (var (root, output) in new[] { (stale, 10), (live, 999) })
+        {
+            var session = Path.Combine(root, "org", "user", "local_shared");
+            Directory.CreateDirectory(session);
+            File.WriteAllLines(
+                Path.Combine(session, CoworkAuditLocator.AuditFileName),
+                [AuditLine("req_shared", "2026-07-20T12:00:00.000Z", output: output)]);
+        }
+
+        var stalePath = Path.Combine(stale, "org", "user", "local_shared", CoworkAuditLocator.AuditFileName);
+        File.SetLastWriteTimeUtc(stalePath, new DateTime(2026, 7, 1, 0, 0, 0, DateTimeKind.Utc));
+
+        var found = CoworkAuditLocator.FindAuditLogs([stale, live]);
+
+        Assert.Single(found);
+        Assert.StartsWith(live, found[0], StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Distinct sessions are never collapsed. The key carries the session id, so two roots
+    /// holding different work stay two files — the silent-undercount direction is the one
+    /// that costs a user their tokens.
+    /// </summary>
+    [Fact]
+    public void DifferentSessionsUnderTwoRootsAreBothKept()
+    {
+        var rootA = Path.Combine(_dir, "a");
+        var rootB = Path.Combine(_dir, "b");
+
+        foreach (var (root, session) in new[] { (rootA, "local_one"), (rootB, "local_two") })
+        {
+            var dir = Path.Combine(root, "org", "user", session);
+            Directory.CreateDirectory(dir);
+            File.WriteAllLines(
+                Path.Combine(dir, CoworkAuditLocator.AuditFileName),
+                [AuditLine($"req_{session}", "2026-07-20T12:00:00.000Z", output: 50)]);
+        }
+
+        Assert.Equal(2, CoworkAuditLocator.FindAuditLogs([rootA, rootB]).Count);
     }
 }
