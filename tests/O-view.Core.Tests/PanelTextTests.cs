@@ -17,6 +17,101 @@ public class PanelTextTests
     private static readonly TimeZoneInfo Utc = TimeZoneInfo.Utc;
     private static readonly DateTimeOffset Now = new(2026, 7, 31, 12, 0, 0, TimeSpan.Zero);
 
+    // ── freshness ───────────────────────────────────────────────────────────────────
+
+    private static UsageSnapshot Snapshot(DataSource source, DateTimeOffset? capturedAtUtc) =>
+        new(source, 47, 20, null, capturedAtUtc);
+
+    /// <summary>
+    /// The header used to read <c>Updated 11:34 · live</c>, where the time was the repaint
+    /// clock and "live" was a claim about the pipeline rather than about the figures beside
+    /// it (issue #192). Both are gone: the line now carries the capture time and nothing else.
+    /// </summary>
+    [Fact]
+    public void TheHeaderStampsTheReadingNotTheRepaint()
+    {
+        var line = PanelText.Freshness(Snapshot(DataSource.Live, Now.AddMinutes(-40)), Now, Utc);
+
+        Assert.Equal("As of 11:20", line);
+        Assert.DoesNotContain("live", line, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Updated", line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AReadingTakenThisMinuteIsTheOnlyOneCalledNow() =>
+        Assert.Equal("As of now", PanelText.Freshness(Snapshot(DataSource.Live, Now), Now, Utc));
+
+    /// <summary>
+    /// Thirty seconds old, but on the other side of the minute — a past log, and stamped as
+    /// one. This is the case the issue names: once the minute has passed the reading stops
+    /// being "now", so the stamp can never read as the current clock minute either.
+    /// </summary>
+    [Fact]
+    public void OnceTheMinuteHasPassedTheReadingIsAPastLog() =>
+        Assert.Equal(
+            "As of 11:59",
+            PanelText.Freshness(Snapshot(DataSource.Live, Now.AddSeconds(-30)), Now, Utc));
+
+    /// <summary>
+    /// Live and Stale collapse to the same wording on purpose: the capture time states the
+    /// age outright, which is strictly more than the tier split said.
+    /// </summary>
+    [Fact]
+    public void AStaleReadingIsStampedTheSameWay() =>
+        Assert.Equal(
+            "As of 11:20",
+            PanelText.Freshness(Snapshot(DataSource.Stale, Now.AddMinutes(-40)), Now, Utc));
+
+    /// <summary>
+    /// What must not collapse (rule 6, ADR-0002): a JSONL-derived figure says it is a local
+    /// estimate, with its age beside that label rather than instead of it.
+    /// </summary>
+    [Fact]
+    public void AnEstimateKeepsItsLabelAndGainsTheStamp()
+    {
+        Assert.Equal(
+            "Local estimate · as of 11:20",
+            PanelText.Freshness(Snapshot(DataSource.Estimate, Now.AddMinutes(-40)), Now, Utc));
+        Assert.Equal(
+            "Local estimate",
+            PanelText.Freshness(Snapshot(DataSource.Estimate, null), Now, Utc));
+    }
+
+    [Fact]
+    public void NoDataSaysSo() =>
+        Assert.Equal("No data", PanelText.Freshness(UsageSnapshot.None, Now, Utc));
+
+    /// <summary>
+    /// An authoritative figure with no capture time says the time is unknown. Falling back to
+    /// the repaint clock would put the removed bug back, one branch lower down.
+    /// </summary>
+    [Fact]
+    public void AnAuthoritativeReadingWithoutACaptureTimeSaysSo() =>
+        Assert.Equal(
+            "Reading time unknown",
+            PanelText.Freshness(Snapshot(DataSource.Live, null), Now, Utc));
+
+    /// <summary>
+    /// A capture stamped ahead of the clock is a clock adjustment, not a prediction. Report
+    /// it as now rather than stamping the panel with a time that has not happened.
+    /// </summary>
+    [Fact]
+    public void ACaptureTimeInTheFutureIsNotStamped() =>
+        Assert.Equal(
+            "As of now",
+            PanelText.Freshness(Snapshot(DataSource.Live, Now.AddSeconds(20)), Now, Utc));
+
+    /// <summary>The stamp converts at the display edge, like every other time the panel shows.</summary>
+    [Fact]
+    public void TheStampIsInTheDisplayZone()
+    {
+        var plusTwo = TimeZoneInfo.CreateCustomTimeZone("t+2", TimeSpan.FromHours(2), "t+2", "t+2");
+
+        Assert.Equal(
+            "As of 13:20",
+            PanelText.Freshness(Snapshot(DataSource.Live, Now.AddMinutes(-40)), Now, plusTwo));
+    }
+
     // ── countdown ───────────────────────────────────────────────────────────────────
 
     [Fact]
