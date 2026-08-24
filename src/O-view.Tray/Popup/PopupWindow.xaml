@@ -153,15 +153,27 @@
                 <StackPanel Orientation="Horizontal">
                     <TextBlock x:Name="TokenExplainLabel" FontSize="11"
                                Foreground="{DynamicResource TextMuted}"/>
+                    <!-- One geometry, turned rather than swapped: the arrow rotates through
+                         the fold on the same curve as the body (DisclosureAnimation), and a
+                         half-turn of a down chevron IS the up chevron it used to be
+                         re-parsed into. -->
                     <Path x:Name="TokenExplainChevron" VerticalAlignment="Center" Margin="5,1,0,0"
+                          Data="M0,0 L4,4 L8,0" RenderTransformOrigin="0.5,0.5"
                           Stroke="{DynamicResource TextMuted}" StrokeThickness="1.4"
-                          StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                        <Path.RenderTransform>
+                            <RotateTransform x:Name="TokenExplainChevronRotation"/>
+                        </Path.RenderTransform>
+                    </Path>
                 </StackPanel>
             </Button>
 
             <!-- Why the total is so large (issue #169), and which surfaces it is made of
                  (issue #171). Both answer "is this number right?", so they fold together. -->
-            <StackPanel x:Name="TokenExplainBody" Visibility="Collapsed">
+            <!-- ClipToBounds is required, not cosmetic: the fold animates this panel's
+                 Height, and without it the text is drawn at full size outside the height it
+                 has been given — over the section below and past the panel's own border. -->
+            <StackPanel x:Name="TokenExplainBody" Visibility="Collapsed" ClipToBounds="True">
                 <TextBlock x:Name="TokenCompositionHint" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
                            Foreground="{DynamicResource TextSecondary}"/>
                 <TextBlock x:Name="TokenCoverageLine" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"
