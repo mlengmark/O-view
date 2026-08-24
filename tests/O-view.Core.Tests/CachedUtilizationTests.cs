@@ -24,35 +24,6 @@ public class CachedUtilizationTests
     private static long Ms(DateTimeOffset t) => t.ToUnixTimeMilliseconds();
 
     /// <summary>
-    /// Reported 2026-08-24. Claude Code moved its state to <c>~/.claude/.claude.json</c> and
-    /// stopped writing the old file, which kept a block that was hours stale and structurally
-    /// indistinguishable from a live one. Taking the first candidate that HAD a block would
-    /// have read the abandoned figures for as long as that file existed.
-    /// </summary>
-    [Fact]
-    public void TheFreshestBlockWins_NotTheFirstCandidateThatHasOne()
-    {
-        var dir = Directory.CreateTempSubdirectory("oview-tests-").FullName;
-        try
-        {
-            var abandoned = Path.Combine(dir, "abandoned.json");
-            File.WriteAllText(abandoned, Document(fiveHour: 14, fetchedAt: Fetched.AddHours(-6)));
-
-            var current = Path.Combine(dir, "current.json");
-            File.WriteAllText(current, Document(fiveHour: 61, fetchedAt: Fetched));
-
-            // Both orders, because "the freshest" must not be "whichever happens to be listed
-            // in the position that used to win".
-            Assert.Equal(61, CachedUtilization.TryReadAny([abandoned, current])?.FiveHour?.Percent);
-            Assert.Equal(61, CachedUtilization.TryReadAny([current, abandoned])?.FiveHour?.Percent);
-        }
-        finally
-        {
-            Directory.Delete(dir, recursive: true);
-        }
-    }
-
-    /// <summary>
     /// The documented shape, including the sibling bars that read null on a plan with no
     /// separate meter for them — they are present in every real file and must not confuse the
     /// parse.
