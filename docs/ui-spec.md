@@ -77,10 +77,19 @@ inset (handles all four dock positions and auto-hide).
 | Position | Content | Source |
 |---|---|---|
 | Top left | **O-view** title | static |
-| Top left, beneath | `Updated HH:mm` + data-source label | runtime |
+| Top left, beneath | `As of HH:mm` — when the reading was taken | runtime |
 | Top right | Display name, email, tier badge | `~/.claude.json` → `oauthAccount` |
 
-**Data-source label is mandatory** (CLAUDE.md rule 6): `live` · `as of HH:mm` · `local estimate`.
+**The line states when the figures were captured, never when the panel was drawn**
+(`PanelText.Freshness`): `As of now` · `As of HH:mm` · `Local estimate · as of HH:mm` ·
+`Reading time unknown` · `No data`. It read `Updated 11:34 · live` until issue #192 — a
+repaint clock beside a claim of liveness, when O-view only ever holds the last poll's
+result and the source samples on its own schedule. `As of now` is claimed only within the
+capture's own clock minute; after that the reading is a past log and carries its own time.
+
+**Estimates stay labelled** (CLAUDE.md rule 6, ADR-0002): the capture time joins `Local
+estimate`, it does not replace it. Live and Stale share one wording deliberately — the
+capture time states the age more precisely than the tier split did.
 
 > ⚠️ **Tier comes from `organizationType`** (e.g. `claude_pro`). On the dev account, `seatTier` and `userRateLimitTier` are both **empty strings** — the obvious-looking fields are wrong and produce a blank badge.
 
@@ -327,6 +336,39 @@ The reveal direction comes from [`PopupPositioner`](../src/O-view.Tray/Popup/Pop
 Closing defers `Hide()` to the end of the animation, since hiding first would make the animation invisible. A close in flight is cancelled if the surface is re-opened, so clicking the tray icon again mid-fade brings it straight back rather than letting it finish disappearing. Menu **actions** run after the animation completes, which preserves the rule that a balloon or modal never appears behind a still-visible topmost flyout.
 
 `--popup-pin` and `--menu-pin` skip the animation entirely: a verification still needs the finished state, not a frame from the middle of a fade.
+
+### The disclosure fold
+
+"Why so large?" **folds**, on the same curve as the entrance: the explanation's height animates
+from zero and its content is clipped to it, so the text slides out from behind the fold edge
+while the panel grows *upward* out of the docked corner. It used to appear whole — the body,
+the `SizeToContent` window's height and the re-dock all changing in one frame, three
+discontinuities in the one surface on screen that had been tuned against a trace of the
+platform.
+
+Durations are **scaled** from the entrance's, not chosen: **191 ms** open and **125 ms** close,
+the traced 230 : 150 at 0.83. The fold covers a twelfth of the entrance's distance, and giving
+60 px the time 700 px needs reads as hesitation. There is deliberately **no fade** — the same
+reasoning that made the entrance a geometric reveal rather than a dissolve — and the chevron
+rotates 180° over the same curve instead of swapping glyph.
+
+**Two failures here are invisible to any offscreen render**, and both were found by
+[`--fold-check`](../src/O-view.Tray/Diagnostics/SampleRenderer.cs), which drives the real panel
+and grabs the pixels the compositor actually presented:
+
+- **The window must never be laid out at the far end of the fold.** Applying the open state and
+  laying it out — the obvious way to measure where the fold ends — resizes a window docked by
+  its top-left, and that HWND is presented before the re-dock catches up: one frame of
+  full-height panel 72 px down, its bottom inside the taskbar. The end point is measured off
+  the explanation alone instead, and the body is pinned at the fold's starting height before
+  any layout runs, so every size the window takes is one the fold docks it for.
+- **Dock against the content's `DesiredSize`, never the window's `ActualHeight`.** A
+  `SizeToContent` window's own size trails the layout pass that produced it, and the fold
+  changes that height sixty times a second; docking against the trailing number left a collapse
+  settled 13 px above its edge.
+
+Measured over the fold, per rendered frame: the body steps 0 → 22.6 → 35.4 → 47.3 → … → 72.0 px
+opening and mirrors it closing, with the docked edge holding to within half a pixel throughout.
 
 ### Clicking the icon toggles
 

@@ -349,15 +349,25 @@ public class PlanHistoryProviderTests : IDisposable
     }
 
     /// <summary>
-    /// The freshness allowance is anchored to the measured sampling cadence: median 5.00 min
-    /// across 1,828 consecutive gaps in a 30-day real file. Eleven minutes tolerates two
-    /// missed samples; the old fifteen tolerated three, which is how a 14-minute-old reading
-    /// came to be presented as current.
+    /// The freshness allowance is anchored to the measured sampling cadence, and the cadence
+    /// moved: 5 minutes until 2026-08-10, 15 minutes since (measured across 1,443 gaps in the
+    /// same real file — 31 consecutive 15-minute gaps on 08-23 alone, none at 5).
+    ///
+    /// <para>Eleven minutes was two intervals plus slack at the old cadence and <i>less than
+    /// one interval</i> at the new one, which made Live unreachable for four minutes in every
+    /// fifteen — a reading as recent as Desktop can produce, labelled stale. Sixteen is one
+    /// interval plus slack: stale now means the next sample is overdue.</para>
+    ///
+    /// <para>Note 14 minutes flipping from Stale to Live. That is the cadence change, not a
+    /// relaxation — at 15-minute sampling a 14-minute-old reading is the newest that can
+    /// exist. What issue #161 was actually about is a 14-minute-old <b>zero</b>, and that is
+    /// still discarded: see <c>ZeroReadingFreshness</c>, which was deliberately left at 6.</para>
     /// </summary>
     [Theory]
     [InlineData(9, DataSource.Live)]
-    [InlineData(12, DataSource.Stale)]
-    [InlineData(14, DataSource.Stale)]
+    [InlineData(14, DataSource.Live)]
+    [InlineData(17, DataSource.Stale)]
+    [InlineData(31, DataSource.Stale)]
     public void SampleAgeDecidesLiveOrStale(int minutesOld, DataSource expected)
     {
         var path = WriteSamples(

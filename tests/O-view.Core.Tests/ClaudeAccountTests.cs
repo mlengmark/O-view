@@ -29,6 +29,50 @@ public class ClaudeAccountTests : IDisposable
         Assert.Equal("00000000-0000-0000-0000-000000000000", account.OrganizationUuid);
     }
 
+    /// <summary>
+    /// Reported 2026-08-24. Claude Code migrated its state into <c>~/.claude/.claude.json</c>
+    /// and the file it writes there starts as nine keys of migration bookkeeping — no
+    /// <c>oauthAccount</c>. Resolving to the first candidate that EXISTED picked that stub, and
+    /// the panel read "account unknown / tier unknown" beside a populated file one directory up.
+    /// </summary>
+    [Fact]
+    public void AMigrationStubDoesNotShadowTheFileThatHasTheAccount()
+    {
+        var stub = Path.Combine(_dir, "stub.json");
+        File.WriteAllText(stub, """
+            {"firstStartTime":"2026-08-24T11:03:29.644Z","migrationVersion":13,
+             "sonnet1m45MigrationComplete":true,"seenNotifications":{}}
+            """);
+
+        var populated = Path.Combine(_dir, "populated.json");
+        File.WriteAllText(populated, """
+            {"oauthAccount":{"displayName":"Maximilian","emailAddress":"m@example.com",
+             "organizationType":"claude_pro"}}
+            """);
+
+        var account = ClaudeAccount.TryReadAny([stub, populated]);
+
+        Assert.NotNull(account);
+        Assert.Equal("claude_pro", account.Tier);
+        Assert.Equal("Maximilian", account.DisplayName);
+    }
+
+    /// <summary>
+    /// Order still decides between two candidates that BOTH carry an account: the configured
+    /// location wins, which is what CLAUDE_CONFIG_DIR is for.
+    /// </summary>
+    [Fact]
+    public void TheFirstCandidateWithAnAccountWins()
+    {
+        var first = Path.Combine(_dir, "first.json");
+        File.WriteAllText(first, """{"oauthAccount":{"displayName":"First"}}""");
+
+        var second = Path.Combine(_dir, "second.json");
+        File.WriteAllText(second, """{"oauthAccount":{"displayName":"Second"}}""");
+
+        Assert.Equal("First", ClaudeAccount.TryReadAny([first, second])?.DisplayName);
+    }
+
     [Fact]
     public void MissingFileOrShape_ReturnsNull_NeverThrows()
     {

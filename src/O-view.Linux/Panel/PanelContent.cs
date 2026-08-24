@@ -135,8 +135,7 @@ public sealed class PanelContent : Border
         var left = new StackPanel { Spacing = 2 };
         left.Children.Add(Text("O-view", 20, _theme["TextPrimary"], FontWeight.SemiBold));
         left.Children.Add(Text(
-            $"Updated {TimeZoneInfo.ConvertTime(utcNow, local):HH:mm} · {SourceLabel(snapshot)}",
-            12, _theme["TextSecondary"]));
+            PanelText.Freshness(snapshot, utcNow, local), 12, _theme["TextSecondary"]));
 
         var right = new StackPanel { Spacing = 2, HorizontalAlignment = HorizontalAlignment.Right };
         right.Children.Add(Text(account?.DisplayName ?? "account unknown", 13, _theme["TextPrimary"]));
@@ -358,15 +357,6 @@ public sealed class PanelContent : Border
     }
 
     // ── primitives ──────────────────────────────────────────────────────────────────
-
-    private static string SourceLabel(UsageSnapshot snapshot) => snapshot.Source switch
-    {
-        DataSource.Live => "live",
-        DataSource.Stale => "stale",
-        // Never unlabelled: a JSONL-derived figure is a local estimate and must say so.
-        DataSource.Estimate => "local estimate",
-        _ => "no data",
-    };
 
     private TextBlock Muted(string text) => Text(text, 11, _theme["TextMuted"]);
 
