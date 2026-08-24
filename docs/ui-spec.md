@@ -77,10 +77,19 @@ inset (handles all four dock positions and auto-hide).
 | Position | Content | Source |
 |---|---|---|
 | Top left | **O-view** title | static |
-| Top left, beneath | `Updated HH:mm` + data-source label | runtime |
+| Top left, beneath | `As of HH:mm` — when the reading was taken | runtime |
 | Top right | Display name, email, tier badge | `~/.claude.json` → `oauthAccount` |
 
-**Data-source label is mandatory** (CLAUDE.md rule 6): `live` · `as of HH:mm` · `local estimate`.
+**The line states when the figures were captured, never when the panel was drawn**
+(`PanelText.Freshness`): `As of now` · `As of HH:mm` · `Local estimate · as of HH:mm` ·
+`Reading time unknown` · `No data`. It read `Updated 11:34 · live` until issue #192 — a
+repaint clock beside a claim of liveness, when O-view only ever holds the last poll's
+result and the source samples on its own schedule. `As of now` is claimed only within the
+capture's own clock minute; after that the reading is a past log and carries its own time.
+
+**Estimates stay labelled** (CLAUDE.md rule 6, ADR-0002): the capture time joins `Local
+estimate`, it does not replace it. Live and Stale share one wording deliberately — the
+capture time states the age more precisely than the tier split did.
 
 > ⚠️ **Tier comes from `organizationType`** (e.g. `claude_pro`). On the dev account, `seatTier` and `userRateLimitTier` are both **empty strings** — the obvious-looking fields are wrong and produce a blank badge.
 

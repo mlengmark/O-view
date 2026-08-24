@@ -271,7 +271,7 @@ public partial class PopupWindow : Window, IFlyout
 
         var local = TimeZoneInfo.Local;
 
-        UpdatedText.Text = $"Updated {Now(local):HH:mm} · {SourceLabel(snapshot, local)}";
+        UpdatedText.Text = PanelText.Freshness(snapshot, Now(TimeZoneInfo.Utc), local);
         NameText.Text = account?.DisplayName ?? "account unknown";
         EmailText.Text = account?.Email ?? "";
         EmailText.Visibility = account?.Email is null ? Visibility.Collapsed : Visibility.Visible;
@@ -848,15 +848,9 @@ public partial class PopupWindow : Window, IFlyout
 
     private static DateTimeOffset Now(TimeZoneInfo zone) => TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, zone);
 
-    private static string SourceLabel(UsageSnapshot s, TimeZoneInfo local) => s.Source switch
-    {
-        DataSource.Live => "live",
-        DataSource.Stale => s.CapturedAtUtc is { } at
-            ? $"as of {TimeZoneInfo.ConvertTime(at, local):HH:mm}"
-            : "stale",
-        DataSource.Estimate => "local estimate",
-        _ => "no data",
-    };
+    // The header's freshness line lives in OView.Core.Models.PanelText, shared with the Linux
+    // panel: it is a statement about how old the figures are, and two panels wording that
+    // differently is the failure PanelText exists to prevent (issue #192).
 
     /// <summary>
     /// Coarsest-two-units countdown. The days branch exists for the weekly window: a
