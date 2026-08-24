@@ -106,4 +106,15 @@ public sealed record UsageEngineOptions
     /// divergence detection depends on.
     /// </summary>
     public PlanHistoryProvider? PlanHistory { get; init; }
+
+    /// <summary>
+    /// Claude Code's cached usage figures. Supplied directly in tests; production leaves this
+    /// null and the engine reads the real <c>.claude.json</c>.
+    ///
+    /// <para>Held separately from <see cref="Provider"/> even though it is part of the chain,
+    /// because the engine also needs it <em>outside</em> the chain: its reset timestamps are
+    /// reported rather than derived, so they are folded onto whichever snapshot wins rather
+    /// than only counting when this provider is the winner.</para>
+    /// </summary>
+    public IUsageProvider? CachedUtilization { get; init; }
 }
