@@ -19,14 +19,17 @@ public class PollThreadingTests
     private static readonly DateTimeOffset T0 = new(2026, 7, 29, 12, 0, 0, TimeSpan.Zero);
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(10);
 
-    private static UsageEngine NewEngine(TempDir dir, FakeProvider provider) => new(new UsageEngineOptions
-    {
-        Clock = new FakeClock(T0),
-        Provider = provider,
-        RollupDbPath = dir.File("usage.db"),
-        WeeklyResetLogPath = dir.File("weekly-resets.json"),
-        SettingsPath = dir.File("settings.json"),
-    });
+    private static UsageEngine NewEngine(
+        TempDir dir, FakeProvider provider, IClock? clock = null, IAppLog? log = null) =>
+        new(new UsageEngineOptions
+        {
+            Clock = clock ?? new FakeClock(T0),
+            Log = log,
+            Provider = provider,
+            RollupDbPath = dir.File("usage.db"),
+            WeeklyResetLogPath = dir.File("weekly-resets.json"),
+            SettingsPath = dir.File("settings.json"),
+        });
 
     /// <summary>
     /// The regression itself. <c>Start</c> must return while the read is still going, or
@@ -153,5 +156,65 @@ public class PollThreadingTests
 
         Assert.True(dispatcher.PumpWithin(Patience), "a failed poll published nothing at all");
         Assert.Equal(30, engine.Latest.SessionPercent);   // the previous state, kept
+    }
+
+    /// <summary>
+    /// A read that throws <i>outright</i>, rather than returning a failure result, must not
+    /// take the cadence with it.
+    ///
+    /// <para>This is a different failure from the one above, and the distinction is the whole
+    /// bug. There, the provider throws from inside <c>Read</c>'s own try and is caught, so a
+    /// <see cref="UsageEngine"/> poll still returns and still releases the gate. Here nothing
+    /// catches it: the exception escapes the runner's lambda, the gate is released nowhere
+    /// else on that path, and <c>Task.Run</c> discards the result so the exception is never
+    /// observed. <c>_busy</c> then stays set for the life of the process and every later tick
+    /// is dropped by <c>TryEnter</c>.</para>
+    ///
+    /// <para>What that looked like in the field: a tray process alive for 35 minutes on a 60 s
+    /// cadence, holding its store open, with 409 KB of unread transcript and a ledger whose
+    /// newest row was five days old — while the store passed every health check, the panel
+    /// went on drawing its last snapshot, and nothing was written anywhere to say why.</para>
+    ///
+    /// <para><b>The assertion that matters is the last one: the poll AFTER the failed one
+    /// runs.</b> Everything before it is setup.</para>
+    /// </summary>
+    [Fact]
+    public void AReadThatThrowsOutrightStillReleasesTheGate()
+    {
+        using var dir = new TempDir();
+        var provider = new FakeProvider();
+        provider.SetSession(30);
+
+        var clock = new FakeClock(T0);
+        var log = new ListLog();
+        using var engine = NewEngine(dir, provider, clock, log);
+        var timers = new FakeTimerFactory();
+        var dispatcher = new FakeDispatcher();
+
+        engine.Start(timers, dispatcher);
+        Assert.True(dispatcher.PumpWithin(Patience));
+        Assert.Equal(1, provider.Calls);
+
+        // The full poll reads the clock before entering its own guard, so this throws from
+        // the one place a provider fake cannot reach.
+        clock.ThrowOnNext = new InvalidOperationException("the clock is unavailable");
+        timers.Poll.Tick();
+
+        // Wait for the failed poll to finish rather than racing it — and assert on the way
+        // past that the failure was recorded at all, because a silent one is what made this
+        // undiagnosable from a support bundle.
+        Assert.True(
+            SpinWait.SpinUntil(
+                () => log.Lines.Any(l => l.StartsWith("poll read FAILED", StringComparison.Ordinal)),
+                Patience),
+            "a read that threw outright was not recorded anywhere");
+
+        Assert.Equal(1, provider.Calls);   // it never reached the provider
+
+        timers.Poll.Tick();
+
+        Assert.True(dispatcher.PumpWithin(Patience), "the cadence never recovered from a failed read");
+        Assert.Equal(2, provider.Calls);
+        Assert.Equal(30, engine.Latest.SessionPercent);
     }
 }

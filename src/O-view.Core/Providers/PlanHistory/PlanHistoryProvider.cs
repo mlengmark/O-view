@@ -229,9 +229,19 @@ public sealed class PlanHistoryProvider : IUsageProvider
         {
             return bracket.NarrowedTo(_earliestActivity(bracket.EarliestUtc, bracket.LatestUtc));
         }
-        catch (Exception ex) when (ex is IOException or InvalidOperationException)
+        catch (Exception)
         {
-            // A precision refinement must never take down the reading it refines.
+            // A precision refinement must never take down the reading it refines — and the
+            // filter that used to sit here, `when (ex is IOException or
+            // InvalidOperationException)`, did not deliver that. In production the delegate
+            // is RollupStore.EarliestRequestBetween, so what it actually throws is
+            // SqliteException, which is neither. That escaped GetSnapshot and blanked the
+            // plan-history percentages — figures that do not depend on the store at all —
+            // turning a rebuildable cache's failure into a missing session gauge.
+            //
+            // Do not narrow this again. The delegate is injected, so this provider cannot
+            // know what it throws, and the only correct answer to any of it is the bracket
+            // that was already correct before the refinement was attempted.
             return bracket;
         }
     }

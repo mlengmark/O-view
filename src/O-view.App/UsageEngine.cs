@@ -345,6 +345,16 @@ public sealed class UsageEngine : IDisposable
     /// <para>Each cadence carries its OWN gate. Sharing one would let a first-run ingest —
     /// seconds long — swallow every plan-history tick underneath it, which is precisely the
     /// coupling being removed.</para>
+    ///
+    /// <para><b>The gate is released on every path out of the read, including a throw.</b>
+    /// It has to be: nothing else on this path releases it, so one escaped exception left
+    /// <c>_busy</c> set for the life of the process and every later tick was dropped by
+    /// <see cref="PollGate.TryEnter"/>. That failure is silent and total — the panel goes on
+    /// drawing its last snapshot, no transcript is ingested, no observed weekly reset is
+    /// written, and because <c>_log</c> is null unless <c>--log</c> was passed there is
+    /// nothing on disk to say why. Observed in the field: a tray up for 35 minutes with a
+    /// 60 s cadence, 409 KB of unread transcript, and a rollup store whose newest row was
+    /// five days old while the store itself passed every health check.</para>
     /// </summary>
     private void RunOffThread<T>(PollGate gate, string what, Func<T> read, Action<T> publish)
     {
@@ -366,7 +376,26 @@ public sealed class UsageEngine : IDisposable
 
         _ = Task.Run(() =>
         {
-            var result = read();
+            T result;
+            try
+            {
+                result = read();
+            }
+            catch (Exception ex)
+            {
+                // Both reads already guard themselves and return a failure result rather
+                // than throwing — but each only guards what sits inside its own try, and
+                // neither covers what it touches before entering one. This is the backstop
+                // for that gap, and for whatever a future read reaches for first.
+                //
+                // It is not defensive padding: the gate is released nowhere else on this
+                // path, so without this the cadence is dead for the life of the process
+                // after a single throw, and Task.Run discards the exception so nothing can
+                // even report it. Releasing here costs one dropped tick instead.
+                gate.Exit();
+                _log?.Write($"{what} read FAILED {ex.GetType().Name}: {ex.Message}");
+                return;
+            }
 
             try
             {
