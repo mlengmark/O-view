@@ -106,6 +106,13 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// </summary>
     private readonly Func<DateTimeOffset, DateTimeOffset, DateTimeOffset?>? _earliestActivity;
 
+    /// <summary>
+    /// Where a swallowed failure inside the weekly-reset forecast is recorded. A delegate for
+    /// the same reason <see cref="_earliestActivity"/> is one — this class knows nothing about
+    /// the app's logging and stays testable without it.
+    /// </summary>
+    public Action<string>? Log { get; init; }
+
     public PlanHistoryProvider(string? path = null, string? orgUuid = null, TimeSpan? freshness = null,
         IWeeklyResetLog? weeklyResetLog = null,
         Func<DateTimeOffset, DateTimeOffset, DateTimeOffset?>? earliestActivity = null)
@@ -324,11 +331,16 @@ public sealed class PlanHistoryProvider : IUsageProvider
 
             return ResolveWeeklyReset(derived, observations, utcNow);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // The weekly-reset log is one part of the panel; a failure inside it — an
             // unreadable file, a locked directory — must never take down the plan-history
             // percentages, which do not depend on it. Degrade to unknown and carry on.
+            //
+            // Named rather than swallowed outright, for the reason CompositeUsageProvider's
+            // own catch now is: "the weekly reset is unknown" and "the weekly reset threw on
+            // every poll for a week" are the same blank on screen and want different fixes.
+            Log?.Invoke($"weekly reset forecast FAILED {ex.GetType().Name}: {ex.Message}");
             return null;
         }
     }

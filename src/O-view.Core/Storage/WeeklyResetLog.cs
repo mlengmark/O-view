@@ -47,6 +47,18 @@ public sealed class WeeklyResetLog : IWeeklyResetLog
 
     private readonly string _path;
 
+    /// <summary>
+    /// Where a failed write is recorded. A delegate, so <c>Core</c> stays free of the app's
+    /// logging — the same seam the providers use.
+    ///
+    /// <para><b>This file is the one piece of O-view state that cannot be rebuilt</b>
+    /// (ADR-0011): a reset that is never written costs a week before another can be observed.
+    /// <see cref="Write"/> nevertheless swallowed every failure, so the most expensive loss in
+    /// the app was also its quietest. Measured in the field: a bundle reported six observations
+    /// while the file on disk held five and had not been written for five days.</para>
+    /// </summary>
+    public Action<string>? Log { get; init; }
+
     public WeeklyResetLog(string? path = null)
     {
         _path = path ?? DefaultPath;
@@ -266,9 +278,14 @@ public sealed class WeeklyResetLog : IWeeklyResetLog
             Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
             File.WriteAllText(temp, JsonSerializer.Serialize(file, SerializerOptions));
             File.Move(temp, _path, overwrite: true);
+            Log?.Invoke($"weekly-reset log written ({observations.Count} observation(s))");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            // Still swallowed — a failed write here must not take down the poll that
+            // discovered the reset — but no longer silent. See the Log remarks: this is the
+            // only unrebuildable state in the app, so a lost write is the one worth naming.
+            Log?.Invoke($"weekly-reset log write FAILED {ex.GetType().Name}: {ex.Message}");
             try { File.Delete(temp); } catch (IOException) { }
         }
     }

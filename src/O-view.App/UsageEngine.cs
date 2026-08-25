@@ -124,7 +124,13 @@ public sealed class UsageEngine : IDisposable
         // rows it still holds are carried across on the way past — idempotent, so this is
         // safe to run on every launch.
         var account = ClaudeAccount.TryRead();
-        var weeklyResets = new WeeklyResetLog(_options.WeeklyResetLogPath);
+
+        // Every Core seam below takes the log as a delegate rather than an interface, so the
+        // accounting layer keeps knowing nothing about how this app logs. What they all now
+        // share is that their failures are recorded instead of merely survived.
+        var logLine = _log is null ? (Action<string>?)null : _log.Write;
+
+        var weeklyResets = new WeeklyResetLog(_options.WeeklyResetLogPath) { Log = logLine };
         try
         {
             weeklyResets.ImportLegacy(_store.GetLegacyWeeklyResets(), account?.OrganizationUuid ?? "");
@@ -141,7 +147,10 @@ public sealed class UsageEngine : IDisposable
             // Local request times tighten the five-hour window's start bracket (issue #185).
             // The engine owns both halves, so the wiring lives here rather than teaching the
             // plan-history provider about the rollup store.
-            earliestActivity: _store.EarliestRequestBetween);
+            earliestActivity: _store.EarliestRequestBetween)
+        {
+            Log = logLine,
+        };
 
         // Claude Code's own cached figures — real percentages where the JSONL estimate has
         // none, and on a machine without Desktop the only source of the top two bars at all.
@@ -164,7 +173,10 @@ public sealed class UsageEngine : IDisposable
         _provider = _options.Provider ?? new CompositeUsageProvider(
             _planHistory,
             _cachedUtilization,
-            new JsonlUsageProvider(_store));
+            new JsonlUsageProvider(_store) { Log = logLine })
+        {
+            Log = logLine,
+        };
 
         _planHistoryIsAddressed = _options.Provider is null
             || _options.PlanHistory is not null
