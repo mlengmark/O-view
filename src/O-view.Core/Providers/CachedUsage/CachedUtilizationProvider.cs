@@ -90,7 +90,7 @@ public sealed class CachedUtilizationProvider : IUsageProvider
             // Reported rather than inferred, so these carry no bracket and must not wear the
             // "~" that marks one.
             weeklyReset is null ? null : TimeSpan.Zero,
-            weeklyReset is null ? null : WeeklyResetDetector.WindowLength,
+            weeklyReset is null ? null : WeeklyWindow.Length,
             sessionReset is null ? null : TimeSpan.Zero);
     }
 

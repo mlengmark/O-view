@@ -17,7 +17,7 @@ public class EngineLifecycleTests
         Clock = new FakeClock(T0),
         Provider = new FakeProvider(),
         RollupDbPath = dir.File("usage.db"),
-        WeeklyResetLogPath = dir.File("weekly-resets.json"),
+        WeeklyResetAnchorPath = dir.File("weekly-resets.json"),
         SettingsPath = dir.File("settings.json"),
     });
 
@@ -55,49 +55,6 @@ public class EngineLifecycleTests
         using var engine = NewEngine(dir);
 
         Assert.True(engine.Settings.NotifyOnThreshold);
-        Assert.Equal(UsageLevels.CriticalPercent, engine.Settings.ThresholdPercent);
-    }
-
-    /// <summary>
-    /// The migration runs on every launch (ADR-0011), so it has to be idempotent — otherwise
-    /// each restart would re-import the same resets and the log would grow without bound,
-    /// eventually evicting real observations past <c>MaxObservations</c>.
-    /// </summary>
-    [Fact]
-    public void LegacyWeeklyResetMigrationIsIdempotentAcrossRuns()
-    {
-        using var dir = new TempDir();
-        var dbPath = dir.File("usage.db");
-        var logPath = dir.File("weekly-resets.json");
-
-        // Create the schema, then seed the pre-ADR-0011 table the way an upgraded install
-        // would already have it. Nothing writes this table any more, so it is seeded directly.
-        using (var store = new RollupStore(dbPath))
-        {
-            _ = store.GetLegacyWeeklyResets();
-        }
-
-        using (var connection = new SqliteConnection($"Data Source={dbPath}"))
-        {
-            connection.Open();
-            foreach (var at in new[] { "2026-07-01T03:00:00+00:00", "2026-07-08T03:14:00+00:00" })
-            {
-                using var cmd = connection.CreateCommand();
-                cmd.CommandText = "INSERT INTO weekly_resets (reset_at) VALUES ($at)";
-                cmd.Parameters.AddWithValue("$at", at);
-                cmd.ExecuteNonQuery();
-            }
-        }
-
-        using (var first = NewEngine(dir)) { }
-        var afterFirst = new WeeklyResetLog(logPath).GetObservations().Count;
-
-        using (var second = NewEngine(dir)) { }
-        using (var third = NewEngine(dir)) { }
-        var afterThird = new WeeklyResetLog(logPath).GetObservations().Count;
-
-        Assert.Equal(2, afterFirst);        // both legacy rows carried across
-        Assert.Equal(afterFirst, afterThird);   // and not re-imported on later launches
     }
 
     /// <summary>

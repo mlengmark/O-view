@@ -414,7 +414,7 @@ public partial class App : System.Windows.Application
         _engine.MarkWeeklyResetConflictNoticed(conflict);
         _trayHost?.ShowNotification(
             "Weekly reset time doesn't match",
-            PanelText.WeeklyResetConflict(conflict.EarliestUtc, conflict.LatestUtc, TimeZoneInfo.Local),
+            PanelText.WeeklyResetConflict(conflict, TimeZoneInfo.Local),
             NotificationKind.Warning);
     }
 

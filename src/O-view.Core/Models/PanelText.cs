@@ -149,7 +149,7 @@ public static class PanelText
     /// while Claude Desktop was sampling is precise; one caught across a gap is not.
     /// </summary>
     public static bool IsApproximate(TimeSpan? uncertainty) =>
-        (uncertainty ?? TimeSpan.Zero) > WeeklyResetDetector.PreciseBracket;
+        (uncertainty ?? TimeSpan.Zero) > WeeklyWindow.PreciseBracket;
 
     /// <summary>
     /// Marks a weekly reset the user entered rather than one O-view inferred (issue #186).
@@ -173,15 +173,17 @@ public static class PanelText
     /// O-view has evidence against must not stay on screen (rule 6) — so this explains a
     /// change that has already happened rather than asking permission for one.</para>
     /// </summary>
-    public static string WeeklyResetConflict(
-        DateTimeOffset observedEarliestUtc, DateTimeOffset observedLatestUtc, TimeZoneInfo local)
+    public static string WeeklyResetConflict(DateTimeOffset reportedUtc, TimeZoneInfo local)
     {
-        var from = TimeZoneInfo.ConvertTime(observedEarliestUtc, local);
-        var to = TimeZoneInfo.ConvertTime(observedLatestUtc, local);
+        // One instant now, not a bracket. The old copy said "between X and Y" because the
+        // reset was inferred from a gap in Claude Desktop's sampling and could only ever be
+        // narrowed to a range. Claude reports it exactly (ADR-0014), so quoting a range would
+        // understate what O-view knows and invite the user to think it is still guessing.
+        var at = TimeZoneInfo.ConvertTime(reportedUtc, local);
 
-        return $"O-view saw the weekly limit reset between {from:ddd HH:mm} and {to:ddd HH:mm}, "
-            + "which does not match the time you entered. It is using what it observed. "
-            + "Check Settings → Usage in Claude and re-enter the time if your plan changed.";
+        return $"Claude reports your weekly limit resetting {at:ddd HH:mm}, which does not "
+            + "match the time you entered. O-view is using the reported time. Re-enter yours "
+            + "if your plan changed.";
     }
 
     /// <summary>Hover text for an approximate weekly reset, naming how wide the bracket is.</summary>

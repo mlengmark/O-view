@@ -920,7 +920,7 @@ public partial class PopupWindow : Window, IFlyout
             if (snapshot.WeeklyResetAtUtc is { } next && snapshot.WeeklyResetPeriod is { } period)
             {
                 return new PlanWeeks(
-                    WeeklyResetDetector.BoundariesWithin(next, period, fromUtc, toUtc),
+                    WeeklyWindow.BoundariesWithin(next, period, fromUtc, toUtc),
                     isPlanDerived: true);
             }
 

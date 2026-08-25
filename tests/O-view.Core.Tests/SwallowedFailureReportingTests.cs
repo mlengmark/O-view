@@ -167,48 +167,58 @@ public class SwallowedFailureReportingTests : IDisposable
     // ── the weekly-reset log ────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The only unrebuildable state in the app (ADR-0011), and its write was the quietest
-    /// failure of the lot: a bundle reported six observations while the file held five and
-    /// had not been written for five days.
+    /// The weekly anchor's write was the quietest failure of the lot: a bundle reported six
+    /// observations while the file on disk held five and had not been written for five days.
+    /// The store behind it changed under ADR-0014; the obligation did not.
     /// </summary>
     [Fact]
-    public void AFailedWeeklyResetWriteIsAbsorbedAndIsNowNamed()
+    public void AFailedWeeklyAnchorWriteIsAbsorbedAndIsNowNamed()
     {
         var lines = new List<string>();
 
         // A directory where the file belongs: the write cannot succeed and must not throw.
-        var target = Path.Combine(_dir, "weekly-resets.json");
+        var target = Path.Combine(_dir, "weekly-reset.json");
         Directory.CreateDirectory(target);
 
-        var log = new WeeklyResetLog(target) { Log = lines.Add };
+        var anchor = new WeeklyResetAnchor(target) { Log = lines.Add };
 
-        var thrown = Record.Exception(() => log.Record(
-        [
-            new WeeklyResetObservation(
-                DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddHours(1), "org-a"),
-        ]));
+        var thrown = Record.Exception(() => anchor.Save(DateTimeOffset.UnixEpoch, "org-a"));
 
         Assert.Null(thrown);
-        Assert.Contains(lines, l => l.Contains("weekly-reset log write FAILED", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.Contains("weekly reset anchor write FAILED", StringComparison.Ordinal));
     }
 
     /// <summary>
-    /// And the success case, so a silent run can be read as "nothing to record" rather than
-    /// "the write is failing again".
+    /// And the success case, so a silent run reads as "nothing changed" rather than "the write
+    /// is failing again" — which matters more here than it used to, because the anchor is
+    /// written once and then stays quiet for good.
     /// </summary>
     [Fact]
-    public void ASuccessfulWeeklyResetWriteSaysHowManyObservationsItHolds()
+    public void AStoredWeeklyAnchorSaysWhatItRecorded()
     {
         var lines = new List<string>();
-        var log = new WeeklyResetLog(Path.Combine(_dir, "weekly-resets.json")) { Log = lines.Add };
+        var anchor = new WeeklyResetAnchor(Path.Combine(_dir, "weekly-reset.json")) { Log = lines.Add };
 
-        log.Record(
-        [
-            new WeeklyResetObservation(
-                DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddHours(1), "org-a"),
-        ]);
+        Assert.True(anchor.Save(new DateTimeOffset(2026, 8, 24, 20, 59, 59, TimeSpan.Zero), "org-a"));
 
-        Assert.Contains(lines, l => l.Contains("weekly-reset log written (1 observation(s))", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.Contains("weekly reset anchor stored", StringComparison.Ordinal));
+        Assert.Contains(lines, l => l.Contains("Monday", StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    /// Claude reports the same boundary with a different date every week, so an anchor already
+    /// on that grid is not news. Rewriting the file on every refresh forever would make its
+    /// timestamp meaningless — and that timestamp is how a support bundle dates the anchor.
+    /// </summary>
+    [Fact]
+    public void AnAnchorAlreadyOnTheSameGridIsNotRewritten()
+    {
+        var anchor = new WeeklyResetAnchor(Path.Combine(_dir, "weekly-reset.json"));
+        var first = new DateTimeOffset(2026, 8, 24, 20, 59, 59, TimeSpan.Zero);
+
+        Assert.True(anchor.Save(first, "org-a"));
+        Assert.False(anchor.Save(first.AddDays(7), "org-a"));   // next week, same schedule
+        Assert.True(anchor.Save(first.AddDays(2), "org-a"));    // a different weekday is news
     }
 
     /// <summary>

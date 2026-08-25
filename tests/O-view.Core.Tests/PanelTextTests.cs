@@ -174,9 +174,9 @@ public class PanelTextTests
     [Fact]
     public void TheBracketBoundaryDecidesWhetherItIsApproximate()
     {
-        Assert.False(PanelText.IsApproximate(WeeklyResetDetector.PreciseBracket));
+        Assert.False(PanelText.IsApproximate(WeeklyWindow.PreciseBracket));
         Assert.False(PanelText.IsApproximate(null));
-        Assert.True(PanelText.IsApproximate(WeeklyResetDetector.PreciseBracket + TimeSpan.FromMinutes(1)));
+        Assert.True(PanelText.IsApproximate(WeeklyWindow.PreciseBracket + TimeSpan.FromMinutes(1)));
     }
 
     [Fact]

@@ -102,24 +102,34 @@ public sealed record ManualWeeklyReset(DayOfWeek Day, TimeOnly LocalTime)
     }
 
     /// <summary>
-    /// Whether an observed bracket proves this entry wrong.
+    /// Whether the reset instant Claude reported proves this entry wrong.
     ///
-    /// <para>The reset demonstrably happened inside <paramref name="observation"/>, so if this
-    /// entry's boundary for that same week falls outside it — by more than
-    /// <see cref="ContradictionSlack"/> — the two cannot both be true. A wide bracket is still
-    /// proof: it is a weak statement about <i>when</i>, and an absolute one about
-    /// <i>within what</i>.</para>
+    /// <para>This used to take an <c>observation</c> — a bracket derived from a drop in Claude
+    /// Desktop's sampled series, which said only that the reset fell <i>somewhere inside</i> a
+    /// window that was routinely ten hours wide. ADR-0014 replaced that with the instant Claude
+    /// reports outright, so the comparison is now exact on both sides: the entry either lands on
+    /// the same weekly grid as the anchor or it does not.</para>
+    ///
+    /// <para><see cref="ContradictionSlack"/> still applies, because the two are expressed
+    /// differently — the entry is a local wall-clock day and time, the anchor a UTC instant with
+    /// sub-second precision — and a difference of a minute or two is transcription, not
+    /// disagreement.</para>
     /// </summary>
-    public bool IsContradictedBy(WeeklyResetObservation observation, TimeZoneInfo local)
+    public bool IsContradictedBy(DateTimeOffset anchorUtc, TimeZoneInfo local)
     {
-        // This entry's boundary for the week the observation landed in.
-        var boundary = NextAfter(observation.EarliestUtc.AddDays(-8), local);
-        while (boundary < observation.EarliestUtc)
+        // This entry's own boundary for the week the anchor falls in. Walking forward from
+        // comfortably before it lands on the one boundary that could match, whatever weekday
+        // the two disagree about.
+        var boundary = NextAfter(anchorUtc.AddDays(-8), local);
+
+        // Bounded: eight days of a seven-day cadence is at most two steps, and a guard beats
+        // trusting the arithmetic of a value the user typed.
+        for (var step = 0; step < 4 && boundary < anchorUtc - ContradictionSlack; step++)
         {
             boundary = NextAfter(boundary, local);
         }
 
-        return boundary > observation.LatestUtc + ContradictionSlack;
+        return (boundary - anchorUtc).Duration() > ContradictionSlack;
     }
 
     private DateTimeOffset ToUtc(DateOnly date, TimeZoneInfo local)

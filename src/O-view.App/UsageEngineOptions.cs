@@ -78,7 +78,19 @@ public sealed record UsageEngineOptions
     /// <summary>Storage locations. Null means the real one.</summary>
     public string? RollupDbPath { get; init; }
 
-    public string? WeeklyResetLogPath { get; init; }
+    /// <summary>Where the discovered weekly-reset anchor is stored (ADR-0014).</summary>
+    public string? WeeklyResetAnchorPath { get; init; }
+
+    /// <summary>
+    /// Raw access to Claude Code's cached figures, for harvesting the weekly anchor.
+    ///
+    /// <para>Separate from <see cref="CachedUtilization"/> — that provider deliberately drops a
+    /// <c>resets_at</c> once it has passed, which is exactly the value the anchor is made of.
+    /// Null defaults to reading the real file, and only when no <see cref="Provider"/> was
+    /// injected: a test that describes its own world must not have this reach past it into the
+    /// developer's own <c>~/.claude.json</c>.</para>
+    /// </summary>
+    public Func<OView.Core.Providers.CachedUsage.CachedUtilization?>? CachedUtilizationSource { get; init; }
 
     public string? SettingsPath { get; init; }
 

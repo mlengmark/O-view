@@ -116,74 +116,63 @@ public class ManualWeeklyResetTests
 
     // ── contradiction: entry loses to evidence ──────────────────────────────────────
 
+
     /// <summary>
-    /// The observed bracket contains the entered boundary, so the two agree. This is the
-    /// normal case for a correct entry, and it must not raise a false alarm — a warning
+    /// The reported instant sits on the same weekly grid as the entry, so the two agree. This
+    /// is the normal case for a correct entry and must not raise a false alarm — a warning
     /// people learn to ignore is worse than none.
     /// </summary>
     [Fact]
-    public void AnObservationContainingTheEntryIsNotAContradiction()
+    public void AnAnchorOnTheSameGridAsTheEntryIsNotAContradiction()
     {
-        // Reset seen between Mon 21:56 and Tue 08:14 local; the entry says Mon 22:59.
-        var observation = new WeeklyResetObservation(
-            new DateTimeOffset(2026, 8, 24, 19, 56, 0, TimeSpan.Zero),
-            new DateTimeOffset(2026, 8, 25, 6, 14, 0, TimeSpan.Zero),
-            "org-a");
+        // Claude reports Mon 20:59 UTC = Mon 22:59 Berlin; the entry says Mon 22:59.
+        var anchor = new DateTimeOffset(2026, 8, 24, 20, 59, 59, TimeSpan.Zero);
 
-        Assert.False(MondayLate.IsContradictedBy(observation, Berlin));
+        Assert.False(MondayLate.IsContradictedBy(anchor, Berlin));
     }
 
     /// <summary>
-    /// The reset demonstrably happened inside the bracket, so an entry well outside it cannot
-    /// also be true. A wide bracket is still proof: weak about <i>when</i>, absolute about
-    /// <i>within what</i>.
+    /// A different weekday cannot be the same schedule. Under ADR-0014 both sides are exact,
+    /// so this is a straight comparison rather than the "is it inside the bracket?" question
+    /// the derived observations used to pose.
     /// </summary>
     [Fact]
-    public void AnObservationExcludingTheEntryIsAContradiction()
+    public void AnAnchorOnADifferentDayIsAContradiction()
     {
-        // Reset seen on Wednesday; the entry claims Monday.
-        var observation = new WeeklyResetObservation(
-            new DateTimeOffset(2026, 8, 26, 6, 0, 0, TimeSpan.Zero),
-            new DateTimeOffset(2026, 8, 26, 9, 0, 0, TimeSpan.Zero),
-            "org-a");
+        // Claude reports Wednesday; the entry claims Monday.
+        var anchor = new DateTimeOffset(2026, 8, 26, 6, 0, 0, TimeSpan.Zero);
 
-        Assert.True(MondayLate.IsContradictedBy(observation, Berlin));
+        Assert.True(MondayLate.IsContradictedBy(anchor, Berlin));
     }
 
     /// <summary>
-    /// Slack absorbs what legitimately moves a boundary without the entry being wrong: a DST
-    /// transition, ~15 minute sampling, and a user who typed the rounded minute they saw.
+    /// Slack absorbs what legitimately separates the two without the entry being wrong: the
+    /// anchor is a UTC instant with sub-second precision, the entry a local wall-clock minute
+    /// a user read off a screen and rounded.
     /// </summary>
     [Fact]
     public void SmallDisagreementsAreWithinSlackAndDoNotFlag()
     {
-        // Bracket ends Mon 22:00 local; entry is Mon 22:59 — 59 minutes past, inside slack.
-        var observation = new WeeklyResetObservation(
-            new DateTimeOffset(2026, 8, 24, 17, 0, 0, TimeSpan.Zero),
-            new DateTimeOffset(2026, 8, 24, 20, 0, 0, TimeSpan.Zero),
-            "org-a");
+        // Mon 22:00 Berlin against an entry of Mon 22:59 — 59 minutes apart, inside slack.
+        var anchor = new DateTimeOffset(2026, 8, 24, 20, 0, 0, TimeSpan.Zero);
 
         Assert.True(ManualWeeklyReset.ContradictionSlack >= TimeSpan.FromHours(1));
-        Assert.False(MondayLate.IsContradictedBy(observation, Berlin));
+        Assert.False(MondayLate.IsContradictedBy(anchor, Berlin));
     }
 
     // ── the copy ────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The conflict notice must say what was seen and what to do, and must not pick a culprit
-    /// — a plan change, a typo and a genuine schedule change look identical from here.
+    /// The notice must say what Claude reported and what to do, and must not pick a culprit —
+    /// a plan change, a typo and a genuine schedule change look identical from here.
     /// </summary>
     [Fact]
-    public void TheConflictNoticeStatesTheObservationAndTheRemedy()
+    public void TheConflictNoticeStatesTheReportedTimeAndTheRemedy()
     {
         var text = PanelText.WeeklyResetConflict(
-            new DateTimeOffset(2026, 8, 26, 6, 0, 0, TimeSpan.Zero),
-            new DateTimeOffset(2026, 8, 26, 9, 0, 0, TimeSpan.Zero),
-            Berlin);
+            new DateTimeOffset(2026, 8, 26, 6, 0, 0, TimeSpan.Zero), Berlin);
 
         Assert.Contains("Wed 08:00", text, StringComparison.Ordinal);
-        Assert.Contains("Wed 11:00", text, StringComparison.Ordinal);
-        Assert.Contains("Settings", text, StringComparison.Ordinal);
-        Assert.Contains("using what it observed", text, StringComparison.Ordinal);
+        Assert.Contains("Re-enter", text, StringComparison.Ordinal);
     }
 }

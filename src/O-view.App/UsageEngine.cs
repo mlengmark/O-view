@@ -69,6 +69,18 @@ public sealed class UsageEngine : IDisposable
     private readonly PollGate _fullGate = new();
     private readonly PollGate _planGate = new();
 
+    /// <summary>The stored weekly reset instant (ADR-0014). See <see cref="WithWeeklyReset"/>.</summary>
+    private readonly WeeklyResetAnchor _weeklyAnchor;
+
+    /// <summary>Raw reader for Claude Code's cached figures, used only to harvest the anchor.</summary>
+    private readonly Func<CachedUtilization?> _cachedUtilizationSource;
+
+    /// <summary>The organization the anchor is scoped to; windows are per-account.</summary>
+    private readonly string? _orgUuid;
+
+    /// <summary>Set when a stored anchor disagrees with what the user typed.</summary>
+    private DateTimeOffset? _weeklyResetConflict;
+
     /// <summary>
     /// Whether the plan-history provider this engine holds is one the caller actually asked
     /// for, and so may be published from directly.
@@ -130,20 +142,24 @@ public sealed class UsageEngine : IDisposable
         // share is that their failures are recorded instead of merely survived.
         var logLine = _log is null ? (Action<string>?)null : _log.Write;
 
-        var weeklyResets = new WeeklyResetLog(_options.WeeklyResetLogPath) { Log = logLine };
-        try
-        {
-            weeklyResets.ImportLegacy(_store.GetLegacyWeeklyResets(), account?.OrganizationUuid ?? "");
-        }
-        catch (Exception ex)
-        {
-            _log?.Write($"weekly-reset legacy import skipped: {ex.GetType().Name}: {ex.Message}");
-        }
+        _orgUuid = account?.OrganizationUuid;
+
+        // The weekly reset, since ADR-0014: one instant Claude reported, stored once and
+        // projected forward by whole weeks forever. There is no observation log any more and
+        // nothing to import from the rollup store — the derivation those existed to feed was
+        // removed for producing an answer 11.5 hours wrong while the exact one sat unread.
+        _weeklyAnchor = new WeeklyResetAnchor(_options.WeeklyResetAnchorPath) { Log = logLine };
+
+        // Deliberately not the CachedUtilization provider: that one drops a resets_at once it
+        // has passed, and a passed instant is precisely what the anchor is made of.
+        _cachedUtilizationSource = _options.CachedUtilizationSource
+            ?? (_options.Provider is null
+                ? () => CachedUtilization.TryRead()
+                : () => null);
 
         _planHistory = _options.PlanHistory ?? new PlanHistoryProvider(
             path: _options.PlanHistoryPath,
             orgUuid: account?.OrganizationUuid,
-            weeklyResetLog: weeklyResets,
             // Local request times tighten the five-hour window's start bracket (issue #185).
             // The engine owns both halves, so the wiring lives here rather than teaching the
             // plan-history provider about the rollup store.
@@ -195,10 +211,11 @@ public sealed class UsageEngine : IDisposable
     /// </summary>
     private void ApplyWeeklyResetSetting()
     {
-        if (_planHistory is not null)
-        {
-            _planHistory.ManualWeeklyReset = Settings.WeeklyReset;
-        }
+        // The entry is read straight from Settings on every poll now (see WithWeeklyReset), so
+        // there is no provider-side copy left to keep in step — the class of bug this method
+        // existed to prevent is removed rather than maintained. Clearing the recorded conflict
+        // stays: a new entry is a fresh claim and deserves a fresh verdict.
+        _weeklyResetConflict = null;
     }
 
     /// <summary>
@@ -223,25 +240,25 @@ public sealed class UsageEngine : IDisposable
     }
 
     /// <summary>
-    /// An observation that disproved the entered weekly reset, or null. Surfaced so the head
-    /// can tell the user once — silently overriding a wrong entry leaves them believing the
-    /// number they typed.
+    /// The reset instant Claude reported that disproves the entered weekly reset, or null.
+    /// Surfaced so the head can tell the user once — silently overriding a wrong entry leaves
+    /// them believing the number they typed.
     /// </summary>
-    public WeeklyResetObservation? WeeklyResetConflict => _planHistory?.ManualWeeklyResetConflict;
+    public DateTimeOffset? WeeklyResetConflict => _weeklyResetConflict;
 
     /// <summary>
     /// Records that the user has been told about <paramref name="conflict"/>, so the notice
-    /// fires once per conflicting observation rather than on every poll.
+    /// fires once per conflicting instant rather than on every poll.
     /// </summary>
-    public void MarkWeeklyResetConflictNoticed(WeeklyResetObservation conflict)
+    public void MarkWeeklyResetConflictNoticed(DateTimeOffset conflict)
     {
-        Settings = Settings with { WeeklyResetConflictNoticed = conflict.LatestUtc.ToString("o") };
+        Settings = Settings with { WeeklyResetConflictNoticed = conflict.ToString("o") };
         Settings.Save(_options.SettingsPath);
     }
 
     /// <summary>Whether this conflict is new to the user.</summary>
-    public bool IsWeeklyResetConflictUnseen(WeeklyResetObservation conflict) =>
-        Settings.WeeklyResetConflictNoticed != conflict.LatestUtc.ToString("o");
+    public bool IsWeeklyResetConflictUnseen(DateTimeOffset conflict) =>
+        Settings.WeeklyResetConflictNoticed != conflict.ToString("o");
 
     /// <summary>
     /// Starts polling. Refreshes once immediately so the first result sets the cadence,
@@ -544,7 +561,7 @@ public sealed class UsageEngine : IDisposable
         {
             // Order matters. The entry fills a gap; the reported timestamps then override
             // whatever is there, entry included — see WithReportedResets.
-            var snapshot = WithEnteredWeeklyReset(_provider.GetSnapshot(utcNow), utcNow);
+            var snapshot = WithWeeklyReset(_provider.GetSnapshot(utcNow), utcNow);
             snapshot = WithReportedResets(snapshot, utcNow);
             return new PollResult(snapshot, ReadOffPlan(), utcNow, Failed: false);
         }
@@ -575,13 +592,8 @@ public sealed class UsageEngine : IDisposable
     /// one place allowed to decide between them. Overwriting it here would reinstate an entry
     /// that an observation had just disproved.</para>
     /// </summary>
-    private UsageSnapshot WithEnteredWeeklyReset(UsageSnapshot snapshot, DateTimeOffset utcNow)
+    private UsageSnapshot WithWeeklyReset(UsageSnapshot snapshot, DateTimeOffset utcNow)
     {
-        if (snapshot.WeeklyResetAtUtc is not null || Settings.WeeklyReset is not { } entry)
-        {
-            return snapshot;
-        }
-
         // Nothing to attach a reset to: a panel with no data at all should stay blank rather
         // than grow one lonely populated line.
         if (snapshot.Source == DataSource.None)
@@ -589,13 +601,65 @@ public sealed class UsageEngine : IDisposable
             return snapshot;
         }
 
+        // Harvest first. Whenever Claude Code has reported an instant, store it — including
+        // one already in the past, which is the case that matters: the cache refreshes only
+        // when Claude Code fetches usage, measured at 43 hours stale on a machine whose file
+        // was being rewritten every few minutes. Read once, it is correct forever after.
+        var reported = ReportedWeeklyResetInstant();
+        if (reported is { } instant)
+        {
+            _weeklyAnchor.Save(instant, _orgUuid);
+        }
+
+        var anchor = _weeklyAnchor.Read(_orgUuid);
+        _weeklyResetConflict = null;
+
+        // A discovered anchor outranks a typed entry, because it comes from the source rather
+        // than from transcription — but it must never silently replace one. Disagreement is
+        // recorded so the head can say so once; a wrong entry quietly overridden leaves the
+        // user believing the number they typed.
+        if (anchor is { } stored && Settings.WeeklyReset is { } entered &&
+            entered.IsContradictedBy(stored, TimeZoneInfo.Local))
+        {
+            _weeklyResetConflict = stored;
+        }
+
+        var next = anchor is { } a
+            ? WeeklyWindow.NextAfter(a, utcNow)
+            : Settings.WeeklyReset?.NextAfter(utcNow, TimeZoneInfo.Local);
+
+        // Genuinely unknown: no reported instant has ever been seen and nothing was entered.
+        // The panel says so and points at the entry dialog rather than showing a guess — which
+        // is what the derivation used to do, wrongly and without saying so (rule 6).
+        if (next is null)
+        {
+            return snapshot;
+        }
+
         return snapshot with
         {
-            WeeklyResetAtUtc = entry.NextAfter(utcNow, TimeZoneInfo.Local),
-            // Exact, so it renders without the "~" that marks a derived bracket.
+            WeeklyResetAtUtc = next,
+            // Both remaining sources are exact, so this never wears the "~".
             WeeklyResetUncertainty = TimeSpan.Zero,
-            WeeklyResetPeriod = WeeklyResetDetector.WindowLength,
+            WeeklyResetPeriod = WeeklyWindow.Length,
         };
+    }
+
+    /// <summary>
+    /// The weekly reset instant Claude Code last reported, past or future, or null.
+    /// Never throws: a failure to harvest must not disturb the reading it decorates.
+    /// </summary>
+    private DateTimeOffset? ReportedWeeklyResetInstant()
+    {
+        try
+        {
+            return _cachedUtilizationSource()?.SevenDay?.ResetsAtUtc;
+        }
+        catch (Exception ex)
+        {
+            _log?.Write($"weekly anchor read FAILED {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
     }
 
     /// <summary>
@@ -658,16 +722,9 @@ public sealed class UsageEngine : IDisposable
             };
         }
 
-        if (reported.WeeklyResetAtUtc is { } weeklyReset)
-        {
-            snapshot = snapshot with
-            {
-                WeeklyResetAtUtc = weeklyReset,
-                WeeklyResetUncertainty = TimeSpan.Zero,
-                WeeklyResetPeriod = reported.WeeklyResetPeriod ?? WeeklyResetDetector.WindowLength,
-            };
-        }
-
+        // The weekly reset is deliberately not touched here. WithWeeklyReset owns it end to
+        // end now, working from the stored anchor rather than from this snapshot — which
+        // drops a resets_at the moment it passes, the exact case the anchor exists to survive.
         return snapshot;
     }
 
