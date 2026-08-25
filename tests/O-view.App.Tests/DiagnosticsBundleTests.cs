@@ -21,7 +21,10 @@ public class DiagnosticsBundleTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private string Build(DiagnosticsEnvironment environment, CorruptBackupReport? corruptBackups = null) =>
+    private string Build(
+        DiagnosticsEnvironment environment,
+        CorruptBackupReport? corruptBackups = null,
+        IReadOnlyList<string>? logTail = null) =>
         DiagnosticsBundle.Build(
             environment,
             PlanHistoryDiagnostics.Inspect(_dir.File("absent.json")),
@@ -29,7 +32,8 @@ public class DiagnosticsBundleTests : IDisposable
             account: null,
             new WeeklyResetLog(_dir.File("weekly-resets.json")),
             new DateTimeOffset(2026, 8, 2, 12, 0, 0, TimeSpan.Zero),
-            corruptBackups);
+            corruptBackups,
+            logTail);
 
     private static DiagnosticsEnvironment Windows => new("0.6.0", "WindowsInstaller");
 
@@ -192,6 +196,43 @@ public class DiagnosticsBundleTests : IDisposable
             DateTimeOffset.UnixEpoch);
 
         Assert.Contains("weekly resets", bundle, StringComparison.Ordinal);
+    }
+
+    // ── the recent log ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The only part of the bundle that says what the app <i>did</i>. Everything else
+    /// describes its inputs, and all of that can read perfectly while no poll has completed
+    /// in days — which is exactly the report that arrived three times, each leading with
+    /// <c>status : Ok</c>.
+    /// </summary>
+    [Fact]
+    public void TheRecentLogIsCarriedInTheBundle()
+    {
+        var bundle = Build(Windows, logTail:
+        [
+            "2026-08-25 18:14:52.001Z poll read begin",
+            "2026-08-25 18:14:52.123Z poll read done in 122 ms",
+            "2026-08-25 18:14:52.140Z poll published after 139 ms",
+        ]);
+
+        Assert.Contains("log           :", bundle, StringComparison.Ordinal);
+        Assert.Contains("poll read begin", bundle, StringComparison.Ordinal);
+        Assert.Contains("poll published after 139 ms", bundle, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// On a build that logs by default, "no log lines" is itself a finding — it means the run
+    /// never reached the first write. So it is stated rather than omitted, because an absent
+    /// section is indistinguishable from one that failed to render.
+    /// </summary>
+    [Fact]
+    public void AnAbsentLogSaysSoRatherThanVanishing()
+    {
+        var bundle = Build(Windows);
+
+        Assert.Contains("log           :", bundle, StringComparison.Ordinal);
+        Assert.Contains("(no log lines yet)", bundle, StringComparison.Ordinal);
     }
 
     // ── quarantined rollup stores (issue #160) ──────────────────────────────────────

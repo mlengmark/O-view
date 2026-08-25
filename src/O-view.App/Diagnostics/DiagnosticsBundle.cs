@@ -62,7 +62,7 @@ public static class DiagnosticsBundle
     public static string Build(DiagnosticsEnvironment environment) =>
         Build(environment, PlanHistoryDiagnostics.Inspect(), TranscriptScopeReport.Inspect(),
             ClaudeAccount.TryRead(), new WeeklyResetLog(), DateTimeOffset.UtcNow,
-            CorruptBackups.Inspect());
+            CorruptBackups.Inspect(), FileLog.Tail());
 
     /// <summary>Overload taking every input explicitly, so the layout is testable.</summary>
     public static string Build(
@@ -72,7 +72,8 @@ public static class DiagnosticsBundle
         ClaudeAccount? account,
         WeeklyResetLog weeklyResets,
         DateTimeOffset utcNow,
-        CorruptBackupReport? corruptBackups = null)
+        CorruptBackupReport? corruptBackups = null,
+        IReadOnlyList<string>? logTail = null)
     {
         var text = new StringBuilder();
         text.Append(planHistory.ToClipboardText(environment.Version));
@@ -83,6 +84,7 @@ public static class DiagnosticsBundle
         text.Append(scope.ToClipboardText());
         AppendWeeklyResets(text, weeklyResets, utcNow);
         AppendCorruptBackups(text, corruptBackups ?? CorruptBackupReport.Empty);
+        AppendRecentLog(text, logTail ?? []);
 
         // The single funnel. Every field above, and every field added below it later, is
         // redacted here rather than at its own call site — see the class remarks.
@@ -210,6 +212,47 @@ public static class DiagnosticsBundle
     /// report — <i>when did this last happen</i> — and the "none" case is printed rather than
     /// omitted so its absence is never ambiguous with a field that failed to render.</para>
     /// </summary>
+    /// <summary>
+    /// The tail of the log, which is the only part of this bundle that describes what the
+    /// app <i>did</i> rather than what its inputs look like.
+    ///
+    /// <para>Every other field here reports a file: which paths exist, how many samples they
+    /// hold, how old they are. All of it can read perfectly while the app has not completed a
+    /// poll in days — that is exactly the report that arrived three times over, each one
+    /// leading with <c>status : Ok</c>. Three lines per poll turn that ambiguity into a fact
+    /// the user pastes without being asked for it, which matters because the alternative is a
+    /// round trip asking someone to re-run with a flag and reproduce a stall on demand.</para>
+    ///
+    /// <para>Thirty lines: enough to show the last few polls and a session header, small
+    /// enough that the bundle stays pasteable. The log carries no tokens and no conversation
+    /// content by construction (<see cref="IAppLog"/>), and <see cref="Redact"/> runs over
+    /// this like every other field on the way out.</para>
+    ///
+    /// <para><b>Passed in rather than read here</b>, for the reason
+    /// <see cref="UsageEngine"/> gives about reaching past an injected dependency to real user
+    /// data: reading <see cref="FileLog.DefaultPath"/> from inside the bundle would put the
+    /// developer's own log into every test that builds one, passing on a CI runner that has
+    /// none and failing on the machine of whoever last ran the app.</para>
+    /// </summary>
+    private static void AppendRecentLog(StringBuilder text, IReadOnlyList<string> lines)
+    {
+        text.AppendLine($"  log           : {FileLog.DefaultPath}");
+
+        if (lines.Count == 0)
+        {
+            // Distinguished from a log that exists and is empty only by the path above, and
+            // deliberately not explained away: "no log" on a build that logs by default is
+            // itself a finding — it means this run never reached the first write.
+            text.AppendLine("    (no log lines yet)");
+            return;
+        }
+
+        foreach (var line in lines)
+        {
+            text.AppendLine($"    | {line}");
+        }
+    }
+
     private static void AppendCorruptBackups(StringBuilder text, CorruptBackupReport report) =>
         text.AppendLine($"  corrupt stores: {(report.Generations == 0
             ? "none"

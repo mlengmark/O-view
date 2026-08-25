@@ -140,11 +140,16 @@ internal static class Program
             return 0;   // already running; two icons and double polling is the thing to avoid
         }
 
-        var log = parsed.TryGetValue("--log", out var logPath) && logPath is { Length: > 0 }
-            ? new FileLog(logPath)
-            : null;
+        // On by default; --log only redirects it. Same reasoning as the Windows head, and
+        // the reason it is written the same way in both: a flag nobody passed is not
+        // instrumentation. See FileLog for the bound that makes always-on affordable.
+        var log = new FileLog(
+            parsed.TryGetValue("--log", out var logPath) && logPath is { Length: > 0 } ? logPath : null);
 
-        log?.Write($"startup desktop={DesktopEnvironment()} session={SessionType()} trayHost={hostState}");
+        log.WriteSessionHeader(
+            typeof(Program).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0",
+            DetectInstallKind().ToString());
+        log.Write($"startup desktop={DesktopEnvironment()} session={SessionType()} trayHost={hostState}");
 
         var interval = parsed.TryGetValue("--interval-ms", out var ms)
                        && int.TryParse(ms, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedMs)
