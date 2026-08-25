@@ -374,12 +374,22 @@ public sealed class UsageEngine : IDisposable
             return;
         }
 
+        // Three lines per poll, and the gaps between them are the diagnosis. A tick that
+        // never logs "read begin" means the timer is not firing; "read begin" with no "read
+        // done" means the read is hung or threw; "read done" with no "published" means the
+        // dispatcher is not running the callback — and each of those is a different bug in a
+        // different layer. Without them a stalled poll and a healthy idle one are the same
+        // silence, which is how five days of no ingestion went unnoticed.
+        var startedAt = Environment.TickCount64;
+        _log?.Write($"{what} read begin");
+
         _ = Task.Run(() =>
         {
             T result;
             try
             {
                 result = read();
+                _log?.Write($"{what} read done in {Environment.TickCount64 - startedAt} ms");
             }
             catch (Exception ex)
             {
@@ -404,6 +414,7 @@ public sealed class UsageEngine : IDisposable
                     try
                     {
                         publish(result);
+                        _log?.Write($"{what} published after {Environment.TickCount64 - startedAt} ms");
                     }
                     finally
                     {

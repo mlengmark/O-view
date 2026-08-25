@@ -117,7 +117,12 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        var log = args.TryGetValue("--log", out var logPath) ? new FileLog(logPath!) : null;
+        // On by default; --log only redirects it. It was opt-in until a machine stalled for
+        // five days and the one thing that would have named the failing call was a flag
+        // nobody had passed — a log you have to enable before the fault reproduces is never
+        // on when it matters. FileLog bounds itself, so always-on costs a capped 6 MB.
+        var log = new FileLog(args.TryGetValue("--log", out var logPath) ? logPath : null);
+        log.WriteSessionHeader(UpdateService.CurrentVersion, UpdateService.CurrentInstallKind.ToString());
         var interval = args.TryGetValue("--interval-ms", out var ms) &&
                        int.TryParse(ms, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed >= 50
             ? TimeSpan.FromMilliseconds(parsed)
