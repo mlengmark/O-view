@@ -61,7 +61,7 @@ public static class DiagnosticsBundle
 {
     public static string Build(DiagnosticsEnvironment environment) =>
         Build(environment, PlanHistoryDiagnostics.Inspect(), TranscriptScopeReport.Inspect(),
-            ClaudeAccount.TryRead(), new WeeklyResetLog(), DateTimeOffset.UtcNow,
+            ClaudeAccount.TryRead(), new WeeklyResetAnchor(), DateTimeOffset.UtcNow,
             CorruptBackups.Inspect(), FileLog.Tail());
 
     /// <summary>Overload taking every input explicitly, so the layout is testable.</summary>
@@ -70,7 +70,7 @@ public static class DiagnosticsBundle
         PlanHistoryReport planHistory,
         TranscriptScopeReport scope,
         ClaudeAccount? account,
-        WeeklyResetLog weeklyResets,
+        WeeklyResetAnchor weeklyReset,
         DateTimeOffset utcNow,
         CorruptBackupReport? corruptBackups = null,
         IReadOnlyList<string>? logTail = null)
@@ -82,7 +82,7 @@ public static class DiagnosticsBundle
         AppendRoots(text);
         AppendAccount(text, account);
         text.Append(scope.ToClipboardText());
-        AppendWeeklyResets(text, weeklyResets, utcNow);
+        AppendWeeklyReset(text, weeklyReset, utcNow);
         AppendCorruptBackups(text, corruptBackups ?? CorruptBackupReport.Empty);
         AppendRecentLog(text, logTail ?? []);
 
@@ -167,30 +167,38 @@ public static class DiagnosticsBundle
     }
 
     /// <summary>
-    /// What the weekly-reset discovery has actually found (ADR-0011). "Weekly says waiting"
-    /// is otherwise undiagnosable from the outside: it looks identical whether no reset has
-    /// occurred yet, the file was never written, or drops are being detected and discarded.
-    /// Listing the observations with their brackets separates those in one glance.
-    /// Timestamps only — no usage figures, nothing identifying.
+    /// The stored weekly-reset anchor and what it projects to (ADR-0014).
+    ///
+    /// <para>This replaces a list of derived observations with their brackets. That list was
+    /// the right report while the reset was inferred from drops in a sampled series — it
+    /// separated "no reset seen yet" from "drops detected and discarded". None of those states
+    /// exist any more: either an exact instant has been reported and stored, or it has not.
+    /// Printing the anchor's weekday alongside it makes a wrong one obvious at a glance, which
+    /// a bare timestamp does not.</para>
+    ///
+    /// <para>Timestamps only — no usage figures, nothing identifying.</para>
     /// </summary>
-    private static void AppendWeeklyResets(StringBuilder text, WeeklyResetLog log, DateTimeOffset utcNow)
+    private static void AppendWeeklyReset(StringBuilder text, WeeklyResetAnchor anchor, DateTimeOffset utcNow)
     {
         try
         {
-            var observations = log.GetObservations();
-            text.AppendLine($"  weekly resets : {observations.Count} observed ({WeeklyResetLog.DefaultPath})");
-            foreach (var o in observations.TakeLast(5))
+            text.AppendLine($"  weekly anchor : {WeeklyResetAnchor.DefaultPath}");
+
+            if (anchor.Read() is not { } stored)
             {
-                text.AppendLine($"    reset       : by {o.LatestUtc:u} "
-                                + $"(± {o.Uncertainty.TotalMinutes:0} min{(o.IsPrecise ? "" : ", Desktop not sampling")})");
+                // Not a fault. It means Claude Code has never reported one on this machine,
+                // which is exactly when the user should be entering it by hand.
+                text.AppendLine("    anchor      : none stored — never reported by Claude Code");
+                text.AppendLine("  next weekly   : unknown — no anchor and no entered value");
+                return;
             }
 
-            var next = WeeklyResetDetector.PredictNextReset(observations, utcNow);
-            text.AppendLine($"  next weekly   : {(next is null ? "unknown — waiting for first reset" : $"{next.AtUtc:u}")}");
+            text.AppendLine($"    anchor      : {stored:u} ({stored.UtcDateTime.DayOfWeek})");
+            text.AppendLine($"  next weekly   : {WeeklyWindow.NextAfter(stored, utcNow):u}");
         }
         catch (Exception ex)
         {
-            text.AppendLine($"  weekly resets : unreadable ({ex.GetType().Name})");
+            text.AppendLine($"  weekly anchor : unreadable ({ex.GetType().Name})");
         }
     }
 

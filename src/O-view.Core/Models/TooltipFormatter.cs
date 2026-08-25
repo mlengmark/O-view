@@ -49,7 +49,7 @@ public static class TooltipFormatter
     }
 
     private static string Approx(TimeSpan? uncertainty) =>
-        uncertainty > Providers.PlanHistory.WeeklyResetDetector.PreciseBracket ? "~" : "";
+        uncertainty > Providers.PlanHistory.WeeklyWindow.PreciseBracket ? "~" : "";
 
     private static DateTimeOffset ToLocal(DateTimeOffset utc, TimeZoneInfo zone) =>
         TimeZoneInfo.ConvertTime(utc, zone);

@@ -30,7 +30,7 @@ public class DiagnosticsBundleTests : IDisposable
             PlanHistoryDiagnostics.Inspect(_dir.File("absent.json")),
             TranscriptScopeReport.Inspect(null, []),
             account: null,
-            new WeeklyResetLog(_dir.File("weekly-resets.json")),
+            new WeeklyResetAnchor(_dir.File("weekly-resets.json")),
             new DateTimeOffset(2026, 8, 2, 12, 0, 0, TimeSpan.Zero),
             corruptBackups,
             logTail);
@@ -153,7 +153,7 @@ public class DiagnosticsBundleTests : IDisposable
         Assert.Contains("app version", bundle, StringComparison.Ordinal);
         Assert.Contains("process", bundle, StringComparison.Ordinal);
         Assert.Contains("account file", bundle, StringComparison.Ordinal);
-        Assert.Contains("weekly resets", bundle, StringComparison.Ordinal);
+        Assert.Contains("weekly anchor", bundle, StringComparison.Ordinal);
         // "installed : True/False" became "install kind", which subsumes it — a portable
         // build and an installer build are still distinguishable, and now so are the Linux
         // kinds.
@@ -183,7 +183,7 @@ public class DiagnosticsBundleTests : IDisposable
     }
 
     [Fact]
-    public void AnUnreadableWeeklyResetLogDoesNotTakeTheBundleDown()
+    public void AnUnreadableWeeklyAnchorDoesNotTakeTheBundleDown()
     {
         // A support bundle that throws is worse than one with a gap in it — the user is
         // already reporting a problem.
@@ -192,10 +192,10 @@ public class DiagnosticsBundleTests : IDisposable
             PlanHistoryDiagnostics.Inspect(_dir.File("absent.json")),
             TranscriptScopeReport.Inspect(null, []),
             account: null,
-            new WeeklyResetLog(_dir.Path),   // a directory, not a file
+            new WeeklyResetAnchor(_dir.Path),   // a directory, not a file
             DateTimeOffset.UnixEpoch);
 
-        Assert.Contains("weekly resets", bundle, StringComparison.Ordinal);
+        Assert.Contains("weekly anchor", bundle, StringComparison.Ordinal);
     }
 
     // ── the recent log ──────────────────────────────────────────────────────────────

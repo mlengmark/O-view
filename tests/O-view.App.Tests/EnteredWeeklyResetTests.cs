@@ -39,7 +39,7 @@ public class EnteredWeeklyResetTests
             Clock = new FakeClock(T0),
             Provider = new FixedProvider(snapshot),
             RollupDbPath = dir.File("usage.db"),
-            WeeklyResetLogPath = dir.File("weekly-resets.json"),
+            WeeklyResetAnchorPath = dir.File("weekly-resets.json"),
             SettingsPath = dir.File("settings.json"),
         });
     }
@@ -75,21 +75,29 @@ public class EnteredWeeklyResetTests
     /// them — overwriting here would reinstate an entry an observation had just disproved.
     /// </summary>
     [Fact]
-    public void AResetTheProviderAlreadyResolvedIsNotOverwritten()
+    public void TheEntryIsUsedEvenWhereADerivedResetWouldOnceHaveWon()
     {
         using var dir = new TempDir();
-        var derived = T0.AddDays(3);
-        var withDerivedReset = new UsageSnapshot(
+
+        // A snapshot still carrying a bracketed weekly reset. Under ADR-0011 the entry only
+        // filled a gap, so this value survived and the user's own answer was ignored.
+        //
+        // No provider produces one any more — PlanHistoryProvider returns null for the weekly
+        // window — so this is a snapshot the app cannot actually build, kept here to pin that
+        // the entry wins even against the thing that used to outrank it. What made the old
+        // rule wrong is that the derived value was an inference and the entry was read off
+        // Claude's own screen; deferring to the inference preferred a guess to an answer.
+        var stale = new UsageSnapshot(
             DataSource.Live, 40, 60, T0.AddHours(2), T0,
-            WeeklyResetAtUtc: derived,
+            WeeklyResetAtUtc: T0.AddDays(3),
             WeeklyResetUncertainty: TimeSpan.FromHours(10),
             WeeklyResetPeriod: TimeSpan.FromDays(7));
-        using var engine = Build(dir, withDerivedReset, Entry);
+        using var engine = Build(dir, stale, Entry);
 
         engine.Refresh();
 
-        Assert.Equal(derived, engine.Latest.WeeklyResetAtUtc);
-        Assert.Equal(TimeSpan.FromHours(10), engine.Latest.WeeklyResetUncertainty);
+        Assert.Equal(Entry.NextAfter(T0, TimeZoneInfo.Local), engine.Latest.WeeklyResetAtUtc);
+        Assert.Equal(TimeSpan.Zero, engine.Latest.WeeklyResetUncertainty);
     }
 
     /// <summary>With nothing entered, nothing is added.</summary>

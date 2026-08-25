@@ -31,7 +31,7 @@ public class NotificationKindTests
             Clock = new FakeClock(T0),
             Provider = provider,
             RollupDbPath = dir.File("usage.db"),
-            WeeklyResetLogPath = dir.File("weekly-resets.json"),
+            WeeklyResetAnchorPath = dir.File("weekly-resets.json"),
             SettingsPath = dir.File("settings.json"),
         };
 

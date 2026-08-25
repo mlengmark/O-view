@@ -43,16 +43,22 @@ public class ReportedResetTests
         WeeklyResetPeriod: TimeSpan.FromDays(7),
         SessionResetUncertainty: TimeSpan.FromMinutes(8));
 
-    private static IUsageProvider Cache(
+    /// <summary>
+    /// What Claude Code cached. Returned raw rather than already wrapped in a provider,
+    /// because the engine now consumes it twice and the two consumers see different things:
+    /// the provider drops a <c>resets_at</c> the moment it passes, while the weekly anchor is
+    /// harvested from the raw value precisely so a passed instant still counts (ADR-0014).
+    /// Handing tests one object keeps those two views describing the same machine.
+    /// </summary>
+    private static CachedUtilization Cache(
         DateTimeOffset? sessionResets, DateTimeOffset? weeklyResets, DateTimeOffset? fetchedAt = null) =>
-        new CachedUtilizationProvider(() => new CachedUtilization(
-            fetchedAt ?? T0,
+        new(fetchedAt ?? T0,
             "acct",
             sessionResets is null ? null : new UtilizationBar(91, sessionResets),
-            weeklyResets is null ? null : new UtilizationBar(79, weeklyResets)));
+            weeklyResets is null ? null : new UtilizationBar(79, weeklyResets));
 
     private static UsageEngine Build(
-        TempDir dir, UsageSnapshot snapshot, IUsageProvider? cache, ManualWeeklyReset? entry = null)
+        TempDir dir, UsageSnapshot snapshot, CachedUtilization? cache, ManualWeeklyReset? entry = null)
     {
         if (entry is not null)
         {
@@ -64,9 +70,10 @@ public class ReportedResetTests
         {
             Clock = new FakeClock(T0),
             Provider = new FixedProvider(snapshot),
-            CachedUtilization = cache ?? new CachedUtilizationProvider(() => null),
+            CachedUtilization = new CachedUtilizationProvider(() => cache),
+            CachedUtilizationSource = () => cache,
             RollupDbPath = dir.File("usage.db"),
-            WeeklyResetLogPath = dir.File("weekly-resets.json"),
+            WeeklyResetAnchorPath = dir.File("weekly-reset.json"),
             SettingsPath = dir.File("settings.json"),
         });
     }
@@ -131,21 +138,31 @@ public class ReportedResetTests
     }
 
     /// <summary>
-    /// A refinement must never remove the figure it was meant to refine. A cached window that
-    /// has already rolled past its boundary reports nothing, and nothing must stay nothing —
-    /// not null written over a good derived value.
+    /// A rolled-over cache is where the two windows now part company, and deliberately so.
+    ///
+    /// <para><b>Session:</b> the refinement must never remove the figure it refines. A five-hour
+    /// window that has passed its cached boundary reports nothing, and nothing must stay nothing
+    /// rather than null written over a good derived value — that window rolls from first use, so
+    /// a passed instant describes a window that never existed (issue #180).</para>
+    ///
+    /// <para><b>Weekly:</b> the opposite. A passed instant is exactly what the anchor is made of
+    /// — the cache is routinely tens of hours stale, so insisting on a future one is insisting
+    /// on the case that rarely holds. It is harvested and projected forward a whole week
+    /// (ADR-0014), which is why the derived value is superseded here.</para>
     /// </summary>
     [Fact]
-    public void ARolledOverCacheLeavesTheDerivedResetsInPlace()
+    public void ARolledOverCacheKeepsTheSessionResetAndStillAnchorsTheWeeklyOne()
     {
         using var dir = new TempDir();
+        var passedWeekly = T0.AddDays(-1);
         using var engine = Build(
-            dir, Derived, Cache(T0.AddHours(-2), T0.AddDays(-1), fetchedAt: T0.AddHours(-8)));
+            dir, Derived, Cache(T0.AddHours(-2), passedWeekly, fetchedAt: T0.AddHours(-8)));
 
         engine.Refresh();
 
         Assert.Equal(Derived.SessionResetAtUtc, engine.Latest.SessionResetAtUtc);
-        Assert.Equal(Derived.WeeklyResetAtUtc, engine.Latest.WeeklyResetAtUtc);
+        Assert.Equal(passedWeekly.AddDays(7), engine.Latest.WeeklyResetAtUtc);
+        Assert.Equal(TimeSpan.Zero, engine.Latest.WeeklyResetUncertainty);
     }
 
     /// <summary>Each window is folded on its own; one being absent must not drop the other.</summary>
@@ -188,7 +205,19 @@ public class ReportedResetTests
     public void AFailingCacheReadCostsPrecisionRatherThanThePoll()
     {
         using var dir = new TempDir();
-        using var engine = Build(dir, Derived, new ThrowingProvider());
+        using var engine = new UsageEngine(new UsageEngineOptions
+        {
+            Clock = new FakeClock(T0),
+            Provider = new FixedProvider(Derived),
+            // Both readers of the cache throw, because both are on the poll's path now: the
+            // provider that refines the session reset, and the raw read the weekly anchor is
+            // harvested from.
+            CachedUtilization = new ThrowingProvider(),
+            CachedUtilizationSource = () => throw new IOException("locked"),
+            RollupDbPath = dir.File("usage.db"),
+            WeeklyResetAnchorPath = dir.File("weekly-reset.json"),
+            SettingsPath = dir.File("settings.json"),
+        });
 
         engine.Refresh();
 
@@ -210,10 +239,11 @@ public class ReportedResetTests
         using var engine = new UsageEngine(new UsageEngineOptions
         {
             Clock = new FakeClock(T0),
-            Provider = new CompositeUsageProvider(cache),
-            CachedUtilization = cache,
+            Provider = new CompositeUsageProvider(new CachedUtilizationProvider(() => cache)),
+            CachedUtilization = new CachedUtilizationProvider(() => cache),
+            CachedUtilizationSource = () => cache,
             RollupDbPath = dir.File("usage.db"),
-            WeeklyResetLogPath = dir.File("weekly-resets.json"),
+            WeeklyResetAnchorPath = dir.File("weekly-reset.json"),
             SettingsPath = dir.File("settings.json"),
         });
 

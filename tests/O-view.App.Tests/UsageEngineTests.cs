@@ -29,7 +29,7 @@ public class UsageEngineTests
             Log = log,
             Provider = provider,
             RollupDbPath = dir.File("usage.db"),
-            WeeklyResetLogPath = dir.File("weekly-resets.json"),
+            WeeklyResetAnchorPath = dir.File("weekly-resets.json"),
             SettingsPath = dir.File("settings.json"),
         };
         options = tweak?.Invoke(options) ?? options;
@@ -643,7 +643,7 @@ public class UsageEngineTests
             // than steady state.
             PollInterval = TimeSpan.FromSeconds(1),
             RollupDbPath = dir.File("usage.db"),
-            WeeklyResetLogPath = dir.File("weekly-resets.json"),
+            WeeklyResetAnchorPath = dir.File("weekly-resets.json"),
             SettingsPath = dir.File("settings.json"),
         });
         var timers = new FakeTimerFactory();

@@ -79,7 +79,6 @@ public sealed class PlanHistoryProvider : IUsageProvider
     private readonly string _path;
     private readonly string? _orgUuid;
     private readonly TimeSpan _freshness;
-    private readonly IWeeklyResetLog? _weeklyResetLog;
 
     /// <param name="path">File to read; defaults to the real Claude Desktop location.</param>
     /// <param name="orgUuid">
@@ -92,11 +91,6 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// See <see cref="ReadSamples"/>.
     /// </param>
     /// <param name="freshness">Maximum sample age still labelled <see cref="DataSource.Live"/>.</param>
-    /// <param name="weeklyResetLog">
-    /// Persists observed weekly resets so the 7-day reset survives the source file's finite
-    /// retention (issue #6, ADR-0011). Null disables weekly-reset prediction — fine for
-    /// tests and for the JSONL-only fallback.
-    /// </param>
     /// <summary>
     /// Earliest local request in an interval, used to tighten the five-hour window's start
     /// bracket (GitHub issue #185). A delegate rather than the store itself: this provider
@@ -107,20 +101,18 @@ public sealed class PlanHistoryProvider : IUsageProvider
     private readonly Func<DateTimeOffset, DateTimeOffset, DateTimeOffset?>? _earliestActivity;
 
     /// <summary>
-    /// Where a swallowed failure inside the weekly-reset forecast is recorded. A delegate for
-    /// the same reason <see cref="_earliestActivity"/> is one — this class knows nothing about
-    /// the app's logging and stays testable without it.
+    /// Where a swallowed failure is recorded. A delegate for the same reason
+    /// <see cref="_earliestActivity"/> is one — this class knows nothing about the app's
+    /// logging and stays testable without it.
     /// </summary>
     public Action<string>? Log { get; init; }
 
     public PlanHistoryProvider(string? path = null, string? orgUuid = null, TimeSpan? freshness = null,
-        IWeeklyResetLog? weeklyResetLog = null,
         Func<DateTimeOffset, DateTimeOffset, DateTimeOffset?>? earliestActivity = null)
     {
         _path = path ?? PlanHistoryFile.DefaultPath;
         _orgUuid = orgUuid;
         _freshness = freshness ?? DefaultFreshness;
-        _weeklyResetLog = weeklyResetLog;
         _earliestActivity = earliestActivity;
     }
 
@@ -276,120 +268,26 @@ public sealed class PlanHistoryProvider : IUsageProvider
         var windowStart = NarrowWithLocalActivity(ResetDetector.FindCurrentWindowStart(samples));
         var nextReset = ResetDetector.PredictNextReset(windowStart, utcNow);
 
-        // Weekly reset (issue #6, ADR-0011). This IS the discovery loop: every poll
-        // re-scans the whole retained series for `sd` drops and folds them into the
-        // persisted log, so a reset is picked up on the first poll after it appears in the
-        // file and re-recording an already-known one is a no-op. Prediction then runs off
-        // the full history, not just what this file still holds.
-        var weeklyReset = ForecastWeeklyReset(samples, utcNow);
-
+        // No weekly reset. This provider used to derive one by scanning the series for `sd`
+        // drops; ADR-0014 removed that outright. The reset is a fixed weekly grid reported
+        // exactly by Claude Code, so plan history has nothing to add to it and the engine
+        // owns the question — deriving it here only ever produced a worse answer than the
+        // one already sitting in ~/.claude.json.
+        //
+        // The FIVE-hour reset above is unaffected and still derived, because that window
+        // rolls from first use and is genuinely not a grid (issue #180).
         return new UsageSnapshot(
             source,
             TrustedFiveHourPercent(latest.FiveHourPercent, age),
             latest.SevenDayPercent,
             nextReset,
             latest.AtUtc,
-            weeklyReset?.AtUtc,
-            weeklyReset?.Uncertainty,
-            weeklyReset?.Period,
+            WeeklyResetAtUtc: null,
+            WeeklyResetUncertainty: null,
+            WeeklyResetPeriod: null,
             // How wide the bracket is, so a start inferred across a sampling gap is marked
             // approximate rather than printed to the minute (rule 6).
             windowStart?.Uncertainty);
     }
 
-    /// <summary>
-    /// Records this poll's observations and predicts from everything recorded so far.
-    /// Scoped to the org the samples belong to: windows are per-organization, and an
-    /// account that switches org must not have the two sets of resets averaged together.
-    /// </summary>
-    /// <summary>
-    /// The weekly reset the user entered, when they have entered one. Set by the head from
-    /// settings; null means derive it (GitHub issue #186).
-    /// </summary>
-    public ManualWeeklyReset? ManualWeeklyReset { get; set; }
-
-    /// <summary>
-    /// The observation that disproved the entered reset, if one has. Read by the head so it
-    /// can tell the user once — a wrong entry that is silently overridden is worse than no
-    /// entry, because they go on believing the number they typed.
-    /// </summary>
-    public WeeklyResetObservation? ManualWeeklyResetConflict { get; private set; }
-
-    private WeeklyResetForecast? ForecastWeeklyReset(
-        IReadOnlyList<PlanHistorySample> samples, DateTimeOffset utcNow)
-    {
-        if (_weeklyResetLog is null)
-        {
-            return null;
-        }
-
-        try
-        {
-            _weeklyResetLog.Record(WeeklyResetDetector.FindResets(samples));
-            var observations = _weeklyResetLog.GetObservations(samples[^1].OrgUuid);
-            var derived = WeeklyResetDetector.PredictNextReset(observations, utcNow);
-
-            return ResolveWeeklyReset(derived, observations, utcNow);
-        }
-        catch (Exception ex)
-        {
-            // The weekly-reset log is one part of the panel; a failure inside it — an
-            // unreadable file, a locked directory — must never take down the plan-history
-            // percentages, which do not depend on it. Degrade to unknown and carry on.
-            //
-            // Named rather than swallowed outright, for the reason CompositeUsageProvider's
-            // own catch now is: "the weekly reset is unknown" and "the weekly reset threw on
-            // every poll for a week" are the same blank on screen and want different fixes.
-            Log?.Invoke($"weekly reset forecast FAILED {ex.GetType().Name}: {ex.Message}");
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Chooses between what the user entered and what O-view derived (GitHub issue #186).
-    ///
-    /// <para><b>The entry wins over inference, and loses to evidence.</b> Anthropic assigns
-    /// the weekly reset as a fixed time the user can read directly, so an entered value comes
-    /// from the authoritative source while the derived one is inferred from a ~10-hour
-    /// sampling gap. That justifies precedence — but not immunity.</para>
-    ///
-    /// <para>An observed bracket is proof of <i>within what</i> the reset fell. If the entered
-    /// boundary lies outside every such bracket, the two cannot both be true, and continuing
-    /// to show the entry would be displaying a number O-view has evidence against — the exact
-    /// thing rule 6 forbids. So a contradiction hands the answer back to the derived value
-    /// <b>and</b> is recorded for the head to surface. Flagging while still showing the
-    /// disproven number would be the worst of both.</para>
-    ///
-    /// <para>The most recent observation decides. An older one can legitimately disagree
-    /// because the account's schedule changed — which is the case where the newest evidence is
-    /// the only relevant evidence.</para>
-    /// </summary>
-    private WeeklyResetForecast? ResolveWeeklyReset(
-        WeeklyResetForecast? derived,
-        IReadOnlyList<WeeklyResetObservation> observations,
-        DateTimeOffset utcNow)
-    {
-        ManualWeeklyResetConflict = null;
-
-        if (ManualWeeklyReset is not { } manual)
-        {
-            return derived;
-        }
-
-        var local = TimeZoneInfo.Local;
-        var newest = observations.Count > 0
-            ? observations.OrderByDescending(o => o.LatestUtc).First()
-            : null;
-
-        if (newest is not null && manual.IsContradictedBy(newest, local))
-        {
-            ManualWeeklyResetConflict = newest;
-            return derived;
-        }
-
-        // Zero uncertainty: the user read this off Claude, so it is not an approximation and
-        // must not wear the "~" that marks one.
-        return new WeeklyResetForecast(
-            manual.NextAfter(utcNow, local), TimeSpan.Zero, WeeklyResetDetector.WindowLength);
-    }
 }
