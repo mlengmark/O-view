@@ -62,20 +62,37 @@ public sealed record CachedUtilization(
     public static IReadOnlyList<string> Candidates() => ClaudeAccount.Candidates();
 
     /// <summary>
-    /// The block from the first candidate that has one; null when no file has it. Never throws.
+    /// The <b>most recently fetched</b> block across the candidates; null when no file has one.
+    /// Never throws.
     ///
     /// <para>Not merely the first file that <i>exists</i>: a relocated configuration can leave a
     /// stub behind, and a file without the block is no better than a missing one here.</para>
+    ///
+    /// <para><b>And not merely the first that has one.</b> When Claude Code migrated its state
+    /// into <c>~/.claude/.claude.json</c> it stopped writing the old file, which kept a block
+    /// that was hours old and looked exactly as valid as a live one. List order decides nothing
+    /// here for the same reason it decides nothing between providers (issue #191): the
+    /// candidates are two locations for one file, so the freshest reading is the reading.</para>
     /// </summary>
-    public static CachedUtilization? TryRead(string? path = null)
+    public static CachedUtilization? TryRead(string? path = null) =>
+        TryReadAny(path is null ? Candidates() : [path]);
+
+    /// <summary>
+    /// The selection rule over an explicit candidate list, testable without a real profile —
+    /// see <see cref="ClaudeAccount.TryReadAny"/> for why that separation exists.
+    /// </summary>
+    public static CachedUtilization? TryReadAny(IReadOnlyList<string> candidates)
     {
-        foreach (var candidate in path is null ? Candidates() : [path])
+        CachedUtilization? newest = null;
+
+        foreach (var candidate in candidates)
         {
             try
             {
-                if (Parse(File.ReadAllText(candidate)) is { } parsed)
+                if (Parse(File.ReadAllText(candidate)) is { } parsed &&
+                    (newest is null || parsed.FetchedAtUtc > newest.FetchedAtUtc))
                 {
-                    return parsed;
+                    newest = parsed;
                 }
             }
             catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
@@ -85,7 +102,7 @@ public sealed record CachedUtilization(
             }
         }
 
-        return null;
+        return newest;
     }
 
     /// <summary>
