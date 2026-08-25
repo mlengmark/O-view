@@ -21,6 +21,19 @@ public sealed class JsonlUsageProvider : IUsageProvider
     private readonly string? _projectsRoot;
     private readonly IReadOnlyList<string> _coworkRoots;
 
+    /// <summary>
+    /// Where each poll's ingestion result is recorded. A delegate, so <c>Core</c> stays free
+    /// of the app's logging — the same seam <see cref="CompositeUsageProvider.Log"/> uses.
+    ///
+    /// <para><b>The one line this writes is the one that was missing.</b> Ingestion has three
+    /// ways to produce nothing and they need different fixes: no transcript files were found
+    /// at all, files were found but none had grown since the last poll, or reading them threw.
+    /// From outside, all three are a token tile that does not move. Measured in the field: a
+    /// poll completing in 15 ms while 409,501 bytes sat unread, with no way to tell which of
+    /// the three it was without attaching a debugger to a user's machine.</para>
+    /// </summary>
+    public Action<string>? Log { get; init; }
+
     /// <summary>The real machine layout: every transcript root on this machine.</summary>
     public JsonlUsageProvider(RollupStore store)
         : this(store, ClaudeProjectsLocator.DefaultRoot, CoworkAuditLocator.DefaultRoots)
@@ -88,8 +101,17 @@ public sealed class JsonlUsageProvider : IUsageProvider
     /// </summary>
     private void Sync()
     {
+        var startedAt = Environment.TickCount64;
+        var seen = 0;
+        var changed = 0;
+        var unreadable = 0;
+        long bytesRead = 0;
+        var ingested = 0;
+
         foreach (var file in FindAllTranscripts())
         {
+            seen++;
+
             long length;
             try
             {
@@ -97,6 +119,7 @@ public sealed class JsonlUsageProvider : IUsageProvider
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
+                unreadable++;
                 continue;
             }
 
@@ -109,13 +132,26 @@ public sealed class JsonlUsageProvider : IUsageProvider
                 continue;
             }
 
+            changed++;
             var (records, nextOffset) = TranscriptReader.ReadFrom(file, offset);
+            bytesRead += Math.Max(0, nextOffset - offset);
             if (records.Count > 0)
             {
                 _store.Ingest(records);
+                ingested += records.Count;
             }
 
             _store.SetFileOffset(file, nextOffset, length);
         }
+
+        // One line per poll, always — including the all-quiet case, because "0 changed" is
+        // the answer to "is it stuck or is there simply nothing new?" and only says so when
+        // it is written down. A throw above never reaches here, which is itself the signal:
+        // the composite's own catch names the provider, and the absence of this line dates
+        // the failure.
+        Log?.Invoke(
+            $"jsonl sync: {seen} file(s), {changed} changed, {bytesRead:N0} bytes read, "
+            + $"{ingested} record(s) ingested{(unreadable > 0 ? $", {unreadable} unreadable" : "")} "
+            + $"in {Environment.TickCount64 - startedAt} ms");
     }
 }

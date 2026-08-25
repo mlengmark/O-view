@@ -23,6 +23,22 @@ public sealed class CompositeUsageProvider : IUsageProvider
 {
     private readonly IReadOnlyList<IUsageProvider> _providers;
 
+    /// <summary>
+    /// Where a swallowed provider failure is recorded. A delegate rather than a log
+    /// interface, for the reason <see cref="PlanHistory.PlanHistoryProvider"/> takes its
+    /// activity lookup as one: <c>Core</c> knows nothing about the app's logging, and a
+    /// seam that is a single <c>Action</c> stays testable without one.
+    ///
+    /// <para><b>This exists because the catch below is otherwise perfectly silent.</b> A
+    /// provider that throws on every poll is indistinguishable here from one that has no data
+    /// — both become <see cref="UsageSnapshot.None"/> and the chain moves on. Measured in the
+    /// field: transcript ingestion had been failing on every poll for five days behind this
+    /// catch while the panel showed live percentages from a sibling provider and the support
+    /// bundle reported <c>status : Ok</c>. Nothing anywhere named the failing provider,
+    /// because nothing was asked to.</para>
+    /// </summary>
+    public Action<string>? Log { get; init; }
+
     /// <param name="providers">
     /// The sources to consult. Order is a tie-break only — <see cref="MoreAccurate"/> decides
     /// within a tier, and falls back to this order when two snapshots are equally informative
@@ -35,7 +51,7 @@ public sealed class CompositeUsageProvider : IUsageProvider
 
     public UsageSnapshot GetSnapshot(DateTimeOffset utcNow)
     {
-        var snapshots = _providers.Select(p => SafeGetSnapshot(p, utcNow)).ToList();
+        var snapshots = _providers.Select(p => SafeGetSnapshot(this, p, utcNow)).ToList();
 
         foreach (var tier in new[] { DataSource.Live, DataSource.Stale, DataSource.Estimate })
         {
@@ -101,15 +117,24 @@ public sealed class CompositeUsageProvider : IUsageProvider
     /// A provider that throws (e.g. one backed by a corrupt local store — issue #16)
     /// must not blank the whole display. Treat its failure as "no data" so the chain
     /// falls through to the next source instead of propagating.
+    ///
+    /// <para><b>Degrading quietly is right; degrading invisibly is not.</b> The swallow stays
+    /// — this is a monitoring tool and one bad provider must not take the panel down — but it
+    /// now says what it caught and which provider it came from. Without that line a provider
+    /// failing on every poll for days looks exactly like a provider with nothing to report,
+    /// from inside the app and from a support bundle alike.</para>
     /// </summary>
-    private static UsageSnapshot SafeGetSnapshot(IUsageProvider provider, DateTimeOffset utcNow)
+    private static UsageSnapshot SafeGetSnapshot(
+        CompositeUsageProvider owner, IUsageProvider provider, DateTimeOffset utcNow)
     {
         try
         {
             return provider.GetSnapshot(utcNow);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            owner.Log?.Invoke(
+                $"provider {provider.GetType().Name} FAILED {ex.GetType().Name}: {ex.Message}");
             return UsageSnapshot.None;
         }
     }
