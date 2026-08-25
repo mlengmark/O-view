@@ -102,6 +102,15 @@ public sealed class UsageEngine : IDisposable
     /// <summary>Most recent snapshot — what the panel opens with.</summary>
     public UsageSnapshot Latest { get; private set; } = UsageSnapshot.None;
 
+    /// <summary>
+    /// The rollup store as this engine sees it, for the support bundle.
+    ///
+    /// <para>Exposed so a bundle produced by the <i>running</i> app reports the store through
+    /// the connection that app is actually using, rather than through one opened for the
+    /// occasion. Those two should agree; when they do not, that is the finding.</para>
+    /// </summary>
+    public RollupStoreReport InspectStore() => _store.Inspect();
+
     /// <summary>Current persisted settings. Mutated only through <see cref="SetNotifyOnThreshold"/>.</summary>
     public TraySettings Settings { get; private set; }
 
