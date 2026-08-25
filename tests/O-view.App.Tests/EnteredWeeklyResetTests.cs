@@ -128,4 +128,56 @@ public class EnteredWeeklyResetTests
         Assert.Null(engine.Latest.WeeklyResetAtUtc);
         Assert.Equal(DataSource.None, engine.Latest.Source);
     }
+
+    /// <summary>
+    /// Both cadences must decorate the snapshot the same way, or the difference shows up as a
+    /// blink.
+    ///
+    /// <para>The regression, shipped in v0.6.24: ADR-0014 moved the weekly reset out of
+    /// <c>PlanHistoryProvider</c> and into the engine, but only the full poll applied it. The
+    /// plan-history cadence publishes straight from the provider, so every 20 seconds it
+    /// replaced a snapshot that had a weekly reset with one that did not, and the 60-second
+    /// poll put it back. Measured on a real machine as consecutive tooltips reading
+    /// <c>7d: 13%</c> and <c>7d: 13% · resets Mon 22:59</c>.</para>
+    ///
+    /// <para><c>PublishPlanHistory</c> already guards this shape for the <i>percentages</i>,
+    /// which is why the same flicker arrived through the reset instead.</para>
+    /// </summary>
+    [Fact]
+    public void ThePlanOnlyCadencePublishesTheWeeklyResetToo()
+    {
+        using var dir = new TempDir();
+
+        // A real plan-history file, so the plan-only cadence has something authoritative to
+        // publish — it drops anything that is not (see PublishPlanHistory).
+        var planPath = dir.File("plan-usage-history.json");
+        var sampledAt = T0.AddMinutes(-2).ToUnixTimeMilliseconds();
+        File.WriteAllText(planPath,
+            $"{{\"version\":2,\"samples\":[{{\"t\":{sampledAt},\"org\":\"org-a\","
+            + "\"u\":{\"fh\":23,\"sd\":13}}]}");
+
+        new TraySettings(WeeklyResetDay: Entry.DayText, WeeklyResetTime: Entry.TimeText)
+            .Save(dir.File("settings.json"));
+
+        using var engine = new UsageEngine(new UsageEngineOptions
+        {
+            Clock = new FakeClock(T0),
+            PlanHistoryPath = planPath,
+            RollupDbPath = dir.File("usage.db"),
+            WeeklyResetAnchorPath = dir.File("weekly-reset.json"),
+            SettingsPath = dir.File("settings.json"),
+        });
+
+        var timers = new FakeTimerFactory();
+        engine.Start(timers);
+
+        var afterFullPoll = engine.Latest.WeeklyResetAtUtc;
+        Assert.NotNull(afterFullPoll);
+
+        // The tick that used to blank it.
+        timers.PlanPoll.Tick();
+
+        Assert.Equal(afterFullPoll, engine.Latest.WeeklyResetAtUtc);
+        Assert.Equal(TimeSpan.Zero, engine.Latest.WeeklyResetUncertainty);
+    }
 }
