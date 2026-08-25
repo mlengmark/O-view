@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using OView.Core.Models;
 using OView.Core.Providers.PlanHistory;
 
@@ -452,6 +453,39 @@ public class PlanHistoryProviderTests : IDisposable
             earliestActivity: (_, _) => throw new InvalidOperationException("store is busy"));
 
         Assert.Equal(firstSeen.AddHours(5), provider.GetSnapshot(Now).SessionResetAtUtc);
+    }
+
+    /// <summary>
+    /// The same guarantee, for the exception the real delegate actually throws — and the one
+    /// the test above did not cover.
+    ///
+    /// <para>In production <c>earliestActivity</c> is <c>RollupStore.EarliestRequestBetween</c>,
+    /// so a store fault surfaces as <see cref="SqliteException"/>. The catch here used to be
+    /// filtered to <c>IOException or InvalidOperationException</c>, which that is neither, so
+    /// it escaped <c>GetSnapshot</c> entirely and took the percentages with it — figures read
+    /// from Claude Desktop's file that do not depend on the rollup store in any way. The
+    /// rebuildable cache failing is supposed to cost the token tiles; instead it silently cost
+    /// the session gauge as well.</para>
+    ///
+    /// <para>The suite missed it because the existing test threw the one exception the filter
+    /// happened to name. This one asserts the whole snapshot survives, not just the reset.</para>
+    /// </summary>
+    [Fact]
+    public void AStoreFaultInTheActivityLookupDoesNotBlankThePercentages()
+    {
+        var firstSeen = Now.AddMinutes(-5);
+        var path = WriteSamples(
+            (Now.AddMinutes(-20), "org-a", 0, 6),
+            (firstSeen, "org-a", 9, 7));
+        var provider = new PlanHistoryProvider(path,
+            earliestActivity: (_, _) =>
+                throw new SqliteException("SQLITE_CORRUPT: database disk image is malformed", 11));
+
+        var snapshot = provider.GetSnapshot(Now);
+
+        Assert.Equal(9, snapshot.SessionPercent);
+        Assert.Equal(7, snapshot.WeeklyPercent);
+        Assert.Equal(firstSeen.AddHours(5), snapshot.SessionResetAtUtc);
     }
 
     // ── the entered weekly reset (issue #186) ───────────────────────────────────────

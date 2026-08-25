@@ -7,9 +7,36 @@ namespace OView.App.Tests;
 /// <summary>A clock the test moves by hand, so cadence and windows are exercised without waiting.</summary>
 public sealed class FakeClock(DateTimeOffset start) : IClock
 {
-    public DateTimeOffset UtcNow { get; private set; } = start;
+    private DateTimeOffset _now = start;
 
-    public void Advance(TimeSpan by) => UtcNow += by;
+    /// <summary>
+    /// Thrown by the next read of <see cref="UtcNow"/>, then cleared.
+    ///
+    /// <para>This is the only way a test can produce the failure that matters most to the
+    /// poll runner: a read that throws <i>outright</i> rather than returning a failure
+    /// result. Every provider-level fake throws from inside the read's own try and is
+    /// caught there, which is precisely why the gate-wedge bug survived a suite that
+    /// already had a "failed read" test. The engine reads the clock as the first statement
+    /// of its full poll, before that try — so this stands in for anything a read touches
+    /// before it is guarded.</para>
+    /// </summary>
+    public Exception? ThrowOnNext { get; set; }
+
+    public DateTimeOffset UtcNow
+    {
+        get
+        {
+            if (ThrowOnNext is { } ex)
+            {
+                ThrowOnNext = null;
+                throw ex;
+            }
+
+            return _now;
+        }
+    }
+
+    public void Advance(TimeSpan by) => _now += by;
 }
 
 /// <summary>
@@ -164,9 +191,22 @@ public sealed class FakeProvider : IUsageProvider
 /// <summary>Captures log lines so a test can assert what was recorded without a file.</summary>
 public sealed class ListLog : IAppLog
 {
-    public List<string> Lines { get; } = [];
+    private readonly List<string> _lines = [];
 
-    public void Write(string message) => Lines.Add(message);
+    /// <summary>
+    /// A snapshot, taken under the lock. The engine writes from the thread pool while the
+    /// test reads from its own thread, so handing out the live list would be a data race —
+    /// and one that shows up as an intermittent failure rather than an error.
+    /// </summary>
+    public IReadOnlyList<string> Lines
+    {
+        get { lock (_lines) { return [.. _lines]; } }
+    }
+
+    public void Write(string message)
+    {
+        lock (_lines) { _lines.Add(message); }
+    }
 }
 
 /// <summary>
