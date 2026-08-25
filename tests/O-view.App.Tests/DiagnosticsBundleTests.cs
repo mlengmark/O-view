@@ -24,16 +24,18 @@ public class DiagnosticsBundleTests : IDisposable
     private string Build(
         DiagnosticsEnvironment environment,
         CorruptBackupReport? corruptBackups = null,
-        IReadOnlyList<string>? logTail = null) =>
+        IReadOnlyList<string>? logTail = null,
+        RollupStoreReport? store = null) =>
         DiagnosticsBundle.Build(
             environment,
             PlanHistoryDiagnostics.Inspect(_dir.File("absent.json")),
             TranscriptScopeReport.Inspect(null, []),
             account: null,
-            new WeeklyResetAnchor(_dir.File("weekly-resets.json")),
+            new WeeklyResetAnchor(_dir.File("weekly-reset.json")),
             new DateTimeOffset(2026, 8, 2, 12, 0, 0, TimeSpan.Zero),
             corruptBackups,
-            logTail);
+            logTail,
+            store);
 
     private static DiagnosticsEnvironment Windows => new("0.6.0", "WindowsInstaller");
 
@@ -196,6 +198,54 @@ public class DiagnosticsBundleTests : IDisposable
             DateTimeOffset.UnixEpoch);
 
         Assert.Contains("weekly anchor", bundle, StringComparison.Ordinal);
+    }
+
+    // ── the rollup store ────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The store section, and specifically which reader produced it. A bundle from the running
+    /// app reports the store through the connection that app holds; <c>--diagnose</c> opens its
+    /// own. Printing which is what turns a disagreement between them into evidence.
+    /// </summary>
+    [Fact]
+    public void TheStoreSectionNamesItsReaderAndWhatItFound()
+    {
+        var bundle = Build(Windows, store: new RollupStoreReport(
+            Path: @"C:\store\usage.db",
+            Origin: RollupStoreReport.LiveInstance,
+            FileBytes: 1_183_744,
+            WalBytes: 2_575_032,
+            JournalMode: "wal",
+            Integrity: "ok",
+            WritesAccepted: true,
+            Failure: null,
+            LedgerRows: 5_072,
+            FirstDay: "2026-07-17",
+            LastDay: "2026-08-20",
+            NewestTimestamp: "2026-08-20T19:21:47Z",
+            TrackedFiles: 32,
+            FilesBehind: 2,
+            UnreadBytes: 409_501,
+            FilesGone: 2));
+
+        Assert.Contains("rollup store", bundle, StringComparison.Ordinal);
+        Assert.Contains(RollupStoreReport.LiveInstance, bundle, StringComparison.Ordinal);
+        Assert.Contains("5,072 row(s)", bundle, StringComparison.Ordinal);
+        Assert.Contains("2 behind by 409,501 bytes", bundle, StringComparison.Ordinal);
+        Assert.Contains("writes accepted", bundle, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A store that could not be read says so. An omitted section is indistinguishable from one
+    /// that failed to render, which is the ambiguity this whole bundle exists to remove.
+    /// </summary>
+    [Fact]
+    public void AStoreThatWasNotInspectedSaysSoRatherThanVanishing()
+    {
+        var bundle = Build(Windows);
+
+        Assert.Contains("rollup store", bundle, StringComparison.Ordinal);
+        Assert.Contains("unreadable", bundle, StringComparison.Ordinal);
     }
 
     // ── the recent log ──────────────────────────────────────────────────────────────

@@ -495,10 +495,21 @@ public partial class App : System.Windows.Application
     /// the shell and cannot be absent — so those fields are omitted rather than padded with
     /// "n/a".
     /// </summary>
-    private static string BuildDiagnostics() =>
-        DiagnosticsBundle.Build(new DiagnosticsEnvironment(
+    private static string BuildDiagnostics()
+    {
+        var environment = new DiagnosticsEnvironment(
             Version: UpdateService.CurrentVersion,
-            InstallKind: UpdateService.CurrentInstallKind.ToString()));
+            InstallKind: UpdateService.CurrentInstallKind.ToString());
+
+        // When there is a running engine, the store is read through the connection that engine
+        // is actually using — so the bundle reports what the app believes rather than what a
+        // reader opened for the occasion finds. The --diagnose hook runs before the engine
+        // exists and takes the other path, and the two label themselves differently on purpose.
+        var engine = ((App?)Current)?._engine;
+        return engine is null
+            ? DiagnosticsBundle.Build(environment)
+            : DiagnosticsBundle.Build(environment, engine.InspectStore());
+    }
 
     /// <summary>
     /// Quiet check: only *notifies* when a newer release exists, and only once per version

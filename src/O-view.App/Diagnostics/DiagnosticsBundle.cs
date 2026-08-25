@@ -62,7 +62,17 @@ public static class DiagnosticsBundle
     public static string Build(DiagnosticsEnvironment environment) =>
         Build(environment, PlanHistoryDiagnostics.Inspect(), TranscriptScopeReport.Inspect(),
             ClaudeAccount.TryRead(), new WeeklyResetAnchor(), DateTimeOffset.UtcNow,
-            CorruptBackups.Inspect(), FileLog.Tail());
+            CorruptBackups.Inspect(), FileLog.Tail(), RollupStoreReport.Inspect());
+
+    /// <summary>
+    /// The bundle as the <b>running</b> app sees it: identical except that the store is read
+    /// through the connection the app already holds. See <see cref="RollupStoreReport.Origin"/>
+    /// for why that distinction is worth a whole parameter.
+    /// </summary>
+    public static string Build(DiagnosticsEnvironment environment, RollupStoreReport store) =>
+        Build(environment, PlanHistoryDiagnostics.Inspect(), TranscriptScopeReport.Inspect(),
+            ClaudeAccount.TryRead(), new WeeklyResetAnchor(), DateTimeOffset.UtcNow,
+            CorruptBackups.Inspect(), FileLog.Tail(), store);
 
     /// <summary>Overload taking every input explicitly, so the layout is testable.</summary>
     public static string Build(
@@ -73,7 +83,8 @@ public static class DiagnosticsBundle
         WeeklyResetAnchor weeklyReset,
         DateTimeOffset utcNow,
         CorruptBackupReport? corruptBackups = null,
-        IReadOnlyList<string>? logTail = null)
+        IReadOnlyList<string>? logTail = null,
+        RollupStoreReport? store = null)
     {
         var text = new StringBuilder();
         text.Append(planHistory.ToClipboardText(environment.Version));
@@ -84,6 +95,14 @@ public static class DiagnosticsBundle
         text.Append(scope.ToClipboardText());
         AppendWeeklyReset(text, weeklyReset, utcNow);
         AppendCorruptBackups(text, corruptBackups ?? CorruptBackupReport.Empty);
+
+        // Placed before the log tail so the store's state and the poll lines that produced it
+        // read together — "0 changed" means one thing beside a ledger that is current and
+        // quite another beside one that is five days stale.
+        text.Append((store ?? RollupStoreReport.Unavailable(
+            RollupStore.DefaultPath, RollupStoreReport.OpenedForReport, "not inspected"))
+            .ToClipboardText());
+
         AppendRecentLog(text, logTail ?? []);
 
         // The single funnel. Every field above, and every field added below it later, is

@@ -166,25 +166,30 @@ public sealed class RollupStore : IDisposable
     }
 
     /// <summary>
-    /// Weekly resets recorded by versions before ADR-0011, when this store doubled as the
-    /// weekly-reset log. It no longer does — that state is unrebuildable and this store
-    /// wipes itself on corruption, so it moved to <see cref="WeeklyResetLog"/>. This reader
-    /// stays so an upgrade can carry the old rows across; the table is never written again.
+    /// This store's own view of itself, read through the connection it already holds.
+    ///
+    /// <para><b>Deliberately not a fresh connection.</b> A separate reader answers "what is in
+    /// the file"; this answers "what does the running app believe is in the file", and the two
+    /// disagreeing is a finding rather than a detail. On the machine this was written for they
+    /// did disagree, repeatedly, about the same directory.</para>
+    ///
+    /// <para>Under the same lock as every other command here — <see cref="SqliteConnection"/>
+    /// is not thread-safe, and two commands on one handle corrupt the reader state and return
+    /// wrong numbers rather than throwing, which is the worst failure this app can have.</para>
     /// </summary>
-    public IReadOnlyList<DateTimeOffset> GetLegacyWeeklyResets()
+    public RollupStoreReport Inspect()
     {
         lock (_gate)
         {
-            using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "SELECT reset_at FROM weekly_resets ORDER BY reset_at";
-            var result = new List<DateTimeOffset>();
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
+            try
             {
-                result.Add(DateTimeOffset.Parse(reader.GetString(0), CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal));
+                return RollupStoreReport.Read(_connection, _path, RollupStoreReport.LiveInstance);
             }
-            return result;
+            catch (Exception ex)
+            {
+                return RollupStoreReport.Unavailable(
+                    _path, RollupStoreReport.LiveInstance, $"{ex.GetType().Name}: {ex.Message}");
+            }
         }
     }
 
