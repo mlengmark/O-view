@@ -160,19 +160,27 @@ public sealed class WeeklyResetAnchor
         return drift <= TimeSpan.FromMinutes(1);
     }
 
-    /// <summary>Best-effort: a leftover observation log is litter, never an error.</summary>
+    /// <summary>
+    /// Best-effort: a leftover observation log is litter, never an error — but a swallowed
+    /// failure is how the last three releases' worth of bugs stayed invisible, so it says so
+    /// (issue #204). Observed on the development machine: the anchor stored successfully and
+    /// the legacy file was still there afterwards, with nothing recorded either way.
+    /// </summary>
     private void RemoveLegacyLog()
     {
+        var legacy = Path.Combine(Path.GetDirectoryName(_path)!, LegacyLogFileName);
+
         try
         {
-            var legacy = Path.Combine(Path.GetDirectoryName(_path)!, LegacyLogFileName);
             if (File.Exists(legacy))
             {
                 File.Delete(legacy);
+                Log?.Invoke($"removed superseded observation log: {LegacyLogFileName}");
             }
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
+            Log?.Invoke($"could not remove {LegacyLogFileName}: {ex.GetType().Name}: {ex.Message}");
         }
     }
 

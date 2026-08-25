@@ -467,7 +467,22 @@ public sealed class UsageEngine : IDisposable
     {
         try
         {
-            return _planHistory?.GetSnapshot(_clock.UtcNow) ?? UsageSnapshot.None;
+            var utcNow = _clock.UtcNow;
+            var snapshot = _planHistory?.GetSnapshot(utcNow) ?? UsageSnapshot.None;
+
+            // The same two folds the full poll applies, in the same order, because both
+            // cadences publish to the same display.
+            //
+            // Plan history stopped producing a weekly reset of its own under ADR-0014, so
+            // without this the 20-second cadence publishes a snapshot with no weekly time and
+            // the 60-second one puts it back: the reset blinks out and returns, twice a
+            // minute. Measured in the field on v0.6.24 — "7d: 13%" alternating with
+            // "7d: 13% · resets Mon 22:59" in consecutive tooltips.
+            //
+            // This is exactly the flicker PublishPlanHistory's own remarks warn about for the
+            // percentages, arriving through the reset instead. Two cadences that decorate a
+            // snapshot differently will always show the difference as a blink.
+            return WithReportedResets(WithWeeklyReset(snapshot, utcNow), utcNow);
         }
         catch (Exception ex)
         {
