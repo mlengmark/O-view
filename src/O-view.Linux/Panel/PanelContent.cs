@@ -97,7 +97,7 @@ public sealed class PanelContent : Border
         AddBar("Weekly", authoritative ? snapshot.WeeklyPercent : null,
             WeeklyResetLine(snapshot, authoritative, utcNow, local), placeholder);
 
-        AddTiles(stats, scopeReport);
+        AddTiles(stats, scopeReport, utcNow, local);
         AddGraph(stats);
 
         // Nothing recorded at all while the plan meters show real usage: the tiles are
@@ -202,7 +202,9 @@ public sealed class PanelContent : Border
         _root.Children.Add(block);
     }
 
-    private void AddTiles(PanelStatistics stats, TranscriptScopeReport? scopeReport)
+    private void AddTiles(
+        PanelStatistics stats, TranscriptScopeReport? scopeReport,
+        DateTimeOffset utcNow, TimeZoneInfo local)
     {
         var caveat = PanelText.Caveat(stats);
         var offPlan = stats.IsOffPlan;
@@ -210,6 +212,13 @@ public sealed class PanelContent : Border
         _root.Children.Add(TileRow(
             Tile(PanelText.TokensTodayLabel, UsageFormatter.Tokens(stats.TokensToday), PanelText.OffPlanNote(offPlan)),
             Tile(PanelText.EstTodayLabel(offPlan), UsageFormatter.Usd(stats.EstTodayUsd), PanelText.OffPlanNote(offPlan))));
+
+        // Where that UTC day actually starts on this machine. The Windows head hovers this
+        // (issue #210); this head carries no hover at all — and a tooltip is a second window
+        // for a compositor to refuse or to deactivate the panel under, which is the shape of
+        // bug #129 was. Standing text is the honest way to state it here, and one muted line
+        // is the price.
+        _root.Children.Add(Muted(PanelText.TodayUtcHint(utcNow, local)));
 
         _root.Children.Add(TileRow(
             Tile(PanelText.Tokens31DaysLabel, UsageFormatter.Tokens(stats.Tokens31Days), caveat),

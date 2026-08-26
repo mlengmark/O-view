@@ -260,10 +260,63 @@ public class PanelTextTests
     [Fact]
     public void TheTodayLabelFlipsWhenSpendStopsBeingHypothetical()
     {
-        Assert.Equal("Est. value today", PanelText.EstTodayLabel(offPlan: false));
-        Assert.Equal("Est. spend today", PanelText.EstTodayLabel(offPlan: true));
+        Assert.Equal("Est. value today (UTC)", PanelText.EstTodayLabel(offPlan: false));
+        Assert.Equal("Est. spend today (UTC)", PanelText.EstTodayLabel(offPlan: true));
         Assert.StartsWith("Est.", PanelText.EstTodayLabel(offPlan: true), StringComparison.Ordinal);
     }
+
+    // ── which day "today" is (issue #210) ───────────────────────────────────────────
+
+    /// <summary>
+    /// Both "today" tiles are computed over a UTC day, and both must say so. The number was
+    /// always right; the unqualified label was not, and a correct number under a wrong name
+    /// is the same rule-6 failure as a wrong one.
+    /// </summary>
+    [Fact]
+    public void BothTodayLabelsNameTheirTimezoneBasis()
+    {
+        Assert.Contains("(UTC)", PanelText.TokensTodayLabel, StringComparison.Ordinal);
+        Assert.Contains("(UTC)", PanelText.EstTodayLabel(offPlan: false), StringComparison.Ordinal);
+        Assert.Contains("(UTC)", PanelText.EstTodayLabel(offPlan: true), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// "(UTC)" on its own still leaves the reader working out which hours are counted, so the
+    /// hint states the boundary in their own clock. Asserted against a fixed zone and a fixed
+    /// clock, never the machine's — a test that reads whatever zone CI happens to sit in is
+    /// the hazard issue #212 is about.
+    /// </summary>
+    [Fact]
+    public void TheTodayHintNamesTheBoundaryInLocalTime()
+    {
+        // 23:26 UTC on the 25th is 01:26 local on the 26th at UTC+2 — the reported case.
+        // The UTC day open on that reading began 02:00 local, that same morning.
+        var hint = PanelText.TodayUtcHint(
+            new DateTimeOffset(2026, 8, 25, 23, 26, 0, TimeSpan.Zero), PlusTwo);
+
+        Assert.Contains("UTC day", hint, StringComparison.Ordinal);
+        Assert.Contains("02:00", hint, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// West of UTC the boundary lands on the previous local day, which is the half of the
+    /// bug that lasts longer: at UTC-8 a user spends eight hours of every evening watching
+    /// "today" accrue tomorrow's early hours.
+    /// </summary>
+    [Fact]
+    public void TheTodayHintFollowsTheZoneWestOfUtc()
+    {
+        var hint = PanelText.TodayUtcHint(
+            new DateTimeOffset(2026, 8, 25, 23, 26, 0, TimeSpan.Zero), MinusEight);
+
+        Assert.Contains("16:00", hint, StringComparison.Ordinal);
+    }
+
+    private static readonly TimeZoneInfo PlusTwo =
+        TimeZoneInfo.CreateCustomTimeZone("test-plus-2", TimeSpan.FromHours(2), "UTC+2", "UTC+2");
+
+    private static readonly TimeZoneInfo MinusEight =
+        TimeZoneInfo.CreateCustomTimeZone("test-minus-8", TimeSpan.FromHours(-8), "UTC-8", "UTC-8");
 
     /// <summary>
     /// Divergence is detected for the current session window only, so the 31-day heading

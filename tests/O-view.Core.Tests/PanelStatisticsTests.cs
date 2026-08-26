@@ -40,6 +40,10 @@ public class PanelStatisticsTests : IDisposable
     private static void Seed(RollupStore store, string id, string date, long output, string model = "claude-opus-4-8") =>
         store.Ingest([new TranscriptRecord(id, DateTimeOffset.Parse(date + "T10:00:00Z"), model, 0, 0, 0, output)]);
 
+    /// <summary>Seeds at a stated instant, for cases where the hour within the day is the point.</summary>
+    private void SeedAt(string id, string timestamp, long output, string model = "claude-opus-4-8") =>
+        _store.Ingest([new TranscriptRecord(id, DateTimeOffset.Parse(timestamp), model, 0, 0, 0, output)]);
+
     [Fact]
     public void PreInstallDays_AreMarkedNoData_NotZero()
     {
@@ -272,6 +276,31 @@ public class PanelStatisticsTests : IDisposable
     // TranscriptReader drops those records at parse time — so it pinned the behaviour of
     // a branch no user could reach. The real guarantee is end-to-end and now lives in
     // JsonlIngestionTests.SyntheticRecords_NeverReachTheStore_... (GitHub issue #57).
+
+    /// <summary>
+    /// Pins which day "today" selects, ahead of changing it (issue #210).
+    ///
+    /// <para>The reported reading: 23:26 UTC on 2026-08-25, which on a UTC+2 machine is 01:26
+    /// on the 26th. The tile selects the <b>UTC</b> day, so it counts work done at 10:00 UTC
+    /// — the reader's <i>yesterday</i> morning — alongside work done since their local
+    /// midnight. That is why the tile read 149.2M under the word "today".</para>
+    ///
+    /// <para>Written down while the label is the fix, so that moving to local-day buckets is a
+    /// visible change to an assertion rather than a silent change to a number.</para>
+    /// </summary>
+    [Fact]
+    public void TokensToday_IsTheUtcDay_NotTheReadersLocalDay()
+    {
+        var lateUtc = new DateTimeOffset(2026, 8, 25, 23, 26, 0, TimeSpan.Zero);
+
+        SeedAt("their-yesterday", "2026-08-25T10:00:00Z", 100);  // before local midnight at UTC+2
+        SeedAt("their-today", "2026-08-25T23:00:00Z", 400);      // after it
+
+        var stats = PanelStatistics.Build(_store, lateUtc);
+
+        Assert.Equal(new DateOnly(2026, 8, 25), stats.DailySeries[^1].DateUtc);
+        Assert.Equal(500, stats.TokensToday);
+    }
 
     [Fact]
     public void NothingPriceable_IsStillUnknown_NotZero()

@@ -91,15 +91,23 @@ public partial class StatTile : UserControl
     /// a breakdown from twenty minutes ago would be showing stale intent, and the tile
     /// is a transient view rather than a setting.
     /// </summary>
+    /// <param name="labelHint">
+    /// Hover copy for the label, or empty for none. Carried by the label rather than by the
+    /// tile: the tile's own hover band belongs to the breakdown segments, and the label is
+    /// what the hint is about — it qualifies what the figure measures (issue #210).
+    /// </param>
     public void Populate(
         string label,
         string value,
         string note,
         IReadOnlyList<ModelSlice> slices,
         BreakdownMeasure measure,
-        IReadOnlyList<string> colourOrder)
+        IReadOnlyList<string> colourOrder,
+        string labelHint = "")
     {
         LabelText.Text = label;
+        LabelText.ToolTip = labelHint.Length > 0 ? HoverCard.Text(this, labelHint) : null;
+        ApplyHoverTiming(LabelText);
         ValueText.Text = value;
         NoteText.Text = note;
         NoteText.Visibility = note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;

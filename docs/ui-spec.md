@@ -131,10 +131,14 @@ Percentages come from the OAuth provider. On JSONL fallback they are estimates a
 
 | Tile | Definition |
 |---|---|
-| Tokens today | Summed from rollup store, UTC day |
-| Est. value today | Tokens priced at public API rates |
+| Tokens today (UTC) | Summed from rollup store, UTC day |
+| Est. value today (UTC) | Tokens priced at public API rates |
 | Tokens · 31 days | Rollup store, trailing 31 days |
 | Est. value · 31 days | As above, priced |
+
+> **The two "today" tiles name their day** ([issue #210](https://github.com/mlengmark/O-view/issues/210)). The window is a UTC day, and for anyone not on UTC that is not what "today" means — at UTC+2 the tile spends the first two hours of every local day showing yesterday's usage, and west of UTC it runs the other way for longer. The number is right; the unqualified label was not, and a correct number under a wrong name is the same failure as a wrong one. `(UTC)` alone still leaves the reader working out which hours are covered, so the boundary is stated in their own clock too — hovered on Windows, standing text on Linux, which carries no hover.
+>
+> This is a stopgap. Bucketing by **local** day is the fix and comes with its own removal of `(UTC)`.
 
 > **"Spend" means estimated API-equivalent value, not money charged.** Within plan limits the marginal cost is £0. These tiles answer "what would this have cost on the API" and **must be labelled `Est.`** — presenting them as actual spend would be a fabricated number.
 
@@ -234,7 +238,7 @@ The panel carries the signal in **two independent registers**:
 **Live (current session window)** — the real-time divergence detector:
 
 1. **An amber banner** above the quota bars — the bars are correct but no longer the whole story, so the correction must appear before them, not after.
-2. **Relabels the value tile** from `Est. value today` to `Est. spend today` with an `incl. off-plan usage` note. The "not money charged" framing is only true for plan usage; off-plan work bills at API rates, so the label flips with the reality.
+2. **Relabels the value tile** from `Est. value today (UTC)` to `Est. spend today (UTC)` with an `incl. off-plan usage` note. The "not money charged" framing is only true for plan usage; off-plan work bills at API rates, so the label flips with the reality.
 
 A notification fires once per onset (edge-triggered, re-armed when it clears). When the plan limit is reached (≥99%) the wording changes: continued work bills beyond the plan by definition rather than by inference.
 

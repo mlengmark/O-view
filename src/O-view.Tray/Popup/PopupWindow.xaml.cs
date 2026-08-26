@@ -516,17 +516,22 @@ public partial class PopupWindow : Window, IFlyout
         // bills at API rates, so the label has to flip with it.
         var offPlan = stats.IsOffPlan;
 
+        // Both "today" tiles are bucketed by UTC date, so both say so — and both explain
+        // where that boundary falls on this machine, because "(UTC)" alone still leaves a
+        // reader working out which hours it covers (issue #210).
+        var todayHint = PanelText.TodayUtcHint(Now(TimeZoneInfo.Utc), TimeZoneInfo.Local);
+
         TileTokensToday.FormatSlice = s => FormatTokens(s.Tokens);
         TileTokensToday.Populate(
             PanelText.TokensTodayLabel, FormatTokens(stats.TokensToday), "",
-            stats.ModelsToday, BreakdownMeasure.Tokens, stats.ModelColourOrder);
+            stats.ModelsToday, BreakdownMeasure.Tokens, stats.ModelColourOrder, todayHint);
 
         TileEstToday.FormatSlice = s => FormatUsd(s.EstUsd);
         TileEstToday.Populate(
             PanelText.EstTodayLabel(offPlan),
             FormatUsd(stats.EstTodayUsd),
             PanelText.OffPlanNote(offPlan),
-            stats.ModelsToday, BreakdownMeasure.EstValue, stats.ModelColourOrder);
+            stats.ModelsToday, BreakdownMeasure.EstValue, stats.ModelColourOrder, todayHint);
 
         TileTokens31.FormatSlice = s => FormatTokens(s.Tokens);
         TileTokens31.Populate(
