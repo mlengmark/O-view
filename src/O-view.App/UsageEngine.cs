@@ -832,7 +832,7 @@ public sealed class UsageEngine : IDisposable
     public PanelStatistics BuildStatistics()
     {
         var utcNow = _clock.UtcNow;
-        var stats = PanelStatistics.Build(_store, utcNow);
+        var stats = PanelStatistics.Build(_store, utcNow, _options.DisplayZone);
         if (_planHistory is null)
         {
             return stats;

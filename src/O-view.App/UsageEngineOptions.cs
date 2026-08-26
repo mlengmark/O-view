@@ -73,6 +73,17 @@ public sealed record UsageEngineOptions
 
     public IClock Clock { get; init; } = SystemClock.Instance;
 
+    /// <summary>
+    /// The timezone the panel's daily figures are measured in — the reader's own, so "today"
+    /// means their today (issue #211).
+    ///
+    /// <para>Injectable for the same reason <see cref="Clock"/> is: a day-boundary assertion
+    /// that reads the machine's zone passes or fails by where CI happens to be, and passes
+    /// vacuously on a runner sitting in UTC. The pair is what pins a case — a fixed clock in a
+    /// zone that moves under it says nothing.</para>
+    /// </summary>
+    public TimeZoneInfo DisplayZone { get; init; } = TimeZoneInfo.Local;
+
     public IAppLog? Log { get; init; }
 
     /// <summary>Storage locations. Null means the real one.</summary>

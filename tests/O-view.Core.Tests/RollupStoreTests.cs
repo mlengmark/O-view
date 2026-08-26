@@ -22,8 +22,16 @@ public class RollupStoreTests : IDisposable
     private static TranscriptRecord Record(string id, string date, string model, long output) =>
         new(id, DateTimeOffset.Parse(date + "T12:00:00Z"), model, 10, 100, 200, output);
 
+    /// <summary>Every zone is named explicitly — none of these read the machine's (issue #211).</summary>
+    private static readonly TimeZoneInfo Utc = TimeZoneInfo.Utc;
+
+    private static readonly TimeZoneInfo PlusTwo =
+        TimeZoneInfo.CreateCustomTimeZone("test-plus-2", TimeSpan.FromHours(2), "UTC+2", "UTC+2");
+
+    private static DateTimeOffset At(string timestamp) => DateTimeOffset.Parse(timestamp);
+
     [Fact]
-    public void Rollups_GroupByUtcDateAndModel()
+    public void Rollups_GroupByDateAndModel()
     {
         _store.Ingest([
             Record("r1", "2026-07-20", "claude-opus-4-8", 100),
@@ -32,16 +40,16 @@ public class RollupStoreTests : IDisposable
             Record("r4", "2026-07-21", "claude-opus-4-8", 70),
         ]);
 
-        var rollups = _store.GetDailyRollups(new DateOnly(2026, 7, 20), new DateOnly(2026, 7, 21));
+        var rollups = _store.GetDailyRollups(At("2026-07-20T00:00:00Z"), At("2026-07-22T00:00:00Z"), Utc);
 
         Assert.Equal(3, rollups.Count);
-        var day1Opus = rollups.Single(r => r.DateUtc == new DateOnly(2026, 7, 20) && r.Model == "claude-opus-4-8");
+        var day1Opus = rollups.Single(r => r.Date == new DateOnly(2026, 7, 20) && r.Model == "claude-opus-4-8");
         Assert.Equal(150, day1Opus.OutputTokens);
         Assert.Equal(2, day1Opus.RequestCount);
     }
 
     [Fact]
-    public void DateRange_IsInclusiveAndExcludesOutside()
+    public void Range_IsHalfOpenAndExcludesOutside()
     {
         _store.Ingest([
             Record("r1", "2026-07-19", "m", 1),
@@ -49,9 +57,51 @@ public class RollupStoreTests : IDisposable
             Record("r3", "2026-07-21", "m", 4),
         ]);
 
-        var rollups = _store.GetDailyRollups(new DateOnly(2026, 7, 20), new DateOnly(2026, 7, 20));
+        var rollups = _store.GetDailyRollups(At("2026-07-20T00:00:00Z"), At("2026-07-21T00:00:00Z"), Utc);
 
         Assert.Equal(2, rollups.Sum(r => r.OutputTokens));
+    }
+
+    /// <summary>
+    /// The point of the whole change (issue #211): the bucket a request lands in follows the
+    /// caller's timezone, not the <c>utc_date</c> it was stored under. Same rows, same store,
+    /// two zones, two answers — and both are right for whoever is reading.
+    /// </summary>
+    [Fact]
+    public void Rollups_BucketByTheCallersDay_NotTheStoredUtcDate()
+    {
+        // 23:00Z on the 20th is 01:00 on the 21st at UTC+2.
+        _store.Ingest([new TranscriptRecord("late", At("2026-07-20T23:00:00Z"), "m", 0, 0, 0, 5)]);
+
+        var inUtc = _store.GetDailyRollups(At("2026-07-01T00:00:00Z"), At("2026-08-01T00:00:00Z"), Utc);
+        var inPlusTwo = _store.GetDailyRollups(At("2026-07-01T00:00:00Z"), At("2026-08-01T00:00:00Z"), PlusTwo);
+
+        Assert.Equal(new DateOnly(2026, 7, 20), Assert.Single(inUtc).Date);
+        Assert.Equal(new DateOnly(2026, 7, 21), Assert.Single(inPlusTwo).Date);
+    }
+
+    /// <summary>
+    /// Rows are grouped after the conversion, not before it: two UTC days that fall inside one
+    /// local day are one bucket, summed, not two rows that happen to share a date.
+    /// </summary>
+    [Fact]
+    public void Rollups_MergeAcrossAUtcBoundaryInsideOneLocalDay()
+    {
+        // Both of these are 2026-07-21 at UTC-5, either side of midnight UTC.
+        var minusFive = TimeZoneInfo.CreateCustomTimeZone(
+            "test-minus-5", TimeSpan.FromHours(-5), "UTC-5", "UTC-5");
+
+        _store.Ingest([
+            new TranscriptRecord("evening", At("2026-07-22T02:00:00Z"), "m", 0, 0, 0, 7),
+            new TranscriptRecord("morning", At("2026-07-21T14:00:00Z"), "m", 0, 0, 0, 3),
+        ]);
+
+        var rollups = _store.GetDailyRollups(At("2026-07-01T00:00:00Z"), At("2026-08-01T00:00:00Z"), minusFive);
+
+        var day = Assert.Single(rollups);
+        Assert.Equal(new DateOnly(2026, 7, 21), day.Date);
+        Assert.Equal(10, day.OutputTokens);
+        Assert.Equal(2, day.RequestCount);
     }
 
     // CoverageCount_ReportsDistinctRecordedDays went with CountRecordedDays (issue #142). It
@@ -95,7 +145,7 @@ public class RollupStoreTests : IDisposable
         {
             // A rebuilt, empty, healthy store — usable, with no leftover rows.
             store.Ingest([Record("r1", "2026-07-20", "claude-opus-4-8", 100)]);
-            Assert.Single(store.GetDailyRollups(new DateOnly(2026, 7, 20), new DateOnly(2026, 7, 20)));
+            Assert.Single(store.GetDailyRollups(At("2026-07-20T00:00:00Z"), At("2026-07-21T00:00:00Z"), Utc));
         }
 
         // The corrupt original was preserved for post-mortem, not silently destroyed.

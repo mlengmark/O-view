@@ -516,22 +516,20 @@ public partial class PopupWindow : Window, IFlyout
         // bills at API rates, so the label has to flip with it.
         var offPlan = stats.IsOffPlan;
 
-        // Both "today" tiles are bucketed by UTC date, so both say so — and both explain
-        // where that boundary falls on this machine, because "(UTC)" alone still leaves a
-        // reader working out which hours it covers (issue #210).
-        var todayHint = PanelText.TodayUtcHint(Now(TimeZoneInfo.Utc), TimeZoneInfo.Local);
-
+        // The "today" tiles carried a "(UTC)" hint for one release, while the figure was a UTC
+        // day under a local-time header (issue #210). The figure is the reader's own day now,
+        // so there is nothing left to qualify.
         TileTokensToday.FormatSlice = s => FormatTokens(s.Tokens);
         TileTokensToday.Populate(
             PanelText.TokensTodayLabel, FormatTokens(stats.TokensToday), "",
-            stats.ModelsToday, BreakdownMeasure.Tokens, stats.ModelColourOrder, todayHint);
+            stats.ModelsToday, BreakdownMeasure.Tokens, stats.ModelColourOrder);
 
         TileEstToday.FormatSlice = s => FormatUsd(s.EstUsd);
         TileEstToday.Populate(
             PanelText.EstTodayLabel(offPlan),
             FormatUsd(stats.EstTodayUsd),
             PanelText.OffPlanNote(offPlan),
-            stats.ModelsToday, BreakdownMeasure.EstValue, stats.ModelColourOrder, todayHint);
+            stats.ModelsToday, BreakdownMeasure.EstValue, stats.ModelColourOrder);
 
         TileTokens31.FormatSlice = s => FormatTokens(s.Tokens);
         TileTokens31.Populate(
@@ -727,7 +725,10 @@ public partial class PopupWindow : Window, IFlyout
         var col = width / series.Count;
         var globalMax = Math.Max(1, series.Max(d => d.TotalTokens));
 
-        var weeks = PlanWeeks.ForSeries(series, snapshot);
+        // The columns are LOCAL days (issue #211), so everything drawn over them has to be
+        // placed in the same frame: a gridline positioned as though every column were 24 UTC
+        // hours drifts against the bar it annotates from the DST change onwards.
+        var weeks = PlanWeeks.ForSeries(series, snapshot, TimeZoneInfo.Local);
 
         // Per-week peak, so colour intensity is normalised within each week. The week is
         // the PLAN's week wherever it is known, so the shading and the gridlines below
@@ -764,7 +765,7 @@ public partial class PopupWindow : Window, IFlyout
                     ToolTip = HoverCard.Figure(
                         this,
                         $"{FormatTokens(day.TotalTokens)} tokens",
-                        day.DateUtc.ToString("dddd d MMMM", CultureInfo.InvariantCulture)),
+                        day.Date.ToString("dddd d MMMM", CultureInfo.InvariantCulture)),
                 };
                 HoverCard.ApplyTiming(bar);
                 // Placed from the column centre, like the label below it, so the two
@@ -791,7 +792,7 @@ public partial class PopupWindow : Window, IFlyout
             var rotation = new RotateTransform(90);
             var label = new TextBlock
             {
-                Text = day.DateUtc.ToString("d MMM", CultureInfo.InvariantCulture),
+                Text = day.Date.ToString("d MMM", CultureInfo.InvariantCulture),
                 FontSize = 8,
                 Foreground = labelBrush,
                 RenderTransform = rotation,
@@ -831,12 +832,12 @@ public partial class PopupWindow : Window, IFlyout
     {
         var gridBrush = (Brush)FindResource("WarnText");
         var columnOf = series
-            .Select((day, index) => (day.DateUtc, index))
-            .ToDictionary(t => t.DateUtc, t => t.index);
+            .Select((day, index) => (day.Date, index))
+            .ToDictionary(t => t.Date, t => t.index);
 
         foreach (var boundary in weeks.Boundaries)
         {
-            if (!columnOf.TryGetValue(boundary.DayUtc, out var index))
+            if (!columnOf.TryGetValue(boundary.Day, out var index))
             {
                 continue;   // outside the plotted range
             }
@@ -880,11 +881,17 @@ public partial class PopupWindow : Window, IFlyout
     /// Where one week boundary lands on the chart: the day column it falls in, and how far
     /// through that column, since a plan reset happens at a time of day rather than at
     /// midnight.
+    ///
+    /// <para>Both answers are taken in the column's own frame — a <b>local</b> day, of
+    /// whatever length the timezone says it was (issue #211). Dividing by a flat 24 hours
+    /// would put the line up to an hour off its true position on the two DST days, and off in
+    /// the same direction for every day after them if the day boundaries were stepped that way
+    /// too.</para>
     /// </summary>
-    private readonly record struct WeekBoundary(DateTimeOffset AtUtc)
+    private readonly record struct WeekBoundary(DateTimeOffset AtUtc, TimeZoneInfo Zone)
     {
-        public DateOnly DayUtc => DateOnly.FromDateTime(AtUtc.UtcDateTime);
-        public double FractionOfDay => AtUtc.UtcDateTime.TimeOfDay / TimeSpan.FromDays(1);
+        public DateOnly Day => LocalDays.DateOf(AtUtc, Zone);
+        public double FractionOfDay => LocalDays.FractionThrough(AtUtc, Day, Zone);
     }
 
     /// <summary>
@@ -905,37 +912,45 @@ public partial class PopupWindow : Window, IFlyout
     private sealed class PlanWeeks
     {
         private readonly IReadOnlyList<DateTimeOffset> _boundaries;
+        private readonly TimeZoneInfo _zone;
 
-        private PlanWeeks(IReadOnlyList<DateTimeOffset> boundaries, bool isPlanDerived)
+        private PlanWeeks(IReadOnlyList<DateTimeOffset> boundaries, bool isPlanDerived, TimeZoneInfo zone)
         {
             _boundaries = boundaries;
+            _zone = zone;
             IsPlanDerived = isPlanDerived;
         }
 
         /// <summary>False when these are calendar weeks standing in for an unknown plan week.</summary>
         public bool IsPlanDerived { get; }
 
-        public IEnumerable<WeekBoundary> Boundaries => _boundaries.Select(b => new WeekBoundary(b));
+        public IEnumerable<WeekBoundary> Boundaries => _boundaries.Select(b => new WeekBoundary(b, _zone));
 
-        public static PlanWeeks ForSeries(IReadOnlyList<DayUsage> series, UsageSnapshot snapshot)
+        public static PlanWeeks ForSeries(
+            IReadOnlyList<DayUsage> series, UsageSnapshot snapshot, TimeZoneInfo zone)
         {
-            var fromUtc = new DateTimeOffset(series[0].DateUtc.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
-            var toUtc = new DateTimeOffset(series[^1].DateUtc.ToDateTime(TimeOnly.MaxValue), TimeSpan.Zero);
+            // The span the columns actually cover, taken from the timezone. The columns are
+            // local days now (issue #211), so their first and last instants are not local
+            // midnight interpreted as UTC — which is what these two lines used to say, and
+            // what would clip or over-collect boundaries by the offset.
+            var fromUtc = LocalDays.StartUtc(series[0].Date, zone);
+            var toUtc = LocalDays.EndUtc(series[^1].Date, zone);
 
             if (snapshot.WeeklyResetAtUtc is { } next && snapshot.WeeklyResetPeriod is { } period)
             {
                 return new PlanWeeks(
                     WeeklyWindow.BoundariesWithin(next, period, fromUtc, toUtc),
-                    isPlanDerived: true);
+                    isPlanDerived: true,
+                    zone);
             }
 
-            // Fallback: midnight at the start of each Monday in range.
+            // Fallback: the start of each local Monday in range.
             var mondays = series
-                .Select(d => d.DateUtc)
+                .Select(d => d.Date)
                 .Where(d => d.DayOfWeek == DayOfWeek.Monday)
-                .Select(d => new DateTimeOffset(d.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero))
+                .Select(d => LocalDays.StartUtc(d, zone))
                 .ToList();
-            return new PlanWeeks(mondays, isPlanDerived: false);
+            return new PlanWeeks(mondays, isPlanDerived: false, zone);
         }
 
         /// <summary>
@@ -949,8 +964,8 @@ public partial class PopupWindow : Window, IFlyout
         /// </summary>
         public int IndexOf(DayUsage day)
         {
-            var midday = new DateTimeOffset(day.DateUtc.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero)
-                .AddHours(12);
+            var start = LocalDays.StartUtc(day.Date, _zone);
+            var midday = start + (LocalDays.EndUtc(day.Date, _zone) - start) / 2;
             return _boundaries.Count(boundary => boundary <= midday);
         }
     }

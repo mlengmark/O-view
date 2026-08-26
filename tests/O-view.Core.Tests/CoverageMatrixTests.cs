@@ -95,7 +95,8 @@ public class CoverageMatrixTests : IDisposable
     private long IngestedTokens()
     {
         new JsonlUsageProvider(_store, ProjectsRoot, [CoworkRoot]).GetSnapshot(DateTimeOffset.UtcNow);
-        return _store.GetDailyRollups(DateOnly.MinValue, DateOnly.MaxValue).Sum(r => r.TotalTokens);
+        return _store.GetDailyRollups(DateTimeOffset.MinValue, DateTimeOffset.MaxValue, TimeZoneInfo.Utc)
+            .Sum(r => r.TotalTokens);
     }
 
     private bool PercentagesAvailable() =>

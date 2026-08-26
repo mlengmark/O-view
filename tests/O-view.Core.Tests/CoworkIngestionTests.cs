@@ -41,7 +41,8 @@ public class CoworkIngestionTests : IDisposable
         $"\"cache_creation_input_tokens\":100,\"cache_read_input_tokens\":200,\"output_tokens\":{output}}}}}}}";
 
     private long TotalOutputTokens() =>
-        _store.GetDailyRollups(DateOnly.MinValue, DateOnly.MaxValue).Sum(r => r.OutputTokens);
+        _store.GetDailyRollups(DateTimeOffset.MinValue, DateTimeOffset.MaxValue, TimeZoneInfo.Utc)
+            .Sum(r => r.OutputTokens);
 
     /// <summary>Builds a realistic Cowork layout: sandbox home, empty projects dir, audit log.</summary>
     private string WriteCoworkSession(string sessionId, params string[] lines)

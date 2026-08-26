@@ -97,7 +97,7 @@ public sealed class PanelContent : Border
         AddBar("Weekly", authoritative ? snapshot.WeeklyPercent : null,
             WeeklyResetLine(snapshot, authoritative, utcNow, local), placeholder);
 
-        AddTiles(stats, scopeReport, utcNow, local);
+        AddTiles(stats, scopeReport);
         AddGraph(stats);
 
         // Nothing recorded at all while the plan meters show real usage: the tiles are
@@ -202,9 +202,7 @@ public sealed class PanelContent : Border
         _root.Children.Add(block);
     }
 
-    private void AddTiles(
-        PanelStatistics stats, TranscriptScopeReport? scopeReport,
-        DateTimeOffset utcNow, TimeZoneInfo local)
+    private void AddTiles(PanelStatistics stats, TranscriptScopeReport? scopeReport)
     {
         var caveat = PanelText.Caveat(stats);
         var offPlan = stats.IsOffPlan;
@@ -213,13 +211,9 @@ public sealed class PanelContent : Border
             Tile(PanelText.TokensTodayLabel, UsageFormatter.Tokens(stats.TokensToday), PanelText.OffPlanNote(offPlan)),
             Tile(PanelText.EstTodayLabel(offPlan), UsageFormatter.Usd(stats.EstTodayUsd), PanelText.OffPlanNote(offPlan))));
 
-        // Where that UTC day actually starts on this machine. The Windows head hovers this
-        // (issue #210); this head carries no hover at all — and a tooltip is a second window
-        // for a compositor to refuse or to deactivate the panel under, which is the shape of
-        // bug #129 was. Standing text is the honest way to state it here, and one muted line
-        // is the price.
-        _root.Children.Add(Muted(PanelText.TodayUtcHint(utcNow, local)));
-
+        // A muted line naming the UTC day's boundary stood here for one release, because the
+        // tiles were a UTC day and this head has no hover to put the caveat behind (issue
+        // #210). The tiles are the reader's own day now, so the line has nothing to say.
         _root.Children.Add(TileRow(
             Tile(PanelText.Tokens31DaysLabel, UsageFormatter.Tokens(stats.Tokens31Days), caveat),
             Tile(PanelText.Est31DaysLabel, UsageFormatter.Usd(stats.Est31DaysUsd), caveat)));

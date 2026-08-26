@@ -3,13 +3,18 @@ using OView.Core.Storage;
 
 namespace OView.Core.Models;
 
-/// <summary>One graph slot: a UTC day and what is honestly known about it.</summary>
+/// <summary>One graph slot: a day the reader had, and what is honestly known about it.</summary>
+/// <param name="Date">
+/// The <b>local</b> calendar date, so each bar is the day the user remembers having rather
+/// than a UTC day shifted against it (issue #211). Local days are 23 or 25 hours twice a
+/// year; the boundaries come from <see cref="LocalDays"/> rather than from 24-hour steps.
+/// </param>
 /// <param name="PreInstall">
 /// True for days before the first recorded day. These have NO data, not zero data —
 /// the UI renders them as an explicit empty region, never zero-height bars
 /// (ADR-0006; CLAUDE.md rule 6).
 /// </param>
-public sealed record DayUsage(DateOnly DateUtc, long TotalTokens, bool PreInstall);
+public sealed record DayUsage(DateOnly Date, long TotalTokens, bool PreInstall);
 
 /// <summary>
 /// Everything the popup's tiles and graph need, computed from the rollup store.
@@ -49,9 +54,9 @@ public sealed record PanelStatistics(
 
     /// <summary>
     /// Per-model split behind <see cref="TokensToday"/> and <see cref="EstTodayUsd"/>
-    /// (GitHub issue #37). The rollup store already keeps its ledger at (UTC date ×
-    /// model) grain, so this costs one extra grouping over rollups already in hand —
-    /// no second query, and nothing to fetch when a tile is clicked.
+    /// (GitHub issue #37). The rollups already arrive at (date × model) grain, so this
+    /// costs one extra grouping over figures in hand — no second query, and nothing to
+    /// fetch when a tile is clicked.
     /// </summary>
     public IReadOnlyList<ModelSlice> ModelsToday { get; init; } = [];
 
@@ -125,22 +130,35 @@ public sealed record PanelStatistics(
         };
     }
 
-    public static PanelStatistics Build(RollupStore store, DateTimeOffset utcNow, int windowDays = 31)
+    /// <param name="zone">
+    /// The timezone the window is measured in — <b>always passed, never defaulted</b>.
+    /// Reaching for <see cref="TimeZoneInfo.Local"/> in here would make every figure depend on
+    /// whichever machine ran the code, which in the test suite means assertions that pass or
+    /// fail by geography (the hazard issue #212 is about). The heads and
+    /// <c>UsageEngineOptions</c> name it at the edge, where a display concern belongs.
+    /// </param>
+    public static PanelStatistics Build(
+        RollupStore store, DateTimeOffset utcNow, TimeZoneInfo zone, int windowDays = 31)
     {
-        var today = DateOnly.FromDateTime(utcNow.UtcDateTime);
+        var today = LocalDays.DateOf(utcNow, zone);
         var windowStart = today.AddDays(-(windowDays - 1));
 
-        var rollups = store.GetDailyRollups(windowStart, today);
-        var todayRollups = rollups.Where(r => r.DateUtc == today).ToList();
+        // Half-open over instants rather than a pair of dates: the window is 31 LOCAL days,
+        // and the run of UTC time it covers is 30 × 24h plus however long the two DST days in
+        // it actually were.
+        var rollups = store.GetDailyRollups(
+            LocalDays.StartUtc(windowStart, zone), LocalDays.EndUtc(today, zone), zone);
+        var todayRollups = rollups.Where(r => r.Date == today).ToList();
 
-        // First recorded day across ALL history, not just the window — a store older
-        // than the window means no day in the window is pre-install.
-        var firstRecorded = store.GetDailyRollups(DateOnly.MinValue, today) is { Count: > 0 } all
-            ? all.Min(r => r.DateUtc)
+        // Where recorded history begins, read as an instant and dated here — a store older
+        // than the window means no day in the window is pre-install. Asking the ledger for its
+        // oldest row replaces re-aggregating all of history to take the minimum of it.
+        var firstRecorded = store.EarliestActivityUtc() is { } earliest
+            ? LocalDays.DateOf(earliest, zone)
             : (DateOnly?)null;
 
         var byDate = rollups
-            .GroupBy(r => r.DateUtc)
+            .GroupBy(r => r.Date)
             .ToDictionary(g => g.Key, g => g.Sum(r => r.TotalTokens));
 
         var series = new List<DayUsage>(windowDays);
