@@ -21,11 +21,34 @@ public static class PlanHistoryFile
         PlanHistoryLocator.Locate() ?? PlanHistoryLocator.CanonicalPath;
 
     /// <summary>
+    /// A path that names no file, for a caller that has not said which plan history it means
+    /// (<a href="https://github.com/mlengmark/O-view/issues/212">issue #212</a>).
+    ///
+    /// <para><b>Why a sentinel rather than <c>null</c>.</b> Null means "use the real machine's
+    /// file", and that default is what reached past an injected provider chain into the
+    /// developer's own Claude Desktop usage — so the test suite's result depended on how much
+    /// Claude that person had recently used. An explicit "no file" is the same fix
+    /// <c>CachedUtilizationProvider(() =&gt; null)</c> already applies one seam over, where the
+    /// identical hazard was solved and the reasoning written down.</para>
+    ///
+    /// <para>Reads from it return nothing, exactly as a missing file does — a provider built on
+    /// it is inert rather than absent, so nothing downstream has to special-case it.</para>
+    /// </summary>
+    public const string NoFile = "";
+
+    /// <summary>
     /// Parse the file into validated samples ordered by time. Returns an empty list on
     /// any failure — missing file, unreadable file, malformed JSON. Never throws.
     /// </summary>
     public static IReadOnlyList<PlanHistorySample> Read(string path)
     {
+        // Stated rather than left to the FileStream throwing on it: "no file" is a decision the
+        // caller made, and it should read as one here (issue #212).
+        if (path == NoFile)
+        {
+            return [];
+        }
+
         try
         {
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);

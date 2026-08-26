@@ -107,10 +107,23 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// </summary>
     public Action<string>? Log { get; init; }
 
+    /// <summary>
+    /// The file this provider actually resolved to — <see cref="PlanHistoryFile.NoFile"/> when
+    /// it was built to read nothing.
+    ///
+    /// <para>Exposed so the resolution can be <i>asserted</i> rather than inferred from the
+    /// figures it produces. The bug in issue #212 was silent precisely because it only showed
+    /// as an outcome: eight tests failed for hours, then passed unchanged, and the difference
+    /// was how much Claude the developer had used. A test can now say "this must not be the
+    /// real machine's file" and fail on the fact rather than on the weather.</para>
+    /// </summary>
+    public string Path { get; }
+
     public PlanHistoryProvider(string? path = null, string? orgUuid = null, TimeSpan? freshness = null,
         Func<DateTimeOffset, DateTimeOffset, DateTimeOffset?>? earliestActivity = null)
     {
         _path = path ?? PlanHistoryFile.DefaultPath;
+        Path = _path;
         _orgUuid = orgUuid;
         _freshness = freshness ?? DefaultFreshness;
         _earliestActivity = earliestActivity;
