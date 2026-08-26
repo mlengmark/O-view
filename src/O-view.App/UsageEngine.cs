@@ -139,6 +139,16 @@ public sealed class UsageEngine : IDisposable
 
         _store = new RollupStore(_options.RollupDbPath);
 
+        // What stood beside the database when it opened (issue #213). Logged whenever it is
+        // anything other than the ordinary case, because a guard that quarantines a file
+        // without saying so is the same class of problem as the silent rollback it prevents —
+        // and "the store was open elsewhere, so nothing was checked" has to be as visible as a
+        // quarantine, or an unmade check reads as a clean one.
+        if (_store.JournalGuard.IsNoteworthy)
+        {
+            _log?.Write($"rollup journal: {_store.JournalGuard.Describe()}");
+        }
+
         // Observed weekly resets accrue in their own durable file, not in the rollup store
         // (ADR-0011): the store is a rebuildable cache that wipes itself on corruption,
         // whereas a missed reset costs a week. Older builds kept them in the store, so any

@@ -48,10 +48,26 @@ public sealed class RollupStore : IDisposable
     /// </summary>
     private readonly Lock _gate = new();
 
+    /// <summary>
+    /// What stood beside the database when this store opened it (issue #213).
+    ///
+    /// <para>Surfaced rather than kept private: a defence that acts silently is the same class
+    /// of problem as the thing it defends against, so this reaches the log and the diagnostics
+    /// bundle. It also carries the case where the check could <b>not</b> be made, which a
+    /// reader needs in order to know the difference between "the journal was fine" and "nobody
+    /// established anything about the journal".</para>
+    /// </summary>
+    public StaleJournalCheck JournalGuard { get; }
+
     public RollupStore(string? dbPath = null)
     {
         _path = dbPath ?? DefaultPath;
         Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+
+        // BEFORE the connection, and this ordering is the whole defence: SQLite recovers from
+        // a -wal as it opens the file, so by the time there is a connection to ask, an orphan
+        // has already been folded in and quick_check reports ok on the result (issue #213).
+        JournalGuard = StaleJournal.Guard(_path);
 
         _connection = Connect(_path);
 
@@ -191,7 +207,8 @@ public sealed class RollupStore : IDisposable
         {
             try
             {
-                return RollupStoreReport.Read(_connection, _path, RollupStoreReport.LiveInstance);
+                return RollupStoreReport.Read(
+                    _connection, _path, RollupStoreReport.LiveInstance, JournalGuard);
             }
             catch (Exception ex)
             {

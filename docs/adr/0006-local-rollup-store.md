@@ -57,6 +57,20 @@ The store cannot invent history that predates installation. Consistent with the 
 >
 > **A local day is 23 or 25 hours twice a year.** Boundaries come from the timezone via `LocalDays`, never from 24-hour arithmetic, and the graph's gridlines are placed in the same frame as its columns. Nothing here touches the plan meters — the five-hour window rolls from first use and the weekly reset is a reported instant (ADR-0014); neither is a calendar day.
 
+> **Amendment (2026-08-26, [#213](https://github.com/mlengmark/O-view/issues/213)) — the store is checked for an orphaned journal before it is opened.**
+>
+> SQLite recovers from a `-wal` on open and treats its frames as the newest version of the pages they cover, overriding newer content in the main file. That is correct when the journal is a genuine continuation. When it is an orphan, the store presents itself as it stood when that file was written — measured on the development machine, the same database read twice gave **6,917 rows** and **5,072 rows**, differing only in whether a stale journal sat beside it, with `PRAGMA quick_check` returning `ok` both times. Worse, opening it that way makes the rolled-back state the new truth: 1,845 rows, unrebuildable for transcripts Claude Code had since deleted.
+>
+> `StaleJournal.Guard` runs in the `RollupStore` constructor **before** the connection, because after it there is nothing left to see. Three decisions in it are not obvious:
+>
+> - **The age is compared against the database, not against now.** A machine switched off for a week has an old journal and an old database and nothing is wrong. What cannot happen is a journal materially *older* than the file it continues — SQLite writes the journal on every commit and the database only on checkpoint.
+> - **The timestamps are only read while both files are held exclusively.** Windows does not update a directory entry while a handle is open, so a journal being written right now can report a last-write time from minutes ago; quarantining that one would *cause* the loss this prevents. When the handles cannot be taken the guard reports that nothing was established, which is not the same as reporting the journal healthy. On Unix the probe is weaker — .NET emulates `FileShare` with `flock` while SQLite locks with `fcntl` — so what carries it there is running behind the single-instance guard.
+> - **Only the journal is moved aside, never the database.** A deliberate departure from the corruption path above, which quarantines the whole set and rebuilds empty. Here the database is the truth and the journal is the liar; moving the database would discard the history the guard exists to save.
+>
+> **The threshold is six hours**, argued rather than picked. A live journal is never more than one poll behind, and one that outlives a clean shutdown does not exist — so on the app's own behaviour, minutes would do; the margin above that is for timestamp granularity, NTP steps and tools that rewrite mtimes. The issue offered "a day" as the unambiguous case and this is tighter, because the two mistakes cost very different amounts: acting wrongly costs a re-ingest into a rebuildable cache with the frames still quarantined, and failing to act costs days of history that cannot be rebuilt at all, silently.
+>
+> **The rollback is reproduced, not assumed.** `StaleJournalTests` captures a real journal mid-life and puts it back after the database has moved on: a plain connection then reports 5 rows where the file holds 25, and `quick_check` still says `ok`. That test asserts the wrong behaviour deliberately, so the guard beside it is demonstrably defending against something real — and so it fails loudly if a future SQLite stops doing this, rather than leaving the guard standing on an expired premise.
+
 ## Alternatives considered
 
 | Option | Why rejected |
