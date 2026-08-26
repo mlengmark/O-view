@@ -21,6 +21,47 @@ public class PlanHistoryProviderTests : IDisposable
         return path;
     }
 
+    // ── reading nothing, on purpose (issue #212) ────────────────────────────────────
+
+    /// <summary>
+    /// <see cref="PlanHistoryFile.NoFile"/> names no file, and a provider built on it is inert
+    /// rather than absent — so nothing downstream has to special-case it.
+    /// </summary>
+    [Fact]
+    public void NoFile_ReadsNothing_AndReportsAMeterThatIsNotThere()
+    {
+        var provider = new PlanHistoryProvider(PlanHistoryFile.NoFile);
+
+        var (_, percents, age) = provider.GetCurrentWindow(Now);
+
+        Assert.Equal(PlanHistoryFile.NoFile, provider.Path);
+        Assert.Empty(percents);
+        // Not "fresh and empty", which would let the divergence detector treat silence as a
+        // flat meter. An absent meter is infinitely stale.
+        Assert.Equal(TimeSpan.MaxValue, age);
+    }
+
+    /// <summary>
+    /// The empty window is what makes the off-plan comparison inert: no samples means no
+    /// verdict, whatever the machine's own meter happens to be doing.
+    /// </summary>
+    [Fact]
+    public void NoFile_CannotProduceAnOffPlanVerdict()
+    {
+        var (_, percents, age) = new PlanHistoryProvider(PlanHistoryFile.NoFile).GetCurrentWindow(Now);
+
+        var result = DivergenceDetector.Evaluate(percents, outputTokensInWindow: 0, age);
+
+        Assert.False(result.IsOffPlan);
+    }
+
+    /// <summary>A null path still means the real machine's file — that is production's case.</summary>
+    [Fact]
+    public void ANullPathStillResolvesTheRealFile()
+    {
+        Assert.Equal(PlanHistoryFile.DefaultPath, new PlanHistoryProvider().Path);
+    }
+
     [Fact]
     public void FreshSample_IsLive_WithLatestValues()
     {

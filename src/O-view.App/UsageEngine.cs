@@ -96,6 +96,13 @@ public sealed class UsageEngine : IDisposable
     /// <para>Naming either <see cref="UsageEngineOptions.PlanHistory"/> or
     /// <see cref="UsageEngineOptions.PlanHistoryPath"/> is enough — both say which file is
     /// meant, which is the whole question.</para>
+    ///
+    /// <para><b>Kept after issue #212, and it is no longer the only defence.</b> The provider
+    /// built in that case now reads <see cref="PlanHistoryFile.NoFile"/> rather than the real
+    /// machine's file, which is what fixes the off-plan path this flag never covered. This
+    /// still guards <i>publishing</i>, which is a different question: an inert provider would
+    /// publish empty snapshots over a caller's own chain rather than the developer's usage,
+    /// which is better and still wrong.</para>
     /// </summary>
     private readonly bool _planHistoryIsAddressed;
 
@@ -110,6 +117,24 @@ public sealed class UsageEngine : IDisposable
     /// occasion. Those two should agree; when they do not, that is the finding.</para>
     /// </summary>
     public RollupStoreReport InspectStore() => _store.Inspect();
+
+    /// <summary>
+    /// Which plan-history file this engine resolved to (issue #212).
+    ///
+    /// <para>Exposed so the resolution can be asserted rather than inferred from the figures:
+    /// reaching past an injected provider into the real machine's file only ever showed as an
+    /// outcome, which is why it survived a suite that runs on every commit. A test can now say
+    /// "not that file" and be right on every machine on every day.</para>
+    /// </summary>
+    public string PlanHistoryPath => (_planHistory as PlanHistoryProvider)?.Path ?? "";
+
+    /// <summary>
+    /// How many meter samples the off-plan comparison currently has to work with. Zero when
+    /// there is no plan history to read — the state every test with an injected provider chain
+    /// must be in (issue #212).
+    /// </summary>
+    public int PlanWindowSampleCount =>
+        _planHistory?.GetCurrentWindow(_clock.UtcNow).Percents.Count ?? 0;
 
     /// <summary>Current persisted settings. Mutated only through <see cref="SetNotifyOnThreshold"/>.</summary>
     public TraySettings Settings { get; private set; }
@@ -176,8 +201,22 @@ public sealed class UsageEngine : IDisposable
                 ? () => CachedUtilization.TryRead()
                 : () => null);
 
+        // A caller that supplied its own Provider has described the whole world, so an
+        // unnamed plan history reads NOTHING rather than the real machine's file (issue #212).
+        //
+        // The default used to be PlanHistoryFile.DefaultPath in that case, and the guard
+        // against it — _planHistoryIsAddressed — covered only *publishing*. ReadOffPlan() →
+        // BuildStatistics() went through this provider regardless, so the off-plan comparison
+        // read the developer's own Claude Desktop usage on every poll in every test that did
+        // not name a file. Replayed against that file afterwards: six instants where a test
+        // with an empty rollup store would have seen the plan meter pinned at 99% and reported
+        // usage billing beyond the plan, all within two hours on 2026-08-25 — which is when
+        // eight of them did.
+        //
+        // Same fix, and the same reasoning, as CachedUtilization gets a few lines below.
         _planHistory = _options.PlanHistory ?? new PlanHistoryProvider(
-            path: _options.PlanHistoryPath,
+            path: _options.PlanHistoryPath
+                ?? (_options.Provider is null ? null : PlanHistoryFile.NoFile),
             orgUuid: account?.OrganizationUuid,
             // Local request times tighten the five-hour window's start bracket (issue #185).
             // The engine owns both halves, so the wiring lives here rather than teaching the
