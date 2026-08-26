@@ -33,6 +33,22 @@ namespace OView.Core.Storage;
 /// offset. <b>This is the number that proves an ingest has stalled</b>, and it is the one no
 /// other field can stand in for.
 /// </param>
+/// <param name="JournalLag">
+/// How much older the <c>-wal</c> is than the database beside it (issue #213). Null when there
+/// is no journal.
+///
+/// <para><b>A positive number here is the finding.</b> SQLite writes the journal on every
+/// commit and the database only on checkpoint, so a live journal is the newer of the two — one
+/// that trails its database by hours cannot be a continuation of it, and SQLite will still
+/// recover from it and present the store as it stood when that file was written. This is the
+/// field that makes that visible; on the machine this was measured on, everything else read
+/// <c>ok</c>.</para>
+/// </param>
+/// <param name="JournalGuard">
+/// What the startup guard did about it, or null when this reader did not run one — which is
+/// every reader but the live instance, and is deliberately not reported as "nothing was
+/// wrong".
+/// </param>
 public sealed record RollupStoreReport(
     string Path,
     string Origin,
@@ -49,7 +65,9 @@ public sealed record RollupStoreReport(
     int TrackedFiles,
     int FilesBehind,
     long UnreadBytes,
-    int FilesGone)
+    int FilesGone,
+    TimeSpan? JournalLag = null,
+    StaleJournalCheck? JournalGuard = null)
 {
     /// <summary>Produced by the running app, from the connection it already holds.</summary>
     public const string LiveInstance = "live instance";
@@ -84,6 +102,11 @@ public sealed record RollupStoreReport(
                 false => "REFUSED",
                 _ => "not probed",
             })}"));
+
+        // Its own line rather than appended to `file`, because it is the one number on this
+        // report that can be alarming while every other field reads ok (issue #213).
+        text.AppendLine(string.Create(CultureInfo.InvariantCulture,
+            $"    journal     : {DescribeJournalLag()}, guard {JournalGuard?.Describe() ?? "not run by this reader"}"));
         text.AppendLine(string.Create(CultureInfo.InvariantCulture,
             $"    ledger      : {LedgerRows:N0} row(s), {FirstDay ?? "-"} .. {LastDay ?? "-"}, newest {NewestTimestamp ?? "none"}"));
         text.AppendLine(string.Create(CultureInfo.InvariantCulture,
@@ -91,6 +114,19 @@ public sealed record RollupStoreReport(
 
         return text.ToString();
     }
+
+    /// <summary>
+    /// The journal's age in words. States the direction, because "6.2h" alone does not say
+    /// which of the two files is behind and only one of those is a problem.
+    /// </summary>
+    private string DescribeJournalLag() => JournalLag switch
+    {
+        null => "none",
+        { TotalSeconds: <= 0 } lag => string.Create(CultureInfo.InvariantCulture,
+            $"{-lag.TotalHours:0.0}h newer than the database"),
+        { } lag => string.Create(CultureInfo.InvariantCulture,
+            $"{lag.TotalHours:0.0}h OLDER than the database"),
+    };
 
     /// <summary>
     /// Inspects a store file this process does not already have open. Used by
@@ -127,7 +163,8 @@ public sealed record RollupStoreReport(
     /// produce byte-identical sections apart from <see cref="Origin"/> — which is the whole
     /// point of comparing them.
     /// </summary>
-    internal static RollupStoreReport Read(SqliteConnection connection, string path, string origin)
+    internal static RollupStoreReport Read(
+        SqliteConnection connection, string path, string origin, StaleJournalCheck? journalGuard = null)
     {
         var (rows, firstDay, lastDay, newest) = ReadLedger(connection);
         var (tracked, behind, unread, gone) = ReadOffsets(connection);
@@ -148,7 +185,9 @@ public sealed record RollupStoreReport(
             tracked,
             behind,
             unread,
-            gone);
+            gone,
+            StaleJournal.Lag(path),
+            journalGuard);
     }
 
     /// <summary>
