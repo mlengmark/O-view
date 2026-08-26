@@ -233,12 +233,11 @@ public static class PanelText
     /// <para>The framing flips when usage goes off-plan, because then it genuinely is
     /// spend.</para>
     ///
-    /// <para>Carries <see cref="TodayUtcSuffix"/> for the same reason
-    /// <see cref="TokensTodayLabel"/> does — the figure beside it is bucketed by UTC date
-    /// (issue #210).</para>
+    /// <para>It read "(UTC)" for one release, because the figure was bucketed by UTC date and
+    /// had to say so (issue #210). The suffix is off again now the bucket is the reader's own
+    /// day — a qualifier that is no longer true is not a safe thing to leave on.</para>
     /// </summary>
-    public static string EstTodayLabel(bool offPlan) =>
-        offPlan ? $"Est. spend today {TodayUtcSuffix}" : $"Est. value today {TodayUtcSuffix}";
+    public static string EstTodayLabel(bool offPlan) => offPlan ? "Est. spend today" : "Est. value today";
 
     /// <summary>
     /// The 31-day heading, which deliberately does <b>not</b> flip with off-plan state.
@@ -258,43 +257,13 @@ public static class PanelText
     /// 1000× over-count. The qualifier is the headline's share of rule 6: a figure states
     /// what it measures, and the detail follows in <see cref="TokenCompositionLine"/>.</para>
     ///
-    /// <para><b>It also names its day.</b> The figure is computed over a <b>UTC</b> day
-    /// (<c>PanelStatistics.Build</c>), and for anyone not on UTC that is not the day the word
-    /// "today" means: on a UTC+2 machine the tile spends the first two hours of every local
-    /// day showing yesterday's usage, and west of UTC the error runs the other way for longer
-    /// (issue #210). The number is correct; the unqualified label was not, which is the same
-    /// rule-6 failure as a wrong number wearing better clothes.</para>
+    /// <para><b>"Today" means the reader's today.</b> It said "(UTC)" for one release because
+    /// the bucket genuinely was a UTC day and a label that does not match its figure is the
+    /// same rule-6 failure as a wrong figure (issue #210). The bucket is now the local day
+    /// (issue #211), so the qualifier is gone: leaving it on would be the mislabelling
+    /// pointed the other way.</para>
     /// </summary>
-    public const string TokensTodayLabel = $"Tokens today {TodayUtcSuffix} · incl. cache";
-
-    /// <summary>
-    /// What the "today" tiles append to say which day they mean.
-    ///
-    /// <para>A stopgap, deliberately: computing the window in <b>local</b> days is what a user
-    /// actually means by today, and is tracked separately because it needs real work in the
-    /// rollup layer — the store keys on <c>utc_date</c> and one local day straddles two UTC
-    /// ones. This suffix comes back off when that lands.</para>
-    /// </summary>
-    public const string TodayUtcSuffix = "(UTC)";
-
-    /// <summary>
-    /// Where the UTC day's boundary actually falls on this machine — the sentence
-    /// <see cref="TodayUtcSuffix"/> cannot fit, and without which "(UTC)" still leaves a
-    /// reader guessing which hours are counted.
-    ///
-    /// <para>Stated in the reader's own clock rather than as an offset, because the question
-    /// being answered is "when did this figure start counting". Read from
-    /// <paramref name="local"/> at the boundary itself rather than from the current offset, so
-    /// it stays right on the two days a year those differ.</para>
-    /// </summary>
-    public static string TodayUtcHint(DateTimeOffset utcNow, TimeZoneInfo local)
-    {
-        var opened = TimeZoneInfo.ConvertTime(
-            new DateTimeOffset(utcNow.UtcDateTime.Date, TimeSpan.Zero), local);
-
-        return $"\"Today\" here is the UTC day, which where you are opened {opened:ddd HH:mm}. "
-            + "Work done before then is counted in the previous day's figure, not this one.";
-    }
+    public const string TokensTodayLabel = "Tokens today · incl. cache";
 
     /// <inheritdoc cref="TokensTodayLabel"/>
     public const string Tokens31DaysLabel = "Tokens · 31 days · incl. cache";

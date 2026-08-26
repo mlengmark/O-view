@@ -131,14 +131,18 @@ Percentages come from the OAuth provider. On JSONL fallback they are estimates a
 
 | Tile | Definition |
 |---|---|
-| Tokens today (UTC) | Summed from rollup store, UTC day |
-| Est. value today (UTC) | Tokens priced at public API rates |
-| Tokens · 31 days | Rollup store, trailing 31 days |
+| Tokens today | Summed from rollup store, the reader's local day |
+| Est. value today | Tokens priced at public API rates |
+| Tokens · 31 days | Rollup store, trailing 31 local days |
 | Est. value · 31 days | As above, priced |
 
-> **The two "today" tiles name their day** ([issue #210](https://github.com/mlengmark/O-view/issues/210)). The window is a UTC day, and for anyone not on UTC that is not what "today" means — at UTC+2 the tile spends the first two hours of every local day showing yesterday's usage, and west of UTC it runs the other way for longer. The number is right; the unqualified label was not, and a correct number under a wrong name is the same failure as a wrong one. `(UTC)` alone still leaves the reader working out which hours are covered, so the boundary is stated in their own clock too — hovered on Windows, standing text on Linux, which carries no hover.
+> **Every day-shaped figure is a local day** ([issue #211](https://github.com/mlengmark/O-view/issues/211)) — these tiles, the per-model and cache breakdowns behind them, each bar in the 31-day graph, and the `N of 31 days recorded` caveat. Users mean local days, and one of those straddles two UTC ones, so the bucket is computed from each request's timestamp at query time rather than read from the `utc_date` it was stored under. Nothing about ingestion changes: storing a local date would bake one machine's offset into the row.
 >
-> This is a stopgap. Bucketing by **local** day is the fix and comes with its own removal of `(UTC)`.
+> They were UTC days until v0.6.x, and for one release they said so — `Tokens today (UTC)` ([issue #210](https://github.com/mlengmark/O-view/issues/210)), the honest stopgap while this was built. The qualifier is off again, because a label that no longer matches its figure is the same rule-6 failure in the opposite direction.
+>
+> **A local day is 23 or 25 hours twice a year.** Boundaries come from the timezone (`LocalDays`), never from 24-hour steps — and the graph's gridlines are placed in the same frame as its columns, or they drift against the bars they annotate from the transition onwards.
+>
+> **The plan meters are not days and keep their own clocks.** The five-hour window rolls from first use; the weekly reset is a fixed instant Claude reports (ADR-0014). Neither learns about local dates.
 
 > **"Spend" means estimated API-equivalent value, not money charged.** Within plan limits the marginal cost is £0. These tiles answer "what would this have cost on the API" and **must be labelled `Est.`** — presenting them as actual spend would be a fabricated number.
 
@@ -238,7 +242,7 @@ The panel carries the signal in **two independent registers**:
 **Live (current session window)** — the real-time divergence detector:
 
 1. **An amber banner** above the quota bars — the bars are correct but no longer the whole story, so the correction must appear before them, not after.
-2. **Relabels the value tile** from `Est. value today (UTC)` to `Est. spend today (UTC)` with an `incl. off-plan usage` note. The "not money charged" framing is only true for plan usage; off-plan work bills at API rates, so the label flips with the reality.
+2. **Relabels the value tile** from `Est. value today` to `Est. spend today` with an `incl. off-plan usage` note. The "not money charged" framing is only true for plan usage; off-plan work bills at API rates, so the label flips with the reality.
 
 A notification fires once per onset (edge-triggered, re-armed when it clears). When the plan limit is reached (≥99%) the wording changes: continued work bills beyond the plan by definition rather than by inference.
 

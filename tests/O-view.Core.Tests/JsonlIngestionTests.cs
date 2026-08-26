@@ -35,8 +35,11 @@ public class JsonlIngestionTests : IDisposable
         return path;
     }
 
+    // UTC named explicitly rather than left to the machine: these assertions are about totals,
+    // and which day a row lands in is not the question here (issue #211).
     private long TotalOutputTokens() =>
-        _store.GetDailyRollups(DateOnly.MinValue, DateOnly.MaxValue).Sum(r => r.OutputTokens);
+        _store.GetDailyRollups(DateTimeOffset.MinValue, DateTimeOffset.MaxValue, TimeZoneInfo.Utc)
+            .Sum(r => r.OutputTokens);
 
     // ── MANDATORY TEST 1: requestId de-duplication ─────────────────────────────
     // The real file had 28 records for 12 ids; a naive sum overcounts ~2.3×.
@@ -189,7 +192,8 @@ public class JsonlIngestionTests : IDisposable
 
         _store.Ingest(TranscriptReader.ReadFile(path));
 
-        var rollups = _store.GetDailyRollups(DateOnly.MinValue, DateOnly.MaxValue);
+        var rollups = _store.GetDailyRollups(
+            DateTimeOffset.MinValue, DateTimeOffset.MaxValue, TimeZoneInfo.Utc);
 
         Assert.DoesNotContain("<synthetic>", rollups.Select(r => r.Model));
         Assert.Equal(120, TotalOutputTokens());

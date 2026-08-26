@@ -8,6 +8,19 @@ public class PanelStatisticsTests : IDisposable
 {
     private static readonly DateTimeOffset Now = new(2026, 7, 21, 12, 0, 0, TimeSpan.Zero);
 
+    /// <summary>
+    /// The zone every case is measured in unless it says otherwise.
+    ///
+    /// <para><b>Named, never <see cref="TimeZoneInfo.Local"/>.</b> These assertions are about
+    /// which day a figure lands on, so a suite that read the machine's zone would pass or fail
+    /// by where it ran — and would pass vacuously on a CI runner sitting in UTC, which is
+    /// where every one of them would run (issue #211, and the hazard of issue #212).</para>
+    /// </summary>
+    private static readonly TimeZoneInfo Utc = TimeZoneInfo.Utc;
+
+    private static readonly TimeZoneInfo PlusTwo =
+        TimeZoneInfo.CreateCustomTimeZone("test-plus-2", TimeSpan.FromHours(2), "UTC+2", "UTC+2");
+
     private readonly string _dir = Directory.CreateTempSubdirectory("oview-tests-").FullName;
     private readonly List<RollupStore> _stores = [];
     private readonly RollupStore _store;
@@ -49,14 +62,14 @@ public class PanelStatisticsTests : IDisposable
     {
         Seed("r1", "2026-07-19", 100);  // first recorded day
 
-        var stats = PanelStatistics.Build(_store, Now);
+        var stats = PanelStatistics.Build(_store, Now, Utc);
 
         Assert.Equal(31, stats.DailySeries.Count);
         // Days before 2026-07-19 have NO data; days from it onward are the recorded era.
-        Assert.All(stats.DailySeries.Where(d => d.DateUtc < new DateOnly(2026, 7, 19)), d => Assert.True(d.PreInstall));
-        Assert.All(stats.DailySeries.Where(d => d.DateUtc >= new DateOnly(2026, 7, 19)), d => Assert.False(d.PreInstall));
+        Assert.All(stats.DailySeries.Where(d => d.Date < new DateOnly(2026, 7, 19)), d => Assert.True(d.PreInstall));
+        Assert.All(stats.DailySeries.Where(d => d.Date >= new DateOnly(2026, 7, 19)), d => Assert.False(d.PreInstall));
         // 2026-07-20 is inside the recorded era with no usage — a genuine zero.
-        var idle = stats.DailySeries.Single(d => d.DateUtc == new DateOnly(2026, 7, 20));
+        var idle = stats.DailySeries.Single(d => d.Date == new DateOnly(2026, 7, 20));
         Assert.False(idle.PreInstall);
         Assert.Equal(0, idle.TotalTokens);
     }
@@ -64,7 +77,7 @@ public class PanelStatisticsTests : IDisposable
     [Fact]
     public void EmptyStore_MarksEveryDayPreInstall()
     {
-        var stats = PanelStatistics.Build(_store, Now);
+        var stats = PanelStatistics.Build(_store, Now, Utc);
 
         Assert.All(stats.DailySeries, d => Assert.True(d.PreInstall));
         Assert.Equal(0, stats.RecordedDays);
@@ -86,7 +99,7 @@ public class PanelStatisticsTests : IDisposable
         Seed("r2", "2026-07-20", 20);
         Seed("r3", "2026-07-21", 30);
 
-        var stats = PanelStatistics.Build(_store, Now);
+        var stats = PanelStatistics.Build(_store, Now, Utc);
 
         Assert.Equal(4, stats.RecordedDays);
         Assert.Equal(31, stats.WindowDays);
@@ -105,7 +118,7 @@ public class PanelStatisticsTests : IDisposable
         Seed("r1", "2026-06-21", 10);   // the first day of the 31-day window
         Seed("r2", "2026-07-21", 20);   // today — nothing at all in between
 
-        var stats = PanelStatistics.Build(_store, Now);
+        var stats = PanelStatistics.Build(_store, Now, Utc);
 
         Assert.Equal(31, stats.RecordedDays);
         Assert.False(stats.HasPartialHistory);
@@ -125,7 +138,7 @@ public class PanelStatisticsTests : IDisposable
             var store = NewStore();
             Seed(store, "r1", firstDay, 10);
 
-            var stats = PanelStatistics.Build(store, Now);
+            var stats = PanelStatistics.Build(store, Now, Utc);
 
             Assert.Equal(stats.DailySeries.Count(d => !d.PreInstall), stats.RecordedDays);
         }
@@ -142,7 +155,7 @@ public class PanelStatisticsTests : IDisposable
         Seed("r0", "2026-05-01", 5);
         Seed("r1", "2026-07-21", 40);
 
-        var stats = PanelStatistics.Build(_store, Now);
+        var stats = PanelStatistics.Build(_store, Now, Utc);
 
         Assert.Equal(31, stats.RecordedDays);
         Assert.Equal("", stats.CoverageNote);
@@ -154,7 +167,7 @@ public class PanelStatisticsTests : IDisposable
         Seed("r1", "2026-07-20", 100);
         Seed("r2", "2026-07-21", 40);
 
-        var stats = PanelStatistics.Build(_store, Now);
+        var stats = PanelStatistics.Build(_store, Now, Utc);
 
         Assert.Equal(40, stats.TokensToday);
         Assert.Equal(140, stats.Tokens31Days);
@@ -166,7 +179,7 @@ public class PanelStatisticsTests : IDisposable
         Seed("r0", "2026-05-01", 5);  // well before the 31-day window
         Seed("r1", "2026-07-21", 40);
 
-        var stats = PanelStatistics.Build(_store, Now);
+        var stats = PanelStatistics.Build(_store, Now, Utc);
 
         Assert.All(stats.DailySeries, d => Assert.False(d.PreInstall));
     }
@@ -182,7 +195,7 @@ public class PanelStatisticsTests : IDisposable
         Seed("r1", "2026-07-21", 1_000_000);
         Seed("r2", "2026-07-21", 1_000_000, model: "claude-hypothetical-9");
 
-        var stats = PanelStatistics.Build(_store, Now);
+        var stats = PanelStatistics.Build(_store, Now, Utc);
 
         Assert.Equal(25.00m, stats.EstTodayUsd);       // the priced portion, reported
         Assert.Contains("claude-hypothetical-9", stats.UnpricedModels);  // and labelled
@@ -194,7 +207,7 @@ public class PanelStatisticsTests : IDisposable
     {
         Seed("r1", "2026-07-21", 1_000_000);  // 1M output on opus: $25
 
-        var stats = PanelStatistics.Build(_store, Now);
+        var stats = PanelStatistics.Build(_store, Now, Utc);
 
         Assert.Equal(25.00m, stats.EstTodayUsd);
     }
@@ -207,7 +220,7 @@ public class PanelStatisticsTests : IDisposable
         Seed("r2", "2026-07-21", 1_000_000, "claude-fable-5");    // credit-billed — counted
         Seed("r3", "2026-07-15", 500_000, "claude-fable-5");      // earlier in window — counted
 
-        var stats = PanelStatistics.Build(_store, Now);
+        var stats = PanelStatistics.Build(_store, Now, Utc);
 
         // Fable output only: (1M + 0.5M) tokens.
         Assert.Equal(1_500_000, stats.CreditTokens31Days);
@@ -221,7 +234,7 @@ public class PanelStatisticsTests : IDisposable
     {
         Seed("r1", "2026-07-21", 1_000_000, "claude-opus-4-8");
 
-        var stats = PanelStatistics.Build(_store, Now);
+        var stats = PanelStatistics.Build(_store, Now, Utc);
 
         Assert.Equal(0, stats.CreditTokens31Days);
         Assert.False(stats.HasCreditUsage);
@@ -233,7 +246,7 @@ public class PanelStatisticsTests : IDisposable
         Seed("old", "2026-06-01", 1_000_000, "claude-fable-5");   // before the 31-day window
         Seed("new", "2026-07-21", 400_000, "claude-fable-5");
 
-        var stats = PanelStatistics.Build(_store, Now);
+        var stats = PanelStatistics.Build(_store, Now, Utc);
 
         Assert.Equal(400_000, stats.CreditTokens31Days);
     }
@@ -246,7 +259,7 @@ public class PanelStatisticsTests : IDisposable
         Seed("a", "2026-07-21", 1_000_000, "claude-opus-4-8");
         Seed("b", "2026-07-21", 1_000_000, "claude-brand-new-9");
 
-        var stats = PanelStatistics.Build(_store, Now);
+        var stats = PanelStatistics.Build(_store, Now, Utc);
 
         Assert.NotNull(stats.Est31DaysUsd);              // priced portion still reported
         Assert.Equal(25.00m, stats.Est31DaysUsd);        // 1M Opus output @ $25/MTok
@@ -261,7 +274,7 @@ public class PanelStatisticsTests : IDisposable
         // is defined once here.
         Seed("a", "2026-07-21", 1_000, "claude-opus-4-8");
 
-        var partial = PanelStatistics.Build(_store, Now);
+        var partial = PanelStatistics.Build(_store, Now, Utc);
         Assert.True(partial.HasPartialHistory);
         Assert.Equal($"{partial.RecordedDays} of {partial.WindowDays} days recorded", partial.CoverageNote);
 
@@ -277,29 +290,107 @@ public class PanelStatisticsTests : IDisposable
     // a branch no user could reach. The real guarantee is end-to-end and now lives in
     // JsonlIngestionTests.SyntheticRecords_NeverReachTheStore_... (GitHub issue #57).
 
+    // ── which day "today" is (issues #210, #211) ────────────────────────────────────
+
     /// <summary>
-    /// Pins which day "today" selects, ahead of changing it (issue #210).
+    /// The reported case, now answered (issue #211). At 23:26 UTC on 2026-08-25 a UTC+2 reader
+    /// is at 01:26 on the <b>26th</b>, and their day began at 22:00 UTC the evening before.
     ///
-    /// <para>The reported reading: 23:26 UTC on 2026-08-25, which on a UTC+2 machine is 01:26
-    /// on the 26th. The tile selects the <b>UTC</b> day, so it counts work done at 10:00 UTC
-    /// — the reader's <i>yesterday</i> morning — alongside work done since their local
-    /// midnight. That is why the tile read 149.2M under the word "today".</para>
-    ///
-    /// <para>Written down while the label is the fix, so that moving to local-day buckets is a
-    /// visible change to an assertion rather than a silent change to a number.</para>
+    /// <para>This assertion is the inverse of the one that stood here while #210 was the fix:
+    /// the tile then counted the reader's yesterday morning too, and read 149.2M under the
+    /// word "today". Only the 400 tokens since their local midnight belong to it.</para>
     /// </summary>
     [Fact]
-    public void TokensToday_IsTheUtcDay_NotTheReadersLocalDay()
+    public void TokensToday_IsTheReadersLocalDay_NotTheUtcOne()
     {
         var lateUtc = new DateTimeOffset(2026, 8, 25, 23, 26, 0, TimeSpan.Zero);
 
         SeedAt("their-yesterday", "2026-08-25T10:00:00Z", 100);  // before local midnight at UTC+2
         SeedAt("their-today", "2026-08-25T23:00:00Z", 400);      // after it
 
-        var stats = PanelStatistics.Build(_store, lateUtc);
+        var stats = PanelStatistics.Build(_store, lateUtc, PlusTwo);
 
-        Assert.Equal(new DateOnly(2026, 8, 25), stats.DailySeries[^1].DateUtc);
-        Assert.Equal(500, stats.TokensToday);
+        Assert.Equal(new DateOnly(2026, 8, 26), stats.DailySeries[^1].Date);
+        Assert.Equal(400, stats.TokensToday);
+
+        // The tokens are not lost — they are on the bar for the day the reader had them.
+        Assert.Equal(100, stats.DailySeries.Single(d => d.Date == new DateOnly(2026, 8, 25)).TotalTokens);
+        Assert.Equal(500, stats.Tokens31Days);
+    }
+
+    /// <summary>
+    /// West of UTC the error ran the other way and lasted longer: at UTC-8 the last eight
+    /// hours of every local day were already counted as tomorrow. Same store, same instant,
+    /// asserted from the other side so neither direction can regress alone.
+    /// </summary>
+    [Fact]
+    public void TokensToday_FollowsTheZoneWestOfUtc()
+    {
+        var minusEight = TimeZoneInfo.CreateCustomTimeZone(
+            "test-minus-8", TimeSpan.FromHours(-8), "UTC-8", "UTC-8");
+
+        // 2026-08-26T03:00Z is 19:00 on the 25th at UTC-8 — the reader's evening, which the
+        // UTC bucket called tomorrow.
+        var readingUtc = new DateTimeOffset(2026, 8, 26, 4, 0, 0, TimeSpan.Zero);
+        SeedAt("their-evening", "2026-08-26T03:00:00Z", 250);
+
+        var stats = PanelStatistics.Build(_store, readingUtc, minusEight);
+
+        Assert.Equal(new DateOnly(2026, 8, 25), stats.DailySeries[^1].Date);
+        Assert.Equal(250, stats.TokensToday);
+    }
+
+    /// <summary>
+    /// The window is 31 <b>local</b> days across a DST transition in both directions — not 31
+    /// × 24 hours, which is what stepping back from midnight in fixed blocks would give.
+    ///
+    /// <para>Europe/London is used because its transitions are at 01:00 local, so the days
+    /// either side are unambiguously 23 and 25 hours. The dates asserted are calendar dates,
+    /// which is the point: the reader's calendar does not skip or repeat a day.</para>
+    /// </summary>
+    [Theory]
+    [InlineData("2026-03-29T12:00:00Z")]   // spring forward — a 23-hour day inside the window
+    [InlineData("2026-10-25T12:00:00Z")]   // fall back — a 25-hour one
+    public void Window_Is31LocalDays_AcrossDstInBothDirections(string readingUtc)
+    {
+        var london = TimeZoneInfo.FindSystemTimeZoneById(
+            OperatingSystem.IsWindows() ? "GMT Standard Time" : "Europe/London");
+
+        var now = DateTimeOffset.Parse(readingUtc);
+        var stats = PanelStatistics.Build(_store, now, london);
+
+        Assert.Equal(31, stats.DailySeries.Count);
+        Assert.Equal(LocalDays.DateOf(now, london), stats.DailySeries[^1].Date);
+        Assert.Equal(stats.DailySeries[^1].Date.AddDays(-30), stats.DailySeries[0].Date);
+
+        // Consecutive calendar days throughout — no repeat, no gap at the transition.
+        for (var i = 1; i < stats.DailySeries.Count; i++)
+        {
+            Assert.Equal(stats.DailySeries[i - 1].Date.AddDays(1), stats.DailySeries[i].Date);
+        }
+    }
+
+    /// <summary>
+    /// The 25-hour day holds 25 hours of usage. Stepping day boundaries back in fixed 24-hour
+    /// blocks puts the extra hour on the neighbouring bar instead — a silent move, which is
+    /// why it is asserted on a figure rather than on a date.
+    /// </summary>
+    [Fact]
+    public void ADayThatIs25HoursLong_CountsAllOfThem()
+    {
+        var london = TimeZoneInfo.FindSystemTimeZoneById(
+            OperatingSystem.IsWindows() ? "GMT Standard Time" : "Europe/London");
+
+        // 2026-10-25 is 25 hours long in London: 00:00 BST (23:00Z on the 24th) to 00:00 GMT.
+        SeedAt("first-hour", "2026-10-24T23:30:00Z", 10);   // 00:30 BST, the day's first hour
+        SeedAt("last-hour", "2026-10-25T23:30:00Z", 20);    // 23:30 GMT, its last
+        SeedAt("next-day", "2026-10-26T00:30:00Z", 40);     // 00:30 the following day
+
+        var stats = PanelStatistics.Build(
+            _store, DateTimeOffset.Parse("2026-10-26T12:00:00Z"), london);
+
+        Assert.Equal(30, stats.DailySeries.Single(d => d.Date == new DateOnly(2026, 10, 25)).TotalTokens);
+        Assert.Equal(40, stats.TokensToday);
     }
 
     [Fact]
@@ -309,7 +400,7 @@ public class PanelStatisticsTests : IDisposable
         // rather than a $0.00 that reads as "you spent nothing" (rule 6).
         Seed("a", "2026-07-21", 1_000_000, "claude-brand-new-9");
 
-        var stats = PanelStatistics.Build(_store, Now);
+        var stats = PanelStatistics.Build(_store, Now, Utc);
 
         Assert.Null(stats.Est31DaysUsd);
         Assert.Contains("claude-brand-new-9", stats.UnpricedModels);

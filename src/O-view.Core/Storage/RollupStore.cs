@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.Data.Sqlite;
+using OView.Core.Models;
 using OView.Core.Providers.Jsonl;
 
 namespace OView.Core.Storage;
@@ -13,7 +14,9 @@ namespace OView.Core.Storage;
 /// with request_id as PRIMARY KEY, upserted on every ingest (never blind INSERT —
 /// CLAUDE.md rule 7). Re-ingesting the same transcript rewrites identical rows;
 /// streaming duplicates of a request overwrite in file order so the last occurrence
-/// wins. Daily (UTC date × model) rollups are served by aggregation over the ledger.
+/// wins. Daily (local date × model) rollups are served by aggregation over the ledger —
+/// bucketed from last_timestamp at query time, because a local day straddles two UTC
+/// ones and the stored utc_date cannot answer for it (issue #211).
 /// Ledger rows hold ids, dates, models, and token counts only — no conversation
 /// content (ADR-0006 privacy rationale).
 /// </summary>
@@ -151,6 +154,11 @@ public sealed class RollupStore : IDisposable
                 last_timestamp        TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS ix_requests_date ON ingested_requests(utc_date);
+            -- Every time-ranged read goes through last_timestamp now: the panel's daily
+            -- buckets (local days, so utc_date cannot answer — issue #211), the session
+            -- window, and the window-start narrowing. ix_requests_date still serves the
+            -- store report's MIN/MAX over the ingested day.
+            CREATE INDEX IF NOT EXISTS ix_requests_timestamp ON ingested_requests(last_timestamp);
             CREATE TABLE IF NOT EXISTS file_offsets (
                 path        TEXT PRIMARY KEY,
                 byte_offset INTEGER NOT NULL,
@@ -281,38 +289,74 @@ public sealed class RollupStore : IDisposable
         }
     }
 
-    /// <summary>Daily (UTC date × model) rollups for [from, to] inclusive.</summary>
-    public IReadOnlyList<DailyRollup> GetDailyRollups(DateOnly fromUtc, DateOnly toUtc)
+    /// <summary>
+    /// Daily (local date × model) rollups for the instants in <c>[fromUtc, toUtc)</c>.
+    ///
+    /// <para><b>Bucketed by the caller's local day, not by <c>utc_date</c></b> (issue #211).
+    /// Users mean local days, and one of those straddles two UTC ones, so the column the rows
+    /// are stored under cannot answer the question — the bucket comes from
+    /// <c>last_timestamp</c>, which <c>ingested_requests</c> already carries in full. No
+    /// schema change, and nothing about ingestion moves: storing a local date at ingest time
+    /// would bake this machine's offset into the row, which is wrong for anyone who travels
+    /// and wrong for every historical row after a DST change.</para>
+    ///
+    /// <para><b>What it costs.</b> Filtering on <c>last_timestamp</c> gives up
+    /// <c>ix_requests_date</c>, so <c>ix_requests_timestamp</c> was added to serve this range
+    /// scan. SQLite cannot do the timezone conversion, so the rows come back at request grain
+    /// and are grouped here — one pass over a 31-day slice of the ledger. Measured rather than
+    /// assumed: see <c>RollupStoreQueryCostTests</c>, which builds a ledger the size of a real
+    /// one and holds this to the same order as the UTC-keyed query it replaced.</para>
+    ///
+    /// <para>Half-open on purpose. A local day ends exactly where the next begins, and an
+    /// inclusive upper bound would count the boundary instant in both.</para>
+    /// </summary>
+    public IReadOnlyList<DailyRollup> GetDailyRollups(
+        DateTimeOffset fromUtc, DateTimeOffset toUtc, TimeZoneInfo zone)
     {
         lock (_gate)
         {
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = """
-                SELECT utc_date, model,
-                       SUM(input_tokens), SUM(cache_creation_tokens),
-                       SUM(cache_read_tokens), SUM(output_tokens), COUNT(*)
+                SELECT last_timestamp, model,
+                       input_tokens, cache_creation_tokens,
+                       cache_read_tokens, output_tokens
                 FROM ingested_requests
-                WHERE utc_date >= $from AND utc_date <= $to
-                GROUP BY utc_date, model
-                ORDER BY utc_date, model
+                WHERE last_timestamp >= $from AND last_timestamp < $to
                 """;
-            cmd.Parameters.AddWithValue("$from", fromUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
-            cmd.Parameters.AddWithValue("$to", toUtc.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+            cmd.Parameters.AddWithValue("$from", fromUtc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
+            cmd.Parameters.AddWithValue("$to", toUtc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
 
-            var result = new List<DailyRollup>();
+            var buckets = new Dictionary<(DateOnly Date, string Model), DailyRollup>();
+
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
-                result.Add(new DailyRollup(
-                    DateOnly.ParseExact(reader.GetString(0), "yyyy-MM-dd", CultureInfo.InvariantCulture),
-                    reader.GetString(1),
-                    reader.GetInt64(2),
-                    reader.GetInt64(3),
-                    reader.GetInt64(4),
-                    reader.GetInt64(5),
-                    reader.GetInt64(6)));
+                if (!DateTimeOffset.TryParse(
+                        reader.GetString(0), CultureInfo.InvariantCulture,
+                        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var at))
+                {
+                    continue;   // an unparseable stamp is one row, not a failed panel
+                }
+
+                var model = reader.GetString(1);
+                var key = (LocalDays.DateOf(at, zone), model);
+                var running = buckets.GetValueOrDefault(key)
+                    ?? new DailyRollup(key.Item1, model, 0, 0, 0, 0, 0);
+
+                buckets[key] = running with
+                {
+                    InputTokens = running.InputTokens + reader.GetInt64(2),
+                    CacheCreationTokens = running.CacheCreationTokens + reader.GetInt64(3),
+                    CacheReadTokens = running.CacheReadTokens + reader.GetInt64(4),
+                    OutputTokens = running.OutputTokens + reader.GetInt64(5),
+                    RequestCount = running.RequestCount + 1,
+                };
             }
-            return result;
+
+            return buckets.Values
+                .OrderBy(r => r.Date)
+                .ThenBy(r => r.Model, StringComparer.Ordinal)
+                .ToList();
         }
     }
 
@@ -407,6 +451,26 @@ public sealed class RollupStore : IDisposable
         {
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = "SELECT MAX(last_timestamp) FROM ingested_requests";
+            return cmd.ExecuteScalar() is string s
+                ? DateTimeOffset.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal)
+                : null;
+        }
+    }
+
+    /// <summary>
+    /// Timestamp of the oldest ingested record, or null when the store is empty.
+    ///
+    /// <para>This is where recorded history begins, and it draws the line between a day with
+    /// no usage and a day with no data — the distinction rule 6 makes the graph render
+    /// differently. An instant rather than a date, because which calendar day it lands on
+    /// depends on the reader's timezone (issue #211).</para>
+    /// </summary>
+    public DateTimeOffset? EarliestActivityUtc()
+    {
+        lock (_gate)
+        {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = "SELECT MIN(last_timestamp) FROM ingested_requests";
             return cmd.ExecuteScalar() is string s
                 ? DateTimeOffset.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal)
                 : null;

@@ -47,6 +47,16 @@ The store cannot invent history that predates installation. Consistent with the 
 >
 > Two consequences accepted deliberately: the caveat now disappears for most users once they are past 31 days (correct — it is for short history, and that history is not short), and a store wiped by the corruption guard legitimately reports shrunken coverage if Claude Code has since pruned the transcripts behind it (also correct — the data really is gone, and it is the floor the graph already drew).
 
+> **Amendment (2026-08-26, [#211](https://github.com/mlengmark/O-view/issues/211)) — the grain above is what is *stored*; the grain *reported* is a local day.**
+>
+> "One row per (UTC date × model)" still describes the ledger, and ingestion is unchanged. What changed is the read: a UTC day is not the day a user means by "today", and one local day straddles two UTC ones, so `utc_date` cannot answer for it however it is indexed. `GetDailyRollups` now takes a UTC instant range and a timezone, buckets each row from its own `last_timestamp`, and returns local dates. The coverage window this section is about is therefore 31 **local** days.
+>
+> **Storing a local date alongside the UTC one was rejected**, not overlooked. It queries faster, and it bakes the machine's offset into the row at ingest time — wrong for anyone who travels, and wrong for every historical row after a DST change. The offset belongs to the reader, not to the record.
+>
+> **The cost of giving up `ix_requests_date` was measured, not assumed**, because that was the stated risk. Against a synthetic ledger of 7,000 rows — the size of the development machine's when the issue was written — a 31-day read is **0.63 ms**, against 7.61 ms for the whole ledger; `ix_requests_timestamp` was added to serve the range scan. `RollupStoreQueryCostTests` holds it there. The measurement is deliberately not taken against the real store: opening that file is the operation [#213](https://github.com/mlengmark/O-view/issues/213) is about.
+>
+> **A local day is 23 or 25 hours twice a year.** Boundaries come from the timezone via `LocalDays`, never from 24-hour arithmetic, and the graph's gridlines are placed in the same frame as its columns. Nothing here touches the plan meters — the five-hour window rolls from first use and the weekly reset is a reported instant (ADR-0014); neither is a calendar day.
+
 ## Alternatives considered
 
 | Option | Why rejected |

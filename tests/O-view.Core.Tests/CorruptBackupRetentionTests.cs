@@ -215,7 +215,10 @@ public class CorruptBackupRetentionTests : IDisposable
         {
             store.Ingest([new Providers.Jsonl.TranscriptRecord(
                 "r1", DateTimeOffset.Parse("2026-08-20T10:00:00Z"), "claude-opus-5", 1, 0, 0, 1)]);
-            Assert.Single(store.GetDailyRollups(new DateOnly(2026, 8, 20), new DateOnly(2026, 8, 20)));
+            Assert.Single(store.GetDailyRollups(
+                DateTimeOffset.Parse("2026-08-20T00:00:00Z"),
+                DateTimeOffset.Parse("2026-08-21T00:00:00Z"),
+                TimeZoneInfo.Utc));
 
             Assert.Equal(OperatingSystem.IsWindows(), File.Exists(held));
         }

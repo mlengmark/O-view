@@ -127,8 +127,8 @@ public class IncrementalReadTests : IDisposable
         using var full = new RollupStore(Path.Combine(_dir, "full.db"));
         full.Ingest(TranscriptReader.ReadFile(path));
 
-        var incTotal = incremental.GetDailyRollups(DateOnly.MinValue, DateOnly.MaxValue).Sum(r => r.OutputTokens);
-        var fullTotal = full.GetDailyRollups(DateOnly.MinValue, DateOnly.MaxValue).Sum(r => r.OutputTokens);
+        var incTotal = incremental.GetDailyRollups(DateTimeOffset.MinValue, DateTimeOffset.MaxValue, TimeZoneInfo.Utc).Sum(r => r.OutputTokens);
+        var fullTotal = full.GetDailyRollups(DateTimeOffset.MinValue, DateTimeOffset.MaxValue, TimeZoneInfo.Utc).Sum(r => r.OutputTokens);
 
         Assert.Equal(60, fullTotal);
         Assert.Equal(fullTotal, incTotal);
