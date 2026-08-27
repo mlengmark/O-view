@@ -66,7 +66,11 @@ public sealed class JsonlUsageProvider : IUsageProvider
     /// no other change — offsets, de-duplication and idempotent upserts all still hold,
     /// including for a request id that appears in both (issue #44).
     /// </summary>
-    private IEnumerable<string> FindAllTranscripts()
+    /// <param name="Source">Which surface writes it — a <see cref="TranscriptSources"/> label.</param>
+    /// <param name="Path">The file itself.</param>
+    private readonly record struct Transcript(string Source, string Path);
+
+    private IEnumerable<Transcript> FindAllTranscripts()
     {
         IEnumerable<string> transcripts = _projectsRoot is null
             ? []
@@ -80,7 +84,13 @@ public sealed class JsonlUsageProvider : IUsageProvider
             .FindAuditLogs(_coworkRoots)
             .Distinct(PathIdentity.Comparer);
 
-        return transcripts.Concat(audits);
+        // The label is attached here, where the locator that produced the path is still
+        // known, and carried all the way into the store. Deriving it downstream from the
+        // path — "does it end in audit.jsonl" — would be a second, guessable answer to a
+        // question this loop already knows for certain, and it would go quietly wrong the
+        // first time a root moved (issue #218).
+        return transcripts.Select(p => new Transcript(TranscriptSources.ClaudeCode, p))
+            .Concat(audits.Select(p => new Transcript(TranscriptSources.Cowork, p)));
     }
 
     public UsageSnapshot GetSnapshot(DateTimeOffset utcNow)
@@ -108,9 +118,18 @@ public sealed class JsonlUsageProvider : IUsageProvider
         long bytesRead = 0;
         var ingested = 0;
 
-        foreach (var file in FindAllTranscripts())
+        // Per-source tallies for the log line. A single total cannot answer the question the
+        // log is read for: 98.5% of one machine's transcript bytes were Cowork, and "9 records
+        // ingested" was equally consistent with that working and with only the Claude Code
+        // slice being counted (issue #218).
+        var perSource = TranscriptSources.All.ToDictionary(s => s, _ => new SourceTally(),
+            StringComparer.Ordinal);
+
+        foreach (var (source, file) in FindAllTranscripts())
         {
             seen++;
+            var tally = perSource[source];
+            tally.Files++;
 
             long length;
             try
@@ -120,6 +139,7 @@ public sealed class JsonlUsageProvider : IUsageProvider
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 unreadable++;
+                tally.Unreadable++;
                 continue;
             }
 
@@ -133,15 +153,23 @@ public sealed class JsonlUsageProvider : IUsageProvider
             }
 
             changed++;
+            tally.Changed++;
             var (records, nextOffset) = TranscriptReader.ReadFrom(file, offset);
-            bytesRead += Math.Max(0, nextOffset - offset);
+            var read = Math.Max(0, nextOffset - offset);
+            bytesRead += read;
+            tally.BytesRead += read;
+
             if (records.Count > 0)
             {
-                _store.Ingest(records);
+                _store.Ingest(records, source);
                 ingested += records.Count;
+                tally.Records += records.Count;
             }
 
-            _store.SetFileOffset(file, nextOffset, length);
+            // Written whether or not anything was parsed, and that is the case it exists for:
+            // a file that advances its watermark while yielding nothing is invisible in every
+            // total above, and is the shape a stale watermark leaves behind.
+            _store.SetFileOffset(file, nextOffset, length, source, records.Count, offset);
         }
 
         // One line per poll, always — including the all-quiet case, because "0 changed" is
@@ -152,6 +180,28 @@ public sealed class JsonlUsageProvider : IUsageProvider
         Log?.Invoke(
             $"jsonl sync: {seen} file(s), {changed} changed, {bytesRead:N0} bytes read, "
             + $"{ingested} record(s) ingested{(unreadable > 0 ? $", {unreadable} unreadable" : "")} "
-            + $"in {Environment.TickCount64 - startedAt} ms");
+            + $"in {Environment.TickCount64 - startedAt} ms"
+            + $" [{string.Join(", ", TranscriptSources.All.Select(s => perSource[s].Describe(s)))}]");
+    }
+
+    /// <summary>One surface's share of a single poll. Mutable by design — it is a counter.</summary>
+    private sealed class SourceTally
+    {
+        public int Files;
+        public int Changed;
+        public int Unreadable;
+        public int Records;
+        public long BytesRead;
+
+        /// <summary>
+        /// Compact enough that a whole poll still fits on one log line, and complete enough that
+        /// "0 records" can be told apart from "0 files". A source with no files at all is the
+        /// normal case for anyone who uses only one surface, and says so rather than printing
+        /// three zeroes that read like a failure.
+        /// </summary>
+        public string Describe(string source) => Files == 0
+            ? $"{source} none"
+            : $"{source} {Files}f/{Changed}ch/{BytesRead:N0}b/{Records}r"
+              + (Unreadable > 0 ? $"/{Unreadable}unreadable" : "");
     }
 }

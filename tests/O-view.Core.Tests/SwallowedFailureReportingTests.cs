@@ -143,6 +143,35 @@ public class SwallowedFailureReportingTests : IDisposable
     }
 
     /// <summary>
+    /// The totals are split by surface, because on the machine that prompted issue #218 the
+    /// total could not answer the question the log is read for: 98.5% of its transcript bytes
+    /// were Cowork, and "9 record(s) ingested" was equally consistent with Cowork being counted
+    /// and with only the Claude Code slice reaching the store.
+    ///
+    /// <para>A surface with no files says "none" rather than printing three zeroes — using only
+    /// one surface is the ordinary case, not a failure, and the line is read at a glance.</para>
+    /// </summary>
+    [Fact]
+    public void TheSyncLineSplitsItsTotalsBySurface()
+    {
+        var lines = new List<string>();
+        var projects = Directory.CreateDirectory(Path.Combine(_dir, "projects")).FullName;
+
+        File.WriteAllText(Path.Combine(projects, "session.jsonl"),
+            AssistantRecord("req-1", "2026-08-25T10:00:00Z", 120) + "\n");
+
+        using var store = new RollupStore(Path.Combine(_dir, "usage.db"));
+        var provider = new JsonlUsageProvider(store, projects, []) { Log = lines.Add };
+
+        provider.GetSnapshot(DateTimeOffset.UnixEpoch);
+
+        var line = Assert.Single(lines);
+        Assert.Contains("Claude Code 1f/1ch/", line, StringComparison.Ordinal);
+        Assert.Contains("/1r", line, StringComparison.Ordinal);
+        Assert.Contains("Cowork none", line, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The second poll over an unchanged file reports zero changed rather than zero found —
     /// which is precisely the distinction between "stuck" and "nothing new", and the question
     /// a stalled machine needs answered first.

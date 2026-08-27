@@ -25,17 +25,20 @@ public class DiagnosticsBundleTests : IDisposable
         DiagnosticsEnvironment environment,
         CorruptBackupReport? corruptBackups = null,
         IReadOnlyList<string>? logTail = null,
-        RollupStoreReport? store = null) =>
+        RollupStoreReport? store = null,
+        TranscriptScopeReport? scope = null,
+        IngestAuditReport? ingestAudit = null) =>
         DiagnosticsBundle.Build(
             environment,
             PlanHistoryDiagnostics.Inspect(_dir.File("absent.json")),
-            TranscriptScopeReport.Inspect(null, []),
+            scope ?? TranscriptScopeReport.Inspect(null, []),
             account: null,
             new WeeklyResetAnchor(_dir.File("weekly-reset.json")),
             new DateTimeOffset(2026, 8, 2, 12, 0, 0, TimeSpan.Zero),
             corruptBackups,
             logTail,
-            store);
+            store,
+            ingestAudit);
 
     private static DiagnosticsEnvironment Windows => new("0.6.0", "WindowsInstaller");
 
@@ -234,6 +237,119 @@ public class DiagnosticsBundleTests : IDisposable
         Assert.Contains("2 behind by 409,501 bytes", bundle, StringComparison.Ordinal);
         Assert.Contains("writes accepted", bundle, StringComparison.Ordinal);
     }
+
+    // ── the ingest gap and the reconciliation (issue #218) ──────────────────────────
+
+    /// <summary>
+    /// Transcripts on disk that the store has no watermark for at all.
+    ///
+    /// <para>Both figures were already in the bundle, twenty lines apart and written for
+    /// different reasons; the machine this came from read 38 and 32 and nobody subtracted them.
+    /// <c>0 behind by 0 bytes</c> is only ever a statement about files the store already knows
+    /// about — a file it has never seen is behind by its whole length and appears in none of
+    /// those numbers.</para>
+    /// </summary>
+    [Fact]
+    public void TranscriptsWithNoWatermarkAreCountedAgainstWhatTheStoreTracks()
+    {
+        var projects = Directory.CreateDirectory(Path.Combine(_dir.Path, "projects")).FullName;
+        foreach (var name in new[] { "a.jsonl", "b.jsonl", "c.jsonl" })
+        {
+            File.WriteAllText(Path.Combine(projects, name), "{}\n");
+        }
+
+        var bundle = Build(Windows,
+            store: Tracked(trackedFiles: 1, filesGone: 0),
+            scope: TranscriptScopeReport.Inspect(projects, []));
+
+        Assert.Contains("3 file(s) on disk, 1 tracked and present, 2 with no watermark",
+            bundle, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A watermark for a transcript Claude Code has since deleted is not a tracked file, and
+    /// must not be counted as one — it would hide a real gap behind a stale row.
+    /// </summary>
+    [Fact]
+    public void WatermarksForDeletedTranscriptsDoNotCountAsTracked()
+    {
+        var projects = Directory.CreateDirectory(Path.Combine(_dir.Path, "projects")).FullName;
+        File.WriteAllText(Path.Combine(projects, "a.jsonl"), "{}\n");
+
+        var bundle = Build(Windows,
+            store: Tracked(trackedFiles: 4, filesGone: 3),
+            scope: TranscriptScopeReport.Inspect(projects, []));
+
+        Assert.Contains("1 file(s) on disk, 1 tracked and present, 0 with no watermark",
+            bundle, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A store that could not be read contributes no gap line: "0 tracked" would then be a fact
+    /// about this reader rather than about the machine (rule 6).
+    /// </summary>
+    [Fact]
+    public void AnUnreadableStoreProducesNoIngestGapLine()
+    {
+        var bundle = Build(Windows, store: RollupStoreReport.Unavailable(
+            @"C:\store\usage.db", RollupStoreReport.OpenedForReport, "no database file yet"));
+
+        Assert.DoesNotContain("ingest gap", bundle, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The reconciliation pass, when it has been run: what is on disk against what is stored.
+    /// This is the section that answers the question the store's own numbers raise and cannot
+    /// settle, and it works on a store carrying no attribution at all.
+    /// </summary>
+    [Fact]
+    public void TheIngestAuditReportsWhatIsMissingPerSurface()
+    {
+        var bundle = Build(Windows, ingestAudit: new IngestAuditReport(
+            [
+                new IngestAuditSource(TranscriptSources.ClaudeCode, 30, 13_357, 7_081, 4_895, 2_685_535_944, 1_838_290_166),
+                new IngestAuditSource(TranscriptSources.Cowork, 8, 590, 174, 174, 14_910_462, 14_910_462),
+            ],
+            LedgerRows: 5_072,
+            SharedRequests: 0,
+            Elapsed: TimeSpan.FromSeconds(0.4)));
+
+        Assert.Contains("2,186 MISSING", bundle, StringComparison.Ordinal);
+        Assert.Contains("0 MISSING", bundle, StringComparison.Ordinal);
+        Assert.Contains(TranscriptSources.Cowork, bundle, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Most bundles are produced without it, and say so rather than omitting the section — an
+    /// absent section cannot be told apart from one that failed to render.
+    /// </summary>
+    [Fact]
+    public void ABundleWithoutTheAuditSaysSoRatherThanOmittingIt()
+    {
+        var bundle = Build(Windows);
+
+        Assert.Contains("ingest audit", bundle, StringComparison.Ordinal);
+        Assert.Contains("--diagnose", bundle, StringComparison.Ordinal);
+    }
+
+    /// <summary>A store report whose only interesting fields are the two the gap line reads.</summary>
+    private static RollupStoreReport Tracked(int trackedFiles, int filesGone) => new(
+        Path: @"C:\store\usage.db",
+        Origin: RollupStoreReport.LiveInstance,
+        FileBytes: 1024,
+        WalBytes: 0,
+        JournalMode: "wal",
+        Integrity: "ok",
+        WritesAccepted: true,
+        Failure: null,
+        LedgerRows: 1,
+        FirstDay: "2026-08-01",
+        LastDay: "2026-08-01",
+        NewestTimestamp: "2026-08-01T00:00:00Z",
+        TrackedFiles: trackedFiles,
+        FilesBehind: 0,
+        UnreadBytes: 0,
+        FilesGone: filesGone);
 
     /// <summary>
     /// A store that could not be read says so. An omitted section is indistinguishable from one

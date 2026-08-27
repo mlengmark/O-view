@@ -479,7 +479,10 @@ public partial class App : System.Windows.Application
         var target = path is { Length: > 0 } p ? p : "oview-diagnostics.txt";
         try
         {
-            File.WriteAllText(target, BuildDiagnostics());
+            // deepAudit: this hook is a deliberate command-line run with no UI to freeze and no
+            // engine to interrupt, which makes it the one place the transcript reconciliation
+            // can afford to run (issue #218).
+            File.WriteAllText(target, BuildDiagnostics(deepAudit: true));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -495,7 +498,7 @@ public partial class App : System.Windows.Application
     /// the shell and cannot be absent — so those fields are omitted rather than padded with
     /// "n/a".
     /// </summary>
-    private static string BuildDiagnostics()
+    private static string BuildDiagnostics(bool deepAudit = false)
     {
         var environment = new DiagnosticsEnvironment(
             Version: UpdateService.CurrentVersion,
@@ -507,7 +510,7 @@ public partial class App : System.Windows.Application
         // exists and takes the other path, and the two label themselves differently on purpose.
         var engine = ((App?)Current)?._engine;
         return engine is null
-            ? DiagnosticsBundle.Build(environment)
+            ? DiagnosticsBundle.Build(environment, deepAudit)
             : DiagnosticsBundle.Build(environment, engine.InspectStore());
     }
 
