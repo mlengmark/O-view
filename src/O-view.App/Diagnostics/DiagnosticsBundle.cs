@@ -70,7 +70,7 @@ public static class DiagnosticsBundle
             ClaudeAccount.TryRead(), new WeeklyResetAnchor(), DateTimeOffset.UtcNow,
             CorruptBackups.Inspect(), FileLog.Tail(), RollupStoreReport.Inspect(),
             deepAudit ? IngestAuditReport.Run() : IngestAuditReport.NotRun,
-            CoworkSessionReport.Inspect());
+            CoworkSessionReport.Inspect(), ClaudeWriteSurvey.Inspect());
 
     /// <summary>
     /// The bundle as the <b>running</b> app sees it: identical except that the store is read
@@ -81,7 +81,7 @@ public static class DiagnosticsBundle
         Build(environment, PlanHistoryDiagnostics.Inspect(), TranscriptScopeReport.Inspect(),
             ClaudeAccount.TryRead(), new WeeklyResetAnchor(), DateTimeOffset.UtcNow,
             CorruptBackups.Inspect(), FileLog.Tail(), store, IngestAuditReport.NotRun,
-            CoworkSessionReport.Inspect());
+            CoworkSessionReport.Inspect(), ClaudeWriteSurvey.Inspect());
 
     /// <summary>Overload taking every input explicitly, so the layout is testable.</summary>
     public static string Build(
@@ -95,7 +95,8 @@ public static class DiagnosticsBundle
         IReadOnlyList<string>? logTail = null,
         RollupStoreReport? store = null,
         IngestAuditReport? ingestAudit = null,
-        CoworkSessionReport? coworkSessions = null)
+        CoworkSessionReport? coworkSessions = null,
+        ClaudeWriteSurvey? writeSurvey = null)
     {
         var text = new StringBuilder();
         text.Append(planHistory.ToClipboardText(environment.Version));
@@ -111,6 +112,12 @@ public static class DiagnosticsBundle
         // whose newest transcript is two days old reads as perfectly healthy in every line
         // above and is named outright here.
         text.Append((coworkSessions ?? CoworkSessionReport.None).ToClipboardText(utcNow));
+
+        // And if it is in neither place, where is it? The two sections above only ever look
+        // where this build already believes the answer is, so a layout that has moved reads as
+        // an absence with no explanation — identical to a machine sitting idle. This sweeps
+        // Claude's own directories and prints what is actually being written (issue #218).
+        text.Append((writeSurvey ?? ClaudeWriteSurvey.Empty).ToClipboardText(utcNow));
 
         AppendWeeklyReset(text, weeklyReset, utcNow);
         AppendCorruptBackups(text, corruptBackups ?? CorruptBackupReport.Empty);

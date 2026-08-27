@@ -181,10 +181,16 @@ public sealed record CoworkSessionReport(
     {
         try
         {
+            // De-duplicated by FILE NAME, not by path. MSIX presents one store through the
+            // canonical path as well as the package's own, neither is a link, and nothing about
+            // either name reveals they are one tree — so a path-keyed Distinct kept both copies
+            // and reported twice the sessions that exist. A registration's file name carries the
+            // session's own id, so two entries sharing one cannot be two sessions.
             var files = roots
                 .SelectMany(r => TranscriptFileScan.Find(r, "local_*.json"))
-                .Distinct(PathIdentity.Comparer)
                 .Select(p => new FileInfo(p))
+                .GroupBy(f => f.Name, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.OrderByDescending(f => f.LastWriteTimeUtc).First())
                 .OrderByDescending(f => f.LastWriteTimeUtc)
                 .ToList();
 
