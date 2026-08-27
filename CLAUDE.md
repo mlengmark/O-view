@@ -105,7 +105,7 @@ The rollup store ([ADR-0006](docs/adr/0006-local-rollup-store.md)) is re-fed fro
 
 Account info comes from `~/.claude.json` → `oauthAccount` (no token, no network). **Tier is `organizationType`** (e.g. `claude_pro`). `seatTier` and `userRateLimitTier` are empty strings on the dev account — the obvious-looking fields are the wrong ones and silently render a blank badge.
 
-### 9. Tokens come from two places, and chat is neither
+### 9. Tokens come from two places, and two surfaces write nothing local at all
 
 Local token counts have **two** sources, and scanning one of them is the historical bug ([findings/cowork-audit-logs.md](docs/findings/cowork-audit-logs.md), issue #44):
 
@@ -113,8 +113,22 @@ Local token counts have **two** sources, and scanning one of them is the histori
 |---|---|
 | Claude Code (CLI **and** hosted in Desktop) | `%USERPROFILE%\.claude\projects\**\*.jsonl` |
 | **Cowork**, older builds | `<claude-data-root>\local-agent-mode-sessions\…\<session>\audit.jsonl` |
-| **Cowork**, current builds | `%USERPROFILE%\.claude\projects\**\*.jsonl` — the **same files as Claude Code** |
+| **Cowork**, current builds, running locally | `%USERPROFILE%\.claude\projects\**\*.jsonl` — the **same files as Claude Code** |
+| **Cowork**, running in a cloud container | **none reachable** — see below |
 | Chat | **none — no local usage record exists** |
+
+**A Cowork session can execute in an ephemeral cloud container, and then nothing lands on this
+machine.** The transcript is written inside the container at `/root/.claude/projects/<slug>/<session>.jsonl`,
+in the same schema as any other, and is destroyed when the session is reclaimed. Confirmed by
+Claude Desktop itself on the machine that reported issue #218, whose plan meter sat at 100% while
+its newest local record was two days old.
+
+This is the row that matters most when a user reports "the token tiles have stopped", because
+every other explanation is a bug and this one is not. **No scan fixes it**, and reaching for a
+wider search is the wrong instinct: three of the defects found while diagnosing #218 came from
+assuming a local file must exist somewhere. The plan meters are account-wide and *do* cover this
+usage, so the bars stay correct while the tiles cannot — and `PanelText.SessionUsageNote` is where
+the panel says so.
 
 **Location is not authorship, and this table is why that had to be said twice.** Cowork now runs
 its sessions through Claude Code, so its transcripts land in the Claude Code row. Reading the
