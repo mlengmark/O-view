@@ -47,11 +47,23 @@ public static class TranscriptFileScan
     /// one's clothes, and the caller has to be able to print "capped" (rule 6).</para>
     /// </summary>
     public static IReadOnlyList<string> Find(
+        string root, string searchPattern, int maxDirectories, out bool capped) =>
+        [.. FindInfos(root, searchPattern, maxDirectories, out capped).Select(f => f.FullName)];
+
+    /// <summary>
+    /// The same walk, keeping each entry's metadata.
+    ///
+    /// <para>Enumeration already carries size and timestamps, so a caller that needs them gets
+    /// them free here and pays a stat per file if it asks afterwards. The diagnostic sweep needs
+    /// both, over every file rather than a pattern, and this is what lets it walk once instead
+    /// of once per shape it is looking for.</para>
+    /// </summary>
+    public static IReadOnlyList<FileInfo> FindInfos(
         string root, string searchPattern, int maxDirectories, out bool capped)
     {
         capped = false;
         var visitedCount = 0;
-        var results = new List<string>();
+        var results = new List<FileInfo>();
 
         // Directory.Exists swallows its own errors and returns false, so it needs no
         // guard here; the per-directory try blocks below are what make the walk safe.
@@ -94,7 +106,7 @@ public static class TranscriptFileScan
             // directory whose *children* cannot be listed may still yield its own files.
             try
             {
-                results.AddRange(Directory.EnumerateFiles(dir, searchPattern));
+                results.AddRange(new DirectoryInfo(dir).EnumerateFiles(searchPattern));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

@@ -45,6 +45,34 @@ public static class TranscriptReader
     public static IReadOnlyList<TranscriptRecord> ReadFile(string path) => ReadFrom(path, 0).Records;
 
     /// <summary>
+    /// The file's length <b>as an open handle reports it</b>, or null if it cannot be opened.
+    ///
+    /// <para><b>Not <see cref="FileInfo.Length"/>, and the difference is the point.</b> That
+    /// reads the cached directory entry through <c>GetFileAttributesEx</c>, which Windows
+    /// documents as not necessarily current for a file that is open and being written — and
+    /// every transcript this app reads is exactly that, held open by Claude for the length of a
+    /// session. A stale entry makes a growing file look untouched, and ingestion's "unchanged
+    /// since the last poll" test then skips it on every poll for as long as the session lasts:
+    /// no error, no growth, no records, and a token tile frozen while the user works.</para>
+    ///
+    /// <para>Opening the file forces the real size. It costs one open per transcript per poll,
+    /// which is O(1) rather than O(history) and does not touch the optimisation this check
+    /// exists to serve.</para>
+    /// </summary>
+    public static long? CurrentLength(string path)
+    {
+        try
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            return stream.Length;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// Parse only the bytes appended after <paramref name="startOffset"/>, returning
     /// the records found and the offset to resume from next time.
     ///

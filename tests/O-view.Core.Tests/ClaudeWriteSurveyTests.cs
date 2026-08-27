@@ -58,6 +58,45 @@ public class ClaudeWriteSurveyTests : IDisposable
     }
 
     /// <summary>
+    /// <b>The line that cannot come back empty on a machine where Claude is running.</b>
+    ///
+    /// <para>Every other field here — and every scan in the app — asks after a shape someone has
+    /// already thought of, so all of them report "none" identically whether the files moved or
+    /// were never written. A session recorded under a name nobody anticipated has to show up as
+    /// itself, or the sweep repeats one level up the same blindness it was written to fix.</para>
+    /// </summary>
+    [Fact]
+    public void AFileMatchingNoKnownPatternStillAppearsAmongTheNewest()
+    {
+        var data = Root("data");
+        Write(data, Path.Combine("some-new-place", "session.sqlite3"));
+
+        var survey = ClaudeWriteSurvey.Inspect([("data", data)]);
+        var root = Assert.Single(survey.Roots);
+
+        Assert.Empty(root.Transcripts);
+        Assert.Empty(root.Registries);
+        Assert.Contains(root.Newest, f => f.Path.EndsWith("session.sqlite3", StringComparison.Ordinal));
+        Assert.Contains("session.sqlite3", survey.ToClipboardText(Now), StringComparison.Ordinal);
+    }
+
+    /// <summary>Newest first, so the list answers "what changed most recently" at a glance.</summary>
+    [Fact]
+    public void TheNewestListIsOrderedByRecency()
+    {
+        var data = Root("data");
+        var old = Write(data, "older.log");
+        var recent = Write(data, "newer.log");
+        File.SetLastWriteTimeUtc(old, Now.AddDays(-4).UtcDateTime);
+        File.SetLastWriteTimeUtc(recent, Now.AddMinutes(-2).UtcDateTime);
+
+        var root = Assert.Single(ClaudeWriteSurvey.Inspect([("data", data)]).Roots);
+
+        Assert.EndsWith("newer.log", root.Newest[0].Path, StringComparison.Ordinal);
+        Assert.EndsWith("older.log", root.Newest[1].Path, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Cowork's session register is swept for as well as read, because this is the report that
     /// answers "and if it is not where we look, where is it?".
     /// </summary>

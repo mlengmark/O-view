@@ -117,6 +117,7 @@ public sealed class JsonlUsageProvider : IUsageProvider
         var unreadable = 0;
         long bytesRead = 0;
         var ingested = 0;
+        var staleStat = 0;
 
         // Per-source tallies for the log line. A single total cannot answer the question the
         // log is read for: 98.5% of one machine's transcript bytes were Cowork, and "9 records
@@ -131,16 +132,25 @@ public sealed class JsonlUsageProvider : IUsageProvider
             var tally = perSource[source];
             tally.Files++;
 
-            long length;
-            try
-            {
-                length = new FileInfo(file).Length;
-            }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            // From an open handle, never from the cached directory entry. Windows documents
+            // GetFileAttributesEx — which FileInfo.Length uses — as not necessarily current for
+            // a file that is open and being written, and every transcript here is exactly that.
+            // A stale entry makes a growing file look untouched, so the "unchanged" test below
+            // skips it on every poll for as long as the session holds it open: no error, no
+            // records, and a token tile frozen while the user is working (issue #218).
+            if (TranscriptReader.CurrentLength(file) is not { } length)
             {
                 unreadable++;
                 tally.Unreadable++;
                 continue;
+            }
+
+            // What the directory entry claimed, kept only to count how often it was wrong. This
+            // is the measurement that turns "the tiles stopped" into a named cause on a machine
+            // nobody can attach a debugger to.
+            if (StatLength(file) is { } stat && stat != length)
+            {
+                staleStat++;
             }
 
             var (offset, knownLength) = _store.GetFileOffset(file);
@@ -179,9 +189,28 @@ public sealed class JsonlUsageProvider : IUsageProvider
         // the failure.
         Log?.Invoke(
             $"jsonl sync: {seen} file(s), {changed} changed, {bytesRead:N0} bytes read, "
-            + $"{ingested} record(s) ingested{(unreadable > 0 ? $", {unreadable} unreadable" : "")} "
+            + $"{ingested} record(s) ingested{(unreadable > 0 ? $", {unreadable} unreadable" : "")}"
+            // Printed only when it happens, because on a healthy machine it never does — and a
+            // zero every minute would train the reader to skip the line that matters.
+            + $"{(staleStat > 0 ? $", {staleStat} stale stat(s)" : "")} "
             + $"in {Environment.TickCount64 - startedAt} ms"
             + $" [{string.Join(", ", TranscriptSources.All.Select(s => perSource[s].Describe(s)))}]");
+    }
+
+    /// <summary>
+    /// The length the cached directory entry claims. Diagnostic only — it is the value that
+    /// cannot be trusted, kept solely so disagreements with the handle can be counted.
+    /// </summary>
+    private static long? StatLength(string path)
+    {
+        try
+        {
+            return new FileInfo(path).Length;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>One surface's share of a single poll. Mutable by design — it is a counter.</summary>

@@ -8,6 +8,9 @@ namespace OView.Core.Providers.Jsonl;
 /// <summary>A directory under a surveyed root, and when anything in it last changed.</summary>
 public sealed record SurveyedChild(string Name, DateTimeOffset WrittenUtc);
 
+/// <summary>One file, by whatever name it happens to have.</summary>
+public sealed record SurveyedFile(string Path, DateTimeOffset WrittenUtc, long Bytes);
+
 /// <summary>One of Claude's directories, and what is actually being written inside it.</summary>
 /// <param name="Label">What this root is — <c>config</c> or <c>data</c>.</param>
 /// <param name="Transcripts">Every <c>*.jsonl</c> beneath it, newest first.</param>
@@ -32,6 +35,16 @@ public sealed record SurveyedRoot(
     /// numbers that are the same number.</para>
     /// </summary>
     public string? Mirrors { get; init; }
+
+    /// <summary>
+    /// The most recently written files here, of any name.
+    ///
+    /// <para>The line that cannot come back empty on a machine where Claude is running. Every
+    /// other field in this report — and every scan in the app — asks after a shape someone has
+    /// already thought of; this one just says what changed most recently, so a session written
+    /// under a name nobody here anticipated shows up as itself rather than as an absence.</para>
+    /// </summary>
+    public IReadOnlyList<SurveyedFile> Newest { get; init; } = [];
 
     /// <summary>The relative paths found here, which is what makes two roots comparable.</summary>
     internal IReadOnlyList<string> Signature(string root) =>
@@ -74,6 +87,9 @@ public sealed record ClaudeWriteSurvey(IReadOnlyList<SurveyedRoot> Roots, TimeSp
 
     /// <summary>Subdirectories listed per root, newest first.</summary>
     private const int ChildrenShown = 4;
+
+    /// <summary>Most-recently-written files listed per root, of any name.</summary>
+    private const int NewestShown = 6;
 
     public static ClaudeWriteSurvey Empty { get; } = new([], TimeSpan.Zero);
 
@@ -135,16 +151,36 @@ public sealed record ClaudeWriteSurvey(IReadOnlyList<SurveyedRoot> Roots, TimeSp
             return new SurveyedRoot(label, path, false, [], [], [], false);
         }
 
-        var transcripts = TranscriptFileScan.Find(path, "*.jsonl", MaxDirectories, out var cappedA);
-
-        // Cowork's session register (CoworkSessionReport). Swept for here as well as read
-        // there, because this is the report that answers "and if it is not in the place we
-        // look, where is it?".
-        var registries = TranscriptFileScan.Find(path, "local_*.json", MaxDirectories, out var cappedB);
+        // EVERY file, once, then partitioned — rather than one walk per shape being looked for.
+        //
+        // Sweeping only for known patterns can only ever confirm or deny what this build already
+        // expects, which is the same blindness the section was written to fix one level up: if
+        // Cowork starts writing its sessions under a name nobody here has thought of, a
+        // pattern-filtered sweep reports "none" exactly as it would on an idle machine. The
+        // newest files by name are what answer "what is Claude writing right now" without
+        // presuming the answer. Measured at ~280 ms over ~7,900 files across two roots.
+        var all = TranscriptFileScan.FindInfos(path, "*", MaxDirectories, out var capped)
+            .OrderByDescending(f => f.LastWriteTimeUtc)
+            .ToList();
 
         return new SurveyedRoot(
-            label, path, true,
-            ByRecency(transcripts), ByRecency(registries), RecentChildren(path), cappedA || cappedB);
+            label,
+            path,
+            true,
+            [.. all.Where(f => f.Extension.Equals(".jsonl", StringComparison.OrdinalIgnoreCase))
+                   .Select(f => f.FullName)],
+            // Cowork's session register (CoworkSessionReport). Swept for here as well as read
+            // there, because this is the report that answers "and if it is not in the place we
+            // look, where is it?".
+            [.. all.Where(f => f.Name.StartsWith("local_", StringComparison.OrdinalIgnoreCase)
+                            && f.Extension.Equals(".json", StringComparison.OrdinalIgnoreCase))
+                   .Select(f => f.FullName)],
+            RecentChildren(path),
+            capped)
+        {
+            Newest = [.. all.Take(NewestShown).Select(f => new SurveyedFile(
+                f.FullName, new DateTimeOffset(f.LastWriteTimeUtc, TimeSpan.Zero), f.Length))],
+        };
     }
 
     /// <summary>
@@ -238,6 +274,15 @@ public sealed record ClaudeWriteSurvey(IReadOnlyList<SurveyedRoot> Roots, TimeSp
                         $"{c.Name} {(utcNow - c.WrittenUtc).TotalHours:0.0}h"))));
             }
 
+            // Any name at all. On a machine where Claude is running this cannot be empty, so an
+            // empty or uniformly stale list is itself the finding.
+            foreach (var file in root.Newest)
+            {
+                text.AppendLine(string.Create(CultureInfo.InvariantCulture,
+                    $"      newest      : {Age(utcNow - file.WrittenUtc)} · {file.Bytes,10:N0} · "
+                    + $"{Elide(System.IO.Path.GetRelativePath(root.Path, file.Path))}"));
+            }
+
             if (root.Capped)
             {
                 text.AppendLine(string.Create(CultureInfo.InvariantCulture,
@@ -263,18 +308,19 @@ public sealed record ClaudeWriteSurvey(IReadOnlyList<SurveyedRoot> Roots, TimeSp
         var newest = files[0];
         var relative = Elide(System.IO.Path.GetRelativePath(root, newest));
 
-        // Clamped: a file written while the sweep was running, or by a machine whose clock has
-        // just been corrected, is otherwise reported as "-0.0 h old" — an age that cannot exist
-        // and that reads as a rendering fault rather than as freshness.
-        var age = utcNow - WrittenUtc(newest);
-        if (age < TimeSpan.Zero)
-        {
-            age = TimeSpan.Zero;
-        }
-
         return string.Create(CultureInfo.InvariantCulture,
-            $"{files.Count} file(s), newest {age.TotalHours:0.0} h old — {relative}");
+            $"{files.Count} file(s), newest {Age(utcNow - WrittenUtc(newest))} old — {relative}");
     }
+
+    /// <summary>
+    /// An age in hours.
+    ///
+    /// <para>Clamped at zero: a file written while the sweep was running, or on a machine whose
+    /// clock has just been corrected, is otherwise reported as <c>-0.0 h</c> — an age that
+    /// cannot exist and that reads as a rendering fault rather than as freshness.</para>
+    /// </summary>
+    private static string Age(TimeSpan age) => string.Create(CultureInfo.InvariantCulture,
+        $"{(age < TimeSpan.Zero ? TimeSpan.Zero : age).TotalHours,6:0.0} h");
 
     /// <summary>
     /// Keeps a path readable without losing what it is read for.
