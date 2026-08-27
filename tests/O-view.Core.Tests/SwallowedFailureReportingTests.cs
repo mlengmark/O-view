@@ -143,6 +143,51 @@ public class SwallowedFailureReportingTests : IDisposable
     }
 
     /// <summary>
+    /// A transcript that grows while its handle is held open is still ingested.
+    ///
+    /// <para>Change detection used <see cref="FileInfo.Length"/>, which reads the cached
+    /// directory entry — and Windows documents that as not necessarily current for a file being
+    /// written. Every transcript here is exactly that: held open by Claude for the length of a
+    /// session. Where the entry goes stale, a growing file looks untouched and the "unchanged
+    /// since the last poll" test skips it on every poll for as long as the session lasts. The
+    /// length now comes from an open handle, which is always the real one.</para>
+    ///
+    /// <para>The stale entry itself could not be reproduced on the development machine's NTFS
+    /// volume, so this pins the behaviour that makes it moot rather than the fault: appends made
+    /// through a still-open writer are picked up.</para>
+    /// </summary>
+    [Fact]
+    public void ATranscriptAppendedThroughAnOpenHandleIsStillIngested()
+    {
+        var lines = new List<string>();
+        var projects = Directory.CreateDirectory(Path.Combine(_dir, "projects")).FullName;
+        var transcript = Path.Combine(projects, "session.jsonl");
+
+        using var store = new RollupStore(Path.Combine(_dir, "usage.db"));
+        var provider = new JsonlUsageProvider(store, projects, []) { Log = lines.Add };
+
+        // Claude's own access pattern: opened for append and kept open across the poll.
+        using var writer = new FileStream(
+            transcript, FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
+
+        Append(writer, AssistantRecord("req-1", "2026-08-25T10:00:00Z", 120));
+        provider.GetSnapshot(DateTimeOffset.UnixEpoch);
+
+        Append(writer, AssistantRecord("req-2", "2026-08-25T10:01:00Z", 240));
+        provider.GetSnapshot(DateTimeOffset.UnixEpoch);
+
+        Assert.Contains("1 record(s) ingested", lines[0], StringComparison.Ordinal);
+        Assert.Contains("1 record(s) ingested", lines[1], StringComparison.Ordinal);
+    }
+
+    private static void Append(FileStream stream, string line)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetBytes(line + "\n");
+        stream.Write(bytes, 0, bytes.Length);
+        stream.Flush();
+    }
+
+    /// <summary>
     /// The totals are split by surface, because on the machine that prompted issue #218 the
     /// total could not answer the question the log is read for: 98.5% of its transcript bytes
     /// were Cowork, and "9 record(s) ingested" was equally consistent with Cowork being counted
