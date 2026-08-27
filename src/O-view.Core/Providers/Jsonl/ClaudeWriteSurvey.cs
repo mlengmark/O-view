@@ -281,15 +281,25 @@ public sealed record ClaudeWriteSurvey(IReadOnlyList<SurveyedRoot> Roots, TimeSp
     ///
     /// <para>Claude Code encodes a whole working directory into one folder name, so a session
     /// whose cwd was itself deep inside Claude's tree produces a segment several hundred
-    /// characters long — measured at 236 on the development machine. Both ends carry the
-    /// diagnostic: the leading segments say which subtree this is, and the file name says what
-    /// kind of record it is. Only the middle is expendable.</para>
+    /// characters long — measured at 236 on the development machine.</para>
+    ///
+    /// <para><b>Trimmed per segment, never across the whole string, and the head of a segment is
+    /// what survives.</b> Eliding the middle of the joined path was shorter but cut wherever the
+    /// character count happened to land — including through the middle of an account name, which
+    /// <see cref="App.Diagnostics.Redact"/> then could not match against either half. An encoded
+    /// working directory carries the account name near its start (<c>C--Users-ada-work</c>), so
+    /// keeping each segment's head keeps the name intact and redactable, and keeps the leading
+    /// segments that say which subtree this is. The file name is its own short segment and
+    /// survives whole.</para>
     /// </summary>
     private static string Elide(string relative)
     {
-        const int max = 110;
-        return relative.Length <= max
-            ? relative
-            : $"{relative[..(max / 2)]}…{relative[^(max / 2)..]}";
+        const int maxSegment = 60;
+
+        var separators = new[] { System.IO.Path.DirectorySeparatorChar, System.IO.Path.AltDirectorySeparatorChar };
+        var segments = relative.Split(separators, StringSplitOptions.RemoveEmptyEntries)
+            .Select(s => s.Length <= maxSegment ? s : $"{s[..maxSegment]}…");
+
+        return string.Join(System.IO.Path.DirectorySeparatorChar, segments);
     }
 }

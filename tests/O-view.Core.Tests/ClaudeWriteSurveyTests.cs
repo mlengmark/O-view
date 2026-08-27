@@ -170,6 +170,29 @@ public class ClaudeWriteSurveyTests : IDisposable
     }
 
     /// <summary>
+    /// Trimming happens per segment, and each segment keeps its <b>head</b>.
+    ///
+    /// <para>This is a privacy property, not a layout one. An encoded working directory carries
+    /// the account name near its start (<c>C--Users-ada-work</c>), and eliding the middle of the
+    /// joined path cut wherever the character count happened to land — potentially straight
+    /// through that name, leaving two halves <c>Redact</c> could match against neither. Keeping
+    /// segment heads keeps the name intact, and therefore redactable.
+    /// </summary>
+    [Fact]
+    public void TheStartOfAnEncodedDirectoryNameSurvivesTrimming()
+    {
+        var data = Root("data");
+        var encoded = "C--Users-ada-" + string.Join("-", Enumerable.Repeat("deep", 30));
+        Write(data, Path.Combine("projects", encoded, "session.jsonl"));
+
+        var text = ClaudeWriteSurvey.Inspect([("data", data)]).ToClipboardText(Now);
+
+        // The account name must reach the redactor whole, or it cannot be removed.
+        Assert.Contains("C--Users-ada-", text, StringComparison.Ordinal);
+        Assert.Contains("session.jsonl", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// A file written while the sweep runs, or on a machine whose clock has just been
     /// corrected, must not be reported as "-0.0 h old" — an age that cannot exist and that
     /// reads as a rendering fault rather than as freshness.
