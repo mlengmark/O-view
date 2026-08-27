@@ -112,8 +112,20 @@ Local token counts have **two** sources, and scanning one of them is the histori
 | Surface | Transcript |
 |---|---|
 | Claude Code (CLI **and** hosted in Desktop) | `%USERPROFILE%\.claude\projects\**\*.jsonl` |
-| **Cowork** | `<claude-data-root>\local-agent-mode-sessions\…\<session>\audit.jsonl` |
+| **Cowork**, older builds | `<claude-data-root>\local-agent-mode-sessions\…\<session>\audit.jsonl` |
+| **Cowork**, current builds | `%USERPROFILE%\.claude\projects\**\*.jsonl` — the **same files as Claude Code** |
 | Chat | **none — no local usage record exists** |
+
+**Location is not authorship, and this table is why that had to be said twice.** Cowork now runs
+its sessions through Claude Code, so its transcripts land in the Claude Code row. Reading the
+table as "a file under `.claude\projects` is Claude Code usage" is what made `JsonlUsageProvider`
+label by locator — and on the development machine that reported `Cowork: 0 rows` while **28 of 30
+transcripts there, 107.7 MB of 107.9 MB, belonged to registered Cowork sessions** (issue #218).
+
+The authority on which surface wrote a transcript is Cowork's own register:
+`<claude-data-root>\claude-code-sessions\…\local_<id>.json` names the `cliSessionId` its session
+writes under, and that id is the transcript's file name. `CoworkSessionIndex` is the one place
+that match is made; do not re-derive a surface from a path.
 
 Three traps, all silent:
 

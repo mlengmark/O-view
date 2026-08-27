@@ -232,7 +232,20 @@ public sealed record CoworkSessionReport(
     /// bundle by a wide margin. Reading only what is needed also means the conversation content
     /// in the rest of the file is never materialised at all.</para>
     /// </summary>
-    private static CoworkSession? Read(string path, IReadOnlyDictionary<string, string> transcripts)
+    private static CoworkSession? Read(string path, IReadOnlyDictionary<string, string> transcripts) =>
+        ReadFields(path) is { } fields
+            ? new CoworkSession(
+                fields.SessionId,
+                fields.Cwd ?? "unknown",
+                fields.LastActivityUtc,
+                transcripts.GetValueOrDefault(fields.SessionId))
+            : null;
+
+    /// <summary>
+    /// The three fields a registration is read for, shared with
+    /// <see cref="CoworkSessionIndex"/> so the two never disagree about how one is parsed.
+    /// </summary>
+    internal static CoworkSessionFields? ReadFields(string path)
     {
         try
         {
@@ -276,7 +289,7 @@ public sealed record CoworkSessionReport(
             }
 
             return sessionId is { Length: > 0 } id
-                ? new CoworkSession(id, cwd ?? "unknown", lastActivity, transcripts.GetValueOrDefault(id))
+                ? new CoworkSessionFields(id, cwd, lastActivity)
                 : null;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
@@ -286,3 +299,6 @@ public sealed record CoworkSessionReport(
         }
     }
 }
+
+/// <summary>What a registration is read for: the transcript's name, and two facts about it.</summary>
+internal sealed record CoworkSessionFields(string SessionId, string? Cwd, DateTimeOffset? LastActivityUtc);

@@ -96,6 +96,105 @@ public class IngestAttributionTests : IDisposable
     }
 
     /// <summary>
+    /// <b>The attribution that was inverted.</b> Cowork runs its sessions through Claude Code,
+    /// so its transcripts land under the Claude Code root — and labelling by locator therefore
+    /// stamped every one of them "Claude Code". Measured on the development machine: 28 of 30
+    /// files there, 107.7 MB of 107.9 MB, belonged to registered Cowork sessions while the
+    /// bundle reported <c>Cowork: 0 rows</c>.
+    ///
+    /// <para>The register is the authority. A transcript whose file name is a registered
+    /// <c>cliSessionId</c> is Cowork's, wherever it sits.</para>
+    /// </summary>
+    [Fact]
+    public void ATranscriptWrittenByARegisteredCoworkSessionIsAttributedToCowork()
+    {
+        var (projects, cowork) = BuildLayout(ClaudeCodeRecord("cc-1") + "\n", cowork: null);
+
+        // The same location, one file per surface: one registered to Cowork, one not.
+        File.Move(Path.Combine(projects, "session.jsonl"), Path.Combine(projects, "sess-cowork.jsonl"));
+        File.WriteAllText(Path.Combine(projects, "sess-cli.jsonl"), ClaudeCodeRecord("cc-2", 500) + "\n");
+
+        var registry = RegisterCoworkSession("sess-cowork");
+
+        using (var store = new RollupStore(DbPath))
+        {
+            new JsonlUsageProvider(store, projects, [cowork], [registry])
+                .GetSnapshot(DateTimeOffset.UnixEpoch);
+        }
+
+        var byName = RollupStoreReport.Inspect(DbPath).LedgerBySource!
+            .ToDictionary(s => s.Source, StringComparer.Ordinal);
+
+        Assert.Equal(1, byName[TranscriptSources.Cowork].Rows);
+        Assert.Equal(10 + 120, byName[TranscriptSources.Cowork].Tokens);
+        Assert.Equal(1, byName[TranscriptSources.ClaudeCode].Rows);
+        Assert.Equal(10 + 500, byName[TranscriptSources.ClaudeCode].Tokens);
+    }
+
+    /// <summary>
+    /// The match is on the session id, not on where the file sits — so it survives Claude Code
+    /// moving transcripts again, which is the change that broke the previous rule.
+    /// </summary>
+    [Fact]
+    public void TheMatchIsBySessionIdRatherThanByLocation()
+    {
+        var (projects, cowork) = BuildLayout(claudeCode: null, cowork: null);
+        var nested = Directory.CreateDirectory(
+            Path.Combine(projects, "some--encoding--nobody--predicted")).FullName;
+        File.WriteAllText(Path.Combine(nested, "sess-moved.jsonl"), ClaudeCodeRecord("cc-1") + "\n");
+
+        var registry = RegisterCoworkSession("sess-moved");
+
+        using (var store = new RollupStore(DbPath))
+        {
+            new JsonlUsageProvider(store, projects, [cowork], [registry])
+                .GetSnapshot(DateTimeOffset.UnixEpoch);
+        }
+
+        var cowokRows = RollupStoreReport.Inspect(DbPath).LedgerBySource!
+            .Single(s => s.Source == TranscriptSources.Cowork);
+
+        Assert.Equal(1, cowokRows.Rows);
+    }
+
+    /// <summary>
+    /// No registry named means nothing is reclassified. A provider that reached for a machine
+    /// default here would attribute a test's fixtures from this developer's own sessions — the
+    /// hazard issue #212 was about.
+    /// </summary>
+    [Fact]
+    public void WithNoRegistryEverythingUnderTheProjectsRootStaysClaudeCode()
+    {
+        var (projects, cowork) = BuildLayout(ClaudeCodeRecord("cc-1") + "\n", cowork: null);
+
+        using (var store = new RollupStore(DbPath))
+        {
+            new JsonlUsageProvider(store, projects, [cowork]).GetSnapshot(DateTimeOffset.UnixEpoch);
+        }
+
+        var bySource = RollupStoreReport.Inspect(DbPath).LedgerBySource!;
+
+        Assert.Equal(1, bySource.Single(s => s.Source == TranscriptSources.ClaudeCode).Rows);
+
+        // A surface that contributed nothing has no row here at all — the report supplies the
+        // zero when it prints, so its absence is the same statement.
+        Assert.DoesNotContain(bySource, s => s.Source == TranscriptSources.Cowork);
+    }
+
+    /// <summary>Writes a Cowork registration naming <paramref name="sessionId"/>, and returns its root.</summary>
+    private string RegisterCoworkSession(string sessionId)
+    {
+        var root = Directory.CreateDirectory(
+            Path.Combine(_dir, CoworkSessionReport.SessionsDirectoryName, "org", "user")).FullName;
+
+        File.WriteAllText(
+            Path.Combine(root, $"local_{sessionId}.json"),
+            $$"""{"cliSessionId": "{{sessionId}}", "cwd": "C:\\work", "lastActivityAt": 1787650518127}""");
+
+        return Path.Combine(_dir, CoworkSessionReport.SessionsDirectoryName);
+    }
+
+    /// <summary>
     /// A surface with no rows is printed, not omitted. "Cowork 0 row(s)" beside 36 Cowork files
     /// in the section above is the entire report — and it cannot be seen if a zero means the
     /// line is skipped. Same reasoning as <see cref="TranscriptScopeReport.CoverageLine"/>
