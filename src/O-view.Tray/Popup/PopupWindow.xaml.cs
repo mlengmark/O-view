@@ -516,6 +516,13 @@ public partial class PopupWindow : Window, IFlyout
         // bills at API rates, so the label has to flip with it.
         var offPlan = stats.IsOffPlan;
 
+        // The tokens behind the session bar, beneath the bar itself (issue #218). Both lines
+        // collapse rather than render empty: a blank row under the bar reads as a figure that
+        // failed to load, which is the ambiguity the whole panel is written against.
+        SetLine(SessionUsageText, PanelText.SessionUsageLine(stats));
+        SetLine(SessionUsageNote,
+            PanelText.SessionUsageNote(stats, Now(TimeZoneInfo.Utc), TimeZoneInfo.Local));
+
         // The "today" tiles carried a "(UTC)" hint for one release, while the figure was a UTC
         // day under a local-time header (issue #210). The figure is the reader's own day now,
         // so there is nothing left to qualify.
@@ -565,6 +572,19 @@ public partial class PopupWindow : Window, IFlyout
     /// <para>Collapsed on every Populate, deliberately: the panel is a transient view, not a
     /// setting, and StatTile resets its own expansion for the same reason.</para>
     /// </summary>
+    /// <summary>
+    /// Sets a line's text and hides it when there is none. The empty string is the signal —
+    /// every <c>PanelText</c> member that can have nothing to say returns one, so the decision
+    /// lives with the text rather than being re-derived from the statistics at each call site.
+    /// A visible but empty <see cref="TextBlock"/> leaves a gap that reads as a figure which
+    /// failed to load.
+    /// </summary>
+    private static void SetLine(TextBlock line, string text)
+    {
+        line.Text = text;
+        line.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
     private void PopulateComposition(TokenComposition composition, string coverageLine)
     {
         var show = composition.HasTokens;

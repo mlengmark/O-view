@@ -97,6 +97,57 @@ public sealed record PanelStatistics(
     public string CoverageNote =>
         HasPartialHistory ? $"{RecordedDays} of {WindowDays} days recorded" : "";
 
+    /// <summary>
+    /// Local tokens recorded inside the <b>current session window</b> — the same window the
+    /// session bar is a percentage of (GitHub issue #218).
+    ///
+    /// <para><b>Why this exists.</b> Every other token figure on the panel is scoped to a
+    /// calendar day or to 31 of them, while the bar directly above them is a five-hour rolling
+    /// window. Nothing on screen was scoped to the bar, so a user reading <c>5h: 87%</c> and
+    /// looking for the tokens behind that 87% found a number measuring something else entirely
+    /// and reasonably concluded their usage was not being counted. It was; it was simply never
+    /// shown against the period it belongs to.</para>
+    ///
+    /// <para><b>It will not always agree with the bar, and must not be presented as though it
+    /// should.</b> The percentage comes from Claude's own meters and is account-wide — it counts
+    /// chat, which keeps no local usage record at all, and work done on another machine, which
+    /// leaves no transcript on this one (CLAUDE.md rule 9). This figure can only ever be what
+    /// was written locally. Where the two diverge, the panel says so rather than letting a small
+    /// number sit unexplained beside a large percentage.</para>
+    /// </summary>
+    public long TokensSession { get; init; }
+
+    /// <summary>
+    /// <see cref="TokensSession"/> priced at public API rates. Null when nothing in the window
+    /// could be priced — never a partial sum presented as a total, and never a fabricated rate.
+    /// </summary>
+    public decimal? EstSessionUsd { get; init; }
+
+    /// <summary>Models in the session window with no published rate. See <see cref="UnpricedModels"/>.</summary>
+    public IReadOnlyList<string> UnpricedModelsSession { get; init; } = [];
+
+    /// <summary>
+    /// Whether a session window could be established at all.
+    ///
+    /// <para>False means the plan meters have never been read on this machine, so there is no
+    /// window to scope a figure to — which is a different statement from "the window is empty",
+    /// and the panel renders nothing rather than a zero that would read as measured.</para>
+    /// </summary>
+    public bool HasSessionWindow { get; init; }
+
+    /// <summary>
+    /// The newest usage O-view has recorded locally, from any surface. Null when it has
+    /// recorded none.
+    ///
+    /// <para>Carried so the panel can state <i>how stale</i> the local record is rather than
+    /// only that this window is empty. "No local session activity" beside a bar reading 100%
+    /// invites the reading that something just broke; "newest local record: 54 h old" says what
+    /// actually happened, and is the figure a support report needs. Measured on the machine in
+    /// issue #218, where nothing had been written for two days while the meters ran at
+    /// 100%.</para>
+    /// </summary>
+    public DateTimeOffset? LatestLocalActivityUtc { get; init; }
+
     /// <summary>True when work in the current session window is not drawing from the plan.</summary>
     public bool IsOffPlan => Divergence?.IsOffPlan == true;
 
@@ -121,12 +172,25 @@ public sealed record PanelStatistics(
         var outputTokens = windowUsage.Sum(r => r.OutputTokens);
         var result = DivergenceDetector.Evaluate(planPercentsInWindow, outputTokens, meterAge);
 
+        // The session figures come off the rollups already in hand for the divergence check —
+        // one query, not two, and by construction they describe the same window the bar does
+        // (issue #218). Computing them anywhere else would be a second answer to the same
+        // question, which is how the panel and its own caveat came to disagree in #142.
+        var sessionEstimate = EstimateTotal(windowUsage, out var sessionUnpriced);
+
         // Only price the window when it is actually off-plan: otherwise this figure
         // would read as money spent when it is plan usage costing nothing marginal.
         return this with
         {
             Divergence = result,
             EstOffPlanUsd = result.IsOffPlan ? EstimateTotal(windowUsage) : null,
+
+            // An empty meter series means no window was ever established, so there is nothing
+            // for a figure to be scoped to. Distinct from a window that is genuinely empty.
+            HasSessionWindow = planPercentsInWindow.Count > 0,
+            TokensSession = windowUsage.Sum(r => r.TotalTokens),
+            EstSessionUsd = sessionEstimate,
+            UnpricedModelsSession = sessionUnpriced,
         };
     }
 
@@ -194,6 +258,7 @@ public sealed record PanelStatistics(
             EstimateTotal(creditRollups))
         {
             UnpricedModels = unpriced,
+            LatestLocalActivityUtc = store.LatestActivityUtc(),
             ModelsToday = SliceByModel(todayRollups),
             Models31Days = SliceByModel(rollups),
             ModelColourOrder = ModelBreakdown.ColourOrder(SliceByModel(rollups)),
