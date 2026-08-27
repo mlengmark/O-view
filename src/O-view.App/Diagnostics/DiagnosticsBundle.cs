@@ -59,10 +59,17 @@ public sealed record DiagnosticsEnvironment(
 /// </summary>
 public static class DiagnosticsBundle
 {
-    public static string Build(DiagnosticsEnvironment environment) =>
+    /// <param name="deepAudit">
+    /// Re-read every transcript and reconcile it against the ledger (<see cref="IngestAudit"/>).
+    /// Seconds of work on a large history, so it is opt-in and belongs to <c>--diagnose</c>:
+    /// Copy diagnostics runs on the UI thread, where a pass that scales with total history is
+    /// the freeze issue #125 was about.
+    /// </param>
+    public static string Build(DiagnosticsEnvironment environment, bool deepAudit = false) =>
         Build(environment, PlanHistoryDiagnostics.Inspect(), TranscriptScopeReport.Inspect(),
             ClaudeAccount.TryRead(), new WeeklyResetAnchor(), DateTimeOffset.UtcNow,
-            CorruptBackups.Inspect(), FileLog.Tail(), RollupStoreReport.Inspect());
+            CorruptBackups.Inspect(), FileLog.Tail(), RollupStoreReport.Inspect(),
+            deepAudit ? IngestAuditReport.Run() : IngestAuditReport.NotRun);
 
     /// <summary>
     /// The bundle as the <b>running</b> app sees it: identical except that the store is read
@@ -84,7 +91,8 @@ public static class DiagnosticsBundle
         DateTimeOffset utcNow,
         CorruptBackupReport? corruptBackups = null,
         IReadOnlyList<string>? logTail = null,
-        RollupStoreReport? store = null)
+        RollupStoreReport? store = null,
+        IngestAuditReport? ingestAudit = null)
     {
         var text = new StringBuilder();
         text.Append(planHistory.ToClipboardText(environment.Version));
@@ -99,9 +107,17 @@ public static class DiagnosticsBundle
         // Placed before the log tail so the store's state and the poll lines that produced it
         // read together — "0 changed" means one thing beside a ledger that is current and
         // quite another beside one that is five days stale.
-        text.Append((store ?? RollupStoreReport.Unavailable(
-            RollupStore.DefaultPath, RollupStoreReport.OpenedForReport, "not inspected"))
-            .ToClipboardText());
+        var storeReport = store ?? RollupStoreReport.Unavailable(
+            RollupStore.DefaultPath, RollupStoreReport.OpenedForReport, "not inspected");
+
+        text.Append(storeReport.ToClipboardText());
+        AppendIngestGap(text, scope, storeReport);
+
+        // Straight after the store, because it answers the question the store's own numbers
+        // raise and cannot settle: the store reports what it believes it ingested, this reports
+        // what is actually on disk beside it (issue #218). Its "not run" line is printed rather
+        // than omitted so the section's absence is never mistaken for a section that failed.
+        text.Append((ingestAudit ?? IngestAuditReport.NotRun).ToClipboardText());
 
         AppendRecentLog(text, logTail ?? []);
 
@@ -278,6 +294,39 @@ public static class DiagnosticsBundle
         {
             text.AppendLine($"    | {line}");
         }
+    }
+
+    /// <summary>
+    /// The one subtraction a reader should not have to do themselves: transcripts on disk
+    /// against transcripts the store has ever recorded a watermark for (issue #218).
+    ///
+    /// <para>The two figures already sit in this bundle, twenty lines apart, in sections written
+    /// for different reasons — and on the machine this was added from they read 38 and 32, with
+    /// three of the 32 belonging to files Claude Code has since deleted. Nine transcripts had
+    /// never been ingested at all, and nothing said so. <c>0 behind by 0 bytes</c> is only ever
+    /// a statement about files the store already knows about; a file it has never seen is behind
+    /// by its entire length and appears in none of those numbers.</para>
+    ///
+    /// <para>Printed even when it is zero. A gap that closes is worth seeing closed, and a line
+    /// that appears only on a bad machine cannot be recognised as missing on a good one.</para>
+    /// </summary>
+    private static void AppendIngestGap(
+        StringBuilder text, TranscriptScopeReport scope, RollupStoreReport store)
+    {
+        if (store.Failure is { Length: > 0 })
+        {
+            // The store could not be read at all, so "0 tracked" would be a fact about this
+            // reader rather than about the machine.
+            return;
+        }
+
+        // Watermarks whose file is still on disk. The rest point at transcripts Claude Code has
+        // deleted since — ordinary, already counted as "gone", and not evidence of a gap.
+        var tracked = Math.Max(0, store.TrackedFiles - store.FilesGone);
+        var untracked = Math.Max(0, scope.TotalFiles - tracked);
+
+        text.AppendLine($"  ingest gap    : {scope.TotalFiles} file(s) on disk, {tracked} tracked and present, "
+                        + $"{untracked} with no watermark");
     }
 
     private static void AppendCorruptBackups(StringBuilder text, CorruptBackupReport report) =>

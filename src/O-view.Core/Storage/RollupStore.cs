@@ -187,6 +187,72 @@ public sealed class RollupStore : IDisposable
             );
             """;
         cmd.ExecuteNonQuery();
+
+        AddAttributionColumns(connection);
+    }
+
+    /// <summary>
+    /// The columns that say <b>where</b> a ledger row and a watermark came from (issue #218).
+    ///
+    /// <para>Added rather than rebuilt into the CREATE statements above: a store that already
+    /// exists is never re-created, so a column only listed there would reach a fresh install and
+    /// no other. The ledger is rebuildable in principle, but a rebuild costs every day of
+    /// history older than Claude Code's own ~30-day cleanup — precisely what ADR-0006 exists to
+    /// keep — so a migration that adds a column is the only acceptable shape here.</para>
+    ///
+    /// <para><b>Every one of them is nullable with no default, and that is the design.</b> NULL
+    /// means "written before this build was tracking it", which is a different fact from zero
+    /// and is reported as a different word. Back-filling a default would convert an unknown into
+    /// a confident figure in the one report a person reads when they already doubt the
+    /// numbers.</para>
+    /// </summary>
+    private static void AddAttributionColumns(SqliteConnection connection)
+    {
+        // Which surface the request was parsed from.
+        AddColumnIfMissing(connection, "ingested_requests", "source", "TEXT");
+
+        // Same, for the watermark — so the per-source file accounting needs no path parsing,
+        // and stays right if a root ever moves.
+        AddColumnIfMissing(connection, "file_offsets", "source", "TEXT");
+
+        // Records this store has actually ingested out of this file, cumulative.
+        AddColumnIfMissing(connection, "file_offsets", "records", "INTEGER");
+
+        // The byte offset that count started from. Without it the count is uninterpretable:
+        // "0 records" from a file first seen by an older build says nothing, while "0 records"
+        // counted from byte 0 of a fully-read file is the finding itself.
+        AddColumnIfMissing(connection, "file_offsets", "counted_from", "INTEGER");
+
+        // When this file last yielded a record. Separates "never produced anything" from
+        // "produced plenty, months ago" without a second query.
+        AddColumnIfMissing(connection, "file_offsets", "last_ingest_utc", "TEXT");
+    }
+
+    /// <summary>
+    /// SQLite has no <c>ADD COLUMN IF NOT EXISTS</c>, so the column list is read first. Checked
+    /// rather than attempted-and-caught because a duplicate-column error and a genuinely broken
+    /// store arrive as the same <see cref="SqliteException"/>, and swallowing the second to
+    /// tolerate the first is how a corrupt database gets treated as an up-to-date one.
+    /// </summary>
+    private static void AddColumnIfMissing(
+        SqliteConnection connection, string table, string column, string type)
+    {
+        using (var probe = connection.CreateCommand())
+        {
+            probe.CommandText = $"PRAGMA table_info({table});";
+            using var reader = probe.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                {
+                    return;
+                }
+            }
+        }
+
+        using var alter = connection.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {type};";
+        alter.ExecuteNonQuery();
     }
 
     /// <summary>
@@ -236,21 +302,57 @@ public sealed class RollupStore : IDisposable
         }
     }
 
-    public void SetFileOffset(string path, long offset, long fileLength)
+    /// <summary>
+    /// Records the resume point, and what reading up to it actually yielded.
+    ///
+    /// <para><paramref name="recordsAdded"/> and <paramref name="countedFrom"/> exist together
+    /// or not at all: a record count is meaningless without the offset it was counted from
+    /// (issue #218). Counting from byte 0 means the number covers the whole file, so a zero is
+    /// evidence — the file was read end to end and produced nothing. A count that began
+    /// mid-file, because an earlier build had already advanced the watermark, can only ever say
+    /// "nothing since", and <see cref="RollupStoreReport"/> prints it as exactly that.</para>
+    ///
+    /// <para><c>counted_from</c> is written with COALESCE so it pins the <i>first</i> offset
+    /// this build observed and never moves again; <c>records</c> accumulates beside it. A NULL
+    /// pair is a watermark inherited from a build that recorded neither.</para>
+    /// </summary>
+    /// <param name="source">
+    /// Which surface writes this file (<see cref="TranscriptSources"/>). Null leaves the
+    /// existing value alone rather than clearing it, so a caller that does not know cannot
+    /// erase what a caller that did know already stored.
+    /// </param>
+    public void SetFileOffset(
+        string path,
+        long offset,
+        long fileLength,
+        string? source = null,
+        int recordsAdded = 0,
+        long? countedFrom = null)
     {
         lock (_gate)
         {
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = """
-                INSERT INTO file_offsets (path, byte_offset, file_length)
-                VALUES ($path, $offset, $length)
+                INSERT INTO file_offsets
+                    (path, byte_offset, file_length, source, records, counted_from, last_ingest_utc)
+                VALUES ($path, $offset, $length, $source, $added, $countedFrom, $ingestedAt)
                 ON CONFLICT(path) DO UPDATE SET
-                    byte_offset = excluded.byte_offset,
-                    file_length = excluded.file_length
+                    byte_offset     = excluded.byte_offset,
+                    file_length     = excluded.file_length,
+                    source          = COALESCE(excluded.source, file_offsets.source),
+                    records         = COALESCE(file_offsets.records, 0) + $added,
+                    counted_from    = COALESCE(file_offsets.counted_from, excluded.counted_from),
+                    last_ingest_utc = COALESCE(excluded.last_ingest_utc, file_offsets.last_ingest_utc)
                 """;
             cmd.Parameters.AddWithValue("$path", path);
             cmd.Parameters.AddWithValue("$offset", offset);
             cmd.Parameters.AddWithValue("$length", fileLength);
+            cmd.Parameters.AddWithValue("$source", (object?)source ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$added", recordsAdded);
+            cmd.Parameters.AddWithValue("$countedFrom", (object?)countedFrom ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$ingestedAt", recordsAdded > 0
+                ? DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture)
+                : (object)DBNull.Value);
             cmd.ExecuteNonQuery();
         }
     }
@@ -259,7 +361,15 @@ public sealed class RollupStore : IDisposable
     /// Upsert records in order. Later records for the same requestId overwrite earlier
     /// ones, so feeding a file in append order leaves the final (most complete) record.
     /// </summary>
-    public void Ingest(IEnumerable<TranscriptRecord> records)
+    /// <param name="source">
+    /// Which surface these were parsed from (<see cref="TranscriptSources"/>), stored beside
+    /// each row so the ledger can be summed per source in the support bundle (issue #218).
+    ///
+    /// <para>Null writes NULL, which reads back as <see cref="TranscriptSources.Unattributed"/>
+    /// — the honest answer for every row an older build wrote, and for any caller that does not
+    /// know. It is deliberately not defaulted to the likelier surface.</para>
+    /// </param>
+    public void Ingest(IEnumerable<TranscriptRecord> records, string? source = null)
     {
         lock (_gate)
         {
@@ -269,8 +379,8 @@ public sealed class RollupStore : IDisposable
             cmd.CommandText = """
                 INSERT INTO ingested_requests
                     (request_id, utc_date, model, input_tokens, cache_creation_tokens,
-                     cache_read_tokens, output_tokens, last_timestamp)
-                VALUES ($id, $date, $model, $input, $cacheW, $cacheR, $output, $ts)
+                     cache_read_tokens, output_tokens, last_timestamp, source)
+                VALUES ($id, $date, $model, $input, $cacheW, $cacheR, $output, $ts, $source)
                 ON CONFLICT(request_id) DO UPDATE SET
                     utc_date = excluded.utc_date,
                     model = excluded.model,
@@ -278,7 +388,8 @@ public sealed class RollupStore : IDisposable
                     cache_creation_tokens = excluded.cache_creation_tokens,
                     cache_read_tokens = excluded.cache_read_tokens,
                     output_tokens = excluded.output_tokens,
-                    last_timestamp = excluded.last_timestamp
+                    last_timestamp = excluded.last_timestamp,
+                    source = COALESCE(excluded.source, ingested_requests.source)
                 """;
             var pId = cmd.Parameters.Add("$id", SqliteType.Text);
             var pDate = cmd.Parameters.Add("$date", SqliteType.Text);
@@ -288,6 +399,7 @@ public sealed class RollupStore : IDisposable
             var pCacheR = cmd.Parameters.Add("$cacheR", SqliteType.Integer);
             var pOutput = cmd.Parameters.Add("$output", SqliteType.Integer);
             var pTs = cmd.Parameters.Add("$ts", SqliteType.Text);
+            cmd.Parameters.AddWithValue("$source", (object?)source ?? DBNull.Value);
 
             foreach (var r in records)
             {

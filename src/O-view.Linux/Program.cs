@@ -106,7 +106,10 @@ internal static class Program
         // a windowed app has no console and must be given a path.
         if (parsed.TryGetValue("--diagnose", out var diagnosePath))
         {
-            var bundle = DiagnosticsBundle.Build(DescribeThisMachine());
+            // deepAudit, as on the Windows head: this is a deliberate command-line run with no
+            // toolkit started and no engine to interrupt, so the transcript reconciliation can
+            // afford the seconds it costs (issue #218).
+            var bundle = DiagnosticsBundle.Build(DescribeThisMachine(), deepAudit: true);
             if (diagnosePath is { Length: > 0 })
             {
                 File.WriteAllText(diagnosePath, bundle);
