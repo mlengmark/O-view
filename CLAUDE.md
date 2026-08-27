@@ -131,7 +131,16 @@ Three traps, all silent:
 
 - **`<claude-data-root>` is not always `%APPDATA%\Claude`.** Desktop ships as MSIX and Windows redirects it into `%LOCALAPPDATA%\Packages\<family>\LocalCache\Roaming\Claude`. Use `ClaudeDataRoots` — never hard-code the canonical path, which is how O-view once reported "no usage data" at a user running Desktop. Roots can mirror each other; scanning the union is safe because ingestion de-duplicates on request id.
 
-- Each Cowork sandbox contains a `.claude\projects` directory that is **always empty**. Its presence makes a projects-only scan look like it succeeded.
+- Each Cowork sandbox contains a `.claude\projects` directory. It was documented here as **always
+  empty**, and that was wrong: a session that runs Claude Code inside its sandbox writes its
+  transcript there. Measured — 4 such files on the dev machine, **38** on the machine that
+  reported #218, none of them ever scanned (issue #224). `CoworkAuditLocator` therefore takes
+  `*.jsonl` under a session root, not the single name `audit.jsonl`.
+
+  It stayed invisible because a plain recursive enumeration of that tree returns nothing — it
+  contains the broken junction below — so a hand-rolled check agreed with this paragraph and only
+  `TranscriptFileScan` disagreed. Its presence still makes a projects-only scan look like it
+  succeeded, which is the original trap; it is now *also* a place real usage hides.
 - That tree contains a **broken directory junction**. `Directory.GetFiles(..., AllDirectories)` aborts the entire walk on it and `DirectoryNotFoundException` derives from `IOException`, so the usual catch turns one bad folder into "no transcripts on this machine". Always enumerate per-directory — use `TranscriptFileScan`, don't hand-roll it again.
 
 "Claude Desktop" is **not** the dividing line — Claude Code sessions hosted in Desktop write to the normal user-profile location. Cowork is the odd one out, and chat is the one that genuinely cannot be measured. Don't write UI copy that blames "Desktop".

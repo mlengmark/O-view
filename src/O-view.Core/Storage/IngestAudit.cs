@@ -141,7 +141,7 @@ public sealed record IngestAuditReport(
             (TranscriptSources.ClaudeCode,
                 projectsRoot is null ? [] : ClaudeProjectsLocator.FindTranscripts(projectsRoot)),
             (TranscriptSources.Cowork,
-                CoworkAuditLocator.FindAuditLogs(coworkRoots).Distinct(PathIdentity.Comparer).ToList()),
+                CoworkAuditLocator.FindTranscripts(coworkRoots).Distinct(PathIdentity.Comparer).ToList()),
         };
 
         var sources = new List<IngestAuditSource>();
