@@ -97,7 +97,7 @@ public sealed class JsonlUsageProvider : IUsageProvider
         // de-duplicate its records anyway. Platform path identity, because on a
         // case-sensitive filesystem two names differing only in case are two files.
         IEnumerable<string> audits = CoworkAuditLocator
-            .FindAuditLogs(_coworkRoots)
+            .FindTranscripts(_coworkRoots)
             .Distinct(PathIdentity.Comparer);
 
         // The surface is decided by Cowork's own register, not by which locator found the file.
