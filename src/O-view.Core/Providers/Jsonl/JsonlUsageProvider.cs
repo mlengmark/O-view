@@ -20,6 +20,7 @@ public sealed class JsonlUsageProvider : IUsageProvider
     private readonly RollupStore _store;
     private readonly string? _projectsRoot;
     private readonly IReadOnlyList<string> _coworkRoots;
+    private readonly CoworkSessionIndex _sessions;
 
     /// <summary>
     /// Where each poll's ingestion result is recorded. A delegate, so <c>Core</c> stays free
@@ -36,7 +37,8 @@ public sealed class JsonlUsageProvider : IUsageProvider
 
     /// <summary>The real machine layout: every transcript root on this machine.</summary>
     public JsonlUsageProvider(RollupStore store)
-        : this(store, ClaudeProjectsLocator.DefaultRoot, CoworkAuditLocator.DefaultRoots)
+        : this(store, ClaudeProjectsLocator.DefaultRoot, CoworkAuditLocator.DefaultRoots,
+            CoworkSessionReport.DefaultRoots)
     {
     }
 
@@ -52,11 +54,25 @@ public sealed class JsonlUsageProvider : IUsageProvider
     /// overload pair would have made a bare <c>null</c> argument ambiguous at every call
     /// site, so there is deliberately one constructor here, not two.
     /// </summary>
-    public JsonlUsageProvider(RollupStore store, string? projectsRoot, IReadOnlyList<string> coworkRoots)
+    /// <param name="sessionRegistryRoots">
+    /// Cowork's <c>claude-code-sessions</c> directories, used to tell which transcripts under
+    /// the Claude Code root Cowork actually wrote (<see cref="CoworkSessionIndex"/>).
+    ///
+    /// <para>Empty — the default — reclassifies nothing, so every existing caller keeps the
+    /// behaviour it had. Stated rather than defaulted to a machine path for the same reason as
+    /// the roots above: a test that silently picked up this developer's own registry would be
+    /// measuring his sessions, not its fixture.</para>
+    /// </param>
+    public JsonlUsageProvider(
+        RollupStore store,
+        string? projectsRoot,
+        IReadOnlyList<string> coworkRoots,
+        IReadOnlyList<string>? sessionRegistryRoots = null)
     {
         _store = store;
         _projectsRoot = projectsRoot;
         _coworkRoots = coworkRoots;
+        _sessions = new CoworkSessionIndex(sessionRegistryRoots ?? []);
     }
 
     /// <summary>
@@ -84,12 +100,19 @@ public sealed class JsonlUsageProvider : IUsageProvider
             .FindAuditLogs(_coworkRoots)
             .Distinct(PathIdentity.Comparer);
 
-        // The label is attached here, where the locator that produced the path is still
-        // known, and carried all the way into the store. Deriving it downstream from the
-        // path — "does it end in audit.jsonl" — would be a second, guessable answer to a
-        // question this loop already knows for certain, and it would go quietly wrong the
-        // first time a root moved (issue #218).
-        return transcripts.Select(p => new Transcript(TranscriptSources.ClaudeCode, p))
+        // The surface is decided by Cowork's own register, not by which locator found the file.
+        //
+        // Labelling by location was true when it was written and is not true now: Cowork runs
+        // its sessions through Claude Code, so its transcripts land under the Claude Code root.
+        // Measured on the development machine, 28 of 30 files there — 107.7 MB of 107.9 MB —
+        // belong to registered Cowork sessions, while the bundle reported "Cowork: 0 rows"
+        // (issue #218). A registration names the id its transcript is written under, which is
+        // exact and survives Claude Code moving the file again.
+        //
+        // An audit log is still Cowork by construction: nothing else writes one.
+        return transcripts
+            .Select(p => new Transcript(
+                _sessions.Wrote(p) ? TranscriptSources.Cowork : TranscriptSources.ClaudeCode, p))
             .Concat(audits.Select(p => new Transcript(TranscriptSources.Cowork, p)));
     }
 
@@ -125,6 +148,11 @@ public sealed class JsonlUsageProvider : IUsageProvider
         // slice being counted (issue #218).
         var perSource = TranscriptSources.All.ToDictionary(s => s, _ => new SourceTally(),
             StringComparer.Ordinal);
+
+        // Before the walk, because the walk asks it which surface wrote each transcript. Only
+        // registrations that have changed are re-read, so the steady-state cost is one small
+        // file rather than the whole register.
+        _sessions.Refresh();
 
         foreach (var (source, file) in FindAllTranscripts())
         {
