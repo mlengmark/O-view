@@ -367,6 +367,15 @@ public static class PanelText
     /// weaker statement than "none anywhere". Two paragraphs saying overlapping things is how a
     /// panel stops being read.</para>
     /// </summary>
+    /// <summary>
+    /// The disclosure label for <see cref="SessionUsageNote"/> (issue #230).
+    ///
+    /// <para>Phrased as the question the figure above it provokes, exactly as "Why so large?"
+    /// is. A reader who already knows why the window is empty never opens either, and a reader
+    /// who does not is one click from the answer rather than four standing lines from it.</para>
+    /// </summary>
+    public const string SessionExplainToggleLabel = "Why is this empty?";
+
     public static string SessionUsageNote(
         PanelStatistics stats, DateTimeOffset utcNow, TimeZoneInfo local)
     {

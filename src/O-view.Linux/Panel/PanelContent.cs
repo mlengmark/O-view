@@ -226,13 +226,21 @@ public sealed class PanelContent : Border
 
         var block = new StackPanel { Spacing = 3, Margin = new Thickness(0, 4, 0, 0) };
         block.Children.Add(Text(line, 12, _theme["TextPrimary"]));
+        _root.Children.Add(block);
 
-        if (PanelText.SessionUsageNote(stats, utcNow, local) is { Length: > 0 } note)
+        // The figure stays; the explanation folds, exactly as the token one does above
+        // (issue #230). Four wrapped lines in the panel's most valuable space, answering a
+        // question a reader has once — and the toggle appears only where the answer does.
+        if (PanelText.SessionUsageNote(stats, utcNow, local) is not { Length: > 0 } note)
         {
-            block.Children.Add(Text(note, 12, _theme["TextSecondary"]));
+            return;
         }
 
-        _root.Children.Add(block);
+        var body = new StackPanel { Spacing = 3, IsVisible = false };
+        body.Children.Add(Text(note, 12, _theme["TextSecondary"]));
+
+        _root.Children.Add(Disclosure(PanelText.SessionExplainToggleLabel, body));
+        _root.Children.Add(body);
     }
 
     private void AddTiles(PanelStatistics stats, TranscriptScopeReport? scopeReport)

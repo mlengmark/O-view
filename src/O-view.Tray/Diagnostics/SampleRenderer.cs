@@ -178,6 +178,22 @@ internal static class SampleRenderer
             ],
         };
 
+        // A machine with plenty of history and nothing inside the current window — the state
+        // issue #218 was reported from, and the only one that produces the session-window
+        // explanation. Named once because three samples now render it: folded, expanded, and
+        // compact-with-everything-open.
+        //
+        // The staleness is relative to the real clock, not to the fixed `capturedAt` this file
+        // pins the graph with: the panel ages it against DateTimeOffset.UtcNow, exactly as it
+        // does the reset countdowns, so a fixed instant renders as however long ago that date
+        // happens to be — "32d 8h" when this was written, which demonstrates nothing.
+        var sessionEmpty = stats with
+        {
+            TokensSession = 0,
+            EstSessionUsd = null,
+            LatestLocalActivityUtc = DateTimeOffset.UtcNow.AddHours(-52),
+        };
+
         var cases = new (string Name, UsageSnapshot Snapshot, PanelStatistics Stats,
             TranscriptScopeReport? Scope, PlanHistoryReport? Plan)[]
         {
@@ -192,22 +208,7 @@ internal static class SampleRenderer
             // explaining why the bar above can read high while the line beneath it reads
             // none. Distinct from `no-local-transcripts`, where the scope note owns that
             // explanation and this one deliberately stays quiet.
-            ("session-window-empty", live,
-                stats with
-                {
-                    TokensSession = 0,
-                    EstSessionUsd = null,
-                    // Two days stale, which is what the reported machine looked like — and the
-                    // only sample that renders the staleness figure at all.
-                    //
-                    // Relative to the real clock, not to the fixed `capturedAt` this file pins
-                    // the graph with: the panel ages this against DateTimeOffset.UtcNow, exactly
-                    // as it does the reset countdowns, so a fixed instant here renders as
-                    // however long ago that date happens to be — "32d 8h" when this was
-                    // written, which demonstrates nothing.
-                    LatestLocalActivityUtc = DateTimeOffset.UtcNow.AddHours(-52),
-                },
-                bothSourcesScope, null),
+            ("session-window-empty", live, sessionEmpty, bothSourcesScope, null),
             // The CLI-only banner and its "needs Claude Desktop" gauges. Estimate, not None:
             // the transcripts do resolve, so the composite labels the snapshot a local
             // estimate and the header reads that way — it just carries no percentages,
@@ -251,14 +252,30 @@ internal static class SampleRenderer
                 folding.RenderToBitmap(live, stats, account, scale, compositionReveal: 0.45),
                 Path.Combine(dir, $"panel-tokens-folding-{(light ? "light" : "dark")}.png"));
 
+            // The session-window explanation with its disclosure open (issue #230). Same
+            // reasoning as the token one above: it resets on every Populate, so the expanded
+            // state exists in no other render, and the folded state is what every other sample
+            // already shows.
+            var sessionExplained = new PopupWindow { ThemeOverride = light, ScopeReport = bothSourcesScope };
+            SavePng(
+                sessionExplained.RenderToBitmap(live, sessionEmpty, account, scale,
+                    expandSessionExplanation: true),
+                Path.Combine(dir, $"panel-session-explained-{(light ? "light" : "dark")}.png"));
+
             // The same panel at compact density — what a display too short for the natural
-            // layout gets. Expanded, because that is the tallest the panel ever is and so the
-            // case the density exists for. Rendered rather than reasoned about: whether a
-            // tightened layout still reads as sections cannot be judged from the constants.
+            // layout gets. Rendered rather than reasoned about: whether a tightened layout
+            // still reads as sections cannot be judged from the constants.
+            //
+            // BOTH disclosures open, on the data that produces both. That is the tallest the
+            // panel can be, and so the case the density exists for — and since #230 added the
+            // second fold, "expanded" meaning only the token one would no longer be the worst
+            // case. A sample that stops being the extreme it claims to be is worse than none,
+            // because it is still trusted.
             var compact = new PopupWindow { ThemeOverride = light, ScopeReport = bothSourcesScope };
             SavePng(
-                compact.RenderToBitmap(live, stats, account, scale,
-                    expandComposition: true, density: PanelDensity.Compact),
+                compact.RenderToBitmap(live, sessionEmpty, account, scale,
+                    expandComposition: true, density: PanelDensity.Compact,
+                    expandSessionExplanation: true),
                 Path.Combine(dir, $"panel-compact-{(light ? "light" : "dark")}.png"));
         }
     }
