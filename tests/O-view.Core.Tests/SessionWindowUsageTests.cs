@@ -120,9 +120,43 @@ public class SessionWindowUsageTests : IDisposable
         Assert.Contains("no local session activity recorded",
             PanelText.SessionUsageLine(stats), StringComparison.Ordinal);
 
-        var note = PanelText.SessionUsageNote(stats);
+        var note = PanelText.SessionUsageNote(stats, Now, TimeZoneInfo.Utc);
         Assert.Contains("whole account", note, StringComparison.Ordinal);
         Assert.Contains("Chat keeps no local usage record", note, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// <b>The figure that turns an alarming absence into a dated observation.</b> "No local
+    /// session activity" beside a bar reading 100% invites the reading that something has just
+    /// broken; on the machine in issue #218 nothing had been written for two days. Stating how
+    /// stale the record is says what actually happened, and is the figure a support report
+    /// needs.
+    /// </summary>
+    [Fact]
+    public void TheExplanationLeadsWithHowStaleTheLocalRecordIs()
+    {
+        Seed("earlier", Now.AddDays(-3), 500_000);
+
+        var note = PanelText.SessionUsageNote(Build(Steady), Now, TimeZoneInfo.Utc);
+
+        Assert.StartsWith("Newest local record: 3d 0h old", note, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The last clause is deliberately open. It read "a session on another device", which was
+    /// too narrow — a session can leave no transcript on the machine it is running on, which is
+    /// issue #218 exactly, and the mechanism was never established. Naming a cause O-view cannot
+    /// see would be the fabrication rule 6 forbids.
+    /// </summary>
+    [Fact]
+    public void TheExplanationNamesTheConsequenceRatherThanACause()
+    {
+        Seed("earlier", Now.AddDays(-3), 500_000);
+
+        var note = PanelText.SessionUsageNote(Build(Steady), Now, TimeZoneInfo.Utc);
+
+        Assert.Contains("a session that writes no transcript on this machine", note, StringComparison.Ordinal);
+        Assert.DoesNotContain("another device", note, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -139,7 +173,7 @@ public class SessionWindowUsageTests : IDisposable
         Assert.Equal(0, stats.Tokens31Days);
         Assert.Contains("no local session activity recorded",
             PanelText.SessionUsageLine(stats), StringComparison.Ordinal);
-        Assert.Equal("", PanelText.SessionUsageNote(stats));
+        Assert.Equal("", PanelText.SessionUsageNote(stats, Now, TimeZoneInfo.Utc));
     }
 
     /// <summary>The explanation appears only where it is needed — a figure that agrees with its bar explains itself.</summary>
@@ -148,7 +182,7 @@ public class SessionWindowUsageTests : IDisposable
     {
         Seed("in-1", WindowStart.AddMinutes(10), 1_000);
 
-        Assert.Equal("", PanelText.SessionUsageNote(Build(Steady)));
+        Assert.Equal("", PanelText.SessionUsageNote(Build(Steady), Now, TimeZoneInfo.Utc));
     }
 
     /// <summary>
@@ -163,7 +197,7 @@ public class SessionWindowUsageTests : IDisposable
         var stats = Build([]);
 
         Assert.Equal("", PanelText.SessionUsageLine(stats));
-        Assert.Equal("", PanelText.SessionUsageNote(stats));
+        Assert.Equal("", PanelText.SessionUsageNote(stats, Now, TimeZoneInfo.Utc));
     }
 
     /// <summary>

@@ -98,7 +98,7 @@ public sealed class PanelContent : Border
         // token figure on this panel is a calendar day or 31 of them, so nothing here measured
         // what the percentage above measures — and a user looking for the usage behind 87%
         // found a figure for a different period and read it as usage going uncounted.
-        AddSessionUsage(stats);
+        AddSessionUsage(stats, utcNow, local);
 
         AddBar("Weekly", authoritative ? snapshot.WeeklyPercent : null,
             WeeklyResetLine(snapshot, authoritative, utcNow, local), placeholder);
@@ -217,7 +217,7 @@ public sealed class PanelContent : Border
     /// window, which is the one case where the figure needs defending against the percentage
     /// above it.</para>
     /// </summary>
-    private void AddSessionUsage(PanelStatistics stats)
+    private void AddSessionUsage(PanelStatistics stats, DateTimeOffset utcNow, TimeZoneInfo local)
     {
         if (PanelText.SessionUsageLine(stats) is not { Length: > 0 } line)
         {
@@ -227,7 +227,7 @@ public sealed class PanelContent : Border
         var block = new StackPanel { Spacing = 3, Margin = new Thickness(0, 4, 0, 0) };
         block.Children.Add(Text(line, 12, _theme["TextPrimary"]));
 
-        if (PanelText.SessionUsageNote(stats) is { Length: > 0 } note)
+        if (PanelText.SessionUsageNote(stats, utcNow, local) is { Length: > 0 } note)
         {
             block.Children.Add(Text(note, 12, _theme["TextSecondary"]));
         }

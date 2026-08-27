@@ -135,6 +135,19 @@ public sealed record PanelStatistics(
     /// </summary>
     public bool HasSessionWindow { get; init; }
 
+    /// <summary>
+    /// The newest usage O-view has recorded locally, from any surface. Null when it has
+    /// recorded none.
+    ///
+    /// <para>Carried so the panel can state <i>how stale</i> the local record is rather than
+    /// only that this window is empty. "No local session activity" beside a bar reading 100%
+    /// invites the reading that something just broke; "newest local record: 54 h old" says what
+    /// actually happened, and is the figure a support report needs. Measured on the machine in
+    /// issue #218, where nothing had been written for two days while the meters ran at
+    /// 100%.</para>
+    /// </summary>
+    public DateTimeOffset? LatestLocalActivityUtc { get; init; }
+
     /// <summary>True when work in the current session window is not drawing from the plan.</summary>
     public bool IsOffPlan => Divergence?.IsOffPlan == true;
 
@@ -245,6 +258,7 @@ public sealed record PanelStatistics(
             EstimateTotal(creditRollups))
         {
             UnpricedModels = unpriced,
+            LatestLocalActivityUtc = store.LatestActivityUtc(),
             ModelsToday = SliceByModel(todayRollups),
             Models31Days = SliceByModel(rollups),
             ModelColourOrder = ModelBreakdown.ColourOrder(SliceByModel(rollups)),

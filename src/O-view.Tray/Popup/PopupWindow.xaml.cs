@@ -520,7 +520,8 @@ public partial class PopupWindow : Window, IFlyout
         // collapse rather than render empty: a blank row under the bar reads as a figure that
         // failed to load, which is the ambiguity the whole panel is written against.
         SetLine(SessionUsageText, PanelText.SessionUsageLine(stats));
-        SetLine(SessionUsageNote, PanelText.SessionUsageNote(stats));
+        SetLine(SessionUsageNote,
+            PanelText.SessionUsageNote(stats, Now(TimeZoneInfo.Utc), TimeZoneInfo.Local));
 
         // The "today" tiles carried a "(UTC)" hint for one release, while the figure was a UTC
         // day under a local-time header (issue #210). The figure is the reader's own day now,

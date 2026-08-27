@@ -349,18 +349,49 @@ public static class PanelText
     /// O-view has not observed — it does not claim the user was in chat, or on another device,
     /// only that neither would appear here.</para>
     ///
+    /// <para><b>It leads with how stale the local record is, because that is the fact.</b> "No
+    /// local session activity" beside a bar reading 100% invites the reading that something has
+    /// just broken. On the machine in issue #218 nothing had been written for two days while the
+    /// meters ran at 100% — a figure that says so is both more informative and the one a support
+    /// report needs, and it turns an alarming absence into a dated observation.</para>
+    ///
+    /// <para><b>The last clause is deliberately open.</b> It said "a session on another device",
+    /// which was too narrow: a session can leave no transcript on the machine it is running on —
+    /// issue #218 is exactly that, and the mechanism was never established. Naming a cause O-view
+    /// cannot see would be the fabrication rule 6 forbids; naming the consequence is what the
+    /// panel actually knows.</para>
+    ///
     /// <para><b>Silent when the machine has recorded nothing at all.</b> That case already has
     /// an explanation — the token-scope note, which names the surfaces and the locations
     /// searched (#58, #170) — and it is the better one, because "none in this window" is a
     /// weaker statement than "none anywhere". Two paragraphs saying overlapping things is how a
     /// panel stops being read.</para>
     /// </summary>
-    public static string SessionUsageNote(PanelStatistics stats) =>
-        stats is { HasSessionWindow: true, TokensSession: 0, Tokens31Days: > 0 }
-            ? "The bar above comes from Claude's own meters and covers your whole account. "
-              + "Chat keeps no local usage record, and a session on another device leaves no "
-              + "transcript on this machine, so neither can be counted here."
+    public static string SessionUsageNote(
+        PanelStatistics stats, DateTimeOffset utcNow, TimeZoneInfo local)
+    {
+        if (stats is not { HasSessionWindow: true, TokensSession: 0, Tokens31Days: > 0 })
+        {
+            return "";
+        }
+
+        var staleness = stats.LatestLocalActivityUtc is { } at
+            ? $"Newest local record: {Countdown(Elapsed(at, utcNow))} old"
+              + $" ({TimeZoneInfo.ConvertTime(at, local):ddd HH:mm}). "
             : "";
+
+        return staleness
+            + "The bar above comes from Claude's own meters and covers your whole account. "
+            + "Chat keeps no local usage record, and neither does a session that writes no "
+            + "transcript on this machine, so neither can be counted here.";
+    }
+
+    /// <summary>
+    /// Age, clamped at zero. A record stamped slightly ahead of the clock is a clock
+    /// correction, not a reading from the future, and "-0m old" reads as a rendering fault.
+    /// </summary>
+    private static TimeSpan Elapsed(DateTimeOffset at, DateTimeOffset utcNow) =>
+        utcNow - at is { Ticks: > 0 } age ? age : TimeSpan.Zero;
 
     /// <summary>
     /// Why that total is so much larger than the number Claude's own UI shows — the

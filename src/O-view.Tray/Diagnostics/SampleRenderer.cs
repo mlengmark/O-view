@@ -193,7 +193,21 @@ internal static class SampleRenderer
             // none. Distinct from `no-local-transcripts`, where the scope note owns that
             // explanation and this one deliberately stays quiet.
             ("session-window-empty", live,
-                stats with { TokensSession = 0, EstSessionUsd = null }, bothSourcesScope, null),
+                stats with
+                {
+                    TokensSession = 0,
+                    EstSessionUsd = null,
+                    // Two days stale, which is what the reported machine looked like — and the
+                    // only sample that renders the staleness figure at all.
+                    //
+                    // Relative to the real clock, not to the fixed `capturedAt` this file pins
+                    // the graph with: the panel ages this against DateTimeOffset.UtcNow, exactly
+                    // as it does the reset countdowns, so a fixed instant here renders as
+                    // however long ago that date happens to be — "32d 8h" when this was
+                    // written, which demonstrates nothing.
+                    LatestLocalActivityUtc = DateTimeOffset.UtcNow.AddHours(-52),
+                },
+                bothSourcesScope, null),
             // The CLI-only banner and its "needs Claude Desktop" gauges. Estimate, not None:
             // the transcripts do resolve, so the composite labels the snapshot a local
             // estimate and the header reads that way — it just carries no percentages,
