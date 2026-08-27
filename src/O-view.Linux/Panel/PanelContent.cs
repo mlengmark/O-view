@@ -94,6 +94,12 @@ public sealed class PanelContent : Border
         AddBar("Current session", authoritative ? snapshot.SessionPercent : null,
             PanelText.SessionReset(snapshot.SessionResetAtUtc, utcNow, local, snapshot.SessionResetUncertainty), placeholder);
 
+        // The tokens behind that bar, scoped to the bar's own window (issue #218). Every other
+        // token figure on this panel is a calendar day or 31 of them, so nothing here measured
+        // what the percentage above measures — and a user looking for the usage behind 87%
+        // found a figure for a different period and read it as usage going uncounted.
+        AddSessionUsage(stats);
+
         AddBar("Weekly", authoritative ? snapshot.WeeklyPercent : null,
             WeeklyResetLine(snapshot, authoritative, utcNow, local), placeholder);
 
@@ -197,6 +203,33 @@ public sealed class PanelContent : Border
         if (resetLine is { Length: > 0 })
         {
             block.Children.Add(Text(resetLine, 12, _theme["TextSecondary"]));
+        }
+
+        _root.Children.Add(block);
+    }
+
+    /// <summary>
+    /// The session window's own token and Est. figures, directly beneath its bar.
+    ///
+    /// <para>Both lines are omitted rather than rendered empty: this head builds its tree from
+    /// scratch on every refresh, so an empty <c>TextBlock</c> is a gap in the layout with no
+    /// content to explain it. The note appears only when the local record has nothing for the
+    /// window, which is the one case where the figure needs defending against the percentage
+    /// above it.</para>
+    /// </summary>
+    private void AddSessionUsage(PanelStatistics stats)
+    {
+        if (PanelText.SessionUsageLine(stats) is not { Length: > 0 } line)
+        {
+            return;
+        }
+
+        var block = new StackPanel { Spacing = 3, Margin = new Thickness(0, 4, 0, 0) };
+        block.Children.Add(Text(line, 12, _theme["TextPrimary"]));
+
+        if (PanelText.SessionUsageNote(stats) is { Length: > 0 } note)
+        {
+            block.Children.Add(Text(note, 12, _theme["TextSecondary"]));
         }
 
         _root.Children.Add(block);

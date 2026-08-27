@@ -89,6 +89,14 @@ internal static class SampleRenderer
                 Input: 1_400, CacheCreation: 1_270_000, CacheRead: 11_300_000, Output: 128_600),
             Composition31Days = new TokenComposition(
                 Input: 75_000, CacheCreation: 68_460_000, CacheRead: 609_294_000, Output: 6_771_000),
+
+            // The session window's own figures, beneath the bar they belong to (issue #218).
+            // A fraction of the day's total, because the window is a few hours of it — a
+            // sample where the two matched would render a panel that cannot show the
+            // distinction these lines exist to make.
+            HasSessionWindow = true,
+            TokensSession = 4_180_000,
+            EstSessionUsd = 3.11m,
         };
 
         var capturedAt = new DateTimeOffset(today.ToDateTime(new TimeOnly(10, 47)), TimeSpan.Zero);
@@ -117,6 +125,14 @@ internal static class SampleRenderer
             // hidden here, and the scope note carries the explanation instead.
             CompositionToday = TokenComposition.Empty,
             Composition31Days = TokenComposition.Empty,
+
+            // The window is established and empty — which is the state issue #218 was reported
+            // from: a bar reading 87% above a local record holding nothing for it. The panel
+            // has to explain that pairing on the spot, and this is the only sample that renders
+            // the explanation.
+            HasSessionWindow = true,
+            TokensSession = 0,
+            EstSessionUsd = null,
         };
 
         // Fixed roots rather than the real machine's, so the note is deterministic and the
@@ -171,6 +187,13 @@ internal static class SampleRenderer
                 capturedAt.AddHours(3), capturedAt), stats, bothSourcesScope, null),
             // The token-scope note, which appears in no other state.
             ("no-local-transcripts", live, noLocalUsage, emptyScope, null),
+            // A machine with plenty of history and nothing inside the current window — the
+            // state issue #218 was reported from, and the only one that renders the note
+            // explaining why the bar above can read high while the line beneath it reads
+            // none. Distinct from `no-local-transcripts`, where the scope note owns that
+            // explanation and this one deliberately stays quiet.
+            ("session-window-empty", live,
+                stats with { TokensSession = 0, EstSessionUsd = null }, bothSourcesScope, null),
             // The CLI-only banner and its "needs Claude Desktop" gauges. Estimate, not None:
             // the transcripts do resolve, so the composite labels the snapshot a local
             // estimate and the header reads that way — it just carries no percentages,
