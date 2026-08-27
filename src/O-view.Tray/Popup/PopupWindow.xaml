@@ -121,8 +121,32 @@
                  has nothing for the window, which is the only case that needs explaining. -->
             <TextBlock x:Name="SessionUsageText" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
                        Foreground="{DynamicResource TextPrimary}" Visibility="Collapsed"/>
-            <TextBlock x:Name="SessionUsageNote" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"
-                       Foreground="{DynamicResource TextSecondary}" Visibility="Collapsed"/>
+
+            <!-- The explanation folds, for the same reason the token one does (#169, #230):
+                 it is four wrapped lines, it sits in the most valuable space on the panel,
+                 and a reader needs it once. The FIGURE above never folds — it is the point
+                 of the section. -->
+            <Button x:Name="SessionExplainToggle" Style="{StaticResource DisclosureButton}"
+                    HorizontalAlignment="Left" Margin="0,3,0,0" Cursor="Hand" Visibility="Collapsed">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="SessionExplainLabel" FontSize="11"
+                               Foreground="{DynamicResource TextMuted}"/>
+                    <Path x:Name="SessionExplainChevron" VerticalAlignment="Center" Margin="5,1,0,0"
+                          Data="M0,0 L4,4 L8,0" RenderTransformOrigin="0.5,0.5"
+                          Stroke="{DynamicResource TextMuted}" StrokeThickness="1.4"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                        <Path.RenderTransform>
+                            <RotateTransform x:Name="SessionExplainChevronRotation"/>
+                        </Path.RenderTransform>
+                    </Path>
+                </StackPanel>
+            </Button>
+
+            <!-- ClipToBounds is required, not cosmetic — see TokenExplainBody below. -->
+            <StackPanel x:Name="SessionExplainBody" Visibility="Collapsed" ClipToBounds="True">
+                <TextBlock x:Name="SessionUsageNote" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
+                           Foreground="{DynamicResource TextSecondary}"/>
+            </StackPanel>
 
             <!-- Weekly bar -->
             <Grid x:Name="WeeklyHeading" Margin="0,12,0,0">
