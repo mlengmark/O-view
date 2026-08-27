@@ -178,6 +178,41 @@ public class CoworkSessionRegistryTests : IDisposable
     }
 
     /// <summary>
+    /// One store seen through two roots is one set of sessions, not two.
+    ///
+    /// <para>MSIX presents a package's store through the canonical path as well as the
+    /// package's own; neither is a link, and nothing about either name reveals they are the
+    /// same tree. A path-keyed de-duplication therefore kept both copies and reported twice the
+    /// sessions that exist — measured on the development machine as 54 registered against 27
+    /// real ones. A registration's file name carries the session's own id, so two entries
+    /// sharing one cannot be two sessions.</para>
+    /// </summary>
+    [Fact]
+    public void OneStoreSeenThroughTwoRootsIsNotCountedTwice()
+    {
+        Register("session-mirrored", Now.AddMinutes(-5));
+        WriteTranscript("session-mirrored");
+
+        // A second root holding the identical registration, exactly as MSIX presents it.
+        var mirror = Directory.CreateDirectory(
+            Path.Combine(_dir, "mirror", CoworkSessionReport.SessionsDirectoryName, "org", "user")).FullName;
+        File.Copy(
+            Path.Combine(Sessions, "local_session-mirrored.json"),
+            Path.Combine(mirror, "local_session-mirrored.json"));
+
+        var report = CoworkSessionReport.Inspect(
+            [
+                Path.Combine(_dir, CoworkSessionReport.SessionsDirectoryName),
+                Path.Combine(_dir, "mirror", CoworkSessionReport.SessionsDirectoryName),
+            ],
+            Projects,
+            Now);
+
+        Assert.Equal(1, report.Registered);
+        Assert.Equal(1, report.Resolved);
+    }
+
+    /// <summary>
     /// These files carry conversation titles. The report reads three fields and never
     /// materialises the rest, and nothing identifying reaches the bundle — the same line the
     /// plan-history and transcript-scope reports hold.
