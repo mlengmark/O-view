@@ -10,6 +10,12 @@ namespace OView.Core.Tests;
 /// can answer "what should have been there". A machine actively running Cowork whose newest
 /// local transcript was 52 hours old read as entirely healthy in every one of those lines. This
 /// is the independent expectation to measure against.</para>
+///
+/// <para>Session ids here are deliberately not UUID-shaped. Real ones are, and the bundle
+/// truncates them on the way out — but a UUID literal in a tracked file is what the repository's
+/// identifier scan exists to reject, and a fixture is not a good reason to carve an exception
+/// into a guard that protects against publishing real ones. Nothing in the lookup cares: the id
+/// is a file name.</para>
 /// </summary>
 public class CoworkSessionRegistryTests : IDisposable
 {
@@ -77,8 +83,8 @@ public class CoworkSessionRegistryTests : IDisposable
     [Fact]
     public void ASessionWithATranscriptResolves()
     {
-        Register("aaaaaaaa-0000-0000-0000-000000000001", Now.AddMinutes(-5));
-        WriteTranscript("aaaaaaaa-0000-0000-0000-000000000001");
+        Register("session-resolved", Now.AddMinutes(-5));
+        WriteTranscript("session-resolved");
 
         var report = Inspect();
 
@@ -98,7 +104,7 @@ public class CoworkSessionRegistryTests : IDisposable
     [Fact]
     public void ARecentSessionWithNoTranscriptIsTheFinding()
     {
-        Register("bbbbbbbb-0000-0000-0000-000000000002", Now.AddMinutes(-10));
+        Register("session-recent", Now.AddMinutes(-10));
 
         var report = Inspect();
         var text = report.ToClipboardText(Now);
@@ -106,7 +112,7 @@ public class CoworkSessionRegistryTests : IDisposable
         Assert.Equal(1, report.Unresolved);
         Assert.Single(report.RecentWithoutTranscript(Now));
         Assert.Contains("have NO transcript", text, StringComparison.Ordinal);
-        Assert.Contains("bbbbbbbb", text, StringComparison.Ordinal);
+        Assert.Contains("session-recent", text, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -117,7 +123,7 @@ public class CoworkSessionRegistryTests : IDisposable
     [Fact]
     public void AnOldSessionWithNoTranscriptIsNotFlagged()
     {
-        Register("cccccccc-0000-0000-0000-000000000003", Now.AddDays(-40));
+        Register("session-old", Now.AddDays(-40));
 
         var report = Inspect();
 
@@ -135,8 +141,8 @@ public class CoworkSessionRegistryTests : IDisposable
     [Fact]
     public void TheLookupDoesNotDependOnHowTheProjectDirectoryIsNamed()
     {
-        Register("dddddddd-0000-0000-0000-000000000004", Now.AddMinutes(-5), cwd: @"C:\Users\someone\deep\path");
-        WriteTranscript("dddddddd-0000-0000-0000-000000000004", projectDir: "nothing-like-the-cwd");
+        Register("session-elsewhere", Now.AddMinutes(-5), cwd: @"C:\Users\someone\deep\path");
+        WriteTranscript("session-elsewhere", projectDir: "nothing-like-the-cwd");
 
         Assert.Equal(1, Inspect().Resolved);
     }
@@ -161,7 +167,7 @@ public class CoworkSessionRegistryTests : IDisposable
     {
         for (var i = 0; i < CoworkSessionReport.InspectLimit + 7; i++)
         {
-            Register($"eeeeeeee-0000-0000-0000-{i:D12}", Now.AddMinutes(-i));
+            Register($"session-{i}", Now.AddMinutes(-i));
         }
 
         var report = Inspect();
@@ -179,7 +185,7 @@ public class CoworkSessionRegistryTests : IDisposable
     [Fact]
     public void NoConversationContentReachesTheReport()
     {
-        Register("ffffffff-0000-0000-0000-000000000005", Now.AddMinutes(-5));
+        Register("session-private", Now.AddMinutes(-5));
 
         Assert.DoesNotContain("SECRET-CONVERSATION-TITLE",
             Inspect().ToClipboardText(Now), StringComparison.Ordinal);
