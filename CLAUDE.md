@@ -112,14 +112,35 @@ Local token counts have **two** sources, and scanning one of them is the histori
 | Surface | Transcript |
 |---|---|
 | Claude Code (CLI **and** hosted in Desktop) | `%USERPROFILE%\.claude\projects\**\*.jsonl` |
-| **Cowork** | `<claude-data-root>\local-agent-mode-sessions\…\<session>\audit.jsonl` |
+| **Cowork**, older builds | `<claude-data-root>\local-agent-mode-sessions\…\<session>\audit.jsonl` |
+| **Cowork**, current builds | `%USERPROFILE%\.claude\projects\**\*.jsonl` — the **same files as Claude Code** |
 | Chat | **none — no local usage record exists** |
+
+**Location is not authorship, and this table is why that had to be said twice.** Cowork now runs
+its sessions through Claude Code, so its transcripts land in the Claude Code row. Reading the
+table as "a file under `.claude\projects` is Claude Code usage" is what made `JsonlUsageProvider`
+label by locator — and on the development machine that reported `Cowork: 0 rows` while **28 of 30
+transcripts there, 107.7 MB of 107.9 MB, belonged to registered Cowork sessions** (issue #218).
+
+The authority on which surface wrote a transcript is Cowork's own register:
+`<claude-data-root>\claude-code-sessions\…\local_<id>.json` names the `cliSessionId` its session
+writes under, and that id is the transcript's file name. `CoworkSessionIndex` is the one place
+that match is made; do not re-derive a surface from a path.
 
 Three traps, all silent:
 
 - **`<claude-data-root>` is not always `%APPDATA%\Claude`.** Desktop ships as MSIX and Windows redirects it into `%LOCALAPPDATA%\Packages\<family>\LocalCache\Roaming\Claude`. Use `ClaudeDataRoots` — never hard-code the canonical path, which is how O-view once reported "no usage data" at a user running Desktop. Roots can mirror each other; scanning the union is safe because ingestion de-duplicates on request id.
 
-- Each Cowork sandbox contains a `.claude\projects` directory that is **always empty**. Its presence makes a projects-only scan look like it succeeded.
+- Each Cowork sandbox contains a `.claude\projects` directory. It was documented here as **always
+  empty**, and that was wrong: a session that runs Claude Code inside its sandbox writes its
+  transcript there. Measured — 4 such files on the dev machine, **38** on the machine that
+  reported #218, none of them ever scanned (issue #224). `CoworkAuditLocator` therefore takes
+  `*.jsonl` under a session root, not the single name `audit.jsonl`.
+
+  It stayed invisible because a plain recursive enumeration of that tree returns nothing — it
+  contains the broken junction below — so a hand-rolled check agreed with this paragraph and only
+  `TranscriptFileScan` disagreed. Its presence still makes a projects-only scan look like it
+  succeeded, which is the original trap; it is now *also* a place real usage hides.
 - That tree contains a **broken directory junction**. `Directory.GetFiles(..., AllDirectories)` aborts the entire walk on it and `DirectoryNotFoundException` derives from `IOException`, so the usual catch turns one bad folder into "no transcripts on this machine". Always enumerate per-directory — use `TranscriptFileScan`, don't hand-roll it again.
 
 "Claude Desktop" is **not** the dividing line — Claude Code sessions hosted in Desktop write to the normal user-profile location. Cowork is the odd one out, and chat is the one that genuinely cannot be measured. Don't write UI copy that blames "Desktop".

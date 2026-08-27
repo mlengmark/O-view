@@ -186,7 +186,7 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
         // Must use the same rule ingestion uses, or the banner and the scan disagree about
         // how many files there are — which is the drift issue #58 was about.
         var coworkFiles = CoworkAuditLocator
-            .FindAuditLogs(coworkRoots)
+            .FindTranscripts(coworkRoots)
             .Distinct(PathIdentity.Comparer)
             .ToList();
 

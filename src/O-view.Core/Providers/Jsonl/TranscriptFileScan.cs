@@ -29,9 +29,41 @@ public static class TranscriptFileScan
     /// Every file matching <paramref name="searchPattern"/> under <paramref name="root"/>.
     /// Empty if the root does not exist. Never throws.
     /// </summary>
-    public static IReadOnlyList<string> Find(string root, string searchPattern)
+    public static IReadOnlyList<string> Find(string root, string searchPattern) =>
+        Find(root, searchPattern, int.MaxValue, out _);
+
+    /// <summary>
+    /// The same walk under a ceiling on how many directories it will visit.
+    ///
+    /// <para>Ingestion deliberately has no ceiling — a transcript skipped because a walk gave
+    /// up is a token silently uncounted, which is the whole class of bug this file exists to
+    /// prevent. The bound is for the <b>diagnostic</b> sweep, which walks the whole of Claude's
+    /// data directory rather than two known subtrees, and runs on the UI thread inside Copy
+    /// diagnostics. There the trade inverts: a partial map that arrives is worth more than a
+    /// complete one that freezes the app (issue #125).</para>
+    ///
+    /// <para><paramref name="capped"/> is why this is an overload rather than a default. A
+    /// truncated result that cannot say it was truncated is a wrong answer wearing a right
+    /// one's clothes, and the caller has to be able to print "capped" (rule 6).</para>
+    /// </summary>
+    public static IReadOnlyList<string> Find(
+        string root, string searchPattern, int maxDirectories, out bool capped) =>
+        [.. FindInfos(root, searchPattern, maxDirectories, out capped).Select(f => f.FullName)];
+
+    /// <summary>
+    /// The same walk, keeping each entry's metadata.
+    ///
+    /// <para>Enumeration already carries size and timestamps, so a caller that needs them gets
+    /// them free here and pays a stat per file if it asks afterwards. The diagnostic sweep needs
+    /// both, over every file rather than a pattern, and this is what lets it walk once instead
+    /// of once per shape it is looking for.</para>
+    /// </summary>
+    public static IReadOnlyList<FileInfo> FindInfos(
+        string root, string searchPattern, int maxDirectories, out bool capped)
     {
-        var results = new List<string>();
+        capped = false;
+        var visitedCount = 0;
+        var results = new List<FileInfo>();
 
         // Directory.Exists swallows its own errors and returns false, so it needs no
         // guard here; the per-directory try blocks below are what make the walk safe.
@@ -64,11 +96,17 @@ public static class TranscriptFileScan
                 continue;
             }
 
+            if (++visitedCount > maxDirectories)
+            {
+                capped = true;
+                break;
+            }
+
             // Files and subdirectories are read in separate try blocks on purpose: a
             // directory whose *children* cannot be listed may still yield its own files.
             try
             {
-                results.AddRange(Directory.EnumerateFiles(dir, searchPattern));
+                results.AddRange(new DirectoryInfo(dir).EnumerateFiles(searchPattern));
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

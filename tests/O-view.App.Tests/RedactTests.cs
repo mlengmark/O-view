@@ -40,6 +40,22 @@ public class RedactTests
         Assert.Equal(2, redacted.Split(Redact.UserPlaceholder).Length - 1);
     }
 
+    /// <summary>
+    /// <b>The leak this rule was written without.</b> Claude Code encodes a whole working
+    /// directory into one directory name by replacing every separator with a hyphen, so the
+    /// account name appears mid-token in every transcript path under a user's home. While only
+    /// slashes counted as boundaries, this looked correct and published the name out of every
+    /// bundle that printed such a path — which the write survey does by design.
+    /// </summary>
+    [Theory]
+    [InlineData(@"projects\C--Users-ada\session.jsonl", @"projects\C--Users-<user>\session.jsonl")]
+    [InlineData("C--Users-ada-work", "C--Users-<user>-work")]
+    [InlineData("-ada-", "-<user>-")]
+    public void TheNameIsRedactedInsideAnEncodedProjectDirectory(string input, string expected)
+    {
+        Assert.Equal(expected, Redact.Bundle(input, Ada));
+    }
+
     [Fact]
     public void CasingDoesNotLetOneThrough()
     {

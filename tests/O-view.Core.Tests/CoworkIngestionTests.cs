@@ -102,7 +102,7 @@ public class CoworkIngestionTests : IDisposable
         Assert.True(Directory.Exists(sandboxProjects));
         Assert.Empty(ClaudeProjectsLocator.FindTranscripts(sandboxProjects));
 
-        Assert.Equal(2, CoworkAuditLocator.FindAuditLogs(CoworkRoot).Count);
+        Assert.Equal(2, CoworkAuditLocator.FindTranscripts(CoworkRoot).Count);
     }
 
     [Fact]
@@ -157,7 +157,7 @@ public class CoworkIngestionTests : IDisposable
         // an empty result for the entire tree.
         Directory.Delete(target, recursive: true);
 
-        var found = CoworkAuditLocator.FindAuditLogs(CoworkRoot);
+        var found = CoworkAuditLocator.FindTranscripts(CoworkRoot);
 
         // Remove the link before asserting: a broken junction blocks the recursive
         // delete in Dispose, which would fail the test for the wrong reason.
@@ -193,7 +193,7 @@ public class CoworkIngestionTests : IDisposable
     public void MissingCoworkRoot_IsEmpty_NotAnError()
     {
         // A user who has never opened Cowork is the normal case.
-        Assert.Empty(CoworkAuditLocator.FindAuditLogs(Path.Combine(_dir, "does-not-exist")));
+        Assert.Empty(CoworkAuditLocator.FindTranscripts(Path.Combine(_dir, "does-not-exist")));
     }
 
     // ── The packaged-install trap ──────────────────────────────────────────────
@@ -230,6 +230,13 @@ public class CoworkIngestionTests : IDisposable
         // MSIX redirection can expose one set of files through both the canonical and
         // packaged paths — observed on the dev machine, identical session ids and totals.
         // Scanning both must not double the tokens.
+        //
+        // It must not double the FILE COUNT either, which this used to assert that it did:
+        // the union was taken deliberately and ingestion's request-id de-duplication kept the
+        // tokens right. The tokens were right and the counts were not — the bundle reported
+        // "16 file(s), 46,994,714 bytes" for 8 files and 23 MB, halving and doubling through
+        // the day as the canonical root came and went. Mirrors are now collapsed on the path
+        // relative to their root, which is the only thing that makes two of them comparable.
         var mirrorA = Path.Combine(_dir, "rootA");
         var mirrorB = Path.Combine(_dir, "rootB");
         foreach (var root in new[] { mirrorA, mirrorB })
@@ -241,11 +248,56 @@ public class CoworkIngestionTests : IDisposable
                 [AuditLine("req_A", "2026-07-20T12:00:00.000Z", output: 120)]);
         }
 
-        Assert.Equal(2, CoworkAuditLocator.FindAuditLogs([mirrorA, mirrorB]).Count);
+        Assert.Single(CoworkAuditLocator.FindTranscripts([mirrorA, mirrorB]));
 
         var provider = new JsonlUsageProvider(_store, null, [mirrorA, mirrorB]);
         provider.GetSnapshot(DateTimeOffset.Parse("2026-07-20T13:00:00Z"));
 
         Assert.Equal(120, TotalOutputTokens());
+    }
+
+    /// <summary>
+    /// Two genuinely different sessions are not mistaken for mirrors. <c>audit.jsonl</c> repeats
+    /// in every session directory, so collapsing on the file name alone would discard real
+    /// transcripts — which is why the match is on the path relative to its root.
+    /// </summary>
+    [Fact]
+    public void TwoSessionsUnderOneRootAreBothKept()
+    {
+        foreach (var name in new[] { "local_a", "local_b" })
+        {
+            var session = Path.Combine(CoworkRoot, "org", "user", name);
+            Directory.CreateDirectory(session);
+            File.WriteAllLines(
+                Path.Combine(session, CoworkAuditLocator.AuditFileName),
+                [AuditLine($"req_{name}", "2026-07-20T12:00:00.000Z", output: 120)]);
+        }
+
+        Assert.Equal(2, CoworkAuditLocator.FindTranscripts([CoworkRoot]).Count);
+    }
+
+    /// <summary>
+    /// <b>The gap issue #224 was filed for.</b> A Cowork session that runs Claude Code inside
+    /// its sandbox writes to the sandbox's own <c>.claude\projects</c>, not to
+    /// <c>audit.jsonl</c> — and this class asserted for a year that that directory was always
+    /// empty. Measured: 4 such files on the development machine and 38 on the machine that
+    /// reported #218, none of them ever read.
+    /// </summary>
+    [Fact]
+    public void ATranscriptInsideTheSandboxProjectsDirectoryIsFound()
+    {
+        var sandbox = Path.Combine(
+            CoworkRoot, "org", "user", "local_a", ".claude", "projects", "C--Users-ada-work");
+        Directory.CreateDirectory(sandbox);
+        File.WriteAllLines(
+            Path.Combine(sandbox, "9d1f0d6a.jsonl"),
+            [AuditLine("req_sandbox", "2026-07-20T12:00:00.000Z", output: 500)]);
+
+        Assert.Single(CoworkAuditLocator.FindTranscripts([CoworkRoot]));
+
+        var provider = new JsonlUsageProvider(_store, null, [CoworkRoot]);
+        provider.GetSnapshot(DateTimeOffset.Parse("2026-07-20T13:00:00Z"));
+
+        Assert.Equal(500, TotalOutputTokens());
     }
 }

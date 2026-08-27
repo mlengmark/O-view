@@ -74,9 +74,18 @@ public static partial class Redact
 
             // Only as a whole path segment. A substring replace would turn a user called
             // "max" into "<user>" inside "maxsize", mangling paths that mention nobody.
+            //
+            // A HYPHEN counts as a segment boundary, and that is not cosmetic. Claude Code
+            // encodes a whole working directory into a single directory name by replacing every
+            // separator with one — `C:\Users\ada\work` becomes `C--Users-ada-work` — so the
+            // account name appears mid-token in every transcript path under a user's home. With
+            // only slashes as boundaries this rule looked correct and leaked the name out of
+            // every bundle that printed such a path, which the write survey does by design.
+            // Over-redaction stays the safe failure (see the class remarks): the cost is a
+            // hyphenated word that merely matches the name being replaced too.
             redacted = Regex.Replace(
                 redacted,
-                $@"(?<=^|[/\\]){Regex.Escape(name)}(?=$|[/\\.,;:'""\s])",
+                $@"(?<=^|[/\\-]){Regex.Escape(name)}(?=$|[/\\.,;:'""\s-])",
                 UserPlaceholder,
                 RegexOptions.IgnoreCase | RegexOptions.Multiline,
                 TimeSpan.FromSeconds(2));
