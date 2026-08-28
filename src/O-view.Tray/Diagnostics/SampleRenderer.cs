@@ -1060,11 +1060,4 @@ internal static class SampleRenderer
         };
         timer.Start();
     }
-
-    /// <summary>
-    /// Exercises the tray click the way a user does: open, close, open again — each step
-    /// through the same ShowPopup() the icon calls, spaced far enough apart that the
-    /// close transition and the toggle's grace window have both elapsed. Writes what the
-    /// panel actually is at each point, so a "stopped reacting" report becomes a fact
-    /// rather than a guess.
 }

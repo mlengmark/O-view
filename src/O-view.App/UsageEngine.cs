@@ -432,6 +432,18 @@ public sealed class UsageEngine : IDisposable
     public bool CanRefreshUsageCache => _refresher is not null;
 
     /// <summary>
+    /// How many refresh attempts have actually been started — not how many times
+    /// <see cref="RefreshUsageCache"/> was called, since most calls are turned away by the
+    /// floor, the freshness gate or the latch.
+    ///
+    /// <para>Exists so a verification hook can assert the panel-open path <i>reached</i> the
+    /// refresher, rather than inferring it from a log line. That distinction is the whole gap
+    /// issue #234 stayed open for: the composition behind the click is tested, the click itself
+    /// was not.</para>
+    /// </summary>
+    public int UsageRefreshAttempts { get; private set; }
+
+    /// <summary>
     /// Clears the block set by a suspected charge and allows refreshing again.
     ///
     /// <para>The other half of the trade in <see cref="_refreshBlocked"/>. The guard errs toward
@@ -498,6 +510,7 @@ public sealed class UsageEngine : IDisposable
         // next one. Stamping on completion would let a run that takes the full timeout be
         // followed immediately by another.
         _lastRefreshAttempt = utcNow;
+        UsageRefreshAttempts++;
 
         RunOffThread(_refreshGate, "usage refresh", RunRefresh, ApplyRefresh);
     }
