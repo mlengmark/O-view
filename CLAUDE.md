@@ -127,8 +127,14 @@ This is the row that matters most when a user reports "the token tiles have stop
 every other explanation is a bug and this one is not. **No scan fixes it**, and reaching for a
 wider search is the wrong instinct: three of the defects found while diagnosing #218 came from
 assuming a local file must exist somewhere. The plan meters are account-wide and *do* cover this
-usage, so the bars stay correct while the tiles cannot — and `PanelText.SessionUsageNote` is where
-the panel says so.
+usage, so the bars stay correct while the tiles cannot.
+
+**The panel does not currently explain that pairing, and that is a deliberate gap.** The
+session-window line and its "Why is this empty?" disclosure said so beneath the bar; both were
+removed in issue #232, pending a different treatment. What is left is the token-scope note, which
+only covers a machine that has recorded **nothing at all** — a machine with history and an empty
+current window now shows a high bar over low tiles with nothing beside it. Do not re-add a
+replacement line here without checking #232 first.
 
 **Location is not authorship, and this table is why that had to be said twice.** Cowork now runs
 its sessions through Claude Code, so its transcripts land in the Claude Code row. Reading the
