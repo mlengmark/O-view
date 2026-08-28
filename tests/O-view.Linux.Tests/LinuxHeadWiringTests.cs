@@ -140,9 +140,11 @@ public class LinuxHeadWiringTests
     [Fact]
     public void EveryMenuItemsClickHandlerIsMarshalledOntoTheUiThread()
     {
+        // Null engine, for the reason TheTrayClickHandlerIsMarshalledOntoTheUiThread gives: it is
+        // captured in closures and only dereferenced when a click runs, and nothing here runs one.
         var menu = (NativeMenu)typeof(LinuxApp)
             .GetMethod("BuildMenu", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(Head, null)!;
+            .Invoke(Head, [null])!;
 
         var items = menu.Items.OfType<NativeMenuItem>().ToArray();
         Assert.NotEmpty(items);

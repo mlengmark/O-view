@@ -7,6 +7,7 @@ using OView.App.Diagnostics;
 using OView.App.Platform;
 using OView.App.Updates;
 using OView.Core.Models;
+using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Core.Storage;
@@ -142,6 +143,15 @@ public partial class App : System.Windows.Application
             SimulateDivergence = args.TryGetValue("--simulate-divergence", out var sim)
                 ? sim ?? "diverging"
                 : null,
+
+            // Lets the engine ask Claude Code to refresh its own usage cache (issue #234).
+            // Without it, a machine with no Claude Desktop shows "unknown" indefinitely: Claude
+            // Code refreshes that block only when /usage runs, so a 4.43-day-old one was measured
+            // on a machine that had been running Claude Code all morning.
+            //
+            // No credential is involved — Claude Code authenticates itself and O-view reads the
+            // file it already reads (ADR-0015).
+            UsageCacheRefresher = new ClaudeCliRefresher(),
         });
 
         _trayHost = new NotifyIconTrayHost();
@@ -295,6 +305,16 @@ public partial class App : System.Windows.Application
         }
 
         _engine.Refresh();  // fresh data on open; local reads are cheap
+
+        // Opening the panel is the moment freshness is observable, so it is what drives the
+        // usage-cache refresh rather than a timer (issue #234). Forced, because a person
+        // looking is not a poll and must not be held to the background floor.
+        //
+        // Unlike the Refresh() above this does NOT block the click: it spawns Claude Code off
+        // the UI thread and publishes back when it lands, so the panel opens immediately on the
+        // current snapshot and updates underneath if the figures moved. Doing it synchronously
+        // here would put a process spawn in front of the user's click — issue #125's lesson.
+        _engine.RefreshUsageCache(force: true);
         // Both inspected on open (not cached) so the banners reflect the machine as it is
         // now. The scope report is what the token-scope note is built from — resolved
         // roots and real file counts, never a hard-coded path (issue #58).
@@ -359,7 +379,10 @@ public partial class App : System.Windows.Application
             // policy is the single place that decides it (ADR-0009).
             CanUpdateAutomatically: UpdatePolicy.MayDownloadAndRun(UpdateService.CurrentInstallKind),
             Version: UpdateService.CurrentVersion,
-            WeeklyReset: WeeklyResetRowLabel()));
+            WeeklyReset: WeeklyResetRowLabel(),
+            // Empty on every ordinary open; the row only appears once the refresh has stopped
+            // itself, which is the only state there is anything to undo (issue #234).
+            UsageRefreshBlocked: _engine.UsageRefreshBlocked ?? ""));
     }
 
     /// <summary>
@@ -438,6 +461,16 @@ public partial class App : System.Windows.Application
         // "Desktop missing", "unexpected file format", or "file unreadable", and asking
         // users to run PowerShell by hand is not a diagnosis path.
         menu.WeeklyResetRequested += (_, _) => EditWeeklyReset();
+        // Undoes a self-imposed refresh block, then tries once immediately: someone who just
+        // re-enabled this is asking for it now, not at the next background beat (issue #234).
+        menu.ResumeUsageRefreshRequested += (_, _) =>
+        {
+            if (_engine?.ResumeUsageRefresh() == true)
+            {
+                _engine.RefreshUsageCache(force: true);
+            }
+        };
+
         menu.CopyDiagnosticsRequested += (_, _) => CopyDiagnostics();
         // "Check for updates" sits directly above Exit, as requested in issue #18.
         menu.CheckForUpdatesRequested += async (_, _) => await CheckForUpdatesInteractiveAsync();

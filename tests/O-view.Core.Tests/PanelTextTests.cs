@@ -328,4 +328,30 @@ public class PanelTextTests
                 StringComparison.Ordinal);
         }
     }
+
+    /// <summary>
+    /// The resume row is an action, not a status line. Both heads read this one string, so the
+    /// Windows menu and the Linux DBusMenu cannot offer the same control under different names
+    /// (issue #234).
+    /// </summary>
+    [Fact]
+    public void TheResumeRowIsWordedAsAnAction()
+    {
+        Assert.Equal("Resume usage refresh", PanelText.UsageRefreshBlockedRow);
+    }
+
+    /// <summary>
+    /// The hint has to carry the evidence and admit the check is cautious. A user who trips this
+    /// needs to know it may be a false positive, or the only safe reading of a blocked feature is
+    /// "O-view is broken".
+    /// </summary>
+    [Fact]
+    public void TheResumeHintNamesTheReasonAndAdmitsItMayBeWrong()
+    {
+        var hint = PanelText.UsageRefreshBlockedHint("an invocation appears to have been billed (refresh.jsonl)");
+
+        Assert.Contains("refresh.jsonl", hint, StringComparison.Ordinal);
+        Assert.Contains("deliberately cautious", hint, StringComparison.Ordinal);
+        Assert.Contains("Resume if", hint, StringComparison.Ordinal);
+    }
 }

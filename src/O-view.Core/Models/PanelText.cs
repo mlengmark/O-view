@@ -205,6 +205,29 @@ public static class PanelText
         + "on every refresh and fills this in on the first reset it sees — within a week.";
 
     /// <summary>
+    /// The menu row offered when usage refreshing has stopped itself (issue #234).
+    ///
+    /// <para>Shown only while <c>UsageEngine.UsageRefreshBlocked</c> is set. It is an action
+    /// rather than a status line because the state is undoable and the user is the only one who
+    /// can judge it: the guard behind the block errs toward reporting a charge, and a Claude Code
+    /// session started while a refresh ran looks exactly like a billed one.</para>
+    ///
+    /// <para><b>The row has to exist at all, or the trade is wrong.</b> Erring toward stopping is
+    /// only correct while stopping can be reversed — a latch with no way out turns a rare race
+    /// into a permanent, unexplained loss of the plan bars on machines with no Claude Desktop.</para>
+    /// </summary>
+    public const string UsageRefreshBlockedRow = "Resume usage refresh";
+
+    /// <summary>
+    /// Why it stopped and what resuming means. Names the evidence, because the alternative is a
+    /// feature that went quiet for reasons the user cannot inspect.
+    /// </summary>
+    public static string UsageRefreshBlockedHint(string reason) =>
+        $"O-view stopped refreshing Claude Code's usage figures because {reason}. "
+        + "That check is deliberately cautious — a Claude Code session started while the refresh "
+        + "ran looks the same as a billed one. Resume if you think that is what happened.";
+
+    /// <summary>
     /// The caveat under the 31-day tiles: how much of the window is actually recorded, and
     /// which models were left out of the money figures.
     ///
