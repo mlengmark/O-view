@@ -56,13 +56,26 @@ This project was inspired by the *product concept* of existing macOS menu-bar ap
 
 Those macOS designs are not merely encumbered — they are *incorrect* for this platform.
 
-### 3. v1 handles no credentials — keep it that way
+### 3. No subscription credentials — ever, and on policy grounds
 
-**`OAuthUsageProvider` is deferred out of v1** ([ADR-0007](docs/adr/0007-plan-history-primary-provider.md)). The primary source is a local file Claude Desktop already maintains, so v1 needs no token, no network call, and no credential handling at all. Do not reintroduce auth to solve a problem a local file already solves.
+**O-view handles no Claude subscription credential.** Not a token, not a browser cookie, not a keychain item, not a "sign in with Claude" button. This is [ADR-0015](docs/adr/0015-no-credential-based-usage-sources.md).
 
-If OAuth is ever built: never log the token, persist it, include it in exception messages, or write it to diagnostics. Memory only.
+**The reason changed, and the change matters.** This rule used to rest on the token being unlocatable. Anthropic now documents exactly where Claude Code stores it, so that reason expired — and the rule holds anyway, because using a Free/Pro/Max credential in a third-party product is prohibited by the Consumer Terms. Anyone proposing it on the old premise is arguing against a reason nobody is using.
 
-**Never write to `%APPDATA%\Claude\plan-usage-history.json`** — it belongs to another application. Read-only, always.
+**`OAuthUsageProvider` is not deferred. It is closed** — deleted from the provider design rather than left listed, because "deferred" reads as "planned", and the question was re-proposed twice in a single planning session.
+
+Two source categories are permitted. Both keep the credential inside the vendor's own client:
+
+| Permitted | Example |
+|---|---|
+| **Read a file Claude's own apps write** | `plan-usage-history.json`, `~/.claude.json`, transcripts |
+| **Invoke Claude's own approved client and read what it produces** | `claude -p "/usage"` — [findings](docs/findings/cli-usage-refresh.md) |
+
+**"No network call" is no longer true, and the distinction is exact.** O-view still sends nothing to Anthropic and still holds no credential — but it now *causes* Claude Code to make a request, and a network trace of the machine will show it. Claude Code authenticates as itself, as the client Anthropic approves. `SECURITY.md` states this; keep it stated.
+
+That invocation is free — **measured at zero tokens** — and O-view checks after every one that it stayed free. An argument Claude Code does not recognise reaches the model and cost 49,094 cache-write + 97,456 cache-read + 470 output for one trivial exchange. If a charge is ever detected the feature stops itself; the latch is resettable, because the guard errs toward reporting one.
+
+**Never write to Claude's files** — `%APPDATA%\Claude\plan-usage-history.json` and `~/.claude.json` both belong to another application. Read-only, always. O-view *causes* Claude Code to write the second; it never writes it itself.
 
 ### 4. De-duplicate JSONL by `requestId`
 
@@ -192,14 +205,14 @@ O-view.slnx
 │   └── O-view.Linux/     # net10.0        Avalonia + SkiaSharp, SNI over D-Bus, freedesktop
 │                         #                notifications, XDG autostart, portal theme
 ├── tests/
-│   ├── O-view.Core.Tests/   # xUnit, 425
-│   ├── O-view.App.Tests/    # xUnit, 184
+│   ├── O-view.Core.Tests/   # xUnit, 650
+│   ├── O-view.App.Tests/    # xUnit, 269
 │   └── O-view.Linux.Tests/  # xUnit,  40
 └── packaging/linux/build.sh  # .deb + tarball; the same script CI runs
 ```
 
 Those counts are a **snapshot, not a contract** — measured 2026-08-21, with #163 merged, and
-nothing enforces them. They are here for the shape they show (Core carries most of the logic,
+nothing enforces them. Re-measured 2026-08-28. They are here for the shape they show (Core carries most of the logic,
 and that is the design working) rather than as figures to cite. If one matters to an argument,
 run the suite and use what it says; do not quote this block as evidence. The ADRs' own test
 counts are different and correctly so — those record what was true when each decision was
@@ -221,28 +234,36 @@ Keep `Core` free of UI and Win32 dependencies so the accounting logic stays test
 
 ```
 IUsageProvider
- ├─ PlanHistoryProvider       (primary)  → session/weekly %, derived reset times
+ ├─ PlanHistoryProvider       (primary)  → session/weekly %, derived SESSION reset only
  ├─ CachedUtilizationProvider (primary)  → session/weekly % AND exact reset times, from
  │                                         Claude Code's ~/.claude.json cache
- ├─ OAuthUsageProvider        (deferred) → post-v1 enhancement only
  ├─ JsonlUsageProvider        (fallback) → local token counts, offline (Claude Code + Cowork)
  └─ CompositeUsageProvider               → resolution, caching, source labelling
+
+ ClaudeCliRefresher                      → not a provider. Asks Claude Code to refresh the
+                                           cache above, because it does so only on /usage
 ```
 
-Resolution: authoritative percentages → OAuth if it ever exists → JSONL (labelled estimate) → no data. See [ADR-0002](docs/adr/0002-usage-data-providers.md) and [ADR-0007](docs/adr/0007-plan-history-primary-provider.md).
+Resolution: authoritative percentages → JSONL (labelled estimate) → no data. See [ADR-0002](docs/adr/0002-usage-data-providers.md) and [ADR-0007](docs/adr/0007-plan-history-primary-provider.md). **There is no OAuth tier and there will not be** (rule 3).
 
-**Within a tier, the most accurate reading wins — not the first one listed.** Two sources now report the same meters (Desktop's sampled series and Claude Code's cache), so `CompositeUsageProvider` picks the snapshot that carries **more meters** first, and among equals the one **captured most recently**; ties fall back to argument order so the result stays deterministic. Desktop samples every ~5 minutes while the cache refreshes on use, so neither is reliably fresher and neither gets a standing preference. Do not reintroduce a fixed precedence between them.
+**Within a tier, the most accurate reading wins — not the first one listed.** Two sources now report the same meters (Desktop's sampled series and Claude Code's cache), so `CompositeUsageProvider` picks the snapshot that carries **more meters** first, and among equals the one **captured most recently**; ties fall back to argument order so the result stays deterministic. Desktop samples on a timer while the cache refreshes only when `/usage` runs, so neither is reliably fresher and neither gets a standing preference. Do not reintroduce a fixed precedence between them.
+
+**Do not write a sampling interval into code as a constant.** ADR-0007 recorded 5 minutes, measured in July 2026; it was **15 minutes** when measured again in August. It is Claude Desktop's cadence, it is undocumented, and it changes. Derive it from the samples wherever it matters.
 
 **Snapshots are chosen whole, never merged field-by-field.** A session figure from one source beside a weekly figure from another describes an account state that existed at no instant, under a single `Source` label that can only be true of one of them — a rule 6 fabrication that looks entirely real on screen.
 
-**The percentages are no longer Desktop-only.** Claude Code caches the figures behind `/status` → Usage in `~/.claude.json` → `cachedUsageUtilization`, so a machine with no Claude Desktop can fill the top two bars from a local file — the population that used to see two permanently empty gauges. Same rules as every other source: local, read-only, no token, no network (rule 3). Details and the shape: [findings/cached-usage-utilization.md](docs/findings/cached-usage-utilization.md).
+**The percentages are no longer Desktop-only.** Claude Code caches the figures behind `/status` → Usage in `~/.claude.json` → `cachedUsageUtilization`, so a machine with no Claude Desktop can fill the top two bars from a local file — the population that used to see two permanently empty gauges. Same rules as every other source: local, read-only, no token (rule 3). Details and the shape: [findings/cached-usage-utilization.md](docs/findings/cached-usage-utilization.md).
 
-**Reset times are derived unless Claude Code has reported them.** Prefer a reported instant whenever one exists, and derive only as the fallback:
+**But Claude Code refreshes that block only when `/usage` runs** — not on startup, and not while a session is open. Measured 2026-08-28: 4.43 days stale on a machine that had been running Claude Code all morning, with both `resets_at` passed, so the stale-window rule below correctly rejected it and the panel read *unknown*. That is why `ClaudeCliRefresher` exists (issue #234). Do not gate a refresh on "a session is running" — that premise was measured false.
 
-- **Reported** — `cachedUsageUtilization.utilization.{five_hour,seven_day}.resets_at`. Exact, so it carries **zero uncertainty** and must render without the `~` that marks an approximation. `UsageEngine.WithReportedResets` folds these onto whichever snapshot wins the chain, *overriding* both the derived value and the user's entered one — those are attempts to recover a number this states outright. It is the only exact reset time O-view has ever had.
-- **Derived** — the fallback, and unchanged. Detect a decrease of ≥2 points, anchor on it, step forward by the window length: **5h** from `fh`, **7 days** from `sd` ([ADR-0011](docs/adr/0011-weekly-reset-derivation.md); both lengths are measured, and 72h for the weekly window is disproved). Before any drop is observed the reset time is genuinely **unknown** — show it as unknown, never guessed.
+**The two windows are different shapes, and one rule for both is the mistake** ([ADR-0014](docs/adr/0014-weekly-reset-is-a-reported-constant.md), which supersedes [ADR-0011](docs/adr/0011-weekly-reset-derivation.md) in full):
 
-**A cached percentage whose window has rolled over is not a reading.** Claude Code refreshes that file while it runs, so leave it closed across a boundary and it still reports the old window's figure — 91% for a window that reset to nothing hours ago. Each bar carries its own `resets_at`, so this is checkable; check it, and report unknown rather than the stale number. And **never step a passed `resets_at` forward** to the next window: for the five-hour window that rebuilds the grid bug #180 removed, and for the weekly one it dresses an inference in a reported value's zero uncertainty.
+- **Weekly — a static grid.** Same weekday, same time, every week; five observations over five weeks all matched. Take `cachedUsageUtilization.utilization.seven_day.resets_at`, **persist it as an anchor, and project it forward by whole weeks — including when the stored instant is in the past.** It carries **zero uncertainty**, renders without a `~`, and the field that once carried that uncertainty is gone (issue #248). Persisting is the substance: the cache goes stale, so a value read only while fresh is a value usually absent.
+- **Session — rolls from first use, and is not a grid.** Still derived by detecting a decrease of ≥2 points in `fh` and stepping forward 5h. Still bracketed, still marked `~` when the observation crossed a sampling gap. **Never project a passed `five_hour.resets_at` forward** — that rebuilds the grid bug #180 removed, describing a window that never existed.
+
+Before anything is known, the reset time is genuinely **unknown** — show it as unknown, never guessed, and say what the user can do about it.
+
+**A cached percentage whose window has rolled over is not a reading.** Claude Code refreshes that file only on `/usage`, so a block can sit days old across many boundaries and still report the old window's figure — 91% for a window that reset to nothing hours ago. Each bar carries its own `resets_at`, so this is checkable; check it, and report unknown rather than the stale number. That check is about the **percentage**, not the reset instant — the weekly instant is deliberately projected forward from the past, per the rule above.
 
 Two things about the weekly one are easy to "tidy up" back into the bug they fix:
 
@@ -260,7 +281,7 @@ Deliberately **not** in order of importance — in order of ascending unknowns:
 4. **Rolling-window math** — 5h window rolls from first use, not a wall clock. UTC throughout.
 4b. **Rollup store** (ADR-0006) — SQLite daily aggregates; idempotency test alongside.
 5. **Tray shell** — icon, tooltip, popup positioning, `TaskbarCreated` re-registration, single-instance mutex.
-6. **`OAuthUsageProvider`** — backoff with jitter, `retry-after`, nullable-everything parsing, ≥5 min polling.
+6. ~~`OAuthUsageProvider`~~ — **dropped, not pending.** Prohibited (rule 3, ADR-0015). What took its place is `ClaudeCliRefresher`: ask Claude Code to refresh its own cache, hold no credential.
 7. **Polish** — notifications, startup registration, settings, publish.
 
 ## Conventions
