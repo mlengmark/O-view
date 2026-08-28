@@ -69,6 +69,35 @@ public sealed class UsageEngine : IDisposable
     private readonly PollGate _fullGate = new();
     private readonly PollGate _planGate = new();
 
+    /// <summary>
+    /// Its own gate, for the same reason the other two have theirs: this one spawns a process
+    /// and can take seconds, and sharing a gate would let it swallow the ticks of whichever
+    /// cadence it borrowed.
+    /// </summary>
+    private readonly PollGate _refreshGate = new();
+
+    /// <summary>Asks Claude Code to refresh its usage cache. Null when the feature is off.</summary>
+    private readonly IUsageCacheRefresher? _refresher;
+
+    private readonly TimeSpan _refreshFloor;
+
+    /// <summary>When the last attempt <i>started</i>, so a slow one still spaces the next.</summary>
+    private DateTimeOffset? _lastRefreshAttempt;
+
+    /// <summary>
+    /// Why refreshing is switched off, or null while it is allowed. Set when an invocation is
+    /// found to have been billed, and cleared only by <see cref="ResumeUsageRefresh"/>.
+    ///
+    /// <para><b>Resettable on purpose, and that is load-bearing rather than a nicety.</b> The
+    /// guard behind it errs toward reporting a charge: a Claude Code session the user starts
+    /// during the seconds a refresh runs produces a new transcript carrying request ids, and
+    /// nothing distinguishes it from a billed refresh. That direction is right — a false stop is
+    /// recoverable and a missed charge leaks roughly 50K tokens per poll silently — but only
+    /// while it can be undone. A latch with no way out would turn a rare race into a permanent,
+    /// unexplained loss of the feature.</para>
+    /// </summary>
+    private string? _refreshBlocked;
+
     /// <summary>The stored weekly reset instant (ADR-0014). See <see cref="WithWeeklyReset"/>.</summary>
     private readonly WeeklyResetAnchor _weeklyAnchor;
 
@@ -155,6 +184,8 @@ public sealed class UsageEngine : IDisposable
         _log = _options.Log;
         _normalInterval = _options.PollInterval;
         _warmupInterval = Min(_options.WarmupInterval, _options.PollInterval);
+        _refresher = _options.UsageCacheRefresher;
+        _refreshFloor = _options.UsageRefreshFloor;
 
         // Clamped for the same reason the warm-up is, and it is the same diagnostic that
         // forces it: --interval-ms drives PollInterval alone, so a sub-20 s value would leave
@@ -390,6 +421,147 @@ public sealed class UsageEngine : IDisposable
     /// inline, which is what the tests rely on.</para>
     /// </summary>
     private void Poll() => RunOffThread(_fullGate, "poll", Read, Publish);
+
+    /// <summary>
+    /// Why usage refreshing is switched off, or null while it is allowed. Rendered by the head
+    /// so a user can see the feature stopped and why, rather than watching it quietly not work.
+    /// </summary>
+    public string? UsageRefreshBlocked => _refreshBlocked;
+
+    /// <summary>Whether a refresher was supplied at all — the feature being on, not it being allowed.</summary>
+    public bool CanRefreshUsageCache => _refresher is not null;
+
+    /// <summary>
+    /// Clears the block set by a suspected charge and allows refreshing again.
+    ///
+    /// <para>The other half of the trade in <see cref="_refreshBlocked"/>. The guard errs toward
+    /// stopping, which is only the right direction while stopping is undoable — so this exists
+    /// for the user to say the charge was a concurrent session rather than a real one.</para>
+    /// </summary>
+    /// <returns>True when something was actually cleared.</returns>
+    public bool ResumeUsageRefresh()
+    {
+        if (_refreshBlocked is null)
+        {
+            return false;
+        }
+
+        _log?.Write($"usage refresh resumed (was blocked: {_refreshBlocked})");
+        _refreshBlocked = null;
+
+        // The floor is not re-applied. A user who has just re-enabled this is asking for it now,
+        // and making them wait out a 15-minute window they cannot see would read as still broken.
+        _lastRefreshAttempt = null;
+        return true;
+    }
+
+    /// <summary>
+    /// Asks Claude Code to refresh its usage cache, if it is allowed and due.
+    ///
+    /// <para><b>Call this when the panel opens.</b> That is the moment freshness is observable,
+    /// and it is what makes this event-driven rather than another timer — a tray gauge only has
+    /// to be right when someone looks at it. <paramref name="force"/> bypasses the floor for
+    /// exactly that case: a person opening the panel is not a poll.</para>
+    ///
+    /// <para>Silently does nothing when no refresher was supplied, when a suspected charge has
+    /// blocked it, when the floor has not elapsed, or when one is already running. All four are
+    /// ordinary, and none is an error worth surfacing.</para>
+    /// </summary>
+    public void RefreshUsageCache(bool force = false)
+    {
+        if (_refresher is null || _refreshBlocked is not null)
+        {
+            return;
+        }
+
+        var utcNow = _clock.UtcNow;
+
+        if (!force && _lastRefreshAttempt is { } last && utcNow - last < _refreshFloor)
+        {
+            return;
+        }
+
+        // Nothing to gain from spawning a process to refresh something already fresher than the
+        // floor — the user may have run /usage themselves, which is the one other thing that
+        // moves this block.
+        //
+        // Note what this deliberately does NOT do: skip while a Claude Code session is running.
+        // That was the plan until it was measured. A running session does not maintain this
+        // block — the development machine held a 4.43-day-old one while Claude Code had been
+        // running all morning — so "a session is open" says nothing about freshness.
+        if (!force && CachedBlockAge(utcNow) is { } age && age < _refreshFloor)
+        {
+            return;
+        }
+
+        // Stamped before the run rather than after, so a slow or hung attempt still spaces the
+        // next one. Stamping on completion would let a run that takes the full timeout be
+        // followed immediately by another.
+        _lastRefreshAttempt = utcNow;
+
+        RunOffThread(_refreshGate, "usage refresh", RunRefresh, ApplyRefresh);
+    }
+
+    /// <summary>
+    /// Runs off the UI thread. It spawns a process and waits up to
+    /// <see cref="ClaudeCliRefresher.DefaultTimeout"/> for it — done on the dispatcher that is a
+    /// frozen tray icon for the duration, which is issue #125's lesson applied to a new caller.
+    /// </summary>
+    private ClaudeCliRefreshResult RunRefresh() =>
+        _refresher!.Refresh();
+
+    /// <summary>
+    /// How old Claude Code's cached block is, or null when that cannot be established — no file,
+    /// unreadable, or a test that described its own world and left this source returning null.
+    ///
+    /// <para>Null means "do not gate on this", not "stale". An unknown age must not block a
+    /// refresh, or the feature would switch itself off on exactly the machines whose file it
+    /// cannot read.</para>
+    /// </summary>
+    private TimeSpan? CachedBlockAge(DateTimeOffset utcNow)
+    {
+        try
+        {
+            return _cachedUtilizationSource() is { } cached
+                ? utcNow - cached.FetchedAtUtc
+                : null;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Back on the UI thread with the outcome.
+    ///
+    /// <para>A successful refresh schedules a full poll rather than reading here: the new figures
+    /// live in a file the composite chain already reads, and re-reading it on this thread would
+    /// put the transcript walk back on the dispatcher. <see cref="Poll"/> only schedules.</para>
+    /// </summary>
+    private void ApplyRefresh(ClaudeCliRefreshResult result)
+    {
+        if (result.IsFatal)
+        {
+            // The one outcome that stops rather than backs off. Logged in full because the next
+            // thing that happens is a feature going quiet, and a user asking why deserves an
+            // answer that names the transcript.
+            _refreshBlocked = result.Detail is { Length: > 0 } detail
+                ? $"an invocation appears to have been billed ({detail})"
+                : "an invocation appears to have been billed";
+
+            _log?.Write($"usage refresh BLOCKED — {_refreshBlocked}");
+            return;
+        }
+
+        _log?.Write($"usage refresh {result.Outcome.ToString().ToLowerInvariant()}" +
+                    (result.Detail is { Length: > 0 } d ? $" ({d})" : ""));
+
+        if (result.Succeeded)
+        {
+            Poll();
+        }
+    }
 
     /// <summary>
     /// The cheap half, on its own faster cadence: read the plan-history file and nothing else.
@@ -866,6 +1038,12 @@ public sealed class UsageEngine : IDisposable
         CheckOffPlan(result.OffPlan);
 
         AdjustCadence(result.Snapshot.Source, result.UtcNow);
+
+        // The slow background beat, hung off the poll rather than given a fourth timer. The
+        // floor inside decides whether anything actually runs, so the effective cadence is the
+        // floor and not this — and a successful refresh scheduling a Poll cannot recur, because
+        // the attempt was stamped before it started.
+        RefreshUsageCache();
     }
 
     /// <summary>One poll's readings, carried from the reading thread to the UI thread.</summary>

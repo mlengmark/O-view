@@ -140,4 +140,32 @@ public sealed record UsageEngineOptions
     /// than only counting when this provider is the winner.</para>
     /// </summary>
     public IUsageProvider? CachedUtilization { get; init; }
+
+    /// <summary>
+    /// Asks Claude Code to refresh its own usage cache (issue #234). Null in tests that do not
+    /// exercise it, and in production when the feature is off.
+    ///
+    /// <para><b>Deliberately not defaulted to the real one.</b> Every other seam here falls back
+    /// to the real location, but this one spawns a process, and a test that forgot to set it
+    /// would run <c>claude</c> on the developer's machine — the same rule that keeps
+    /// <see cref="CachedUtilizationSource"/> from reaching past an injected provider into a real
+    /// <c>~/.claude.json</c>, with a side effect instead of a read.</para>
+    /// </summary>
+    public OView.Core.Providers.CachedUsage.IUsageCacheRefresher? UsageCacheRefresher { get; init; }
+
+    /// <summary>
+    /// Shortest gap between two refresh attempts.
+    ///
+    /// <para><b>Rate limit is the constraint here, not cost.</b> The refresh itself is free —
+    /// measured at zero tokens — but it spends <i>Claude Code's</i> budget against a usage
+    /// endpoint ADR-0002 recorded as aggressively rate limited. Polling hard enough to be
+    /// throttled would degrade the user's own CLI work to keep a tray icon current, which is a
+    /// worse outcome than a stale gauge.</para>
+    ///
+    /// <para>Fifteen minutes because nothing moves faster: the session meter shifted ~8 points
+    /// per 15-minute sample under heavy load, on a gauge that shows an integer percent. A shorter
+    /// floor buys resolution the display cannot express. Opening the panel bypasses it — that is
+    /// a person looking, not a timer.</para>
+    /// </summary>
+    public TimeSpan UsageRefreshFloor { get; init; } = TimeSpan.FromMinutes(15);
 }

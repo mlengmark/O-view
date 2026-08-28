@@ -34,6 +34,12 @@ public sealed class LinuxApp : Application
     private readonly IStartupRegistration _startup = new XdgAutostartRegistration();
     private readonly IUiDispatcher _dispatcher = new AvaloniaUiDispatcher();
     private NativeMenuItem? _startupItem;
+
+    /// <summary>The resume row (issue #234), hidden until the refresh blocks itself.</summary>
+    private NativeMenuItem? _resumeItem;
+
+    /// <summary>Why refreshing is blocked, or null. Read on every render to keep the row honest.</summary>
+    private Func<string?>? _usageRefreshBlocked;
     private TrayIcon? _tray;
     private PanelWindow? _panel;
     private CancellationTokenSource? _hostWatch;
@@ -79,7 +85,7 @@ public sealed class LinuxApp : Application
             Icon = ToWindowIcon(UsageSnapshot.None),
             ToolTipText = "O-view",
             IsVisible = true,
-            Menu = BuildMenu(),
+            Menu = BuildMenu(engine),
         };
         _tray.Clicked += TrayClickHandler(engine);
 
@@ -156,6 +162,16 @@ public sealed class LinuxApp : Application
             // the UI thread with the user's click waiting behind it (issue #125).
             RefreshStartupItem();   // the tick, which anything on the machine may have changed
 
+            // Opening the panel is the moment freshness is observable, so it drives the
+            // usage-cache refresh rather than a timer (issue #234). Forced, because a person
+            // looking is not a poll and must not be held to the background floor.
+            //
+            // This is safe where the synchronous Refresh() above was not: it spawns Claude Code
+            // off the UI thread through the engine's own poll runner and publishes back when it
+            // lands, so nothing waits behind the user's click. The panel still opens on the last
+            // polled snapshot; the refresh only affects what the next one carries.
+            engine.RefreshUsageCache(force: true);
+
             _panel?.Close();
             _panel = new PanelWindow(new LinuxPanelTheme(_theme.IsPanelLight()), _log);
 
@@ -219,6 +235,12 @@ public sealed class LinuxApp : Application
 
             _tray.Icon = ToWindowIcon(snapshot);
             _tray.ToolTipText = TooltipFormatter.Format(snapshot);
+
+            // A native menu is drawn by the host and offers no opening hook, so the resume row's
+            // visibility rides the render instead — which happens every poll, more often than a
+            // user could open the menu.
+            SyncResumeItem();
+
             _log?.Write($"icon rendered session={snapshot.SessionPercent?.ToString() ?? "null"}");
         }
         catch (Exception ex)
@@ -240,7 +262,7 @@ public sealed class LinuxApp : Application
         return new WindowIcon(stream);
     }
 
-    private NativeMenu BuildMenu()
+    private NativeMenu BuildMenu(UsageEngine engine)
     {
         var startup = new NativeMenuItem("Run at startup")
         {
@@ -274,8 +296,53 @@ public sealed class LinuxApp : Application
             (ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.Shutdown();
         }, _log);
 
+        // Only present once the refresh has stopped itself (issue #234). The guard behind that
+        // block errs toward reporting a charge — a Claude Code session started while a refresh
+        // ran looks the same as a billed one — and that direction is only correct while the user
+        // can reverse it, so this row is what makes the trade sound rather than a nicety.
+        var resume = new NativeMenuItem(PanelText.UsageRefreshBlockedRow) { IsVisible = false };
+
+        // Marshalled like every other menu click here: a DBusMenu event arrives on the bus
+        // thread, and touching an AvaloniaObject from there is the SIGSEGV of issue #143, not an
+        // exception any catch could reach.
+        resume.Click += BusCallback.For(_dispatcher, () =>
+        {
+            if (engine.ResumeUsageRefresh())
+            {
+                // Immediately, not at the next background beat: someone who has just re-enabled
+                // this is asking for it now.
+                engine.RefreshUsageCache(force: true);
+                _log?.Write("usage refresh resumed from menu");
+            }
+
+            SyncResumeItem();
+        }, _log);
+
+        _resumeItem = resume;
+
+        // A closure, deliberately not invoked here. Building the menu must not dereference the
+        // engine — LinuxHeadWiringTests constructs it with a null one to inspect the click
+        // handlers without opening a store or touching this machine's paths. The row starts
+        // hidden, which is the correct initial state anyway, and Render corrects it every poll.
+        _usageRefreshBlocked = () => engine.UsageRefreshBlocked;
+
         _startupItem = startup;
-        return [startup, exit];
+        return [startup, resume, exit];
+    }
+
+    /// <summary>
+    /// Shows the resume row only while there is something to undo.
+    ///
+    /// <para>Driven from <see cref="Render"/> rather than from the menu opening, because a native
+    /// menu is drawn by the host and gives no hook for that. Render already runs on the UI thread
+    /// every poll, which is more often than a user could open the menu.</para>
+    /// </summary>
+    private void SyncResumeItem()
+    {
+        if (_resumeItem is not null && _usageRefreshBlocked is not null)
+        {
+            _resumeItem.IsVisible = _usageRefreshBlocked() is not null;
+        }
     }
 
     /// <summary>

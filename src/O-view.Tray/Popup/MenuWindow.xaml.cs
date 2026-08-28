@@ -102,6 +102,9 @@ public partial class MenuWindow : Window, IFlyout
     /// <summary>The user asked to set or clear the weekly reset time (issue #186).</summary>
     public event EventHandler? WeeklyResetRequested;
 
+    /// <summary>Raised when the user asks to undo a self-imposed usage-refresh block (issue #234).</summary>
+    public event EventHandler? ResumeUsageRefreshRequested;
+
     public event EventHandler? CopyDiagnosticsRequested;
     public event EventHandler? CheckForUpdatesRequested;
     public event EventHandler? ExitRequested;
@@ -158,6 +161,7 @@ public partial class MenuWindow : Window, IFlyout
         }
 
         WeeklyResetRow.Click += (_, _) => Dismiss(WeeklyResetRequested);
+        ResumeRefreshRow.Click += (_, _) => Dismiss(ResumeUsageRefreshRequested);
         DiagnosticsRow.Click += (_, _) => Dismiss(CopyDiagnosticsRequested);
         UpdatesRow.Click += (_, _) => Dismiss(CheckForUpdatesRequested);
         ExitRow.Click += (_, _) => Dismiss(ExitRequested);
@@ -186,7 +190,8 @@ public partial class MenuWindow : Window, IFlyout
         bool UpdateAutomatically,
         bool CanUpdateAutomatically,
         string Version,
-        string WeeklyReset = "");
+        string WeeklyReset = "",
+        string UsageRefreshBlocked = "");
 
     /// <summary>
     /// Fills the rows from the current state and docks the flyout at the tray corner.
@@ -227,6 +232,17 @@ public partial class MenuWindow : Window, IFlyout
         // under "Run at startup" on every build that cannot self-install, which is most Linux
         // installs and every portable exe.
         UpdateAutoRow.Visibility = state.CanUpdateAutomatically ? Visibility.Visible : Visibility.Collapsed;
+
+        // Only present while there is something to undo, and Collapsed for the same reason as
+        // above — this is the ordinary case, so a permanent empty row would be 34px of nothing
+        // for every user who never trips the guard.
+        var blocked = state.UsageRefreshBlocked.Length > 0;
+        ResumeRefreshRow.Visibility = blocked ? Visibility.Visible : Visibility.Collapsed;
+        if (blocked)
+        {
+            ResumeRefreshLabel.Text = PanelText.UsageRefreshBlockedRow;
+            ResumeRefreshRow.ToolTip = PanelText.UsageRefreshBlockedHint(state.UsageRefreshBlocked);
+        }
         SetChecked(UpdateAutoCheck, state.UpdateAutomatically && state.CanUpdateAutomatically);
     }
 

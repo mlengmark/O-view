@@ -6,6 +6,7 @@ using OView.App.Diagnostics;
 using OView.App.Platform;
 using OView.App.Updates;
 using OView.Core.Models;
+using OView.Core.Providers.CachedUsage;
 using OView.Linux.Platform;
 using OView.Linux.Rendering;
 using OView.Linux.Tray;
@@ -160,7 +161,18 @@ internal static class Program
             ? TimeSpan.FromMilliseconds(parsedMs)
             : TimeSpan.FromSeconds(60);
 
-        using var engine = new UsageEngine(new UsageEngineOptions { PollInterval = interval, Log = log });
+        using var engine = new UsageEngine(new UsageEngineOptions
+        {
+            PollInterval = interval,
+            Log = log,
+
+            // Lets the engine ask Claude Code to refresh its own usage cache (issue #234).
+            // Without it, a machine with no Claude Desktop shows "unknown" indefinitely: Claude
+            // Code refreshes that block only when /usage runs, and a running session does not
+            // maintain it. No credential is involved — Claude Code authenticates itself and
+            // O-view reads the file it already reads (ADR-0015).
+            UsageCacheRefresher = new ClaudeCliRefresher(),
+        });
 
         try
         {

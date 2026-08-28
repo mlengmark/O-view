@@ -283,6 +283,10 @@
                 </Grid>
             </Button>
 
+            <Button x:Name="ResumeRefreshRow" Style="{StaticResource MenuRow}">
+                <TextBlock x:Name="ResumeRefreshLabel" Style="{StaticResource RowLabel}" Margin="22,0,0,0"/>
+            </Button>
+
             <Button x:Name="DiagnosticsRow" Style="{StaticResource MenuRow}">
                 <TextBlock Text="Copy diagnostics" Style="{StaticResource RowLabel}" Margin="22,0,0,0"/>
             </Button>

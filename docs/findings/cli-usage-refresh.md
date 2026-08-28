@@ -45,6 +45,38 @@ Nothing in O-view is at fault. Claude Code simply does not refresh the block.
 **Starting Claude Code does not refresh it.** That is the whole explanation for a machine running
 Claude Code daily and still holding a four-day-old block.
 
+### `/usage` does not always advance it either
+
+Measured by running the real refresher twice, five minutes apart:
+
+| Run | Outcome | `fetchedAtMs` |
+|---|---|---|
+| 16:15:38 | `Refreshed` | 12:50:48 → 16:15:38 |
+| 16:19:07 | **`Unchanged`** | 16:15:38 → 16:15:38 |
+
+Claude Code has its own internal freshness window and served a cached answer rather than
+re-fetching. **`Unchanged` is therefore an ordinary outcome, not a failure**, and must not be
+treated as one — it is the expected result of asking twice in quick succession.
+
+Two consequences for anything built on this. Only `Refreshed` should trigger a republish, because
+nothing else changed anything. And the refresh floor should stay comfortably longer than whatever
+that internal window is; fifteen minutes clears it with room to spare, which is one more reason not
+to shorten it.
+
+### The transcript's folder is named after the caller's working directory
+
+Claude Code files each transcript under a project slug derived from the invoking process's working
+directory. A run from a temporary path produced
+`C--Users-…-Temp-claude-…-spawncheck` — a directory that means nothing to anyone who later finds it,
+sitting in another application's data.
+
+So the working directory is **chosen, not inherited**: `ClaudeCliRefresher.WorkingDirectory` points
+at O-view's own data directory, which exists on both platforms, so the slug names O-view and a user
+who finds the folder can tell what made it. Inheriting would be worse than untidy — for a
+startup-registered tray app the working directory is whatever launched it, which differs between a
+Start Menu launch, an autostart entry and a post-update relaunch through Explorer
+([ADR-0010](../adr/0010-post-update-relaunch.md)).
+
 ## 3. Cost: zero — and the failure mode that is not
 
 `claude -p "/usage"` produced a 6-line transcript holding only `queue-operation`, `user`, `system`
