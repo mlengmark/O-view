@@ -99,7 +99,7 @@ internal static class SampleRenderer
         var nextWeekly = new DateTimeOffset(2026, 8, 4, 6, 28, 57, TimeSpan.Zero);
 
         var live = new UsageSnapshot(DataSource.Live, 25, 3,
-            capturedAt.AddHours(3), capturedAt, nextWeekly, TimeSpan.FromHours(10), TimeSpan.FromDays(7));
+            capturedAt.AddHours(3), capturedAt, nextWeekly, TimeSpan.FromDays(7));
 
         // Plan meters showing real usage while NOTHING is recorded locally — the state that
         // triggers the token-scope note. Constructed, because a machine that feeds the

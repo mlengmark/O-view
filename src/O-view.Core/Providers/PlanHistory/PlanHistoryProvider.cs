@@ -296,11 +296,12 @@ public sealed class PlanHistoryProvider : IUsageProvider
             nextReset,
             latest.AtUtc,
             WeeklyResetAtUtc: null,
-            WeeklyResetUncertainty: null,
             WeeklyResetPeriod: null,
             // How wide the bracket is, so a start inferred across a sampling gap is marked
-            // approximate rather than printed to the minute (rule 6).
-            windowStart?.Uncertainty);
+            // approximate rather than printed to the minute (rule 6). The session window is
+            // the only one that still carries this — the weekly reset is a reported instant
+            // with no bracket to describe (ADR-0014).
+            SessionResetUncertainty: windowStart?.Uncertainty);
     }
 
 }

@@ -39,7 +39,6 @@ public class ReportedResetTests
         SessionResetAtUtc: T0.AddHours(2),
         CapturedAtUtc: T0,
         WeeklyResetAtUtc: T0.AddDays(3),
-        WeeklyResetUncertainty: TimeSpan.FromHours(10),
         WeeklyResetPeriod: TimeSpan.FromDays(7),
         SessionResetUncertainty: TimeSpan.FromMinutes(8));
 
@@ -95,7 +94,6 @@ public class ReportedResetTests
         Assert.Equal(session, engine.Latest.SessionResetAtUtc);
         Assert.Equal(weekly, engine.Latest.WeeklyResetAtUtc);
         Assert.Equal(TimeSpan.Zero, engine.Latest.SessionResetUncertainty);
-        Assert.Equal(TimeSpan.Zero, engine.Latest.WeeklyResetUncertainty);
     }
 
     /// <summary>
@@ -110,14 +108,13 @@ public class ReportedResetTests
         var weekly = T0.AddDays(2).AddHours(11);
         using var engine = Build(
             dir,
-            Derived with { WeeklyResetAtUtc = null, WeeklyResetUncertainty = null },
+            Derived with { WeeklyResetAtUtc = null },
             Cache(sessionResets: null, weeklyResets: weekly),
             entry: new ManualWeeklyReset(DayOfWeek.Monday, new TimeOnly(22, 59)));
 
         engine.Refresh();
 
         Assert.Equal(weekly, engine.Latest.WeeklyResetAtUtc);
-        Assert.Equal(TimeSpan.Zero, engine.Latest.WeeklyResetUncertainty);
     }
 
     /// <summary>
@@ -134,7 +131,12 @@ public class ReportedResetTests
 
         Assert.Equal(Derived.SessionResetAtUtc, engine.Latest.SessionResetAtUtc);
         Assert.Equal(Derived.WeeklyResetAtUtc, engine.Latest.WeeklyResetAtUtc);
-        Assert.Equal(TimeSpan.FromHours(10), engine.Latest.WeeklyResetUncertainty);
+
+        // The session bracket, not the weekly one. This asserted a weekly uncertainty until
+        // issue #248 removed the field — the weekly reset is a reported instant with nothing to
+        // bracket (ADR-0014), while the session window still rolls from first use and keeps its.
+        // Asserting the surviving half is what keeps this test meaning something.
+        Assert.Equal(Derived.SessionResetUncertainty, engine.Latest.SessionResetUncertainty);
     }
 
     /// <summary>
@@ -162,7 +164,6 @@ public class ReportedResetTests
 
         Assert.Equal(Derived.SessionResetAtUtc, engine.Latest.SessionResetAtUtc);
         Assert.Equal(passedWeekly.AddDays(7), engine.Latest.WeeklyResetAtUtc);
-        Assert.Equal(TimeSpan.Zero, engine.Latest.WeeklyResetUncertainty);
     }
 
     /// <summary>Each window is folded on its own; one being absent must not drop the other.</summary>

@@ -154,35 +154,36 @@ public class PanelTextTests
 
     // ── weekly reset ────────────────────────────────────────────────────────────────
 
-    [Fact]
-    public void APreciseWeeklyResetCarriesTheWeekdayAndNoTilde() =>
-        Assert.Equal(
-            "Resets in 3d 4h · Mon 16:30",
-            PanelText.WeeklyReset(Now.AddMinutes(4590), TimeSpan.FromMinutes(5), Now, Utc));
-
     /// <summary>
-    /// A reset observed while Claude Desktop was not sampling is only bracketed to within
-    /// hours. The <c>~</c> is the whole point: showing an exact minute O-view does not have
-    /// would be a fabricated number.
+    /// The weekly reset carries the weekday and <b>never a tilde</b> (issue #248).
+    ///
+    /// <para>It took an uncertainty and could render <c>~</c>, from when the reset was inferred
+    /// from a drop in Claude Desktop's sampled series. ADR-0014 replaced that with a reported
+    /// instant projected forward by whole weeks, so there is no bracket left to qualify and the
+    /// parameter is gone.</para>
     /// </summary>
     [Fact]
-    public void AnApproximateWeeklyResetIsMarkedWithATilde() =>
+    public void AWeeklyResetCarriesTheWeekdayAndNeverATilde() =>
         Assert.Equal(
-            "Resets in 3d 4h · ~Mon 16:30",
-            PanelText.WeeklyReset(Now.AddMinutes(4590), TimeSpan.FromHours(9), Now, Utc));
+            "Resets in 3d 4h · Mon 16:30",
+            PanelText.WeeklyReset(Now.AddMinutes(4590), Now, Utc));
 
+    /// <summary>
+    /// <see cref="PanelText.IsApproximate"/> survives the weekly removal because the <b>session</b>
+    /// window still needs it: it rolls from first use rather than sitting on a grid, so its reset
+    /// is still derived and still bracketed. Applying one rule to both windows is the mistake
+    /// ADR-0014 exists to prevent.
+    /// </summary>
     [Fact]
-    public void TheBracketBoundaryDecidesWhetherItIsApproximate()
+    public void TheBracketBoundaryStillDecidesForTheSessionWindow()
     {
         Assert.False(PanelText.IsApproximate(WeeklyWindow.PreciseBracket));
         Assert.False(PanelText.IsApproximate(null));
         Assert.True(PanelText.IsApproximate(WeeklyWindow.PreciseBracket + TimeSpan.FromMinutes(1)));
-    }
 
-    [Fact]
-    public void TheApproximateHintNamesHowWideTheBracketIs() =>
-        Assert.Contains("known to within 9h 0m",
-            PanelText.WeeklyResetApproximateHint(TimeSpan.FromHours(9)), StringComparison.Ordinal);
+        Assert.Contains("~", PanelText.SessionReset(
+            Now.AddMinutes(134), Now, Utc, TimeSpan.FromHours(9)), StringComparison.Ordinal);
+    }
 
     // ── caveats ─────────────────────────────────────────────────────────────────────
 

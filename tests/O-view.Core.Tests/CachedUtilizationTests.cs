@@ -234,7 +234,6 @@ public class CachedUtilizationTests
             var snapshot = For().GetSnapshot(Fetched.AddMinutes(2));
 
             Assert.Equal(TimeSpan.Zero, snapshot.SessionResetUncertainty);
-            Assert.Equal(TimeSpan.Zero, snapshot.WeeklyResetUncertainty);
             Assert.Equal(TimeSpan.FromDays(7), snapshot.WeeklyResetPeriod);
         }
 

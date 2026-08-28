@@ -37,13 +37,14 @@ public static class TooltipFormatter
         var weekly = s.WeeklyPercent is { } sd
             ? string.Create(CultureInfo.InvariantCulture, $" · 7d: {sd}%")
             : "";
-        // The weekly reset joins the tooltip on the same terms as the session one: shown
-        // once derived, absent while unknown, and prefixed "~" when the observation behind
-        // it was bracketed by a gap in Desktop's sampling (ADR-0011). Weekday, not clock
+        // The weekly reset joins the tooltip on different terms from the session one: shown when
+        // known, absent when not, and never prefixed "~". It is a reported instant projected
+        // forward by whole weeks (ADR-0014), so there is no bracket to qualify — unlike the
+        // session window, which rolls from first use and keeps its marker. Weekday, not clock
         // time alone — a bare "07:28" a week out would read as today.
         var weeklyReset = s.WeeklyResetAtUtc is { } wr
             ? string.Create(CultureInfo.InvariantCulture,
-                $" · resets {Approx(s.WeeklyResetUncertainty)}{ToLocal(wr, zone):ddd HH:mm}")
+                $" · resets {ToLocal(wr, zone):ddd HH:mm}")
             : "";
         return session + (staleSuffix ?? "") + reset + weekly + weeklyReset;
     }

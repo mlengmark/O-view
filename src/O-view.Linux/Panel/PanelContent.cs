@@ -120,7 +120,7 @@ public sealed class PanelContent : Border
     {
         if (snapshot.WeeklyResetAtUtc is { } reset)
         {
-            return PanelText.WeeklyReset(reset, snapshot.WeeklyResetUncertainty, utcNow, local);
+            return PanelText.WeeklyReset(reset, utcNow, local);
         }
 
         // Plan data is flowing but no drop has been seen yet. Rendering nothing here is
