@@ -136,6 +136,17 @@
                 <local:StatTile x:Name="TileEst31" Margin="4,4,0,0"/>
             </UniformGrid>
 
+            <!-- What none of the four tiles above cover (issue #235). The plan bars are
+                 account-wide; these are not, because cloud-container Cowork sessions and
+                 chat leave no transcript on this machine. Beneath the whole block rather
+                 than on a tile: it is true of all four, and the per-tile caveat channel
+                 would print it twice on the 31-day pair and never on today's.
+
+                 Not the line issue #232 removed — that one sat under the session BAR,
+                 described the session window alone, and carried a disclosure. -->
+            <TextBlock x:Name="TokenScopeLine" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"
+                       Foreground="{DynamicResource TextMuted}"/>
+
             <!-- What the token totals are made of (issue #169). ~90% of a Claude Code
                  total is cached prompt re-reads, which is why the tiles read in millions
                  where Claude's own context figure reads in thousands. The composition is

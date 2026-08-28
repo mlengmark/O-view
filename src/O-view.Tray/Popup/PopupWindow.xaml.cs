@@ -526,6 +526,12 @@ public partial class PopupWindow : Window, IFlyout
         // is missing rather than letting the figure read as the whole picture.
         var coverage = PanelText.Caveat(stats);
 
+        // Always shown, unlike the caveat above it. Partial history and an unpriced model are
+        // conditions that pass; the tiles excluding chat and cloud sessions is the standing shape
+        // of the data, and a note that appeared only sometimes would teach a reader that its
+        // absence means full coverage (issue #235).
+        TokenScopeLine.Text = PanelText.TokenScopeCaveat;
+
         // The "not money charged" framing is only true for plan usage. Off-plan work
         // bills at API rates, so the label has to flip with it.
         var offPlan = stats.IsOffPlan;

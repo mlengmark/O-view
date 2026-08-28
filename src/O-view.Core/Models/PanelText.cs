@@ -249,6 +249,35 @@ public static class PanelText
     }
 
     /// <summary>
+    /// What the token and cost tiles permanently do not cover (issue #235).
+    ///
+    /// <para><b>Deliberately not part of <see cref="Caveat"/>.</b> That one is a per-tile hint
+    /// carried by the two 31-day tiles, and it is right for statements about the 31-day window.
+    /// This applies to every token and cost figure on the panel, so riding the same channel would
+    /// print it twice on adjacent tiles and never on the "today" pair. It renders once, beneath
+    /// the whole tile block.</para>
+    ///
+    /// <para><b>The plan bars are account-wide; these tiles are not.</b> Cloud-container Cowork
+    /// sessions and Claude chat leave no transcript on this machine — measured directly on
+    /// 2026-08-28, a cloud Cowork session wrote no registration and no transcript at all — so the
+    /// bars include that work and the tiles cannot. The machine that reported
+    /// [#218](https://github.com/mlengmark/O-view/issues/218) sat at 100% on the plan meter with a
+    /// two-day-old local record, which is that pairing in its most alarming form.</para>
+    ///
+    /// <para><b>Always present, unlike the caveats it joins.</b> Partial history and an unpriced
+    /// model are conditions that pass; this one is the standing shape of the data. A caveat that
+    /// appears only sometimes teaches a reader that its absence means full coverage, and here that
+    /// would be false every time.</para>
+    ///
+    /// <para><b>This is not the line issue #232 removed.</b> That one sat under the session
+    /// <i>bar</i>, described the session window alone, and carried a disclosure; it was removed as
+    /// out of place with the explicit instruction that nothing replace it there. This states the
+    /// scope of the <i>tiles</i>, in the caveat line they already carry, which is where the panel
+    /// has always admitted a figure is real but incomplete.</para>
+    /// </summary>
+    public const string TokenScopeCaveat = "chat and cloud sessions not counted";
+
+    /// <summary>
     /// Tile headings for estimated money. <b>"Est." is never dropped</b> — within plan
     /// limits the marginal cost is £0 and these price tokens at public API rates, so the
     /// figure is a valuation, not a charge.
