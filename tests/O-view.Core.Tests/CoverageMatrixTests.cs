@@ -1,3 +1,4 @@
+using OView.Core.Models;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Core.Storage;
@@ -235,7 +236,7 @@ public class CoverageMatrixTests : IDisposable
 
         var line = Scope().CoverageLine();
 
-        Assert.Equal($"Counting: Claude Code · Cowork. {TranscriptScopeReport.ChatNote}", line);
+        Assert.Equal("Counting local transcripts: Claude Code · Cowork.", line);
     }
 
     /// <summary>
@@ -249,23 +250,51 @@ public class CoverageMatrixTests : IDisposable
 
         var line = Scope().CoverageLine();
 
-        Assert.Contains("Counting: Claude Code", line, StringComparison.Ordinal);
+        Assert.Contains("Counting local transcripts: Claude Code", line, StringComparison.Ordinal);
         Assert.Contains("no Cowork sessions found", line, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// Chat is named on every rendering of the line, because a heavy chat user with a small
-    /// token figure has no other way to learn why — and, unlike the others, it is a gap that
-    /// will never close.
+    /// <b>"local transcripts", not just "Counting"</b> (issue #245). Naming Cowork unqualified
+    /// said all Cowork usage was counted, and it is not: a cloud-container session writes no
+    /// transcript on this machine at all — measured 2026-08-28, no registration and no transcript.
+    ///
+    /// <para>The line's job is still #171's: report which surfaces left files <i>here</i>, so a
+    /// small figure can be told apart from O-view not looking where the user works. The missing
+    /// qualifier was what turned that into an overstatement.</para>
     /// </summary>
     [Fact]
-    public void TheCoverageLineAlwaysSaysChatIsNotCounted()
+    public void TheCoverageLineSaysItIsCountingLocalTranscripts()
+    {
+        GiveCoworkSession("req_a");
+
+        Assert.StartsWith("Counting local transcripts:", Scope().CoverageLine(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// This line no longer names chat, and that is the change rather than a regression
+    /// (issue #245).
+    ///
+    /// <para>It used to end "Chat keeps no local record", justified by a heavy chat user with a
+    /// small token figure having <i>no other way</i> to learn why. That premise stopped holding in
+    /// issue #235: <see cref="PanelText.TokenScopeCaveat"/> states it beneath the tiles, always
+    /// visible, where this line sits inside a disclosure most readers never open. The permanent
+    /// gap is now stated once, in the more visible of the two.</para>
+    ///
+    /// <para>Two notes saying overlapping things is how the panel's copy drifted apart before —
+    /// the same reasoning <see cref="TheCoverageLineIsEmptyWhenNothingWasFound"/> already
+    /// applies to <c>Explain()</c>.</para>
+    /// </summary>
+    [Fact]
+    public void TheCoverageLineLeavesThePermanentGapToTheAlwaysVisibleNote()
     {
         GiveClaudeCodeSession("req_a");
-        Assert.Contains(TranscriptScopeReport.ChatNote, Scope().CoverageLine(), StringComparison.Ordinal);
-
         GiveCoworkSession("req_b");
-        Assert.Contains(TranscriptScopeReport.ChatNote, Scope().CoverageLine(), StringComparison.Ordinal);
+
+        var line = Scope().CoverageLine();
+
+        Assert.DoesNotContain("chat", line, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("chat", PanelText.TokenScopeCaveat, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
