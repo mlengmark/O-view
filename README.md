@@ -163,7 +163,15 @@ O-view handles **no credentials and makes no API calls for usage data.** Everyth
 
 `OAuthUsageProvider` appears in some earlier design docs as the intended primary source. It was **deferred out of v1 and has not been built** — the local file solves the problem without a token ([ADR-0007](docs/adr/0007-plan-history-primary-provider.md)). ADR-0002 is superseded on this point.
 
-O-view polls every 60 seconds (the underlying file only updates every ~300 s), with a fast 3-second warm-up cadence for the first two minutes after launch so a start that beats Claude Desktop to the punch still fills the bars within seconds.
+O-view polls every 60 seconds, with a fast 3-second warm-up cadence for the first two minutes after launch so a start that beats Claude Desktop to the punch still fills the bars within seconds.
+
+### One thing O-view runs
+
+Claude Code caches the same session and weekly percentages in `~/.claude.json`, which is what fills the bars on a machine with **no Claude Desktop**. It refreshes that cache **only when `/usage` runs** — not on startup, not while a session is open. Measured on a machine running Claude Code daily, the cache was **4.43 days stale**, so those users saw "unknown" indefinitely.
+
+So O-view runs `claude /usage` itself: when you open the panel, and at most once every 15 minutes in the background. It then reads the file, as it always has.
+
+**No credential is involved.** Claude Code authenticates as itself with its own stored login, exactly as when you run the command by hand; O-view holds no token and sends nothing to Anthropic ([ADR-0015](docs/adr/0015-no-credential-based-usage-sources.md)). The command costs **zero tokens** — and O-view checks after every invocation that it stayed free. If one is ever billed, it stops itself and offers a **Resume usage refresh** menu row rather than carrying on.
 
 ### What O-view writes
 
