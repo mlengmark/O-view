@@ -25,8 +25,9 @@ Knowing what the app touches is usually enough to judge whether a report is in s
 
 | | |
 |---|---|
-| Credentials | **None.** v1 handles no token and performs no authentication (CLAUDE.md rule 3). |
-| Network | One request, to `api.github.com`, to check for a newer release. Plus the installer download when a Windows user accepts an update. Nothing else. |
+| Credentials | **None.** O-view handles no token and performs no authentication (CLAUDE.md rule 3, [ADR-0015](docs/adr/0015-no-credential-based-usage-sources.md)). |
+| Network | One request, to `api.github.com`, to check for a newer release. Plus the installer download when a Windows user accepts an update. Nothing else **from O-view itself** — but see Subprocesses below. |
+| Subprocesses | **One:** `claude /usage`, run at most every 15 minutes and when you open the panel, to make Claude Code refresh its own usage figures. O-view then reads the file, as it always has. See below. |
 | Reads | Files Claude already writes on this machine — `~/.claude.json` (account fields only, never a token), plan-usage history, and session transcripts. **Read-only, always.** |
 | Writes | Its own state under `%LOCALAPPDATA%\O-view` / `~/.local/share/O-view`, plus the run-at-startup entry when you enable it. |
 | Telemetry | None. Nothing is sent anywhere. |
@@ -35,6 +36,17 @@ Knowing what the app touches is usually enough to judge whether a report is in s
 
 Stated here rather than left to be rediscovered.
 
+- **O-view runs `claude /usage`, and that command talks to Anthropic.** O-view itself still sends
+  nothing to Anthropic and still holds no credential — Claude Code authenticates as itself, using
+  its own stored login, exactly as it does when you run the command yourself. What changed is that
+  O-view now *causes* that request rather than only reading the file it leaves behind, and a
+  network trace of the machine will show it. It exists because Claude Code refreshes those figures
+  **only** when `/usage` runs, so a machine without Claude Desktop otherwise shows "unknown"
+  indefinitely — measured at 4.43 days stale on a machine running Claude Code daily.
+  It is on by default. Cost was measured at **zero tokens**, and O-view checks after every
+  invocation that it stayed that way: if one is ever billed, the feature stops itself and offers a
+  **Resume usage refresh** row rather than continuing.
+  ([findings/cli-usage-refresh.md](docs/findings/cli-usage-refresh.md))
 - **The Windows installer and executable are not code-signed.** An Authenticode certificate
   costs more than a free tool justifies ([ADR-0008](docs/adr/0008-installer-distribution.md)).
   SmartScreen will warn on first run. Integrity rests instead on the two checks below.
