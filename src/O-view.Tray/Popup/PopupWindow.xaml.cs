@@ -484,20 +484,20 @@ public partial class PopupWindow : Window, IFlyout
     {
         if (snapshot.WeeklyResetAtUtc is { } reset)
         {
-            var bracket = snapshot.WeeklyResetUncertainty ?? TimeSpan.Zero;
+            // A user-supplied reset is labelled, so an unexpectedly precise time is explained
+            // rather than mysterious (issue #186).
+            //
+            // This used to also require a zero bracket, to exclude a *derived* reset on a
+            // machine that happened to have an entered one. That distinction died with the
+            // derivation (ADR-0014): every weekly reset is exact now, so the bracket term was
+            // always true and removing it changes nothing observable.
+            var userSupplied = _lastSettings?.WeeklyReset is not null;
 
-            // A user-supplied reset is exact, so it carries no "~" — and it is labelled, so
-            // an unexpectedly precise time is explained rather than mysterious (issue #186).
-            var userSupplied = _lastSettings?.WeeklyReset is not null && bracket == TimeSpan.Zero;
-
-            WeeklyResetText.Text = PanelText.WeeklyReset(
-                reset, snapshot.WeeklyResetUncertainty, Now(TimeZoneInfo.Utc), local)
+            WeeklyResetText.Text = PanelText.WeeklyReset(reset, Now(TimeZoneInfo.Utc), local)
                 + (userSupplied ? $" · {PanelText.WeeklyResetUserSupplied}" : "");
             WeeklyResetText.ToolTip = userSupplied
                 ? HoverCard.Text(this, PanelText.WeeklyResetUserSuppliedHint)
-                : PanelText.IsApproximate(snapshot.WeeklyResetUncertainty)
-                    ? HoverCard.Text(this, PanelText.WeeklyResetApproximateHint(bracket))
-                    : null;
+                : null;
             HoverCard.ApplyTiming(WeeklyResetText);
             WeeklyResetText.Visibility = Visibility.Visible;
             return;

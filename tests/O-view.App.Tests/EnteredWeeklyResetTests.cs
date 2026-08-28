@@ -59,7 +59,6 @@ public class EnteredWeeklyResetTests
         engine.Refresh();
 
         Assert.NotNull(engine.Latest.WeeklyResetAtUtc);
-        Assert.Equal(TimeSpan.Zero, engine.Latest.WeeklyResetUncertainty);
         Assert.Equal(DayOfWeek.Monday,
             TimeZoneInfo.ConvertTime(engine.Latest.WeeklyResetAtUtc!.Value, TimeZoneInfo.Local).DayOfWeek);
 
@@ -90,14 +89,12 @@ public class EnteredWeeklyResetTests
         var stale = new UsageSnapshot(
             DataSource.Live, 40, 60, T0.AddHours(2), T0,
             WeeklyResetAtUtc: T0.AddDays(3),
-            WeeklyResetUncertainty: TimeSpan.FromHours(10),
             WeeklyResetPeriod: TimeSpan.FromDays(7));
         using var engine = Build(dir, stale, Entry);
 
         engine.Refresh();
 
         Assert.Equal(Entry.NextAfter(T0, TimeZoneInfo.Local), engine.Latest.WeeklyResetAtUtc);
-        Assert.Equal(TimeSpan.Zero, engine.Latest.WeeklyResetUncertainty);
     }
 
     /// <summary>With nothing entered, nothing is added.</summary>
@@ -178,6 +175,5 @@ public class EnteredWeeklyResetTests
         timers.PlanPoll.Tick();
 
         Assert.Equal(afterFullPoll, engine.Latest.WeeklyResetAtUtc);
-        Assert.Equal(TimeSpan.Zero, engine.Latest.WeeklyResetUncertainty);
     }
 }

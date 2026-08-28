@@ -72,10 +72,7 @@ public static class PanelSampleRenderer
         DataSource.Live, session, weekly,
         SessionResetAtUtc: At.AddHours(2).AddMinutes(14),
         CapturedAtUtc: At,
-        WeeklyResetAtUtc: At.AddDays(3).AddHours(4),
-        // Wide enough to be approximate, so the ~ marker appears in a sample rather than
-        // only in a state nobody looks at.
-        WeeklyResetUncertainty: TimeSpan.FromHours(9));
+        WeeklyResetAtUtc: At.AddDays(3).AddHours(4));
 
     private static readonly ClaudeAccount Account = new("Sample User", "sample@example.com", "claude_pro", "org-uuid");
 

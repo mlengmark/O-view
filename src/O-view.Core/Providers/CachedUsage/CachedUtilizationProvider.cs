@@ -87,11 +87,14 @@ public sealed class CachedUtilizationProvider : IUsageProvider
             sessionReset,
             cached.FetchedAtUtc,
             weeklyReset,
-            // Reported rather than inferred, so these carry no bracket and must not wear the
-            // "~" that marks one.
-            weeklyReset is null ? null : TimeSpan.Zero,
-            weeklyReset is null ? null : WeeklyWindow.Length,
-            sessionReset is null ? null : TimeSpan.Zero);
+            // Named from here on. These trail a long positional list, and removing the weekly
+            // uncertainty field in issue #248 would otherwise have re-pointed them silently —
+            // the compiler caught it here, and naming them means it would not have to.
+            WeeklyResetPeriod: weeklyReset is null ? null : WeeklyWindow.Length,
+            // Reported rather than inferred, so this carries no bracket. The weekly one no
+            // longer exists at all (ADR-0014); the session window still rolls from first use,
+            // so it keeps the field even when this source can fill it exactly.
+            SessionResetUncertainty: sessionReset is null ? null : TimeSpan.Zero);
     }
 
     /// <summary>

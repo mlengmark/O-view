@@ -18,12 +18,6 @@ namespace OView.Core.Models;
 /// one has been observed, which the UI reports as still waiting rather than as broken
 /// (GitHub issue #6, ADR-0011).
 /// </param>
-/// <param name="WeeklyResetUncertainty">
-/// How wide the bracket around the observed reset was. Claude Desktop stops sampling when
-/// it is closed, so a reset caught overnight is only known to within hours — the display
-/// qualifies the time in that case rather than overstating it. Null alongside
-/// <paramref name="WeeklyResetAtUtc"/>.
-/// </param>
 /// <param name="WeeklyResetPeriod">
 /// Cadence between weekly resets, as derived. Carried so the usage graph can step back from
 /// <paramref name="WeeklyResetAtUtc"/> to draw past week boundaries on exactly the cadence
@@ -36,7 +30,6 @@ public sealed record UsageSnapshot(
     DateTimeOffset? SessionResetAtUtc,
     DateTimeOffset? CapturedAtUtc,
     DateTimeOffset? WeeklyResetAtUtc = null,
-    TimeSpan? WeeklyResetUncertainty = null,
     TimeSpan? WeeklyResetPeriod = null,
     TimeSpan? SessionResetUncertainty = null)
 {

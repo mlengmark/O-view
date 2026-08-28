@@ -137,11 +137,27 @@ public static class PanelText
     /// and a <c>~</c> when the observation is only bracketed to within hours — showing an
     /// exact minute O-view does not have would be a fabricated number.
     /// </summary>
+    /// <summary>
+    /// The weekly reset line. <b>Never approximate</b> — see below.
+    ///
+    /// <para>This took an <c>uncertainty</c> and could render a <c>~</c>, from when the weekly
+    /// reset was inferred from a drop in Claude Desktop's sampled series and could only be
+    /// bracketed. [ADR-0014](../../../docs/adr/0014-weekly-reset-is-a-reported-constant.md)
+    /// replaced that with a reported instant, stored as an anchor and projected forward by whole
+    /// weeks, so the value carries zero uncertainty and the marker became unreachable. It stayed
+    /// in the code for one release to keep that behavioural change reviewable on its own; issue
+    /// #248 is the removal it promised.</para>
+    ///
+    /// <para><b>The five-hour window is the opposite and keeps its <c>~</c></b>
+    /// (<see cref="SessionReset"/>). It rolls from first use rather than sitting on a grid, so its
+    /// reset is still derived and still bracketed. Applying one rule to both windows is the
+    /// mistake ADR-0014 exists to prevent, so <see cref="IsApproximate"/> stays for that caller.</para>
+    /// </summary>
     public static string WeeklyReset(
-        DateTimeOffset resetAtUtc, TimeSpan? uncertainty, DateTimeOffset utcNow, TimeZoneInfo local)
+        DateTimeOffset resetAtUtc, DateTimeOffset utcNow, TimeZoneInfo local)
     {
         var at = TimeZoneInfo.ConvertTime(resetAtUtc, local);
-        return $"Resets in {Countdown(resetAtUtc - utcNow)} · {(IsApproximate(uncertainty) ? "~" : "")}{at:ddd HH:mm}";
+        return $"Resets in {Countdown(resetAtUtc - utcNow)} · {at:ddd HH:mm}";
     }
 
     /// <summary>
@@ -187,11 +203,6 @@ public static class PanelText
     }
 
     /// <summary>Hover text for an approximate weekly reset, naming how wide the bracket is.</summary>
-    public static string WeeklyResetApproximateHint(TimeSpan uncertainty) =>
-        $"The weekly reset was observed while Claude Desktop wasn't sampling, so it is "
-        + $"known to within {Countdown(uncertainty)}. O-view keeps watching and will "
-        + "sharpen this if it sees a reset while Desktop is running.";
-
     /// <summary>
     /// Shown while plan data is flowing but no weekly drop has been seen yet. This used to
     /// render as nothing at all, which is indistinguishable from a bug.

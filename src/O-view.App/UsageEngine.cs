@@ -897,8 +897,8 @@ public sealed class UsageEngine : IDisposable
         return snapshot with
         {
             WeeklyResetAtUtc = next,
-            // Both remaining sources are exact, so this never wears the "~".
-            WeeklyResetUncertainty = TimeSpan.Zero,
+            // No uncertainty field to set: both remaining sources are exact, so the weekly row
+            // never wore the "~" and the field carrying it was removed (ADR-0014, issue #248).
             WeeklyResetPeriod = WeeklyWindow.Length,
         };
     }
