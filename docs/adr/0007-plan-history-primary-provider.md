@@ -42,9 +42,11 @@ Resolution: fresh plan-history sample (within staleness threshold) → OAuth if 
 >
 > **Record the cadence as variable, not as a new constant.** It was 5 minutes in July 2026 and 15 minutes in August. Writing 15 into this ADR would repeat the error that made the amendment necessary; the interval belongs to Claude Desktop, changes without notice, and must be derived from the samples themselves wherever it matters.
 >
-> **This does not touch the two figures that look similar.** The five-hour window measured at 5.00014 hours apart is a *window length*, not a sample interval, and is unaffected — as is ADR-0011's seven-day measurement. Only the rate at which Desktop writes samples has changed.
+> **This does not touch the figures that look similar.** The five-hour window measured at 5.00014 hours apart is a *window length*, not a sample interval, and is unaffected. So is the seven-day window length. Only the rate at which Desktop writes samples has changed.
 >
-> Two consequences sharpen. **"Data is only as fresh as Desktop's last sample" now means up to three times staler than this ADR assumed**, so the staleness labelling this section already calls "more important, not less" matters more again. And **reset derivation loses resolution**: an `fh` drop is bracketed by the samples either side of it, so a 15-minute interval widens that bracket threefold. The `~` marker ADR-0011 introduced for gap-bracketed observations is doing more work than when it was designed, and anything that assumed a 5-minute bracket should be re-read.
+> Two consequences sharpen. **"Data is only as fresh as Desktop's last sample" now means up to three times staler than this ADR assumed**, so the staleness labelling this section already calls "more important, not less" matters more again.
+>
+> And **the session reset bracket widens threefold**. An `fh` drop is bracketed by the samples either side of it, so a 15-minute interval triples that bracket's width. This lands on the **session** row only: [ADR-0014](0014-weekly-reset-is-a-reported-constant.md) superseded weekly derivation entirely, so the weekly reset is now a reported constant carrying zero uncertainty and its `~` is unreachable. The session window still rolls from first use and still derives, so its `~` and its narrowing by local activity are what this coarser sampling degrades. Anything that assumed a 5-minute bracket there should be re-read.
 
 ## Consequences
 
