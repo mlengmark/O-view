@@ -71,11 +71,21 @@ The store cannot invent history that predates installation. Consistent with the 
 >
 > **The rollback is reproduced, not assumed.** `StaleJournalTests` captures a real journal mid-life and puts it back after the database has moved on: a plain connection then reports 5 rows where the file holds 25, and `quick_check` still says `ok`. That test asserts the wrong behaviour deliberately, so the guard beside it is demonstrably defending against something real — and so it fails loudly if a future SQLite stops doing this, rather than leaving the guard standing on an expired premise.
 
+> **Amendment (2026-08-28, [#236](https://github.com/mlengmark/O-view/issues/236)) — the 30-day cleanup is not operating as this ADR describes, and the decision stands anyway.**
+>
+> The Context above infers a 30-day boundary from `cleanupPeriodDays` being unset, and the first row of *Alternatives* treats it as fact. **Measured on the development machine on 2026-08-28: ten Cowork session registrations aged 30–90 days, the oldest 41.9 days, and every one of them still had its transcript on disk.** Cleanup is running — `~/.claude/.last-cleanup` had been touched that morning — so this is not a dormant scheduler.
+>
+> What that establishes is only that retention exceeds 42 days here. It does **not** establish the real figure, and no number should replace 30 in the text above until one is measured; the same trap as ADR-0007's sampling interval, where a documented constant quietly stopped being true. Treat retention as **unknown and variable**.
+>
+> **No part of the decision changes, and two of its load-bearing reasons never depended on the figure.** History that predates O-view's install is unrecoverable at any retention length, which is what the *Honesty requirement* and the coverage caveat exist for. And `cleanupPeriodDays` is a setting the user may change at any time — the third row of *Alternatives* already rejects depending on it. A store justified by "their retention is 30 days" would be undermined by this measurement; a store justified by "their retention is not ours to rely on" is not.
+>
+> The practical consequence is narrow: a machine may hold more recoverable history than the store assumes, so a rebuild after the corruption guard fires may recover more than expected. Nothing needs to change for that to be true.
+
 ## Alternatives considered
 
 | Option | Why rejected |
 |---|---|
-| **Read JSONL on demand, no store** | Simplest, and the original design. Fails outright: Claude Code deletes transcripts at 30 days, so the 31-day window can never be complete. |
+| **Read JSONL on demand, no store** | Simplest, and the original design. Fails outright: Claude Code deletes transcripts at 30 days, so the 31-day window can never be complete. *(The 30-day figure is contradicted by measurement — see the 2026-08-28 amendment. The rejection stands: retention is not ours to rely on, and history predating install is unrecoverable at any length.)* |
 | **Copy raw transcripts into our own archive** | Would preserve full fidelity. Rejected on privacy and size — transcripts contain full conversation content, and O-view has no need for it. Daily token aggregates are sufficient and hold nothing sensitive. |
 | **Raise `cleanupPeriodDays` in Claude Code settings** | O-view must not modify another tool's configuration. Also fails to help retroactively, and leaves us dependent on a setting the user may change. |
 | **JSON file instead of SQLite** | Viable at this scale. Rejected for concurrent-access and partial-write safety — SQLite ships in the .NET ecosystem and handles crash-consistency for free. |
