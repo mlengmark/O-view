@@ -114,6 +114,22 @@ public partial class App : System.Windows.Application
         _instance = new MutexSingleInstanceGuard();
         if (!_instance.TryAcquire())
         {
+            // Exiting silently is right for a second ordinary launch — the user clicked the
+            // shortcut twice and the running instance is what they wanted. It is wrong for a
+            // verification hook: --popup-check needs the assembled app, so unlike the pre-mutex
+            // checks it cannot run beside a live instance, and a check that produces no report
+            // is indistinguishable from one that failed (issue #249).
+            if (args.TryGetValue("--popup-check", out var blockedReport))
+            {
+                File.WriteAllText(
+                    blockedReport ?? "popup-check.txt",
+                    "popup check NOT RUN — another instance holds the single-instance mutex.\n\n" +
+                    "This check drives the real ShowPopup(), so it needs the engine and tray host\n" +
+                    "that only exist after startup — which means it cannot run pre-mutex the way\n" +
+                    "--menu-check and --fold-check do. Close the running O-view and try again.\n\n" +
+                    "RESULT: NOT RUN\n");
+            }
+
             Shutdown();
             return;
         }
@@ -202,6 +218,15 @@ public partial class App : System.Windows.Application
             int.TryParse(stress, NumberStyles.Integer, CultureInfo.InvariantCulture, out var iterations))
         {
             _controller.StressTest(iterations);
+        }
+
+        // The tray click, driven on the real desktop over ~5 s. Not beside --menu-check and
+        // --fold-check in the pre-mutex table: this one needs the assembled app, because
+        // driving the real ShowPopup is the point (issue #249).
+        if (args.TryGetValue("--popup-check", out var popupCheckReport))
+        {
+            RunPopupCheck(popupCheckReport ?? "popup-check.txt");
+            return;
         }
 
         // Verification hooks: open the popup immediately, optionally pinned (auto-hide
@@ -340,6 +365,94 @@ public partial class App : System.Windows.Application
     /// <para>One guard for both surfaces (issue #54): left-click and right-click behaved
     /// identically here and were written twice.</para>
     /// </summary>
+    /// <summary>
+    /// Exercises the tray click the way a user does: open, close, open again — each step
+    /// through the same <see cref="ShowPopup"/> the icon calls, spaced far enough apart that the
+    /// close transition and the toggle's grace window have both elapsed. Writes what the panel
+    /// actually is at each point, so a "stopped reacting" report becomes a fact rather than a
+    /// guess.
+    ///
+    /// <para><b>Why this lives on <see cref="App"/> and not beside the other checks</b> (issue
+    /// #249). <c>--menu-check</c> and <c>--fold-check</c> sit in <see cref="SampleRenderer"/> and
+    /// construct their own windows, so they can run before the single-instance mutex. This one
+    /// cannot: driving the <i>real</i> <see cref="ShowPopup"/> is the entire point, and that needs
+    /// the engine, the tray host and the settings that only exist after startup. So it runs last,
+    /// against the assembled app, and shuts it down when the sequence ends.</para>
+    ///
+    /// <para><b>The reopen is the assertion that matters.</b> A tray click is a toggle, and the
+    /// click itself dismisses an open surface by taking focus from it — so reopening naively made
+    /// the icon a one-way switch that could only ever open. <see cref="CompletedToggle"/> is what
+    /// stops that, and its grace window is why the steps are spaced rather than run back to
+    /// back.</para>
+    ///
+    /// <para>It also records <c>UsageRefreshAttempts</c> either side of the first open, which is
+    /// the one part of issue #234 no unit test could reach: everything behind the panel-open path
+    /// is verified, but the call inside <see cref="ShowPopup"/> had never run assembled.</para>
+    /// </summary>
+    private void RunPopupCheck(string path)
+    {
+        var report = new System.Text.StringBuilder();
+        var refreshesBefore = _engine!.UsageRefreshAttempts;
+
+        void Record(string label) =>
+            report.AppendLine(
+                $"{label,-34} visible={_popup?.IsVisible.ToString() ?? "<none>",-5} " +
+                $"clickAway={_popup?.ClosedByClickAway.ToString() ?? "<none>",-5} " +
+                $"refreshAttempts={_engine!.UsageRefreshAttempts}");
+
+        var opened = new bool[2];
+
+        var steps = new List<(string Label, Action Do)>
+        {
+            ("open (first click)", () => ShowPopup()),
+            ("after first open", () => opened[0] = _popup?.IsVisible == true),
+            ("dismiss", () => _popup?.DismissNow()),
+            ("after dismiss", () => { }),
+            ("open again", () => ShowPopup()),
+            ("after reopen", () => opened[1] = _popup?.IsVisible == true),
+        };
+
+        var step = 0;
+        report.AppendLine($"popup check · {UpdateService.CurrentVersion}");
+        report.AppendLine($"refresher available: {_engine.CanRefreshUsageCache}");
+        report.AppendLine();
+
+        // Comfortably longer than both the close transition and the toggle's grace window, so a
+        // failure here is the behaviour rather than the spacing.
+        var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(900) };
+        timer.Tick += (_, _) =>
+        {
+            if (step > 0)
+            {
+                Record(steps[step - 1].Label);
+            }
+
+            if (step == steps.Count)
+            {
+                timer.Stop();
+
+                var refreshed = _engine!.UsageRefreshAttempts > refreshesBefore;
+                report.AppendLine();
+                report.AppendLine($"first click opened the panel   : {opened[0]}");
+                report.AppendLine($"reopen after dismiss opened it : {opened[1]}");
+                report.AppendLine($"panel open triggered a refresh : {refreshed}" +
+                                  (_engine.CanRefreshUsageCache ? "" : "  (no refresher — not required)"));
+
+                // The refresh is only required of a build that has a refresher at all; the other
+                // two are required of every build, because they are the click working.
+                var pass = opened[0] && opened[1] && (refreshed || !_engine.CanRefreshUsageCache);
+                report.AppendLine($"RESULT: {(pass ? "PASS" : "FAIL")}");
+
+                File.WriteAllText(path, report.ToString());
+                Shutdown();
+                return;
+            }
+
+            steps[step++].Do();
+        };
+        timer.Start();
+    }
+
     private static bool CompletedToggle(IFlyout flyout)
     {
         if (!flyout.IsVisible && !flyout.ClosedByClickAway)

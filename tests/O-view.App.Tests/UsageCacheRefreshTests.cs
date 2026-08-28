@@ -134,6 +134,50 @@ public class UsageCacheRefreshTests
         Assert.Equal(1, slow.Calls);
     }
 
+    /// <summary>
+    /// The counter records attempts that <i>started</i>, not calls that were made — most calls
+    /// are turned away by the floor, the freshness gate or the latch.
+    ///
+    /// <para>It exists so the <c>--popup-check</c> hook can assert the panel-open path reached
+    /// the refresher rather than inferring it from a log line (issue #249). A counter that
+    /// incremented on every call would report success for a click that was gated out.</para>
+    /// </summary>
+    [Fact]
+    public void TheAttemptCounterCountsStartsNotCalls()
+    {
+        using var dir = new TempDir();
+        var refresher = new FakeRefresher();
+        using var engine = NewEngine(dir, refresher, new FakeClock(T0));
+
+        Assert.Equal(0, engine.UsageRefreshAttempts);
+
+        engine.RefreshUsageCache(force: true);
+        Assert.Equal(1, engine.UsageRefreshAttempts);
+
+        // Turned away by the floor — a call, but not an attempt.
+        engine.RefreshUsageCache();
+        Assert.Equal(1, engine.UsageRefreshAttempts);
+    }
+
+    /// <summary>A blocked engine starts nothing, so the counter must not move either.</summary>
+    [Fact]
+    public void ABlockedEngineStartsNoAttempts()
+    {
+        using var dir = new TempDir();
+        var refresher = new FakeRefresher
+        {
+            Next = new ClaudeCliRefreshResult(RefreshOutcome.Billed, "x.jsonl"),
+        };
+        using var engine = NewEngine(dir, refresher, new FakeClock(T0));
+
+        engine.RefreshUsageCache(force: true);
+        var afterBlock = engine.UsageRefreshAttempts;
+
+        engine.RefreshUsageCache(force: true);
+
+        Assert.Equal(afterBlock, engine.UsageRefreshAttempts);
+    }
+
     // ── the staleness gate ──────────────────────────────────────────────────
 
     /// <summary>
