@@ -36,6 +36,16 @@ Resolution: fresh plan-history sample (within staleness threshold) → OAuth if 
 
 `OAuthUsageProvider` is **deferred out of v1**, and the token-discovery spike is dropped from the critical path. It remains worth building later for credit balances and for users without Desktop.
 
+> **Amendment (2026-08-28, [#236](https://github.com/mlengmark/O-view/issues/236)) — the sampling interval is not a constant, and 5 minutes is no longer what it does.**
+>
+> The Context above describes "a 5-minute-interval time series". **Measured on 2026-08-28: three consecutive samples exactly 15:00 apart** — 11:39:51, 11:54:51, 12:09:51 — and 939 samples over 30 days is consistent with the slower rate rather than the faster one.
+>
+> **Record the cadence as variable, not as a new constant.** It was 5 minutes in July 2026 and 15 minutes in August. Writing 15 into this ADR would repeat the error that made the amendment necessary; the interval belongs to Claude Desktop, changes without notice, and must be derived from the samples themselves wherever it matters.
+>
+> **This does not touch the two figures that look similar.** The five-hour window measured at 5.00014 hours apart is a *window length*, not a sample interval, and is unaffected — as is ADR-0011's seven-day measurement. Only the rate at which Desktop writes samples has changed.
+>
+> Two consequences sharpen. **"Data is only as fresh as Desktop's last sample" now means up to three times staler than this ADR assumed**, so the staleness labelling this section already calls "more important, not less" matters more again. And **reset derivation loses resolution**: an `fh` drop is bracketed by the samples either side of it, so a 15-minute interval widens that bracket threefold. The `~` marker ADR-0011 introduced for gap-bracketed observations is doing more work than when it was designed, and anything that assumed a 5-minute bracket should be re-read.
+
 ## Consequences
 
 **Positive**
