@@ -218,6 +218,20 @@ public sealed class PanelContent : Border
             Tile(PanelText.Tokens31DaysLabel, UsageFormatter.Tokens(stats.Tokens31Days), caveat),
             Tile(PanelText.Est31DaysLabel, UsageFormatter.Usd(stats.Est31DaysUsd), caveat)));
 
+        // What none of the four tiles above cover (issue #235). The plan bars are account-wide;
+        // these are not, because cloud-container Cowork sessions and chat leave no transcript on
+        // this machine. Beneath the whole block rather than on a tile: it is true of all four,
+        // and the per-tile caveat channel would print it twice on the 31-day pair and never on
+        // today's.
+        //
+        // Always shown, unlike that caveat. Partial history and an unpriced model are conditions
+        // that pass; this is the standing shape of the data, and a note appearing only sometimes
+        // would teach a reader that its absence means full coverage.
+        //
+        // Not the line issue #232 removed — that one sat under the session BAR, described the
+        // session window alone, and carried a disclosure.
+        _root.Children.Add(Muted(PanelText.TokenScopeCaveat));
+
         // What today's total is made of, and why it dwarfs the context figure in Claude's
         // own UI (issue #169). Omitted when there is nothing to break down — a composition
         // of zero explains nothing.

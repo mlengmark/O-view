@@ -194,6 +194,37 @@ public class PanelTextTests
         Assert.Equal("", PanelText.Caveat(Stats(31)));
 
     /// <summary>
+    /// The scope note is <b>not</b> part of the per-tile caveat (issue #235).
+    ///
+    /// <para>That caveat is carried by the two 31-day tiles and is right for statements about the
+    /// 31-day window. The scope note applies to every token and cost figure on the panel, so
+    /// riding the same channel would print it twice on adjacent tiles and never on the "today"
+    /// pair. It renders once, beneath the whole block.</para>
+    /// </summary>
+    [Fact]
+    public void TheScopeNoteDoesNotRideThePerTileCaveat()
+    {
+        foreach (var stats in new[] { Stats(31), Stats(3), Stats(31, "claude-x"), Stats(3, "claude-x") })
+        {
+            Assert.DoesNotContain(PanelText.TokenScopeCaveat, PanelText.Caveat(stats), StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// Names both surfaces rather than saying "local only". A reader who sees "local" has to
+    /// already know which of their Claude surfaces are not local; naming them removes that step,
+    /// and these are the two the plan bars include and the tiles cannot.
+    ///
+    /// <para>Measured 2026-08-28: a cloud-container Cowork session writes no registration and no
+    /// transcript on this machine at all, so this is a permanent gap rather than a lag.</para>
+    /// </summary>
+    [Fact]
+    public void TheScopeNoteNamesTheSurfacesItExcludes()
+    {
+        Assert.Equal("chat and cloud sessions not counted", PanelText.TokenScopeCaveat);
+    }
+
+    /// <summary>
     /// ADR-0006 makes this a requirement, not a nicety: a small 31-day figure without it
     /// reads as low usage rather than as short history.
     /// </summary>
