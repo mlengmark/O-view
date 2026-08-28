@@ -80,12 +80,9 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
     public TranscriptScopeStatus Status =>
         TotalFiles == 0 ? TranscriptScopeStatus.NoTranscripts : TranscriptScopeStatus.TranscriptsPresent;
 
-    /// <summary>Never counted, and never can be — chat keeps no local usage record at all.</summary>
-    public const string ChatNote = "Chat keeps no local record.";
-
     /// <summary>
-    /// The standing coverage line beneath the token tiles: which surfaces this machine's
-    /// figures are actually made of (GitHub issue #171).
+    /// Which surfaces this machine's figures are actually made of — shown inside the token
+    /// composition disclosure (GitHub issue #171).
     ///
     /// <para>Until now a user could not tell a low number caused by using Claude less from
     /// one caused by O-view not looking where they work. That ambiguity is the shared root
@@ -94,10 +91,24 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
     /// all (#170) — and in every one of them the panel had the facts and did not say
     /// them.</para>
     ///
-    /// <para>An absent surface is named rather than omitted: "Counting: Claude Code" alone
-    /// cannot be distinguished from a build that forgot Cowork existed, which is precisely
-    /// how #44 stayed invisible. Empty when nothing was found at all — <see cref="Explain"/>
-    /// owns that state and says considerably more about it.</para>
+    /// <para>An absent surface is named rather than omitted: "Claude Code" alone cannot be
+    /// distinguished from a build that forgot Cowork existed, which is precisely how #44 stayed
+    /// invisible. Empty when nothing was found at all — <see cref="Explain"/> owns that state and
+    /// says considerably more about it.</para>
+    ///
+    /// <para><b>"local transcripts" is doing real work in this sentence</b> (issue #245). Naming
+    /// Cowork unqualified said all Cowork usage was counted, and it is not: a cloud-container
+    /// session writes no transcript on this machine at all — measured 2026-08-28, no registration
+    /// and no transcript, only Desktop's web storage moved. The line reports which surfaces left
+    /// files <i>here</i>, which is what #171 asked for; it was the missing qualifier that turned
+    /// that into an overstatement.</para>
+    ///
+    /// <para><b>It no longer names chat.</b> It used to end "Chat keeps no local record", on the
+    /// reasoning that a heavy chat user with a small token figure had no other way to learn why.
+    /// That stopped being true in issue #235: <see cref="Models.PanelText.TokenScopeCaveat"/> now
+    /// states it beneath the tiles, always visible, where this line sits inside a disclosure most
+    /// readers never open. Two notes saying overlapping things is how the panel's copy drifted
+    /// apart before, so the permanent gap is stated once — in the more visible of the two.</para>
     /// </summary>
     public string CoverageLine()
     {
@@ -111,7 +122,7 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
             ? $" — no {string.Join(" or ", absent)} sessions found"
             : "";
 
-        return $"Counting: {string.Join(" · ", PresentSources)}{missing}. {ChatNote}";
+        return $"Counting local transcripts: {string.Join(" · ", PresentSources)}{missing}.";
     }
 
     /// <summary>
