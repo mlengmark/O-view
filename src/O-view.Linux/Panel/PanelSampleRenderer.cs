@@ -101,14 +101,6 @@ public static class PanelSampleRenderer
             EstCredit31DaysUsd: null)
         {
             UnpricedModels = unpriced ?? [],
-
-            // The session window's own figures, beneath the bar they belong to (issue #218).
-            // A fraction of the day's total, because the window is a few hours of it — a
-            // sample where the two matched would render a panel that cannot show the
-            // distinction these lines exist to make.
-            HasSessionWindow = true,
-            TokensSession = 4_180_000,
-            EstSessionUsd = 3.11m,
         };
     }
 }

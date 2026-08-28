@@ -67,17 +67,7 @@ public partial class PopupWindow : Window, IFlyout
             // bottom edge stays pinned to the docked corner for the whole transition.
             () => _flyout.Redock(ActualWidth, DockHeight));
 
-        // A second fold, on the same class and the same re-dock callback (issue #230). Both
-        // must have it: the panel is docked by its top-left and is SizeToContent, so a fold
-        // that grows it without re-docking every frame pushes its own new content into the
-        // taskbar — which is #33 exactly, and the failure mode a second disclosure is most
-        // likely to reintroduce by omission.
-        _sessionDisclosure = new DisclosureAnimation(
-            this, SessionExplainBody, SessionExplainChevronRotation,
-            () => _flyout.Redock(ActualWidth, DockHeight));
-
         TokenExplainToggle.Click += (_, _) => ToggleComposition();
-        SessionExplainToggle.Click += (_, _) => ToggleSessionExplanation();
     }
 
     /// <summary>
@@ -98,25 +88,18 @@ public partial class PopupWindow : Window, IFlyout
         RunFold(_disclosure, _compositionExpanded, TokenCompositionLine.ActualWidth);
     }
 
-    /// <summary>Opens or closes the session-window explanation (issue #230).</summary>
-    private void ToggleSessionExplanation()
-    {
-        _sessionExpanded = !_sessionExpanded;
-        RunFold(_sessionDisclosure, _sessionExpanded, SessionUsageText.ActualWidth);
-    }
-
     /// <summary>
-    /// The fold itself, shared by both disclosures.
+    /// The fold itself.
     ///
-    /// <para><b>Shared rather than copied, because what makes it correct is easy to leave
-    /// out.</b> The re-fit below is one line and looks optional; without it a panel that fitted
-    /// closed and does not fit open is clipped by the taskbar, which is the reported failure
-    /// this whole path exists to prevent. A second hand-written copy of this method would work
-    /// on the developer's tall display and fail on a short one.</para>
+    /// <para><b>Kept as one method, because what makes it correct is easy to leave out.</b> The
+    /// re-fit below is one line and looks optional; without it a panel that fitted closed and
+    /// does not fit open is clipped by the taskbar, which is the reported failure this whole
+    /// path exists to prevent. A hand-written copy of this method would work on the developer's
+    /// tall display and fail on a short one.</para>
     /// </summary>
     /// <param name="availableWidth">
-    /// The text column the body wraps within — each disclosure sits under a different line, so
-    /// each measures against its own.
+    /// The text column the body wraps within — a disclosure measures against the line it sits
+    /// under, not against the panel.
     /// </param>
     private void RunFold(DisclosureAnimation disclosure, bool expanded, double availableWidth)
     {
@@ -313,8 +296,7 @@ public partial class PopupWindow : Window, IFlyout
     /// </summary>
     internal System.Windows.Media.Imaging.BitmapSource RenderToBitmap(
         UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account, double scale,
-        bool expandComposition = false, PanelDensity? density = null, double? compositionReveal = null,
-        bool expandSessionExplanation = false)
+        bool expandComposition = false, PanelDensity? density = null, double? compositionReveal = null)
     {
         PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
         ApplyDensity(density ?? PanelDensity.Normal);
@@ -332,11 +314,6 @@ public partial class PopupWindow : Window, IFlyout
             else if (expandComposition)
             {
                 ExpandCompositionForVerification();
-            }
-
-            if (expandSessionExplanation)
-            {
-                ExpandSessionExplanationForVerification();
             }
 
             BuildGraph(stats, snapshot);
@@ -553,24 +530,6 @@ public partial class PopupWindow : Window, IFlyout
         // bills at API rates, so the label has to flip with it.
         var offPlan = stats.IsOffPlan;
 
-        // The tokens behind the session bar, beneath the bar itself (issue #218). Both lines
-        // collapse rather than render empty: a blank row under the bar reads as a figure that
-        // failed to load, which is the ambiguity the whole panel is written against.
-        SetLine(SessionUsageText, PanelText.SessionUsageLine(stats));
-
-        // The figure stays; the explanation folds behind the toggle (issue #230). The toggle
-        // appears only where the explanation does — every other state is the figure alone, and
-        // a disclosure with nothing behind it is worse than no disclosure.
-        var sessionNote = PanelText.SessionUsageNote(stats, Now(TimeZoneInfo.Utc), TimeZoneInfo.Local);
-        SessionUsageNote.Text = sessionNote;
-        SessionExplainLabel.Text = PanelText.SessionExplainToggleLabel;
-        SessionExplainToggle.Visibility =
-            sessionNote.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-
-        // Closed on every Populate, like the token fold: a poll refreshing the panel must not
-        // leave a body expanded whose toggle has just been hidden.
-        SetSessionExplanationExpanded(false);
-
         // The "today" tiles carried a "(UTC)" hint for one release, while the figure was a UTC
         // day under a local-time header (issue #210). The figure is the reader's own day now,
         // so there is nothing left to qualify.
@@ -670,23 +629,6 @@ public partial class PopupWindow : Window, IFlyout
     private bool _compositionExpanded;
 
     private readonly DisclosureAnimation _disclosure;
-
-    /// <summary>
-    /// Puts the session-window explanation in a finished state at once. Same contract as
-    /// <see cref="SetCompositionExpanded"/>: the interactive path folds, this does not.
-    /// </summary>
-    private void SetSessionExplanationExpanded(bool expanded)
-    {
-        _sessionExpanded = expanded;
-        _sessionDisclosure.Apply(expanded);
-    }
-
-    /// <summary>Opens the session-window explanation for a verification render (issue #230).</summary>
-    internal void ExpandSessionExplanationForVerification() => SetSessionExplanationExpanded(true);
-
-    private bool _sessionExpanded;
-
-    private readonly DisclosureAnimation _sessionDisclosure;
 
     /// <summary>
     /// Surfaces off-plan usage in two distinct registers:
