@@ -1,3 +1,4 @@
+using OView.Core.Pricing;
 using OView.Core.Storage;
 
 namespace OView.Core.Tests;
@@ -214,7 +215,8 @@ public class CorruptBackupRetentionTests : IDisposable
         using (var store = new RollupStore(corrupt))
         {
             store.Ingest([new Providers.Jsonl.TranscriptRecord(
-                "r1", DateTimeOffset.Parse("2026-08-20T10:00:00Z"), "claude-opus-5", 1, 0, 0, 1)]);
+                "r1", DateTimeOffset.Parse("2026-08-20T10:00:00Z"), "claude-opus-5",
+                new TokenSplit(1, 0, 0, 0, 0, 1), UsageModifiers.Standard)]);
             Assert.Single(store.GetDailyRollups(
                 DateTimeOffset.Parse("2026-08-20T00:00:00Z"),
                 DateTimeOffset.Parse("2026-08-21T00:00:00Z"),

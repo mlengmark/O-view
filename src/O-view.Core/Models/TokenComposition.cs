@@ -3,6 +3,10 @@ using OView.Core.Storage;
 
 namespace OView.Core.Models;
 
+// TokenComposition keeps a single "cache write" figure: the panel's bar draws one segment for
+// it, and the 5m/1h split (issue #255) is a pricing distinction rather than a display one. The
+// value beside that segment is priced per bucket, so the split is honoured where it matters.
+
 /// <summary>
 /// The four token kinds, in the order the panel draws them.
 ///
@@ -127,30 +131,34 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
     /// </summary>
     public static TokenComposition From(IEnumerable<DailyRollup> rollups)
     {
-        long input = 0, cacheCreation = 0, cacheRead = 0, output = 0;
+        var total = TokenSplit.Empty;
         decimal inputUsd = 0, cacheCreationUsd = 0, cacheReadUsd = 0, outputUsd = 0;
         var pricedAny = false;
 
         foreach (var r in rollups)
         {
-            input += r.InputTokens;
-            cacheCreation += r.CacheCreationTokens;
-            cacheRead += r.CacheReadTokens;
-            output += r.OutputTokens;
+            total += r.Tokens;
 
             // An unpriced model contributes tokens but no value, and is named in
             // PanelStatistics.UnpricedModels — the tokens are still real.
-            if (CostEstimator.EstimateUsd(r.Model, r.InputTokens, 0, 0, 0) is not { } inputPart)
+            if (CostEstimator.EstimateUsd(
+                    r.Model, TokenSplit.Empty with { Input = r.Tokens.Input }, r.Modifiers)
+                is not { } inputPart)
             {
                 continue;
             }
 
-            // The remaining three are priceable by construction: EstimateUsd returns null
-            // only when ModelCatalog has no row for the model, which cannot vary by kind.
+            // The remaining three are priceable by construction: EstimateUsd returns null only
+            // when the rate card cannot resolve the model or its modifiers, and neither varies
+            // by token kind. The three cache-write buckets are priced together — the bar draws
+            // one "cache write" segment, and its value has to be the whole of what that segment
+            // counts, at each bucket's own published rate.
             inputUsd += inputPart;
-            cacheCreationUsd += CostEstimator.EstimateUsd(r.Model, 0, r.CacheCreationTokens, 0, 0) ?? 0;
-            cacheReadUsd += CostEstimator.EstimateUsd(r.Model, 0, 0, r.CacheReadTokens, 0) ?? 0;
-            outputUsd += CostEstimator.EstimateUsd(r.Model, 0, 0, 0, r.OutputTokens) ?? 0;
+            cacheCreationUsd += CostEstimator.EstimateUsd(r.Model, CacheWritesOf(r.Tokens), r.Modifiers) ?? 0;
+            cacheReadUsd += CostEstimator.EstimateUsd(
+                r.Model, TokenSplit.Empty with { CacheRead = r.Tokens.CacheRead }, r.Modifiers) ?? 0;
+            outputUsd += CostEstimator.EstimateUsd(
+                r.Model, TokenSplit.Empty with { Output = r.Tokens.Output }, r.Modifiers) ?? 0;
             pricedAny = true;
         }
 
@@ -159,7 +167,9 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
         // is a different claim from "there is nothing here to value" (rule 6).
         var unknown = !pricedAny;
 
-        return new TokenComposition(input, cacheCreation, cacheRead, output)
+        // CacheWrite, not the three buckets: the split is a pricing distinction, and the values
+        // above already honour it. One bar segment, one figure.
+        return new TokenComposition(total.Input, total.CacheWrite, total.CacheRead, total.Output)
         {
             InputUsd = unknown ? null : inputUsd,
             CacheCreationUsd = unknown ? null : cacheCreationUsd,
@@ -167,4 +177,15 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
             OutputUsd = unknown ? null : outputUsd,
         };
     }
+
+    /// <summary>
+    /// The cache-write buckets alone, each keeping its own TTL so the segment's value is priced
+    /// at the rates that actually apply rather than at one of them.
+    /// </summary>
+    private static TokenSplit CacheWritesOf(TokenSplit tokens) => TokenSplit.Empty with
+    {
+        CacheWrite5m = tokens.CacheWrite5m,
+        CacheWrite1h = tokens.CacheWrite1h,
+        CacheWriteTtlUnrecorded = tokens.CacheWriteTtlUnrecorded,
+    };
 }

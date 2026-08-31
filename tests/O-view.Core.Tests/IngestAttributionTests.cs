@@ -1,3 +1,4 @@
+using OView.Core.Pricing;
 using Microsoft.Data.Sqlite;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Storage;
@@ -227,7 +228,8 @@ public class IngestAttributionTests : IDisposable
         using (var store = new RollupStore(DbPath))
         {
             store.Ingest([new TranscriptRecord(
-                "legacy-1", DateTimeOffset.Parse("2026-07-01T00:00:00Z"), "claude-opus-5", 10, 0, 0, 120)]);
+                "legacy-1", DateTimeOffset.Parse("2026-07-01T00:00:00Z"), "claude-opus-5",
+                new TokenSplit(10, 0, 0, 0, 0, 120), UsageModifiers.Standard)]);
         }
 
         var report = RollupStoreReport.Inspect(DbPath);

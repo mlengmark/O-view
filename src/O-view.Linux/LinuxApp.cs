@@ -9,6 +9,7 @@ using OView.App.Platform;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
+using OView.App.Pricing;
 using OView.App.Updates;
 using OView.Linux.Notifications;
 using OView.Linux.Updates;
@@ -111,6 +112,12 @@ public sealed class LinuxApp : Application
             (title, body) => _notifier.ShowAsync(title, body),
             _log);
         engine.UpdateCheckDue += () => _ = notice.CheckAsync();
+
+        // The rate-card drift check (ADR-0016). One line in the log, no UI, no rate ever
+        // installed — see the Windows head, which wires it identically because there is
+        // nothing platform-specific about asking a public page what it says.
+        var rates = new RateCardFeed(_log);
+        engine.RateCheckDue += () => _ = rates.CheckAsync(ModelCatalog.Bundled);
 
         // Ticks arrive on the UI thread; the reading happens off it and comes back through
         // the dispatcher. The pair is what keeps the icon and the menu responsive while a

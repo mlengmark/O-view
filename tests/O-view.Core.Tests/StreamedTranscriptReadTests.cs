@@ -1,3 +1,4 @@
+using OView.Core.Pricing;
 using System.Text;
 using OView.Core.Providers.Jsonl;
 
@@ -71,7 +72,7 @@ public class StreamedTranscriptReadTests : IDisposable
         var (records, offset) = TranscriptReader.ReadFrom(path, 0);
 
         Assert.Equal(["req_A", "req_B"], records.Select(r => r.RequestId));
-        Assert.Equal(20, records[1].OutputTokens);
+        Assert.Equal(20, records[1].Tokens.Output);
         Assert.Equal(new FileInfo(path).Length, offset);
     }
 

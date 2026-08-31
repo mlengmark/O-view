@@ -177,6 +177,13 @@ public sealed class UsageEngine : IDisposable
     /// <summary>Time to check for a newer release (ADR-0009). The head owns the HTTP and the UI.</summary>
     public event Action? UpdateCheckDue;
 
+    /// <summary>
+    /// Time to compare the bundled rate card against Anthropic's published table (ADR-0016).
+    /// Same shape as <see cref="UpdateCheckDue"/> for the same reason: the engine owns the
+    /// <i>when</i> and touches no network.
+    /// </summary>
+    public event Action? RateCheckDue;
+
     public UsageEngine(UsageEngineOptions? options = null)
     {
         _options = options ?? new UsageEngineOptions();
@@ -392,6 +399,21 @@ public sealed class UsageEngine : IDisposable
         var recheck = UpdateSchedule.Jittered(_options.UpdateCheckInterval, _options.UpdateJitter);
         Track(timers.Create(recheck, () => UpdateCheckDue?.Invoke())).Start();
         _log?.Write($"update check interval={recheck.TotalMinutes:0} min (base {_options.UpdateCheckInterval.TotalMinutes:0})");
+
+        // The rate-card drift check (ADR-0016), on the same two-timer shape and through the
+        // same jitter helper — the endpoint is public and unauthenticated, so the reason to
+        // scatter a fleet is the courtesy one rather than a rate limit, and it costs nothing.
+        IAppTimer? firstRateCheck = null;
+        firstRateCheck = Track(timers.Create(_options.FirstRateCheckDelay, () =>
+        {
+            firstRateCheck!.Stop();
+            RateCheckDue?.Invoke();
+        }));
+        firstRateCheck.Start();
+
+        var rateRecheck = UpdateSchedule.Jittered(_options.RateCheckInterval, _options.UpdateJitter);
+        Track(timers.Create(rateRecheck, () => RateCheckDue?.Invoke())).Start();
+        _log?.Write($"rate check interval={rateRecheck.TotalHours:0} h (base {_options.RateCheckInterval.TotalHours:0})");
     }
 
     /// <summary>

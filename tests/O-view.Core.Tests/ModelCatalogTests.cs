@@ -63,8 +63,14 @@ public class ModelCatalogTests
                 Assert.StartsWith("claude-", entry.Prefix, StringComparison.Ordinal);
                 Assert.NotEmpty(entry.DisplayName);
                 Assert.NotEqual(entry.Prefix, entry.DisplayName);
-                Assert.True(entry.InputPerMTok > 0, $"{entry.Prefix} has no input rate");
-                Assert.True(entry.OutputPerMTok > 0, $"{entry.Prefix} has no output rate");
+                // Every published column, not just the two the table used to carry. A row
+                // half-filled in the new columns would price cache traffic at zero, which
+                // is a confident wrong number rather than a visible gap (issue #255).
+                Assert.True(entry.Rates.InputPerMTok > 0, $"{entry.Prefix} has no input rate");
+                Assert.True(entry.Rates.OutputPerMTok > 0, $"{entry.Prefix} has no output rate");
+                Assert.True(entry.Rates.CacheWrite5mPerMTok > 0, $"{entry.Prefix} has no 5m cache-write rate");
+                Assert.True(entry.Rates.CacheWrite1hPerMTok > 0, $"{entry.Prefix} has no 1h cache-write rate");
+                Assert.True(entry.Rates.CacheReadPerMTok > 0, $"{entry.Prefix} has no cache-read rate");
             }
         }
     }
@@ -78,7 +84,8 @@ public class ModelCatalogTests
         foreach (var entry in ModelCatalog.InClass(BillingClass.Plan)
                      .Concat(ModelCatalog.InClass(BillingClass.Credit)))
         {
-            Assert.NotNull(CostEstimator.EstimateUsd(entry.Prefix, 1_000_000, 0, 0, 0));
+            Assert.NotNull(CostEstimator.EstimateUsd(
+                entry.Prefix, TokenSplit.Empty with { Input = 1_000_000 }));
             Assert.Equal(entry.DisplayName, ModelDisplayName.For(entry.Prefix));
         }
     }

@@ -1,6 +1,7 @@
 using System.Globalization;
 using Microsoft.Data.Sqlite;
 using OView.Core.Models;
+using OView.Core.Pricing;
 using OView.Core.Providers.Jsonl;
 
 namespace OView.Core.Storage;
@@ -189,6 +190,66 @@ public sealed class RollupStore : IDisposable
         cmd.ExecuteNonQuery();
 
         AddAttributionColumns(connection);
+        AddPricingColumns(connection);
+    }
+
+    /// <summary>
+    /// The columns that say <b>how</b> a ledger row is priced (issues #255 and #257): which TTL
+    /// each cache write used, and the two published pricing modifiers.
+    ///
+    /// <para>Added the same way the attribution columns are, and nullable for the same reason —
+    /// NULL means "written before this build was tracking it", which is a different fact from
+    /// zero. A NULL TTL pair is not "no cache writes"; it is a cache-write total with no
+    /// attribution, which <see cref="GetDailyRollups"/> reports as
+    /// <see cref="TokenSplit.CacheWriteTtlUnrecorded"/> and the panel names in its caveat.</para>
+    ///
+    /// <para><b>Adding the TTL columns re-reads the transcripts.</b> Existing rows cannot be
+    /// back-filled from the store — the attribution is in the transcripts, and the ones that
+    /// would answer for the oldest rows are the ones Claude Code has since deleted. Resetting
+    /// the watermarks makes the next poll read every transcript still on disk from byte 0 and
+    /// upsert its rows with the split, which recovers recent history exactly; what is out of
+    /// that reach stays unattributed and says so. Wiping the store instead would have thrown
+    /// away every day whose transcript is gone, which is the history ADR-0006 exists to keep.</para>
+    /// </summary>
+    private static void AddPricingColumns(SqliteConnection connection)
+    {
+        // Which TTL each cache write used. cache_creation_tokens stays the total, so these two
+        // are a decomposition of a column that is already there rather than a replacement.
+        var added = AddColumnIfMissing(connection, "ingested_requests", "cache_write_5m_tokens", "INTEGER");
+        added |= AddColumnIfMissing(connection, "ingested_requests", "cache_write_1h_tokens", "INTEGER");
+
+        // usage.speed and usage.inference_geo. NULL is the standard case as well as the
+        // never-recorded one — see UsageModifiers.SpeedText for why those share a value.
+        AddColumnIfMissing(connection, "ingested_requests", "speed", "TEXT");
+        AddColumnIfMissing(connection, "ingested_requests", "inference_geo", "TEXT");
+
+        if (added)
+        {
+            ResetWatermarks(connection);
+        }
+    }
+
+    /// <summary>
+    /// Rewinds every transcript watermark so the next poll re-reads what is still on disk.
+    ///
+    /// <para>An update rather than a delete: the rows also carry which surface wrote each file
+    /// and when it last yielded a record, and losing that to a migration would blank the
+    /// attribution section of the support bundle for no reason. The counters are zeroed and
+    /// <c>counted_from</c> is cleared so the next <see cref="SetFileOffset"/> pins the fresh
+    /// zero — a count carried over from before the rewind would describe a different read.</para>
+    ///
+    /// <para>Costs one full re-parse of every transcript on the first poll after upgrade. That
+    /// is the first-run cost this store already pays once, and it runs off the UI thread
+    /// (issue #125). Ingestion is idempotent, so nothing double-counts (rule 7).</para>
+    /// </summary>
+    private static void ResetWatermarks(SqliteConnection connection)
+    {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = """
+            UPDATE file_offsets
+            SET byte_offset = 0, file_length = 0, records = 0, counted_from = NULL
+            """;
+        cmd.ExecuteNonQuery();
     }
 
     /// <summary>
@@ -234,7 +295,13 @@ public sealed class RollupStore : IDisposable
     /// store arrive as the same <see cref="SqliteException"/>, and swallowing the second to
     /// tolerate the first is how a corrupt database gets treated as an up-to-date one.
     /// </summary>
-    private static void AddColumnIfMissing(
+    /// <returns>
+    /// True when the column was actually added — that is, when this store is being migrated
+    /// rather than opened. A migration that also has to re-read data needs to know the
+    /// difference, and doing that work on every launch would re-parse every transcript every
+    /// time (see <see cref="AddPricingColumns"/>).
+    /// </returns>
+    private static bool AddColumnIfMissing(
         SqliteConnection connection, string table, string column, string type)
     {
         using (var probe = connection.CreateCommand())
@@ -245,7 +312,7 @@ public sealed class RollupStore : IDisposable
             {
                 if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
                 {
-                    return;
+                    return false;
                 }
             }
         }
@@ -253,6 +320,7 @@ public sealed class RollupStore : IDisposable
         using var alter = connection.CreateCommand();
         alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {type};";
         alter.ExecuteNonQuery();
+        return true;
     }
 
     /// <summary>
@@ -379,26 +447,37 @@ public sealed class RollupStore : IDisposable
             cmd.CommandText = """
                 INSERT INTO ingested_requests
                     (request_id, utc_date, model, input_tokens, cache_creation_tokens,
-                     cache_read_tokens, output_tokens, last_timestamp, source)
-                VALUES ($id, $date, $model, $input, $cacheW, $cacheR, $output, $ts, $source)
+                     cache_write_5m_tokens, cache_write_1h_tokens,
+                     cache_read_tokens, output_tokens, last_timestamp, source,
+                     speed, inference_geo)
+                VALUES ($id, $date, $model, $input, $cacheW, $cacheW5m, $cacheW1h,
+                        $cacheR, $output, $ts, $source, $speed, $geo)
                 ON CONFLICT(request_id) DO UPDATE SET
                     utc_date = excluded.utc_date,
                     model = excluded.model,
                     input_tokens = excluded.input_tokens,
                     cache_creation_tokens = excluded.cache_creation_tokens,
+                    cache_write_5m_tokens = excluded.cache_write_5m_tokens,
+                    cache_write_1h_tokens = excluded.cache_write_1h_tokens,
                     cache_read_tokens = excluded.cache_read_tokens,
                     output_tokens = excluded.output_tokens,
                     last_timestamp = excluded.last_timestamp,
-                    source = COALESCE(excluded.source, ingested_requests.source)
+                    source = COALESCE(excluded.source, ingested_requests.source),
+                    speed = excluded.speed,
+                    inference_geo = excluded.inference_geo
                 """;
             var pId = cmd.Parameters.Add("$id", SqliteType.Text);
             var pDate = cmd.Parameters.Add("$date", SqliteType.Text);
             var pModel = cmd.Parameters.Add("$model", SqliteType.Text);
             var pInput = cmd.Parameters.Add("$input", SqliteType.Integer);
             var pCacheW = cmd.Parameters.Add("$cacheW", SqliteType.Integer);
+            var pCacheW5m = cmd.Parameters.Add("$cacheW5m", SqliteType.Integer);
+            var pCacheW1h = cmd.Parameters.Add("$cacheW1h", SqliteType.Integer);
             var pCacheR = cmd.Parameters.Add("$cacheR", SqliteType.Integer);
             var pOutput = cmd.Parameters.Add("$output", SqliteType.Integer);
             var pTs = cmd.Parameters.Add("$ts", SqliteType.Text);
+            var pSpeed = cmd.Parameters.Add("$speed", SqliteType.Text);
+            var pGeo = cmd.Parameters.Add("$geo", SqliteType.Text);
             cmd.Parameters.AddWithValue("$source", (object?)source ?? DBNull.Value);
 
             foreach (var r in records)
@@ -406,11 +485,18 @@ public sealed class RollupStore : IDisposable
                 pId.Value = r.RequestId;
                 pDate.Value = r.TimestampUtc.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
                 pModel.Value = r.Model;
-                pInput.Value = r.InputTokens;
-                pCacheW.Value = r.CacheCreationTokens;
-                pCacheR.Value = r.CacheReadTokens;
-                pOutput.Value = r.OutputTokens;
+                pInput.Value = r.Tokens.Input;
+                // The flat total stays the authority on how much was written, and the two TTL
+                // columns say how it split — a row re-read by this build always agrees with
+                // itself, and one written by an older build has a total with NULLs beside it.
+                pCacheW.Value = r.Tokens.CacheWrite;
+                pCacheW5m.Value = r.Tokens.CacheWrite5m;
+                pCacheW1h.Value = r.Tokens.CacheWrite1h;
+                pCacheR.Value = r.Tokens.CacheRead;
+                pOutput.Value = r.Tokens.Output;
                 pTs.Value = r.TimestampUtc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture);
+                pSpeed.Value = (object?)r.Modifiers.SpeedText ?? DBNull.Value;
+                pGeo.Value = (object?)r.Modifiers.InferenceGeoText ?? DBNull.Value;
                 cmd.ExecuteNonQuery();
             }
 
@@ -448,14 +534,16 @@ public sealed class RollupStore : IDisposable
             cmd.CommandText = """
                 SELECT last_timestamp, model,
                        input_tokens, cache_creation_tokens,
-                       cache_read_tokens, output_tokens
+                       cache_write_5m_tokens, cache_write_1h_tokens,
+                       cache_read_tokens, output_tokens,
+                       speed, inference_geo
                 FROM ingested_requests
                 WHERE last_timestamp >= $from AND last_timestamp < $to
                 """;
             cmd.Parameters.AddWithValue("$from", fromUtc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
             cmd.Parameters.AddWithValue("$to", toUtc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
 
-            var buckets = new Dictionary<(DateOnly Date, string Model), DailyRollup>();
+            var buckets = new Dictionary<(DateOnly Date, string Model, UsageModifiers Modifiers), DailyRollup>();
 
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
@@ -468,16 +556,14 @@ public sealed class RollupStore : IDisposable
                 }
 
                 var model = reader.GetString(1);
-                var key = (LocalDays.DateOf(at, zone), model);
+                var modifiers = ReadModifiers(reader, 8, 9);
+                var key = (LocalDays.DateOf(at, zone), model, modifiers);
                 var running = buckets.GetValueOrDefault(key)
-                    ?? new DailyRollup(key.Item1, model, 0, 0, 0, 0, 0);
+                    ?? new DailyRollup(key.Item1, model, TokenSplit.Empty, modifiers, 0);
 
                 buckets[key] = running with
                 {
-                    InputTokens = running.InputTokens + reader.GetInt64(2),
-                    CacheCreationTokens = running.CacheCreationTokens + reader.GetInt64(3),
-                    CacheReadTokens = running.CacheReadTokens + reader.GetInt64(4),
-                    OutputTokens = running.OutputTokens + reader.GetInt64(5),
+                    Tokens = running.Tokens + ReadSplit(reader, 2),
                     RequestCount = running.RequestCount + 1,
                 };
             }
@@ -545,13 +631,18 @@ public sealed class RollupStore : IDisposable
         lock (_gate)
         {
             using var cmd = _connection.CreateCommand();
+            // Grouped by the modifiers as well as the model, for the reason DailyRollup gives:
+            // two requests priced under different modifiers cannot share a bucket. NULL is a
+            // group of its own in SQLite's GROUP BY, which is the behaviour wanted here.
             cmd.CommandText = """
                 SELECT model,
                        SUM(input_tokens), SUM(cache_creation_tokens),
-                       SUM(cache_read_tokens), SUM(output_tokens), COUNT(*)
+                       SUM(cache_write_5m_tokens), SUM(cache_write_1h_tokens),
+                       SUM(cache_read_tokens), SUM(output_tokens), COUNT(*),
+                       speed, inference_geo
                 FROM ingested_requests
                 WHERE last_timestamp >= $since
-                GROUP BY model
+                GROUP BY model, speed, inference_geo
                 ORDER BY model
                 """;
             cmd.Parameters.AddWithValue("$since", sinceUtc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
@@ -563,15 +654,56 @@ public sealed class RollupStore : IDisposable
                 result.Add(new DailyRollup(
                     DateOnly.FromDateTime(sinceUtc.UtcDateTime),
                     reader.GetString(0),
-                    reader.GetInt64(1),
-                    reader.GetInt64(2),
-                    reader.GetInt64(3),
-                    reader.GetInt64(4),
-                    reader.GetInt64(5)));
+                    ReadSplit(reader, 1),
+                    ReadModifiers(reader, 8, 9),
+                    reader.GetInt64(7)));
             }
             return result;
         }
     }
+
+    /// <summary>
+    /// Six token counts from consecutive columns starting at <paramref name="offset"/>, in the
+    /// order both queries above select them: input, cache-write total, 5m, 1h, cache read,
+    /// output.
+    ///
+    /// <para><b>The unrecorded bucket is derived here rather than stored.</b> The flat total is
+    /// the authority — it has been written by every build — and whatever it carries beyond the
+    /// two TTL columns has no attribution, which is exactly one case at a fresh install and the
+    /// whole of a pre-migration row. Deriving it means a NULL pair and a zero pair cannot
+    /// disagree with the total, and a row an older build wrote needs no back-fill to be priced
+    /// honestly (issue #255).</para>
+    ///
+    /// <para>NULL reads as zero, not as an error: a summed column is NULL when every row in the
+    /// group predates it, which is the ordinary migration case.</para>
+    /// </summary>
+    private static TokenSplit ReadSplit(SqliteDataReader reader, int offset)
+    {
+        var total = Int64Or0(reader, offset + 1);
+        var write5m = Int64Or0(reader, offset + 2);
+        var write1h = Int64Or0(reader, offset + 3);
+
+        return new TokenSplit(
+            Int64Or0(reader, offset),
+            write5m,
+            write1h,
+            Math.Max(0, total - write5m - write1h),
+            Int64Or0(reader, offset + 4),
+            Int64Or0(reader, offset + 5));
+    }
+
+    /// <summary>
+    /// The stored pricing modifiers. Read back through <see cref="UsageModifiers.From"/>, the
+    /// same function that classifies a transcript's own values, so a stored token and a
+    /// transcript token cannot come to mean different things.
+    /// </summary>
+    private static UsageModifiers ReadModifiers(SqliteDataReader reader, int speed, int geo) =>
+        UsageModifiers.From(
+            reader.IsDBNull(speed) ? null : reader.GetString(speed),
+            reader.IsDBNull(geo) ? null : reader.GetString(geo));
+
+    private static long Int64Or0(SqliteDataReader reader, int column) =>
+        reader.IsDBNull(column) ? 0 : reader.GetInt64(column);
 
     /// <summary>Timestamp of the newest ingested record, or null when the store is empty.</summary>
     public DateTimeOffset? LatestActivityUtc()

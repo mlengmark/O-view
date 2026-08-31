@@ -24,8 +24,15 @@ public class TokenCompositionTests
     private static readonly TokenComposition MeasuredDay = new(
         Input: 14, CacheCreation: 44_347, CacheRead: 398_121, Output: 3_666);
 
+    /// <param name="cacheW">
+    /// Cache writes, as 1-hour ones — which is what the transcripts these figures came from
+    /// actually carry (GitHub issue #255). The composition still reports one cache-write
+    /// figure; the TTL only changes what it is worth.
+    /// </param>
     private static DailyRollup Rollup(string model, long input, long cacheW, long cacheR, long output) =>
-        new(new DateOnly(2026, 8, 23), model, input, cacheW, cacheR, output, RequestCount: 1);
+        new(new DateOnly(2026, 8, 23), model,
+            new TokenSplit(input, 0, cacheW, 0, cacheR, output),
+            UsageModifiers.Standard, RequestCount: 1);
 
     // ── the measurement ─────────────────────────────────────────────────────────────
 
@@ -91,8 +98,7 @@ public class TokenCompositionTests
         };
 
         var composition = TokenComposition.From(rollups);
-        var tile = rollups.Sum(r => CostEstimator.EstimateUsd(
-            r.Model, r.InputTokens, r.CacheCreationTokens, r.CacheReadTokens, r.OutputTokens) ?? 0);
+        var tile = rollups.Sum(r => CostEstimator.EstimateUsd(r.Model, r.Tokens, r.Modifiers) ?? 0);
 
         Assert.Equal(
             tile,

@@ -172,8 +172,7 @@ public sealed record IngestAuditReport(
 
             foreach (var (id, record) in latest)
             {
-                var value = record.InputTokens + record.CacheCreationTokens
-                            + record.CacheReadTokens + record.OutputTokens;
+                var value = record.Tokens.Total;
                 tokens += value;
 
                 if (ledger.ContainsKey(id))

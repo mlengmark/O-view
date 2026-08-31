@@ -1,3 +1,4 @@
+using OView.Core.Pricing;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Storage;
 
@@ -20,7 +21,8 @@ public class RollupStoreTests : IDisposable
     }
 
     private static TranscriptRecord Record(string id, string date, string model, long output) =>
-        new(id, DateTimeOffset.Parse(date + "T12:00:00Z"), model, 10, 100, 200, output);
+        new(id, DateTimeOffset.Parse(date + "T12:00:00Z"), model,
+            new TokenSplit(10, 0, 100, 0, 200, output), UsageModifiers.Standard);
 
     /// <summary>Every zone is named explicitly — none of these read the machine's (issue #211).</summary>
     private static readonly TimeZoneInfo Utc = TimeZoneInfo.Utc;
@@ -44,7 +46,7 @@ public class RollupStoreTests : IDisposable
 
         Assert.Equal(3, rollups.Count);
         var day1Opus = rollups.Single(r => r.Date == new DateOnly(2026, 7, 20) && r.Model == "claude-opus-4-8");
-        Assert.Equal(150, day1Opus.OutputTokens);
+        Assert.Equal(150, day1Opus.Tokens.Output);
         Assert.Equal(2, day1Opus.RequestCount);
     }
 
@@ -59,7 +61,7 @@ public class RollupStoreTests : IDisposable
 
         var rollups = _store.GetDailyRollups(At("2026-07-20T00:00:00Z"), At("2026-07-21T00:00:00Z"), Utc);
 
-        Assert.Equal(2, rollups.Sum(r => r.OutputTokens));
+        Assert.Equal(2, rollups.Sum(r => r.Tokens.Output));
     }
 
     /// <summary>
@@ -71,7 +73,7 @@ public class RollupStoreTests : IDisposable
     public void Rollups_BucketByTheCallersDay_NotTheStoredUtcDate()
     {
         // 23:00Z on the 20th is 01:00 on the 21st at UTC+2.
-        _store.Ingest([new TranscriptRecord("late", At("2026-07-20T23:00:00Z"), "m", 0, 0, 0, 5)]);
+        _store.Ingest([new TranscriptRecord("late", At("2026-07-20T23:00:00Z"), "m", new TokenSplit(0, 0, 0, 0, 0, 5), UsageModifiers.Standard)]);
 
         var inUtc = _store.GetDailyRollups(At("2026-07-01T00:00:00Z"), At("2026-08-01T00:00:00Z"), Utc);
         var inPlusTwo = _store.GetDailyRollups(At("2026-07-01T00:00:00Z"), At("2026-08-01T00:00:00Z"), PlusTwo);
@@ -92,15 +94,15 @@ public class RollupStoreTests : IDisposable
             "test-minus-5", TimeSpan.FromHours(-5), "UTC-5", "UTC-5");
 
         _store.Ingest([
-            new TranscriptRecord("evening", At("2026-07-22T02:00:00Z"), "m", 0, 0, 0, 7),
-            new TranscriptRecord("morning", At("2026-07-21T14:00:00Z"), "m", 0, 0, 0, 3),
+            new TranscriptRecord("evening", At("2026-07-22T02:00:00Z"), "m", new TokenSplit(0, 0, 0, 0, 0, 7), UsageModifiers.Standard),
+            new TranscriptRecord("morning", At("2026-07-21T14:00:00Z"), "m", new TokenSplit(0, 0, 0, 0, 0, 3), UsageModifiers.Standard),
         ]);
 
         var rollups = _store.GetDailyRollups(At("2026-07-01T00:00:00Z"), At("2026-08-01T00:00:00Z"), minusFive);
 
         var day = Assert.Single(rollups);
         Assert.Equal(new DateOnly(2026, 7, 21), day.Date);
-        Assert.Equal(10, day.OutputTokens);
+        Assert.Equal(10, day.Tokens.Output);
         Assert.Equal(2, day.RequestCount);
     }
 
@@ -155,7 +157,8 @@ public class RollupStoreTests : IDisposable
     // ── earliest request in an interval (issue #185) ────────────────────────────────
 
     private static TranscriptRecord At(string id, string timestamp) =>
-        new(id, DateTimeOffset.Parse(timestamp), "claude-opus-5", 10, 100, 200, 50);
+        new(id, DateTimeOffset.Parse(timestamp), "claude-opus-5",
+            new TokenSplit(10, 0, 100, 0, 200, 50), UsageModifiers.Standard);
 
     /// <summary>
     /// Used to tighten the five-hour window's start bracket: the earliest request in the

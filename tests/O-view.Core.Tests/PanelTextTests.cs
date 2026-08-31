@@ -247,6 +247,53 @@ public class PanelTextTests
             "3 of 31 days recorded · excludes claude-x, claude-y (no published rate)",
             PanelText.Caveat(Stats(3, "claude-x", "claude-y")));
 
+    /// <summary>
+    /// Cache writes whose TTL was never recorded are priced at the 5-minute rate, and the panel
+    /// says so where it applies (GitHub issue #255). The alternative the issue rejected outright
+    /// was pricing them at 1.25× silently, which is the original defect with a migration in
+    /// front of it.
+    /// </summary>
+    [Fact]
+    public void UnattributedCacheWritesNameTheAssumptionTheyArePricedUnder()
+    {
+        var caveat = PanelText.Caveat(Stats(31) with { TtlUnrecordedCacheWrites = 4_200_000 });
+
+        Assert.Contains("4.2M cache writes", caveat, StringComparison.Ordinal);
+        Assert.Contains("5-minute rate", caveat, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// It is a condition that clears, not a standing note: once the window holds only rows this
+    /// build ingested, every write carries its own TTL and there is nothing to caveat.
+    /// </summary>
+    [Fact]
+    public void NoUnattributedWritesMeansNoAssumptionToState() =>
+        Assert.Equal("", PanelText.Caveat(Stats(31) with { TtlUnrecordedCacheWrites = 0 }));
+
+    /// <summary>
+    /// The rate table's age reaches the tiles past a threshold, naming its source as well as its
+    /// date — a figure derived from rates a reader cannot trace is a figure they cannot check.
+    /// </summary>
+    [Fact]
+    public void AStaleRateTableIsNamedBesideTheFiguresItPriced()
+    {
+        var stats = Stats(31) with
+        {
+            Rates = ModelCatalog.Bundled with { AsOf = new DateOnly(2026, 6, 24) },
+            RatesAreStale = true,
+        };
+
+        Assert.Equal("rates: bundled, as of 24 Jun 2026", PanelText.Caveat(stats));
+    }
+
+    /// <summary>
+    /// And stays off while the table is current. A caveat that is always on says nothing, and
+    /// the figures are not less true for being priced at a rate that has not changed.
+    /// </summary>
+    [Fact]
+    public void ACurrentRateTableIsNotWorthSaying() =>
+        Assert.Equal("", PanelText.Caveat(Stats(31) with { RatesAreStale = false }));
+
     // ── divergence wording ──────────────────────────────────────────────────────────
 
     /// <summary>

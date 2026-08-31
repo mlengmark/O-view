@@ -1,3 +1,4 @@
+using OView.Core.Pricing;
 using System.Text;
 using OView.Core.Models;
 using OView.Core.Providers.Jsonl;
@@ -71,7 +72,7 @@ public class IncrementalReadTests : IDisposable
 
         Assert.Single(second);
         Assert.Equal("req_B", second[0].RequestId);
-        Assert.Equal(20, second[0].OutputTokens);
+        Assert.Equal(20, second[0].Tokens.Output);
     }
 
     [Fact]
@@ -127,8 +128,8 @@ public class IncrementalReadTests : IDisposable
         using var full = new RollupStore(Path.Combine(_dir, "full.db"));
         full.Ingest(TranscriptReader.ReadFile(path));
 
-        var incTotal = incremental.GetDailyRollups(DateTimeOffset.MinValue, DateTimeOffset.MaxValue, TimeZoneInfo.Utc).Sum(r => r.OutputTokens);
-        var fullTotal = full.GetDailyRollups(DateTimeOffset.MinValue, DateTimeOffset.MaxValue, TimeZoneInfo.Utc).Sum(r => r.OutputTokens);
+        var incTotal = incremental.GetDailyRollups(DateTimeOffset.MinValue, DateTimeOffset.MaxValue, TimeZoneInfo.Utc).Sum(r => r.Tokens.Output);
+        var fullTotal = full.GetDailyRollups(DateTimeOffset.MinValue, DateTimeOffset.MaxValue, TimeZoneInfo.Utc).Sum(r => r.Tokens.Output);
 
         Assert.Equal(60, fullTotal);
         Assert.Equal(fullTotal, incTotal);

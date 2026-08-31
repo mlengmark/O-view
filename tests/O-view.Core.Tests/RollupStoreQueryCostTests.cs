@@ -1,3 +1,4 @@
+using OView.Core.Pricing;
 using System.Diagnostics;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Storage;
@@ -66,7 +67,8 @@ public class RollupStoreQueryCostTests : IDisposable
             $"req-{i}",
             start.AddMinutes(i * 75),
             models[i % models.Length],
-            10, 100, 200, 30)));
+            new TokenSplit(10, 0, 100, 0, 200, 30),
+            UsageModifiers.Standard)));
     }
 
     public void Dispose()
