@@ -1,3 +1,4 @@
+using OView.Core.Pricing;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Storage;
 
@@ -39,7 +40,7 @@ public class JsonlIngestionTests : IDisposable
     // and which day a row lands in is not the question here (issue #211).
     private long TotalOutputTokens() =>
         _store.GetDailyRollups(DateTimeOffset.MinValue, DateTimeOffset.MaxValue, TimeZoneInfo.Utc)
-            .Sum(r => r.OutputTokens);
+            .Sum(r => r.Tokens.Output);
 
     // ── MANDATORY TEST 1: requestId de-duplication ─────────────────────────────
     // The real file had 28 records for 12 ids; a naive sum overcounts ~2.3×.

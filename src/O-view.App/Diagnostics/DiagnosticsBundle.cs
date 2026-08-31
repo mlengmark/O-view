@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Text;
 using OView.Core.Models;
+using OView.Core.Pricing;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
@@ -130,6 +131,7 @@ public static class DiagnosticsBundle
 
         text.Append(storeReport.ToClipboardText());
         AppendIngestGap(text, scope, storeReport);
+        AppendPricing(text, ModelCatalog.Bundled, DateOnly.FromDateTime(utcNow.UtcDateTime));
 
         // Straight after the store, because it answers the question the store's own numbers
         // raise and cannot settle: the store reports what it believes it ingested, this reports
@@ -345,6 +347,39 @@ public static class DiagnosticsBundle
 
         text.AppendLine($"  ingest gap    : {scope.TotalFiles} file(s) on disk, {tracked} tracked and present, "
                         + $"{untracked} with no watermark");
+    }
+
+    /// <summary>
+    /// Which rates the Est. figures were computed from, and how to check them.
+    ///
+    /// <para><b>Every other section here reports an input; this one reports an assumption.</b>
+    /// Two of the three defects that produced GitHub issues #255, #256 and #257 were wrong
+    /// numbers in this table, and neither was visible anywhere — a bundle could read perfectly
+    /// while every money figure in the panel was 50% high. The date and the source are printed
+    /// unconditionally for that reason, not only once the card is stale.</para>
+    ///
+    /// <para>The last line names the calibration rather than performing it. Claude Code prints
+    /// token counts <i>and</i> a dollar total in its own usage summary, which makes the rates
+    /// the only unknown in the comparison — that is how #256 was found, and
+    /// <see cref="CostEstimator.RelativeError"/> is the function that completes it. O-view
+    /// cannot run it on its own: no file on this machine carries a reported dollar figure
+    /// (<c>used_dollars</c> and <c>spend.used</c> are null and zero on the account measured),
+    /// and parsing another application's terminal output to get one is the fragility
+    /// docs/findings/cli-usage-refresh.md warns against. Naming the procedure is honest;
+    /// printing a number O-view did not compute would not be.</para>
+    /// </summary>
+    private static void AppendPricing(StringBuilder text, RateCard card, DateOnly today)
+    {
+        var age = today.DayNumber - card.AsOf.DayNumber;
+
+        text.AppendLine($"  rate card     : {card.Models.Count} model(s), "
+                        + $"{(card.Source == RateCardSource.Bundled ? "bundled" : "user file")}, "
+                        + $"as of {card.AsOf:yyyy-MM-dd} ({age} day(s) ago"
+                        + $"{(card.IsStaleOn(today) ? ", stated on the Est. tiles" : "")})");
+        text.AppendLine($"    drift check : weekly against {PublishedRates.PricingUrl} — "
+                        + "reports differences, never installs rates; see the log above");
+        text.AppendLine("    calibrate   : compare an Est. figure against the dollar total in "
+                        + "Claude Code's own /usage summary (CostEstimator.RelativeError)");
     }
 
     private static void AppendCorruptBackups(StringBuilder text, CorruptBackupReport report) =>

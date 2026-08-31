@@ -66,8 +66,27 @@ public sealed record UsageEngineOptions
     public TimeSpan UpdateCheckInterval { get; init; } = TimeSpan.FromHours(6);
 
     /// <summary>
+    /// First rate-card drift check, after launch for the same reason the update check is —
+    /// so it neither slows startup nor races the first refresh (GitHub issue #257).
+    /// </summary>
+    public TimeSpan FirstRateCheckDelay { get; init; } = TimeSpan.FromMinutes(2);
+
+    /// <summary>
+    /// How often the bundled rate card is compared against Anthropic's published table, before
+    /// jitter (<see cref="UpdateSchedule"/>).
+    ///
+    /// <para><b>Weekly, and deliberately not shorter.</b> Published rates change on the order of
+    /// months, and the failure this guards against — a Sonnet 5 row that was wrong the day it
+    /// was written — took two months to surface. A daily check would buy nothing but noise
+    /// against a page nobody else is paying for. One ~50 KB request per week, zero tokens.</para>
+    /// </summary>
+    public TimeSpan RateCheckInterval { get; init; } = TimeSpan.FromDays(7);
+
+    /// <summary>
     /// Randomness source for the cadence jitter. Injectable so a test can pin the interval
     /// rather than assert against a range that a bad implementation would also satisfy.
+    /// Shared by both outbound cadences — there is one reason to scatter them and one setting
+    /// for it.
     /// </summary>
     public Random UpdateJitter { get; init; } = Random.Shared;
 

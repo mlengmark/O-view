@@ -1,5 +1,6 @@
 using System.Reflection;
 using OView.Core.Models;
+using OView.Core.Pricing;
 
 namespace OView.Core.Tests;
 
@@ -67,6 +68,42 @@ public class RecordShapeTests
             "WeeklyResetAtUtc",
             "WeeklyResetPeriod",
             "SessionResetUncertainty");
+
+    /// <summary>
+    /// Six positional <c>long</c>s, and the most dangerous shape in the codebase (issue #255).
+    ///
+    /// <para>Nothing in the language stops <c>new TokenSplit(input, w1h, w5m, …)</c> from
+    /// compiling, and the two cache-write columns bill at 1.25× and 2× — so swapping them is a
+    /// money error of exactly the kind this whole type was added to fix, arriving with no
+    /// compiler diagnostic and no test failure anywhere the value is not asserted.</para>
+    /// </summary>
+    [Fact]
+    public void TokenSplitPositionalOrderIsPinned() =>
+        AssertOrder(
+            typeof(TokenSplit),
+            "Input",
+            "CacheWrite5m",
+            "CacheWrite1h",
+            "CacheWriteTtlUnrecorded",
+            "CacheRead",
+            "Output");
+
+    /// <summary>
+    /// Five positional <c>decimal</c>s, and the published table lists its columns in a different
+    /// order — input, 5m write, 1h write, cache hit, output. Transcribing a row off the page
+    /// positionally therefore swaps output with the two writes, silently and with no type change
+    /// to notice. The optional sixth is fast mode, and dropping it would rebind nothing.
+    /// </summary>
+    [Fact]
+    public void ModelRatesPositionalOrderIsPinned() =>
+        AssertOrder(
+            typeof(ModelRates),
+            "InputPerMTok",
+            "OutputPerMTok",
+            "CacheWrite5mPerMTok",
+            "CacheWrite1hPerMTok",
+            "CacheReadPerMTok",
+            "Fast");
 
     /// <summary>
     /// The more dangerous of the two, and it has never bitten — yet.

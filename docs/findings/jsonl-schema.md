@@ -47,7 +47,38 @@ Filter to `type == "assistant"`. Do not assume this list is exhaustive; unknown 
 | `message.usage.cache_read_input_tokens` | `25061` | |
 | `message.usage.output_tokens` | `120` | |
 
-Also present on `usage`, not currently needed: `server_tool_use`, `service_tier`, `cache_creation`, `inference_geo`, `iterations`, `speed`.
+### Pricing modifiers — also on `usage`, and all three are load-bearing
+
+This line used to read *"Also present on `usage`, not currently needed: `server_tool_use`,
+`service_tier`, `cache_creation`, `inference_geo`, `iterations`, `speed`."* Three of those six
+appear in Anthropic's published pricing formula, and they were judged against what the panel
+**displayed** rather than against what it **computes**. Two defects trace to that one line
+([#255](https://github.com/mlengmark/O-view/issues/255), [#257](https://github.com/mlengmark/O-view/issues/257)).
+
+**Any field that appears in a pricing formula is load-bearing whether or not today's build reads
+it.** Full structure: [docs/reference/pricing.md](../reference/pricing.md).
+
+| Field | Shape | Why it matters | State |
+|---|---|---|---|
+| `usage.cache_creation` | `{"ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 16719}` | The two TTLs bill at **1.25×** and **2×** base input. The flat `cache_creation_input_tokens` beside it carries the same total with no attribution. | **Active** — read since #255 |
+| `usage.speed` | `"standard"` \| `"fast"` \| absent \| `null` | Fast mode is its own published rate row: Opus 5 / 4.8 at **$10/$50**. | Inactive here — read anyway |
+| `usage.inference_geo` | `"global"` \| `"us"` \| `"not_available"` \| `null` | `"us"` applies **1.1×** to every category. | Inactive here — read anyway |
+
+**Coverage, measured 2026-08-31 on this machine.** `cache_creation` is present on **15,851 of
+15,851** Claude Code assistant records and on **296 of 296** Cowork `audit.jsonl` assistant
+records — both sources, checked separately, because rule 9 says these are two sources and not
+one. `speed` is `"standard"` on 15,817 of 15,817 Claude Code records and absent from all but one
+Cowork record; `inference_geo` is `"not_available"` on 15,851 of 15,851 and on 295 of 296.
+
+**Inactive is not absent, and absent is not standard.** A record whose `cache_creation` is missing
+keeps its writes in a third, unattributed bucket rather than being assigned the TTL the rest of
+the file happens to use. A `speed` or `inference_geo` value this build does not recognise makes
+the request **unpriceable** rather than standard — pricing an unknown modifier at the cheaper
+standard rate is the silent downgrade #257 is about.
+
+Still not needed, and still only display-adjacent: `server_tool_use`, `service_tier` (uniformly
+`"standard"`, including on requests known to have billed to credits), `iterations`,
+`output_tokens_details`.
 
 ## ⚠️ Critical: records are duplicated by `requestId`
 

@@ -1,3 +1,4 @@
+using OView.Core.Pricing;
 using Microsoft.Data.Sqlite;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Storage;
@@ -22,7 +23,8 @@ public class StaleJournalTests : IDisposable
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
     private static TranscriptRecord Record(string id) =>
-        new(id, DateTimeOffset.Parse("2026-08-20T10:00:00Z"), "claude-opus-4-8", 1, 0, 0, 1);
+        new(id, DateTimeOffset.Parse("2026-08-20T10:00:00Z"), "claude-opus-4-8",
+            new TokenSplit(1, 0, 0, 0, 0, 1), UsageModifiers.Standard);
 
     /// <summary>Ingests <paramref name="count"/> rows under <paramref name="prefix"/> and closes.</summary>
     private void Fill(string prefix, int count)

@@ -444,4 +444,37 @@ public class DiagnosticsBundleTests : IDisposable
 
         Assert.Contains($"keeping {CorruptBackups.KeepGenerations}", bundle, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// Which rates the Est. figures were computed from (GitHub issues #255–#257).
+    ///
+    /// <para>Every other section here reports an input; this reports an assumption. Two wrong
+    /// numbers in that table produced money figures 50% high and 28% low, and a bundle could
+    /// read perfectly through both — there was nothing to look at. The date and the source are
+    /// printed unconditionally for that reason, not only once the card is stale.</para>
+    /// </summary>
+    [Fact]
+    public void TheBundleNamesTheRatesTheEstFiguresWerePricedFrom()
+    {
+        var bundle = Build(Windows);
+
+        Assert.Contains("rate card", bundle, StringComparison.Ordinal);
+        Assert.Contains($"as of {ModelCatalog.AsOf:yyyy-MM-dd}", bundle, StringComparison.Ordinal);
+        Assert.Contains("bundled", bundle, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The bundle names the calibration and does not fake it. No file on this machine carries a
+    /// dollar figure Claude Code reported, so O-view cannot run the comparison itself — saying
+    /// how a maintainer runs it is honest, and printing a number O-view did not compute would
+    /// be the fabrication rule 6 is about.
+    /// </summary>
+    [Fact]
+    public void TheBundleNamesTheCalibrationRatherThanInventingOne()
+    {
+        var bundle = Build(Windows);
+
+        Assert.Contains("RelativeError", bundle, StringComparison.Ordinal);
+        Assert.Contains("never installs rates", bundle, StringComparison.Ordinal);
+    }
 }

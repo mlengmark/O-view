@@ -14,19 +14,26 @@ These are **decided, not drafts.** To change one, add a new ADR that supersedes 
 | [0006](0006-local-rollup-store.md) | Local rollup store for usage history | Accepted *(30-day retention premise contradicted by measurement, 2026-08-28)* | SQLite daily aggregates. Claude Code deletes transcripts at 30 days, so 31-day figures need our own store. |
 | [0007](0007-plan-history-primary-provider.md) | `PlanHistoryProvider` becomes the primary usage source | Accepted *(sampling interval amended 2026-08-28: variable, measured at 15 min)* | Claude Desktop caches session/weekly % locally. **No token, no network, no rate limits in v1.** |
 | [0008](0008-installer-distribution.md) | Per-user installer for distribution and relaunch | Accepted | Inno Setup per-user installer: Start Menu entry, optional autostart, clean uninstall. Resolves #7; MSIX rejected (needs signing). |
-| [0009](0009-auto-update.md) | In-app auto-update via GitHub release + existing installer | Accepted *(relaunch amended by 0010; Linux + release model amended)* | Check `releases/latest`, download `O-view-Setup.exe`, silent in-place upgrade + relaunch. Resolves #18; no new dependency; Squirrel/Velopack/MSIX rejected. |
+| [0009](0009-auto-update.md) | In-app auto-update via GitHub release + existing installer | Accepted *(relaunch amended by 0010; Linux + release model amended; outbound-call precedent extended by 0016)* | Check `releases/latest`, download `O-view-Setup.exe`, silent in-place upgrade + relaunch. Resolves #18; no new dependency; Squirrel/Velopack/MSIX rejected. |
 | [0010](0010-post-update-relaunch.md) | Relaunch through Explorer after a silent update | Accepted | An installer-parented instance could not read `plan-usage-history.json` and never recovered; `explorer.exe` re-parents to the shell. Amends 0009. Mechanism unproven — trigger and cure reproduced. |
 | [0011](0011-weekly-reset-derivation.md) | Weekly reset — a measured 7-day window and its own durable log | **Superseded in full by [0014](0014-weekly-reset-is-a-reported-constant.md)** | The **7-day window length** stands, measured; 72 h disproved. The **derivation does not**: the reset is a reported constant, and the detector, observation log and `weekly-resets.json` are deleted. Do not build on this ADR. |
 | [0012](0012-linux-support.md) | Linux joins Windows as a supported target | Accepted | Claude Desktop for Linux shipped, so the files O-view reads exist there. Core needed **no code change** (278/278 tests pass on `net10.0`); the cost is the UI head. Supersedes 0003's target scope only. macOS still out. |
 | [0013](0013-linux-ui-toolkit.md) | Avalonia for a Linux head, alongside WPF | Accepted | Windows head untouched. **A tray icon reports success even with no SNI host**, so O-view must probe the bus itself and say what it observed. Zero-third-party (0005) is scoped to Windows: Linux costs 25 assemblies. |
 | [0014](0014-weekly-reset-is-a-reported-constant.md) | The weekly reset is a reported constant, not something to derive | Accepted *(supersedes 0011 in full)* | `cachedUsageUtilization.seven_day.resets_at` is exact and the weekly reset is a **static grid** — five observations over five weeks, all matching. **Persist it as an anchor and project forward, including from the past**; the derivation was 11.5 h late and on the wrong day. The five-hour window rolls from first use, is not a grid, and stays derived. |
 | [0015](0015-no-credential-based-usage-sources.md) | No credential-based usage sources | Accepted | O-view never handles a Claude subscription credential. Permitted: read files the vendor's client writes, and **invoke the vendor's own client** (`claude -p "/usage"`, measured at zero cost). `OAuthUsageProvider` is deleted, not deferred. Restates rule 3's basis — the token is now documented, so the prohibition rests on policy. |
+| [0016](0016-published-reference-data-is-fetchable.md) | Published reference data is fetchable on the release feed's terms | Accepted *(amends 0009)* | A weekly unauthenticated GET of Anthropic's public pricing page is the same category of call as the release check — no credential, no user data. **It returns a difference list and never installs a rate**, and a failure is reported as "did not check" rather than as agreement. Rule 3 is untouched. The rate table was wrong twice in ways that defeat each other's checks: one a collapsed multiplier, the other a row that was wrong the day it was written. |
+
+## Reference
+
+Structure written down once, so the code can point at it rather than restating parts of it:
+
+- [reference/pricing.md](../reference/pricing.md) — how tokens are priced: the five published columns per model, the `speed` and `inference_geo` modifiers, fail-to-unknown, and the three ways the table is kept right
 
 ## Findings
 
 Empirical results from spikes, cited by the ADRs above:
 
-- [jsonl-schema.md](../findings/jsonl-schema.md) — local transcript format; the `requestId` de-duplication requirement
+- [jsonl-schema.md](../findings/jsonl-schema.md) — local transcript format; the `requestId` de-duplication requirement; the three pricing modifiers on `usage`
 - [tray-icon-rendering.md](../findings/tray-icon-rendering.md) — icon legibility measurements; how the icon became the ring-gauge brand mark (ring + pupil)
 - [plan-usage-history.md](../findings/plan-usage-history.md) — Claude Desktop's cached utilisation series; how reset times are derived
 - [credit-usage-divergence.md](../findings/credit-usage-divergence.md) — **credit-billed usage bypasses the plan window**; the headline % can be true and misleading at once

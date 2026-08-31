@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Globalization;
 using System.Text.Json;
+using OView.Core.Pricing;
 
 namespace OView.Core.Providers.Jsonl;
 
@@ -229,10 +230,9 @@ public static class TranscriptReader
                 requestId,
                 timestamp,
                 model,
-                ReadTokenField(usage, "input_tokens"),
-                ReadTokenField(usage, "cache_creation_input_tokens"),
-                ReadTokenField(usage, "cache_read_input_tokens"),
-                ReadTokenField(usage, "output_tokens"));
+                ReadTokens(usage),
+                UsageModifiers.From(ReadStringField(usage, "speed"),
+                    ReadStringField(usage, "inference_geo")));
         }
         catch (JsonException)
         {
@@ -265,6 +265,59 @@ public static class TranscriptReader
 
         return null;
     }
+
+    /// <summary>
+    /// The six billable quantities behind one request.
+    ///
+    /// <para><b><c>usage.cache_creation</c> carries the TTL split, and reading it is the whole
+    /// of GitHub issue #255.</b> The flat <c>cache_creation_input_tokens</c> was read and the
+    /// object beside it was not, so every cache write was priced at the 5-minute rate while the
+    /// transcripts here were almost entirely 1-hour, which bills at 2× rather than 1.25×.
+    /// Measured on this machine: the object is present on 15,851 of 15,851 Claude Code
+    /// assistant records and on 296 of 296 Cowork audit records (2026-08-31).</para>
+    ///
+    /// <para><b>Present on effectively every record is not present on every record.</b> A
+    /// record whose object is missing or unreadable keeps its flat total in
+    /// <see cref="TokenSplit.CacheWriteTtlUnrecorded"/> rather than being attributed to either
+    /// TTL — the same bucket the migration puts pre-existing rows in, priced at the cheaper
+    /// rate with the assumption named in the panel's caveat. Splitting the difference, or
+    /// assuming the majority TTL, would be a fabricated attribution (rule 6).</para>
+    ///
+    /// <para>The two are reconciled rather than trusted separately: the flat field is the
+    /// authority on the total, so anything it carries beyond the two TTL fields lands in the
+    /// unrecorded bucket, and a total smaller than them clamps at zero.</para>
+    /// </summary>
+    private static TokenSplit ReadTokens(JsonElement usage)
+    {
+        var cacheWrite = ReadTokenField(usage, "cache_creation_input_tokens");
+
+        long write5m = 0, write1h = 0;
+        if (usage.TryGetProperty("cache_creation", out var split) &&
+            split.ValueKind == JsonValueKind.Object)
+        {
+            write5m = ReadTokenField(split, "ephemeral_5m_input_tokens");
+            write1h = ReadTokenField(split, "ephemeral_1h_input_tokens");
+        }
+
+        return new TokenSplit(
+            ReadTokenField(usage, "input_tokens"),
+            write5m,
+            write1h,
+            Math.Max(0, cacheWrite - write5m - write1h),
+            ReadTokenField(usage, "cache_read_input_tokens"),
+            ReadTokenField(usage, "output_tokens"));
+    }
+
+    /// <summary>
+    /// A string field, or null when it is absent, JSON <c>null</c>, or another type. All of
+    /// those mean the same thing to <see cref="UsageModifiers.From"/>: nothing said the price
+    /// was modified. <c>null</c> is not hypothetical — a Cowork audit record here carries
+    /// <c>"speed": null</c> beside <c>"inference_geo": null</c>.
+    /// </summary>
+    private static string? ReadStringField(JsonElement usage, string name) =>
+        usage.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
+            ? v.GetString()
+            : null;
 
     /// <summary>Absent token fields mean none reported; zero, not an error.</summary>
     private static long ReadTokenField(JsonElement usage, string name) =>

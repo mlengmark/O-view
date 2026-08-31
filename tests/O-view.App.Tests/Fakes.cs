@@ -89,6 +89,12 @@ public sealed class FakeTimerFactory : ITimerFactory
     /// <summary>The recurring update check.</summary>
     public FakeTimer RecurringUpdateCheck => Created[3];
 
+    /// <summary>The one-shot first rate-card drift check (ADR-0016).</summary>
+    public FakeTimer FirstRateCheck => Created[4];
+
+    /// <summary>The recurring weekly rate-card drift check.</summary>
+    public FakeTimer RecurringRateCheck => Created[5];
+
     public IAppTimer Create(TimeSpan interval, Action onTick)
     {
         var timer = new FakeTimer(interval, onTick);

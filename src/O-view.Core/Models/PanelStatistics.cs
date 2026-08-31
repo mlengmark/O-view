@@ -90,6 +90,33 @@ public sealed record PanelStatistics(
     /// </summary>
     public IReadOnlyList<string> ModelColourOrder { get; init; } = [];
 
+    /// <summary>
+    /// The rate card the Est. figures were priced from, so the panel can name its date and its
+    /// provenance rather than presenting a figure whose rates the reader cannot trace.
+    /// </summary>
+    public RateCard Rates { get; init; } = ModelCatalog.Bundled;
+
+    /// <summary>
+    /// Whether <see cref="Rates"/> was old enough on the day these figures were built to be
+    /// worth saying so beside them (<see cref="RateCard.StaleAfter"/>).
+    ///
+    /// <para>Decided in <see cref="Build"/>, which is the only place that knows both the card
+    /// and the reader's own today — so the caveat cannot be rendered against a different day
+    /// from the figures it qualifies.</para>
+    /// </summary>
+    public bool RatesAreStale { get; init; }
+
+    /// <summary>
+    /// Cache-write tokens in the 31-day window whose TTL was never recorded, priced at the
+    /// 5-minute rate (GitHub issue #255).
+    ///
+    /// <para>Non-zero only for rows a build before the split ingested, out of reach of the
+    /// re-ingest that recovers everything still on disk. The panel names the assumption where
+    /// it applies rather than letting the figure stand on its own; zero means every write in
+    /// the window carries its own TTL and there is nothing to caveat.</para>
+    /// </summary>
+    public long TtlUnrecordedCacheWrites { get; init; }
+
     public bool HasPartialHistory => RecordedDays < WindowDays;
 
     /// <summary>
@@ -129,7 +156,7 @@ public sealed record PanelStatistics(
         TimeSpan meterAge)
     {
         var windowUsage = store.GetUsageSince(windowStartUtc);
-        var outputTokens = windowUsage.Sum(r => r.OutputTokens);
+        var outputTokens = windowUsage.Sum(r => r.Tokens.Output);
         var result = DivergenceDetector.Evaluate(planPercentsInWindow, outputTokens, meterAge);
 
         // Only price the window when it is actually off-plan: otherwise this figure
@@ -173,7 +200,7 @@ public sealed record PanelStatistics(
         // and the tiles above it are measuring one thing.
         var byDate = rollups
             .GroupBy(r => r.Date)
-            .ToDictionary(g => g.Key, g => g.Sum(r => r.OutputTokens));
+            .ToDictionary(g => g.Key, g => g.Sum(r => r.Tokens.Output));
 
         var series = new List<DayUsage>(windowDays);
         for (var day = windowStart; day <= today; day = day.AddDays(1))
@@ -201,17 +228,23 @@ public sealed record PanelStatistics(
         // value tile answers "what would this have cost", and they are allowed to be built
         // from different inputs precisely because each one names what it is.
         return new PanelStatistics(
-            todayRollups.Sum(r => r.OutputTokens),
+            todayRollups.Sum(r => r.Tokens.Output),
             EstimateTotal(todayRollups),
-            rollups.Sum(r => r.OutputTokens),
+            rollups.Sum(r => r.Tokens.Output),
             est31,
             recordedDays,
             windowDays,
             series,
-            creditRollups.Sum(r => r.OutputTokens),
+            creditRollups.Sum(r => r.Tokens.Output),
             EstimateTotal(creditRollups))
         {
             UnpricedModels = unpriced,
+            // The card is carried on the result rather than looked up again at render time:
+            // the tiles and the caveat beneath them have to describe the same rates, and "the
+            // bundled card" is only the same answer for as long as there is one source.
+            Rates = ModelCatalog.Bundled,
+            RatesAreStale = ModelCatalog.Bundled.IsStaleOn(today),
+            TtlUnrecordedCacheWrites = rollups.Sum(r => r.Tokens.CacheWriteTtlUnrecorded),
             ModelsToday = SliceByModel(todayRollups),
             Models31Days = SliceByModel(rollups),
             ModelColourOrder = ModelBreakdown.ColourOrder(SliceByModel(rollups)),
@@ -238,7 +271,7 @@ public sealed record PanelStatistics(
             .Select(g => new ModelSlice(
                 g.Key,
                 ModelDisplayName.For(g.Key),
-                g.Sum(r => r.OutputTokens),
+                g.Sum(r => r.Tokens.Output),
                 EstimateTotal(g.ToList())))
             .OrderByDescending(s => s.Tokens)
             .ToList();
@@ -259,7 +292,7 @@ public sealed record PanelStatistics(
 
         foreach (var r in rollups)
         {
-            if (CostEstimator.EstimateUsd(r.Model, r.InputTokens, r.CacheCreationTokens, r.CacheReadTokens, r.OutputTokens) is { } usd)
+            if (CostEstimator.EstimateUsd(r.Model, r.Tokens, r.Modifiers) is { } usd)
             {
                 total += usd;
                 priced++;

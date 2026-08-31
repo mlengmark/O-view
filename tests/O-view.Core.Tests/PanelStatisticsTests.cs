@@ -1,3 +1,4 @@
+using OView.Core.Pricing;
 using OView.Core.Models;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Storage;
@@ -51,11 +52,11 @@ public class PanelStatisticsTests : IDisposable
         Seed(_store, id, date, output, model);
 
     private static void Seed(RollupStore store, string id, string date, long output, string model = "claude-opus-4-8") =>
-        store.Ingest([new TranscriptRecord(id, DateTimeOffset.Parse(date + "T10:00:00Z"), model, 0, 0, 0, output)]);
+        store.Ingest([new TranscriptRecord(id, DateTimeOffset.Parse(date + "T10:00:00Z"), model, new TokenSplit(0, 0, 0, 0, 0, output), UsageModifiers.Standard)]);
 
     /// <summary>Seeds at a stated instant, for cases where the hour within the day is the point.</summary>
     private void SeedAt(string id, string timestamp, long output, string model = "claude-opus-4-8") =>
-        _store.Ingest([new TranscriptRecord(id, DateTimeOffset.Parse(timestamp), model, 0, 0, 0, output)]);
+        _store.Ingest([new TranscriptRecord(id, DateTimeOffset.Parse(timestamp), model, new TokenSplit(0, 0, 0, 0, 0, output), UsageModifiers.Standard)]);
 
     [Fact]
     public void PreInstallDays_AreMarkedNoData_NotZero()
@@ -404,5 +405,42 @@ public class PanelStatisticsTests : IDisposable
 
         Assert.Null(stats.Est31DaysUsd);
         Assert.Contains("claude-brand-new-9", stats.UnpricedModels);
+    }
+
+    /// <summary>
+    /// The figures carry the rates they were priced from, so the caveat under a tile and the
+    /// tile itself describe the same table. Looking the card up again at render time would be
+    /// the same answer only for as long as there is one source (GitHub issue #255).
+    /// </summary>
+    [Fact]
+    public void TheFiguresCarryTheRateCardTheyWerePricedFrom()
+    {
+        Seed("a", "2026-07-21", 1_000);
+
+        var stats = PanelStatistics.Build(_store, Now, Utc);
+
+        Assert.Equal(ModelCatalog.Bundled, stats.Rates);
+        Assert.Equal(ModelCatalog.Bundled.IsStaleOn(new DateOnly(2026, 7, 21)), stats.RatesAreStale);
+    }
+
+    /// <summary>
+    /// Cache writes with no TTL attribution are counted so the panel can name the assumption
+    /// they are priced under. Zero when every write in the window carries its own TTL, which is
+    /// every window built entirely from rows this build ingested.
+    /// </summary>
+    [Fact]
+    public void UnattributedCacheWritesAreCountedForTheCaveat()
+    {
+        _store.Ingest([
+            new TranscriptRecord("attributed", DateTimeOffset.Parse("2026-07-21T10:00:00Z"),
+                "claude-opus-5", new TokenSplit(0, 100, 900, 0, 0, 10), UsageModifiers.Standard),
+            new TranscriptRecord("legacy", DateTimeOffset.Parse("2026-07-21T11:00:00Z"),
+                "claude-opus-5", new TokenSplit(0, 0, 0, 4_000, 0, 10), UsageModifiers.Standard),
+        ]);
+
+        var stats = PanelStatistics.Build(_store, Now, Utc);
+
+        Assert.Equal(4_000, stats.TtlUnrecordedCacheWrites);
+        Assert.Contains("5-minute rate", PanelText.Caveat(stats), StringComparison.Ordinal);
     }
 }

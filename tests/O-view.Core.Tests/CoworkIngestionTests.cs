@@ -1,3 +1,4 @@
+using OView.Core.Pricing;
 using System.Diagnostics;
 using OView.Core.Providers;
 using OView.Core.Providers.Jsonl;
@@ -42,7 +43,7 @@ public class CoworkIngestionTests : IDisposable
 
     private long TotalOutputTokens() =>
         _store.GetDailyRollups(DateTimeOffset.MinValue, DateTimeOffset.MaxValue, TimeZoneInfo.Utc)
-            .Sum(r => r.OutputTokens);
+            .Sum(r => r.Tokens.Output);
 
     /// <summary>Builds a realistic Cowork layout: sandbox home, empty projects dir, audit log.</summary>
     private string WriteCoworkSession(string sessionId, params string[] lines)
@@ -71,7 +72,7 @@ public class CoworkIngestionTests : IDisposable
 
         Assert.Single(records);
         Assert.Equal("req_A", records[0].RequestId);
-        Assert.Equal(120, records[0].OutputTokens);
+        Assert.Equal(120, records[0].Tokens.Output);
         Assert.Equal("claude-sonnet-5", records[0].Model);
     }
 

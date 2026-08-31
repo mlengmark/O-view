@@ -679,6 +679,53 @@ public class UsageEngineTests
         Assert.Equal(3, checks);
     }
 
+    /// <summary>
+    /// The rate-card drift check rides the same two-timer shape as the update check (ADR-0016,
+    /// GitHub issue #257) — one shortly after launch, then weekly.
+    ///
+    /// <para>Its own timers, not the update check's: the two cadences are hours and days apart
+    /// and share nothing but the pattern. What they must share is that the engine only ever says
+    /// <i>when</i> — it raises the event and touches no network, which is what keeps
+    /// <c>O-view.App</c> free of the HTTP that both heads wire up.</para>
+    /// </summary>
+    [Fact]
+    public void RateCheckFiresOnceOnStartupThenOnTheWeeklyTimer()
+    {
+        using var dir = new TempDir();
+        var (engine, _, timers, _) = Build(dir);
+        using var _e = engine;
+
+        var checks = 0;
+        engine.RateCheckDue += () => checks++;
+        engine.Start(timers);
+
+        Assert.Equal(0, checks);
+
+        timers.FirstRateCheck.Tick();
+        Assert.Equal(1, checks);
+
+        timers.FirstRateCheck.Tick();             // one-shot: stopped itself
+        Assert.Equal(1, checks);
+
+        timers.RecurringRateCheck.Tick();
+        Assert.Equal(2, checks);
+    }
+
+    /// <summary>
+    /// Weekly, and deliberately not shorter. Published rates change on the order of months and
+    /// the failure this guards against took two months to surface, so a daily check would buy
+    /// nothing but requests against a page nobody else is paying for.
+    /// </summary>
+    [Fact]
+    public void TheRateCheckCadenceIsWeekly()
+    {
+        var options = new UsageEngineOptions();
+
+        Assert.Equal(TimeSpan.FromDays(7), options.RateCheckInterval);
+        Assert.True(options.RateCheckInterval > options.UpdateCheckInterval,
+            "a rate table moves far more slowly than a release does");
+    }
+
     [Fact]
     public void DisposeStopsEveryTimer()
     {

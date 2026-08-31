@@ -26,7 +26,7 @@ Knowing what the app touches is usually enough to judge whether a report is in s
 | | |
 |---|---|
 | Credentials | **None.** O-view handles no token and performs no authentication (CLAUDE.md rule 3, [ADR-0015](docs/adr/0015-no-credential-based-usage-sources.md)). |
-| Network | One request, to `api.github.com`, to check for a newer release. Plus the installer download when a Windows user accepts an update. Nothing else **from O-view itself** — but see Subprocesses below. |
+| Network | Two, both unauthenticated GETs of public pages, sending nothing about you: `api.github.com`, to check for a newer release; and `platform.claude.com`, once a week, to check O-view's built-in price table against Anthropic's published one. Plus the installer download when a Windows user accepts an update. Nothing else **from O-view itself** — but see Subprocesses below. |
 | Subprocesses | **One:** `claude /usage`, run at most every 15 minutes and when you open the panel, to make Claude Code refresh its own usage figures. O-view then reads the file, as it always has. See below. |
 | Reads | Files Claude already writes on this machine — `~/.claude.json` (account fields only, never a token), plan-usage history, and session transcripts. **Read-only, always.** |
 | Writes | Its own state under `%LOCALAPPDATA%\O-view` / `~/.local/share/O-view`, plus the run-at-startup entry when you enable it. |
@@ -47,6 +47,15 @@ Stated here rather than left to be rediscovered.
   invocation that it stayed that way: if one is ever billed, the feature stops itself and offers a
   **Resume usage refresh** row rather than continuing.
   ([findings/cli-usage-refresh.md](docs/findings/cli-usage-refresh.md))
+- **O-view checks its own price table against Anthropic's published one, weekly.** The "Est.
+  value" figures price your tokens at published API rates, and that table has been wrong twice —
+  once by 50% on one model — with nothing in the app able to notice. So once a week O-view fetches
+  <https://platform.claude.com/docs/en/about-claude/pricing.md> and compares. It is the same kind
+  of call as the release check above: no credential, no user data, a public page, and nothing sent
+  about your machine or your usage. **It never installs a rate**: a difference is written to the
+  log for a human to confirm, and a page that does not parse is reported as "could not check"
+  rather than as agreement. ([ADR-0016](docs/adr/0016-published-reference-data-is-fetchable.md),
+  [reference/pricing.md](docs/reference/pricing.md))
 - **The Windows installer and executable are not code-signed.** An Authenticode certificate
   costs more than a free tool justifies ([ADR-0008](docs/adr/0008-installer-distribution.md)).
   SmartScreen will warn on first run. Integrity rests instead on the two checks below.

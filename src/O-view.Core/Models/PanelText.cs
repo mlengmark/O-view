@@ -1,4 +1,5 @@
 using System.Globalization;
+using OView.Core.Pricing;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.PlanHistory;
 
@@ -353,25 +354,61 @@ public static class PanelText
     }
 
     /// <summary>
-    /// The caveat under the 31-day tiles: how much of the window is actually recorded, and
-    /// which models were left out of the money figures.
+    /// The caveat under the 31-day tiles: how much of the window is actually recorded, which
+    /// models were left out of the money figures, what O-view assumed about cache writes it
+    /// could not attribute, and how old the rates behind the figures are.
     ///
-    /// <para>Both are the same class of statement — the total is real but incomplete — and
-    /// omitting either lets a figure read as the whole picture. An unpriced model must be
+    /// <para>All four are the same class of statement — the total is real but qualified — and
+    /// omitting any of them lets a figure read as the whole picture. An unpriced model must be
     /// named rather than silently dropped, and must not void the total (a single newly
     /// released Claude once blanked both Est. tiles entirely).</para>
+    ///
+    /// <para><b>The last two are conditions that clear.</b> The TTL note applies only to rows a
+    /// build before GitHub issue #255 ingested and that are out of reach of the re-ingest, so it
+    /// disappears as that history ages out of the window. The rate age appears only past
+    /// <see cref="RateCard.StaleAfter"/> — a caveat that is always on says nothing, and the
+    /// figures are not less true for being priced at a rate that has not changed.</para>
     /// </summary>
     public static string Caveat(PanelStatistics stats)
     {
-        var coverage = stats.CoverageNote;
-        if (stats.UnpricedModels.Count == 0)
+        var parts = new List<string>(4);
+
+        if (stats.CoverageNote is { Length: > 0 } coverage)
         {
-            return coverage;
+            parts.Add(coverage);
         }
 
-        var excluded = $"excludes {string.Join(", ", stats.UnpricedModels)} (no published rate)";
-        return coverage.Length > 0 ? $"{coverage} · {excluded}" : excluded;
+        if (stats.UnpricedModels.Count > 0)
+        {
+            parts.Add($"excludes {string.Join(", ", stats.UnpricedModels)} (no published rate)");
+        }
+
+        if (stats.TtlUnrecordedCacheWrites > 0)
+        {
+            parts.Add($"{UsageFormatter.Tokens(stats.TtlUnrecordedCacheWrites)} cache writes "
+                      + "with no recorded duration, priced at the 5-minute rate");
+        }
+
+        if (stats.RatesAreStale)
+        {
+            parts.Add(RateAge(stats.Rates));
+        }
+
+        return string.Join(" · ", parts);
     }
+
+    /// <summary>
+    /// How old the rates are and where they came from: <c>rates: bundled, as of 24 Jun 2026</c>.
+    ///
+    /// <para><b>The source is named as well as the date</b>, because the two answer different
+    /// halves of "can I check this figure". A date says how likely the table is to have moved;
+    /// a source says whose table it is. Only <see cref="RateCardSource.Bundled"/> exists today,
+    /// and the line is written to carry the other from the day it does — a user-editable
+    /// pricing file with no provenance on screen is a fabricated-number vector (issue #255).</para>
+    /// </summary>
+    public static string RateAge(RateCard card) => string.Create(
+        CultureInfo.InvariantCulture,
+        $"rates: {(card.Source == RateCardSource.Bundled ? "bundled" : "user file")}, as of {card.AsOf:d MMM yyyy}");
 
     /// <summary>
     /// What the token and cost tiles permanently do not cover (issue #235).

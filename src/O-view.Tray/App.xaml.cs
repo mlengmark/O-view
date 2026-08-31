@@ -5,6 +5,7 @@ using System.Windows.Threading;
 using OView.App;
 using OView.App.Diagnostics;
 using OView.App.Platform;
+using OView.App.Pricing;
 using OView.App.Updates;
 using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
@@ -181,6 +182,13 @@ public partial class App : System.Windows.Application
         // the user's confirmation. The engine owns the *when*; the HTTP and the UI are here.
         _updates = new UpdateService(log);
         _engine.UpdateCheckDue += () => _ = BackgroundCheckAsync();
+
+        // The rate-card drift check (ADR-0016). It writes a log line and nothing else — it
+        // never installs a rate, and a difference is a maintainer's cue rather than a user's
+        // problem, so there is no balloon and no UI. The line reaches a bug report through the
+        // diagnostics bundle's log tail.
+        var rates = new RateCardFeed(log);
+        _engine.RateCheckDue += () => _ = rates.CheckAsync(ModelCatalog.Bundled);
 
         // A conflict is discovered while resolving the weekly reset, which happens on every
         // poll — so this rides the same signal rather than needing its own schedule. The
