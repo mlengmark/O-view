@@ -120,11 +120,14 @@ public static class ModelCatalog
         new("claude-mythos-5", "Mythos 5",  Fable,  BillingClass.Credit),
         new("claude-opus-5",   "Opus 5",    Opus with { Fast = OpusFast }, BillingClass.Plan),
         new("claude-opus-4-8", "Opus 4.8",  Opus with { Fast = OpusFast }, BillingClass.Plan),
-        // Fast mode is not available on Opus 4.7 — the request errors — so there is nothing
-        // to price and no Fast row. Opus 4.6 accepts it, runs at standard speed and is
-        // billed at standard rates, which is a published price rather than a fallback.
+        // No Fast row below this line. Anthropic publishes fast-mode prices for Opus 5 and 4.8
+        // only, so every other model prices a "fast" request as a labelled unknown. Opus 4.6
+        // briefly carried Fast = Opus on the reasoning that it accepts the flag and runs at
+        // standard rates; that was an unpublished claim, and standing rates in for an
+        // unpublished price is the silent cheaper number this whole table is written against
+        // (GitHub issue #257).
         new("claude-opus-4-7", "Opus 4.7",  Opus,   BillingClass.Plan),
-        new("claude-opus-4-6", "Opus 4.6",  Opus with { Fast = Opus }, BillingClass.Plan),
+        new("claude-opus-4-6", "Opus 4.6",  Opus,   BillingClass.Plan),
         new("claude-opus-4-5", "Opus 4.5",  Opus,   BillingClass.Plan),
         new("claude-sonnet-5", "Sonnet 5",  Sonnet5, BillingClass.Plan),
         // Covers Sonnet 4, 4.5 and 4.6 — three models on one row, correct only because
