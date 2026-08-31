@@ -6,6 +6,7 @@ using System.Windows.Media;
 using System.Windows.Shapes;
 using OView.App.Rendering;
 using OView.Core.Models;
+using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using Brush = System.Windows.Media.Brush;
@@ -237,6 +238,16 @@ public partial class PopupWindow : Window, IFlyout
     /// </summary>
     public TraySettings? SettingsForDisplay { get; set; }
 
+    /// <summary>
+    /// The promo notices Claude Code has cached, for the boost chip on the weekly row
+    /// (issue #254). Null means none were read, which is the ordinary state and renders nothing.
+    ///
+    /// <para>Set on open beside <see cref="DataReport"/> rather than carried on the snapshot:
+    /// a promo notice is not a meter reading, and putting it on <c>UsageSnapshot</c> would
+    /// oblige every provider to carry something only this file has.</para>
+    /// </summary>
+    public BoostNotices? BoostNotices { get; set; }
+
     private TraySettings? _lastSettings;
 
     public void ShowNearTrayIcon(UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account)
@@ -441,6 +452,7 @@ public partial class PopupWindow : Window, IFlyout
         PopulateBar(WeeklyPctText, WeeklyBar, WeeklyBarFill,
             authoritative ? snapshot.WeeklyPercent : null, placeholder);
         PopulateWeeklyReset(snapshot, authoritative, local);
+        PopulateBoostChip(local);
 
         PopulateTiles(stats);
         PopulateDivergence(stats);
@@ -517,6 +529,34 @@ public partial class PopupWindow : Window, IFlyout
         WeeklyResetText.ToolTip = HoverCard.Text(this, PanelText.WeeklyResetWaitingHint);
         HoverCard.ApplyTiming(WeeklyResetText);
         WeeklyResetText.Visibility = authoritative ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// The boost chip beside the weekly label, when Claude Code has cached a promo notice for
+    /// that meter and it has not ended (issue #254).
+    ///
+    /// <para>Hidden in every other case, and hidden is the ordinary state — most of the time
+    /// there is no promo running. The chip carries O-view's summary; the hover card carries
+    /// Claude's own sentence, unedited, with who said it and when it was read.</para>
+    /// </summary>
+    private void PopulateBoostChip(TimeZoneInfo local)
+    {
+        var utcNow = Now(TimeZoneInfo.Utc);
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(utcNow, local).DateTime);
+        var notice = BoostNotices?.For(BoostNotice.WeeklyBar, today, utcNow);
+
+        if (notice is null)
+        {
+            BoostChip.Visibility = Visibility.Collapsed;
+            BoostChip.ToolTip = null;
+            return;
+        }
+
+        BoostChipText.Text = PanelText.BoostChip(notice, utcNow, local);
+        BoostChip.ToolTip = HoverCard.Text(
+            this, PanelText.BoostCard(notice, BoostNotices!.FetchedAtUtc, local));
+        HoverCard.ApplyTiming(BoostChip);
+        BoostChip.Visibility = Visibility.Visible;
     }
 
     /// <summary>

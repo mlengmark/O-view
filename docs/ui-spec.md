@@ -104,6 +104,25 @@ Both bars show **percentage of quota consumed** — consistent metric, with time
 | **Current session** | % of 5-hour rolling limit used | `Resets in 2h 14m · 16:32` |
 | **Weekly** | % of 7-day limit used | `Resets in 6d 3h · Tue 06:28` — same shape, plus a weekday (see below) |
 
+**Boost chip ([GitHub issue #254](https://github.com/mlengmark/O-view/issues/254)).** When Claude Code has cached a promo notice for a meter, that meter's heading carries a chip between its label and its percentage: `50% Boosted · until 31 Aug · ends in 2w 4d 14h`. It reuses the tier badge's `BadgeBg`/`BadgeText` pair — nothing is added to `PanelPalette` — so it reads as a factual label about the account rather than a warning; amber stays reserved for things needing attention.
+
+| Part | Source | Missing when |
+|---|---|---|
+| `50%` | extracted from the message, `PromoText.Percent` | the sentence has no unambiguous increase figure |
+| `Boosted` | O-view's own word | never |
+| `until 31 Aug` | extracted, `PromoText.EndDate` | no date could be read without guessing |
+| `ends in 2w 4d 14h` | derived from that date | as above |
+
+Three rules, and each exists because of a specific way this row can mislead:
+
+- **The figure leads and the word follows it immediately.** The same row shows utilisation — `51% used`, a *level* — a hundred pixels to the right, where the chip's figure is a *delta*. `50% Boosted` reads as one phrase; a bare `50%` adrift on that row would read as the same kind of number as the one beside it.
+- **The heading is three columns, not an overlay** — label `Auto`, chip `*`, percentage `Auto`. The first implementation put the chip and the percentage in one cell and drew the chip straight over `100% used`. The chip is the only elastic thing on the row, so it is the one that gets trimmed, and **the row must never wrap**: a wrap shifts the bar beneath it and changes the panel's height.
+- **The month is abbreviated**, because the budget is tight and it is measured, not estimated. Note the figure on the right reads `51% used`, not `51%` — a budget worked out against the shorter string is about 30px too generous, which is exactly how the overlap above got shipped into a first render.
+
+The chip is hidden whenever the promo's last day has passed by the machine's own calendar, when the notice names a bar this gauge is not, and — for a notice carrying no readable date — once the flag cache has gone stale. **Hidden is the ordinary state**: most of the time no promo is running.
+
+Hovering gives the card: Claude's sentence unedited, then `Ends Mon 31 Aug · reported by Claude Code, read 09:24`. O-view cannot verify that this account is boosted — the payload is a feature-flag cache, evaluated server-side — so the panel **relays rather than asserts**, and the provenance line is what makes that honest rather than a hedge (rule 6). Nothing on the panel rescales a percentage because a boost exists: the meters report utilisation against whatever limit is in force, and the boost widened that denominator upstream.
+
 *Design note:* the original spec had the session bar showing **remaining time** and the weekly bar showing **remaining tokens**. Rejected during review: a time bar cannot warn about quota exhaustion — you could sit at 95% used with 4 hours "remaining" and the bar would still look healthy, which defeats the purpose of the tool. Time is still shown, as text.
 
 **Weekly reset ([GitHub issue #6](https://github.com/mlengmark/O-view/issues/6), [ADR-0011](adr/0011-weekly-reset-derivation.md)):** derived from `sd` drops the same way the 5-hour reset is derived from `fh` drops, and now presented the same way. The window is **7 days** — measured from two resets 7 d 0 h 14 m apart, with the 72-hour alternative disproved by the same file — so **one** observed reset is enough to predict the next, as one `fh` drop is. Observed resets are still **persisted**, in [`%LOCALAPPDATA%\O-view\weekly-resets.json`](adr/0011-weekly-reset-derivation.md): a reset that scrolls out of the source file is gone for good, and that state must not sit in the rollup store, which wipes itself on corruption.

@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using OView.App;
 using OView.Core.Models;
 using OView.App.Platform;
+using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.App.Updates;
@@ -183,7 +184,11 @@ public sealed class LinuxApp : Application
                 ClaudeAccount.TryRead(),
                 PlanHistoryDiagnostics.Inspect(),
                 TranscriptScopeReport.Inspect(),
-                DateTimeOffset.UtcNow);
+                DateTimeOffset.UtcNow,
+                // Read on open like the two reports above. The flag cache refreshes when
+                // Claude Code starts, not when /usage runs, so it keeps its own clock and is
+                // read on its own rather than folded into the poll (issue #254).
+                BoostNotices.TryRead());
 
             _log?.Write("panel opened");
         }

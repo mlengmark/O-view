@@ -6,6 +6,7 @@ using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using OView.App.Rendering;
 using OView.Core.Models;
+using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Tray.Popup;
@@ -233,7 +234,54 @@ internal static class SampleRenderer
                 compact.RenderToBitmap(live, stats, account, scale,
                     expandComposition: true, density: PanelDensity.Compact),
                 Path.Combine(dir, $"panel-compact-{(light ? "light" : "dark")}.png"));
+
+            // The boost chip (issue #254). No ordinary sample can show it: it appears only
+            // while Claude Code has a live promo cached, and the one this was built against
+            // expired the day it was found — so without this render the chip would be
+            // inspectable on nobody's machine, which is how the no-data banner spent its life
+            // saying the wrong thing (#58, #170).
+            //
+            // Unlike the pinned `today` above, this is dated from the real clock, because the
+            // chip's own visibility is decided against the machine's date.
+            // Rendered at the WIDEST the row can get, not a comfortable middle: a promo far
+            // enough out for all three countdown units, beside "100% used" — the longest the
+            // figure on the right ever is. The first render of this sample was the reason,
+            // and it did not fit: the heading had one column, so the chip drew straight over
+            // the figure, and a budget worked out against "51%" is 30px short of what
+            // "51% used" actually needs.
+            var boosted = new PopupWindow
+            {
+                ThemeOverride = light,
+                ScopeReport = bothSourcesScope,
+                BoostNotices = SampleBoostNotices(),
+            };
+            SavePng(
+                boosted.RenderToBitmap(live with { WeeklyPercent = 100 }, stats, account, scale),
+                Path.Combine(dir, $"panel-boosted-{(light ? "light" : "dark")}.png"));
         }
+    }
+
+    /// <summary>
+    /// A promo notice in the shape Claude Code really caches, ending far enough out that all
+    /// three countdown units appear — the widest the chip ever gets, which is the case worth
+    /// looking at rather than the shortest.
+    ///
+    /// <para><b>Built by parsing a sentence, not by filling in the fields.</b> The magnitude and
+    /// the date come from <see cref="PromoText"/>, so the render shows what the extractors
+    /// actually produce from a real-shaped message rather than what a hand-written fixture
+    /// asserts they would.</para>
+    /// </summary>
+    private static BoostNotices SampleBoostNotices()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var ends = DateOnly.FromDateTime(now.UtcDateTime).AddDays(18);
+        var text = string.Create(CultureInfo.InvariantCulture,
+            $"+50% weekly limits promo through {ends:MMM d} · clau.de/cc-50-promo");
+
+        return new BoostNotices(now, [
+            new BoostNotice(
+                BoostNotice.WeeklyBar, text, PromoText.Percent(text), PromoText.EndDate(text, now)),
+        ]);
     }
 
     /// <summary>

@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using OView.App.Rendering;
 using OView.Core.Models;
+using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 
@@ -64,7 +65,8 @@ public sealed class PanelContent : Border
         ClaudeAccount? account,
         PlanHistoryReport? dataReport,
         TranscriptScopeReport? scopeReport,
-        DateTimeOffset utcNow)
+        DateTimeOffset utcNow,
+        BoostNotices? boostNotices = null)
     {
         _root.Children.Clear();
 
@@ -95,7 +97,8 @@ public sealed class PanelContent : Border
             PanelText.SessionReset(snapshot.SessionResetAtUtc, utcNow, local, snapshot.SessionResetUncertainty), placeholder);
 
         AddBar("Weekly", authoritative ? snapshot.WeeklyPercent : null,
-            WeeklyResetLine(snapshot, authoritative, utcNow, local), placeholder);
+            WeeklyResetLine(snapshot, authoritative, utcNow, local), placeholder,
+            BoostChipText(boostNotices, utcNow, local));
 
         AddTiles(stats, scopeReport);
         AddGraph(stats);
@@ -126,6 +129,19 @@ public sealed class PanelContent : Border
         // Plan data is flowing but no drop has been seen yet. Rendering nothing here is
         // indistinguishable from a bug, so it says what it is waiting for.
         return authoritative ? PanelText.WeeklyResetWaiting : null;
+    }
+
+    /// <summary>
+    /// The boost chip's text, or null when there is no live promo for the weekly meter
+    /// (issue #254). Null is the ordinary state — most of the time no promo is running.
+    /// </summary>
+    private static string? BoostChipText(
+        BoostNotices? notices, DateTimeOffset utcNow, TimeZoneInfo local)
+    {
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(utcNow, local).DateTime);
+        return notices?.For(BoostNotice.WeeklyBar, today, utcNow) is { } notice
+            ? PanelText.BoostChip(notice, utcNow, local)
+            : null;
     }
 
     // ── sections ────────────────────────────────────────────────────────────────────
@@ -165,10 +181,41 @@ public sealed class PanelContent : Border
     /// A usage bar. A null percentage draws the track alone — never a fabricated fill, and
     /// never a zero that would read as "no usage" when the truth is "not known" (rule 6).
     /// </summary>
-    private void AddBar(string label, int? percent, string? resetLine, string placeholder)
+    private void AddBar(
+        string label, int? percent, string? resetLine, string placeholder, string? chip = null)
     {
-        var header = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        header.Children.Add(Text(label, 14, _theme["TextPrimary"], FontWeight.SemiBold));
+        // Clipped, so a chip wider than its cell is cut off at the boundary rather than drawn
+        // over the figure on the right. The Windows head's first render of this row did exactly
+        // that, and no test could have caught it — only the picture did.
+        var header = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            ClipToBounds = true,
+        };
+
+        // Label and chip share the left cell. The chip reuses the tier badge's colour pair
+        // rather than introducing one, so it reads as the same class of object — a factual
+        // label about the account, not a warning.
+        var left = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 8,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        left.Children.Add(Text(label, 14, _theme["TextPrimary"], FontWeight.SemiBold));
+        if (chip is { Length: > 0 })
+        {
+            left.Children.Add(new Border
+            {
+                Background = _theme["BadgeBg"],
+                CornerRadius = new CornerRadius(4),
+                Padding = new Thickness(6, 1),
+                VerticalAlignment = VerticalAlignment.Center,
+                Child = Text(chip, 11, _theme["BadgeText"]),
+            });
+        }
+
+        header.Children.Add(left);
         var value = Text(percent is { } p ? $"{p}% used" : placeholder, 14, _theme["TextSecondary"]);
         value.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetColumn(value, 1);

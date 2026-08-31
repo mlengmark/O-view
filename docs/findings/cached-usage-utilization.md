@@ -83,6 +83,47 @@ the cache was the fresher of the two.
 - **It follows `CLAUDE_CONFIG_DIR`**, so locate it through `ClaudeAccount.Candidates()` rather
   than hard-coding the profile path (the failure of issues #44, #58 and #189).
 
+## A second block in the same file: promo notices
+
+`cachedGrowthBookFeatures.tengu_rate_limit_promo_notices` is what Claude Code renders beside its
+own usage bars when limits are temporarily boosted. Measured 2026-08-31:
+
+```json
+"tengu_rate_limit_promo_notices": [
+  { "bar": "seven_day",
+    "text": "+50% weekly limits promo through Aug 31 · clau.de/cc-50-promo",
+    "variant": "claude" }
+]
+```
+
+- **`bar` shares this document's key space.** `seven_day` is the weekly meter, so a notice
+  attaches to a gauge by name rather than by position. Model-scoped forms (`seven_day_opus`) are
+  the obvious extension and **none has ever been observed populated** — same status as the sibling
+  utilization fields above.
+- **`text` is prose, and is displayed verbatim.** It also carries two figures worth lifting: an
+  end date and a magnitude. Both are extracted conservatively (`PromoText`) and both are allowed
+  to fail, because the message shows either way.
+- **`variant` is opaque.** Only `claude` observed. Do not branch on it.
+
+**It keeps its own clock, and that is the trap.** Freshness comes from the top-level
+`cachedGrowthBookFeaturesAt`, *not* from `fetchedAtMs` — the flag cache refreshes when Claude Code
+**starts**, the usage block only when `/usage` runs. Measured side by side that morning:
+`cachedGrowthBookFeaturesAt` 08:24:24Z against `fetchedAtMs` 08:19:30Z. Close that day, but driven
+by different triggers, so a notice can be current beside a percentage that is days old. Labelling
+either from the other's timestamp is a fabricated claim about age.
+
+**Only one candidate carried it**: `~/.claude.json` had both keys, `~/.claude/.claude.json` had
+neither — the same stub-versus-populated trap as the block above, resolved the same way.
+
+**This is a feature-flag cache, not an entitlement.** Whether the payload is targeted at this
+account is unproven; the evaluation happens server-side. So the panel relays it — attributed to
+Claude Code, stamped with the read time — and never states in O-view's own voice that the user's
+limits are boosted (rule 6). Nothing rescales a percentage: the meters already report utilisation
+against whatever limit is in force.
+
+**Claude Desktop's file has no equivalent.** `plan-usage-history.json` was searched for `boost`,
+`promo`, `multiplier` and `higher`: no hits. A Desktop-only machine gets no notice.
+
 ## What was ruled out on the way
 
 Recorded so nobody re-runs it: the percentages are **not** in the transcripts, `sessions/`,
