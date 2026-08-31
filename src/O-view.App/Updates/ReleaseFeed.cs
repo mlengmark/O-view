@@ -108,7 +108,10 @@ public sealed class ReleaseFeed
                         (result.Available is { } a ? $" latest={a.Tag}" : ""));
             return result;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
+        // OperationCanceledException rather than TaskCanceledException, for the reason given in
+        // RateCardFeed: the latter derives from the former, so naming only the derived type lets
+        // a plain cancellation escape as an unhandled exception instead of an "unknown" result.
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException)
         {
             _log?.Write($"update check failed {ex.GetType().Name}: {ex.Message}");
             return UpdateCheckResult.Unknown;
@@ -121,7 +124,15 @@ public sealed class ReleaseFeed
 
     private static HttpClient CreateClient()
     {
-        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        var client = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(15),
+            // As in RateCardFeed: the timeout bounds how long the read may take, not how much it
+            // may read. A release payload is tens of KB, so this is ample headroom and still caps
+            // what a hostile response could make a days-long process buffer. Past it HttpClient
+            // throws HttpRequestException, which is already the "unknown" path below.
+            MaxResponseContentBufferSize = 4 * 1024 * 1024,
+        };
         client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("O-view", "1.0"));
         client.DefaultRequestHeaders.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));

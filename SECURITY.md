@@ -26,7 +26,7 @@ Knowing what the app touches is usually enough to judge whether a report is in s
 | | |
 |---|---|
 | Credentials | **None.** O-view handles no token and performs no authentication (CLAUDE.md rule 3, [ADR-0015](docs/adr/0015-no-credential-based-usage-sources.md)). |
-| Network | Two, both unauthenticated GETs of public pages, sending nothing about you: `api.github.com`, to check for a newer release; and `platform.claude.com`, once a week, to check O-view's built-in price table against Anthropic's published one. Plus the installer download when a Windows user accepts an update. Nothing else **from O-view itself** — but see Subprocesses below. |
+| Network | Two, both unauthenticated GETs of public pages, carrying no credential and nothing about your usage: `api.github.com`, to check for a newer release; and `platform.claude.com`, once a week, to check O-view's built-in price table against Anthropic's published one. Each request does reveal your IP address and an `O-view/1.0` user agent to the host serving it, as any request does. Plus the installer download when a Windows user accepts an update. Nothing else **from O-view itself** — but see Subprocesses below. |
 | Subprocesses | **One:** `claude /usage`, run at most every 15 minutes and when you open the panel, to make Claude Code refresh its own usage figures. O-view then reads the file, as it always has. See below. |
 | Reads | Files Claude already writes on this machine — `~/.claude.json` (account fields only, never a token), plan-usage history, and session transcripts. **Read-only, always.** |
 | Writes | Its own state under `%LOCALAPPDATA%\O-view` / `~/.local/share/O-view`, plus the run-at-startup entry when you enable it. |

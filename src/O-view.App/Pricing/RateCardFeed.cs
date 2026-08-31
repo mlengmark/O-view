@@ -69,7 +69,11 @@ public sealed class RateCardFeed
             _log?.Write(drift?.Describe() ?? "rate check failed — published table did not parse");
             return drift;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
+        // OperationCanceledException, not TaskCanceledException: the latter derives from the
+        // former, so naming the derived type alone lets a plain cancellation escape. This runs
+        // fire-and-forget from both heads, where an escape is an unobserved task exception —
+        // silent, and invisible in the log that is the whole output of this check.
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException)
         {
             _log?.Write($"rate check failed {ex.GetType().Name}: {ex.Message}");
             return null;
@@ -78,7 +82,16 @@ public sealed class RateCardFeed
 
     private static HttpClient CreateClient()
     {
-        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+        var client = new HttpClient
+        {
+            Timeout = TimeSpan.FromSeconds(15),
+            // The timeout bounds how LONG the read may take, not how MUCH it may read — fifteen
+            // seconds on a fast link is a great deal of memory in a process designed to run for
+            // days. The published page measured ~50 KB; this leaves about eighty times that and
+            // still caps what a compromised host could make us buffer. Past it HttpClient throws
+            // HttpRequestException, which is already the "did not check" path below.
+            MaxResponseContentBufferSize = 4 * 1024 * 1024,
+        };
         client.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("O-view", "1.0"));
         return client;
     }
