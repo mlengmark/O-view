@@ -70,21 +70,28 @@ internal static class SampleRenderer
             var date = today.AddDays(-offset);
             var preInstall = date < installed;
             // A shape with visible within-week variation, so the intensity bands are legible.
-            long tokens = preInstall ? 0 : (long)(6_000_000 + 9_000_000 * Math.Abs(Math.Sin(offset * 0.9)));
+            // OUTPUT tokens since issue #253, so the scale is ~1% of what it was — the bars
+            // are relative to each other, but a series still in the millions would contradict
+            // the tile above it.
+            long tokens = preInstall ? 0 : (long)(60_000 + 89_000 * Math.Abs(Math.Sin(offset * 0.9)));
             series.Add(new DayUsage(date, tokens, preInstall));
         }
 
         var stats = new PanelStatistics(
-            TokensToday: 12_700_000, EstTodayUsd: 9.36m,
-            Tokens31Days: 684_600_000, Est31DaysUsd: 492.52m,
+            // The token tiles headline OUTPUT and the Est. tiles price EVERYTHING (issue
+            // #253), so these two pairs are deliberately built from different measures. The
+            // token figures are exactly the compositions' Output below; the Est. figures value
+            // all four kinds, which is why $9.36 sits beside 128.6K rather than tracking it.
+            TokensToday: 128_600, EstTodayUsd: 9.36m,
+            Tokens31Days: 6_771_000, Est31DaysUsd: 492.52m,
             RecordedDays: 10, WindowDays: 31,
             DailySeries: series,
-            CreditTokens31Days: 40_000_000, EstCredit31DaysUsd: 92.75m)
+            CreditTokens31Days: 395_000, EstCredit31DaysUsd: 92.75m)
         {
-            // Compositions that sum exactly to the totals above, in the proportions measured
-            // on real transcripts — ~89% cache reads (issue #169). A sample carrying a
-            // plausible-looking but non-summing split would render a panel contradicting
-            // itself, which is the one thing these images exist to catch.
+            // Compositions in the proportions measured on real transcripts — ~89% cache reads
+            // (issue #169) — whose Output matches the token tiles above exactly. A sample
+            // carrying a plausible-looking but non-agreeing split would render a panel
+            // contradicting itself, which is the one thing these images exist to catch.
             CompositionToday = new TokenComposition(
                 Input: 1_400, CacheCreation: 1_270_000, CacheRead: 11_300_000, Output: 128_600),
             Composition31Days = new TokenComposition(
@@ -111,7 +118,7 @@ internal static class SampleRenderer
             TokensToday = 0, EstTodayUsd = 0m,
             Tokens31Days = 0, Est31DaysUsd = 0m,
             RecordedDays = 0,
-            DailySeries = [.. series.Select(d => d with { TotalTokens = 0, PreInstall = true })],
+            DailySeries = [.. series.Select(d => d with { OutputTokens = 0, PreInstall = true })],
             CreditTokens31Days = 0, EstCredit31DaysUsd = 0m,
             // Nothing recorded means nothing to break down: the composition lines are
             // hidden here, and the scope note carries the explanation instead.

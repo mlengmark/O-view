@@ -14,7 +14,12 @@ namespace OView.Core.Models;
 /// the UI renders them as an explicit empty region, never zero-height bars
 /// (ADR-0006; CLAUDE.md rule 6).
 /// </param>
-public sealed record DayUsage(DateOnly Date, long TotalTokens, bool PreInstall);
+/// <param name="OutputTokens">
+/// Output tokens for the day — <b>not</b> everything billed on it (issue #253). Named for
+/// what it holds: the field was <c>TotalTokens</c>, and a bar sized by output under a name
+/// promising a total is the mislabelling issue #210 was about, pointed at the graph.
+/// </param>
+public sealed record DayUsage(DateOnly Date, long OutputTokens, bool PreInstall);
 
 /// <summary>
 /// Everything the popup's tiles and graph need, computed from the rollup store.
@@ -64,12 +69,18 @@ public sealed record PanelStatistics(
     public IReadOnlyList<ModelSlice> Models31Days { get; init; } = [];
 
     /// <summary>
-    /// What <see cref="TokensToday"/> is made of. Cache reads dominate it — see
-    /// <see cref="TokenComposition"/> for the measurement and why the total keeps them.
+    /// Everything billed today, split by token kind — the whole
+    /// <see cref="TokenComposition.Output"/> of which is <see cref="TokensToday"/>.
+    ///
+    /// <para><b>This is a superset of the tile above it, not a decomposition of it</b>
+    /// (issue #253). The tile headlines output; this says what else was billed alongside it,
+    /// which on a Claude Code workload is roughly nine times as much again in cached prompt
+    /// re-reads. The panel labels the two differently for that reason — see
+    /// <see cref="PanelText.TokensUsedTodayLabel"/>.</para>
     /// </summary>
     public TokenComposition CompositionToday { get; init; } = TokenComposition.Empty;
 
-    /// <summary>What <see cref="Tokens31Days"/> is made of. See <see cref="CompositionToday"/>.</summary>
+    /// <summary>Everything billed in the 31-day window. See <see cref="CompositionToday"/>.</summary>
     public TokenComposition Composition31Days { get; init; } = TokenComposition.Empty;
 
     /// <summary>
@@ -157,9 +168,12 @@ public sealed record PanelStatistics(
             ? LocalDays.DateOf(earliest, zone)
             : (DateOnly?)null;
 
+        // Output tokens, like every other figure the panel headlines (issue #253). The bar
+        // heights and the week-relative colour intensity both come from this, so the graph
+        // and the tiles above it are measuring one thing.
         var byDate = rollups
             .GroupBy(r => r.Date)
-            .ToDictionary(g => g.Key, g => g.Sum(r => r.TotalTokens));
+            .ToDictionary(g => g.Key, g => g.Sum(r => r.OutputTokens));
 
         var series = new List<DayUsage>(windowDays);
         for (var day = windowStart; day <= today; day = day.AddDays(1))
@@ -182,15 +196,19 @@ public sealed record PanelStatistics(
 
         var est31 = EstimateTotal(rollups, out var unpriced);
 
+        // Output tokens throughout (issue #253). The Est. figures beside them are unchanged
+        // and still price ALL four kinds — the token tile answers "what did I produce", the
+        // value tile answers "what would this have cost", and they are allowed to be built
+        // from different inputs precisely because each one names what it is.
         return new PanelStatistics(
-            todayRollups.Sum(r => r.TotalTokens),
+            todayRollups.Sum(r => r.OutputTokens),
             EstimateTotal(todayRollups),
-            rollups.Sum(r => r.TotalTokens),
+            rollups.Sum(r => r.OutputTokens),
             est31,
             recordedDays,
             windowDays,
             series,
-            creditRollups.Sum(r => r.TotalTokens),
+            creditRollups.Sum(r => r.OutputTokens),
             EstimateTotal(creditRollups))
         {
             UnpricedModels = unpriced,
@@ -220,7 +238,7 @@ public sealed record PanelStatistics(
             .Select(g => new ModelSlice(
                 g.Key,
                 ModelDisplayName.For(g.Key),
-                g.Sum(r => r.TotalTokens),
+                g.Sum(r => r.OutputTokens),
                 EstimateTotal(g.ToList())))
             .OrderByDescending(s => s.Tokens)
             .ToList();

@@ -71,7 +71,7 @@ public class PanelStatisticsTests : IDisposable
         // 2026-07-20 is inside the recorded era with no usage — a genuine zero.
         var idle = stats.DailySeries.Single(d => d.Date == new DateOnly(2026, 7, 20));
         Assert.False(idle.PreInstall);
-        Assert.Equal(0, idle.TotalTokens);
+        Assert.Equal(0, idle.OutputTokens);
     }
 
     [Fact]
@@ -314,7 +314,7 @@ public class PanelStatisticsTests : IDisposable
         Assert.Equal(400, stats.TokensToday);
 
         // The tokens are not lost — they are on the bar for the day the reader had them.
-        Assert.Equal(100, stats.DailySeries.Single(d => d.Date == new DateOnly(2026, 8, 25)).TotalTokens);
+        Assert.Equal(100, stats.DailySeries.Single(d => d.Date == new DateOnly(2026, 8, 25)).OutputTokens);
         Assert.Equal(500, stats.Tokens31Days);
     }
 
@@ -389,7 +389,7 @@ public class PanelStatisticsTests : IDisposable
         var stats = PanelStatistics.Build(
             _store, DateTimeOffset.Parse("2026-10-26T12:00:00Z"), london);
 
-        Assert.Equal(30, stats.DailySeries.Single(d => d.Date == new DateOnly(2026, 10, 25)).TotalTokens);
+        Assert.Equal(30, stats.DailySeries.Single(d => d.Date == new DateOnly(2026, 10, 25)).OutputTokens);
         Assert.Equal(40, stats.TokensToday);
     }
 

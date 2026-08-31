@@ -100,6 +100,28 @@ public static class PanelPalette
         // worst CVD ΔE 11.0 light / 12.2 dark against the two named slots it appears with.
         ["SeriesOther"] = "#8A8A8A",
 
+        // ── token-kind ramp, for the composition bars (issue #253) ───────────────
+        //
+        // Deliberately ACHROMATIC, and that is the whole design. The categorical trio
+        // above means "which model", panel-wide and by decision — ModelBreakdown
+        // computes one slot order so a model wears one colour everywhere. Reusing
+        // those hues for token kinds would put blue on "Opus 5" in a flipped tile and
+        // on "cache read" in the bar directly beneath it, on screen together.
+        //
+        // Brightness carries the encoding instead, ordered by how much the reader
+        // cares: output is the loudest step, cache read the quietest. That ordering is
+        // real information rather than decoration, it needs no hue, and it leaves the
+        // three chromatic slots to mean exactly one thing.
+        //
+        // Steps run away from the surface in each theme — lighter on dark, darker on
+        // light — so the ramp reads the same way round in both. Identity never rests
+        // on the step alone: every segment is named in the legend and carries a hover
+        // card, which is the same relief the series colours run on.
+        ["TokenKindOutput"] = light ? "#1F1F1F" : "#F0F0F0",
+        ["TokenKindInput"] = light ? "#656565" : "#A0A0A0",
+        ["TokenKindCacheWrite"] = light ? "#9A9A9A" : "#6C6C6C",
+        ["TokenKindCacheRead"] = light ? "#C4C4C4" : "#4A4A4A",
+
         // Not a panel surface: a desktop stand-in, used only by the verification renders
         // to composite a transparent-cornered flyout onto something, so its corner radius
         // and border are visible. One step OUTSIDE the palette in each theme — light greys

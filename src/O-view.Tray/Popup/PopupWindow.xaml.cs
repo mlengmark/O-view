@@ -55,7 +55,9 @@ public partial class PopupWindow : Window, IFlyout
         Deactivated += (_, _) => _flyout.OnDeactivated();
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) _flyout.BeginClose(); };
         _disclosure = new DisclosureAnimation(
-            this, TokenExplainBody, TokenExplainChevronRotation,
+            // No chevron: the Bars/Breakdown switch shows its state by which segment is lit
+            // (issue #253), and an arrow beside it would be a second indicator of one thing.
+            this, TokenBreakdownView, null,
             // Re-dock, exactly as the menu does when its threshold list opens (issue #33).
             // The panel is docked by its top-left and is SizeToContent, so growing it without
             // this pushes the new content down into the taskbar — which is the failure the
@@ -67,11 +69,14 @@ public partial class PopupWindow : Window, IFlyout
             // bottom edge stays pinned to the docked corner for the whole transition.
             () => _flyout.Redock(ActualWidth, DockHeight));
 
-        TokenExplainToggle.Click += (_, _) => ToggleComposition();
+        // Checked fires on the segment being turned ON only, so one handler per segment is
+        // one handler per state — no need to read IsChecked back off the group.
+        TokenViewBars.Checked += (_, _) => ShowBreakdown(false);
+        TokenViewBreakdown.Checked += (_, _) => ShowBreakdown(true);
     }
 
     /// <summary>
-    /// Opens or closes the token explanation, as a fold rather than as a jump.
+    /// Switches between the two views of what was billed, as a fold rather than as a jump.
     ///
     /// <para><b>The panel is never laid out at the far end of the fold.</b> The obvious order —
     /// apply the final state, lay it out, then animate back from where the fold was — puts the
@@ -82,10 +87,15 @@ public partial class PopupWindow : Window, IFlyout
     /// height, and every size the window takes from here is one the fold puts it at and
     /// re-docks it for.</para>
     /// </summary>
-    private void ToggleComposition()
+    private void ShowBreakdown(bool expanded)
     {
-        _compositionExpanded = !_compositionExpanded;
-        RunFold(_disclosure, _compositionExpanded, TokenCompositionLine.ActualWidth);
+        if (_compositionExpanded == expanded)
+        {
+            return;
+        }
+
+        _compositionExpanded = expanded;
+        RunFold(_disclosure, expanded, TokenBarsView.ActualWidth);
     }
 
     /// <summary>
@@ -126,7 +136,7 @@ public partial class PopupWindow : Window, IFlyout
     }
 
     /// <summary>
-    /// Opens the token explanation for a verification render. The disclosure resets on every
+    /// Opens the breakdown for a verification render. The view resets to Bars on every
     /// Populate, so a sample of the expanded state cannot be produced any other way — and an
     /// unrendered state is how the no-data banner spent its whole life saying the wrong
     /// thing (issues #58, #170).
@@ -134,11 +144,11 @@ public partial class PopupWindow : Window, IFlyout
     internal void ExpandCompositionForVerification() => SetCompositionExpanded(true);
 
     /// <summary>
-    /// Folds the explanation from outside, for <c>--fold-check</c>. The real transition,
+    /// Folds the breakdown from outside, for <c>--fold-check</c>. The real transition,
     /// not the instant state: an animation's completion is the thing being checked, and this
     /// app has shipped a missed one before (<see cref="FlyoutAnimation"/>).
     /// </summary>
-    internal void ToggleCompositionForVerification() => ToggleComposition();
+    internal void ToggleCompositionForVerification() => ShowBreakdown(!_compositionExpanded);
 
     /// <summary>
     /// The height to dock against: the content's freshly measured size, not the window's.
@@ -159,7 +169,7 @@ public partial class PopupWindow : Window, IFlyout
     /// Where the disclosure row sits on the physical screen, so <c>--fold-check</c> can cut
     /// its filmstrip to the band that actually moves rather than to the whole panel.
     /// </summary>
-    internal double DisclosureScreenTop => TokenExplainToggle.PointToScreen(new Point(0, 0)).Y;
+    internal double DisclosureScreenTop => TokenViewBars.PointToScreen(new Point(0, 0)).Y;
 
     /// <summary>
     /// The folding body's current height — what <c>--fold-check</c> samples.
@@ -173,13 +183,13 @@ public partial class PopupWindow : Window, IFlyout
     {
         get
         {
-            if (TokenExplainBody.Visibility != Visibility.Visible)
+            if (TokenBreakdownView.Visibility != Visibility.Visible)
             {
                 return 0;
             }
 
-            var height = (double)TokenExplainBody.GetValue(HeightProperty);
-            return double.IsNaN(height) ? TokenExplainBody.ActualHeight : height;
+            var height = (double)TokenBreakdownView.GetValue(HeightProperty);
+            return double.IsNaN(height) ? TokenBreakdownView.ActualHeight : height;
         }
     }
 
@@ -196,7 +206,7 @@ public partial class PopupWindow : Window, IFlyout
         // height, which is only known once it has been measured at that height.
         SetCompositionExpanded(true);
         UpdateLayout();
-        _disclosure.ApplyPartial(fraction, TokenExplainBody.ActualHeight);
+        _disclosure.ApplyPartial(fraction, TokenBreakdownView.ActualHeight);
     }
 
     /// <summary>
@@ -565,6 +575,7 @@ public partial class PopupWindow : Window, IFlyout
         // the scope note owns that state and says considerably more (issue #171).
         PopulateComposition(
             stats.CompositionToday,
+            stats.Composition31Days,
             (ScopeReport ?? TranscriptScopeReport.Inspect()).CoverageLine());
     }
 
@@ -598,27 +609,273 @@ public partial class PopupWindow : Window, IFlyout
         line.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void PopulateComposition(TokenComposition composition, string coverageLine)
+    private void PopulateComposition(
+        TokenComposition today, TokenComposition window31, string coverageLine)
     {
-        var show = composition.HasTokens;
-        TokenCompositionLine.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        TokenExplainToggle.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        // Today can be empty on a machine that has history but has not worked yet, so the
+        // section shows while EITHER window has something to say. Both empty means there is
+        // nothing to break down, and the scope note above already says considerably more.
+        var show = today.HasTokens || window31.HasTokens;
+        TokensUsedSection.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+
+        TokenBarsView.Children.Clear();
+        TokenBreakdownView.Children.Clear();
 
         if (!show)
         {
-            TokenExplainBody.Visibility = Visibility.Collapsed;
+            TokenBreakdownView.Visibility = Visibility.Collapsed;
             return;
         }
 
-        TokenCompositionLine.Text = PanelText.TokenCompositionLine(
-            composition, PanelText.TokenCompositionTodayScope);
-        TokenCompositionHint.Text = PanelText.TokenCompositionHint(composition);
-        TokenExplainLabel.Text = PanelText.TokenExplainToggleLabel;
+        TokensUsedHeading.Text = PanelText.TokensUsedHeading;
+        TokenViewBars.Content = PanelText.TokenViewBarsLabel;
+        TokenViewBreakdown.Content = PanelText.TokenViewBreakdownLabel;
 
-        TokenCoverageLine.Text = coverageLine;
-        TokenCoverageLine.Visibility = coverageLine.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        AddBar(today, PanelText.TokensUsedTodayLabel, PanelText.TokenWindowToday, first: true);
+        AddBar(window31, PanelText.TokensUsed31DaysLabel, PanelText.TokenWindow31Days, first: false);
 
+        TokenBreakdownView.Children.Add(BuildBreakdown(today, window31));
+
+        SetLine(TokenCoverageLine, coverageLine);
+
+        // Back to Bars on every open. The panel is a transient view, not a setting — the same
+        // reason StatTile resets its own expansion.
         SetCompositionExpanded(false);
+    }
+
+    /// <summary>
+    /// One composition bar: heading and billed total, the segmented track, and the legend
+    /// that carries every exact figure the track's floors do not.
+    /// </summary>
+    private void AddBar(TokenComposition composition, string heading, string window, bool first)
+    {
+        var block = new StackPanel { Margin = new Thickness(0, first ? 0 : 9, 0, 0) };
+
+        var head = new Grid();
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+        var title = new TextBlock
+        {
+            Text = heading,
+            FontSize = 10.5,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Foreground = (Brush)FindResource("TextSecondary"),
+        };
+        Grid.SetColumn(title, 0);
+        head.Children.Add(title);
+
+        var total = new TextBlock
+        {
+            Text = FormatTokens(composition.Total),
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = (Brush)FindResource("TextPrimary"),
+        };
+        Grid.SetColumn(total, 1);
+        head.Children.Add(total);
+        block.Children.Add(head);
+
+        var segments = composition.InDisplayOrder.Where(s => s.Tokens > 0).ToList();
+
+        // The track is measured, not assumed: the panel's content width moves with density
+        // and DPI, and TokenBarGeometry's floor is expressed in pixels. Widths are therefore
+        // applied on SizeChanged rather than at build time, when ActualWidth is still zero.
+        var track = new Grid { Height = 12, Margin = new Thickness(0, 4, 0, 0) };
+        for (var i = 0; i < segments.Count; i++)
+        {
+            track.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0) });
+
+            var slice = segments[i];
+            var swatch = KindBrush(slice.Kind);
+            var piece = new Border
+            {
+                Background = swatch,
+                // Rounded only at the ends. A Border does not clip its children to a corner
+                // radius, so a rounded container over square segments shows the corners
+                // through — this gets the pill without a hand-maintained Clip geometry.
+                CornerRadius = new CornerRadius(
+                    i == 0 ? 3 : 0, i == segments.Count - 1 ? 3 : 0,
+                    i == segments.Count - 1 ? 3 : 0, i == 0 ? 3 : 0),
+                ToolTip = SegmentCard(slice, window, swatch),
+            };
+            HoverCard.ApplyTiming(piece);
+            Grid.SetColumn(piece, i);
+            track.Children.Add(piece);
+        }
+
+        track.SizeChanged += (_, _) => LayOutSegments(track, composition);
+        block.Children.Add(track);
+
+        // Every figure the bar cannot draw honestly. This is what makes the 3 px floor safe,
+        // so it is not optional decoration — see TokenBarGeometry.
+        var legend = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
+        foreach (var slice in segments)
+        {
+            var swatch = KindBrush(slice.Kind);
+            var entry = new StackPanel
+            {
+                Orientation = System.Windows.Controls.Orientation.Horizontal,
+                Margin = new Thickness(0, 0, 10, 0),
+                ToolTip = SegmentCard(slice, window, swatch),
+            };
+            HoverCard.ApplyTiming(entry);
+
+            entry.Children.Add(new Border
+            {
+                Width = 8,
+                Height = 8,
+                CornerRadius = new CornerRadius(2),
+                Background = swatch,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            entry.Children.Add(new TextBlock
+            {
+                Text = $"{PanelText.TokenKindLabel(slice.Kind)} {FormatTokens(slice.Tokens)}",
+                FontSize = 10.5,
+                Margin = new Thickness(5, 0, 0, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (Brush)FindResource("TextSecondary"),
+            });
+            legend.Children.Add(entry);
+        }
+
+        block.Children.Add(legend);
+        TokenBarsView.Children.Add(block);
+    }
+
+    /// <summary>
+    /// Applies the shared geometry to a laid-out track. Called on every size change, so the
+    /// floors are re-decided against the width the bar actually got rather than a guess.
+    /// </summary>
+    private static void LayOutSegments(Grid track, TokenComposition composition)
+    {
+        var segments = TokenBarGeometry.Segments(composition, track.ActualWidth);
+        if (segments.Count != track.ColumnDefinitions.Count)
+        {
+            return;
+        }
+
+        for (var i = 0; i < segments.Count; i++)
+        {
+            track.ColumnDefinitions[i].Width = new GridLength(segments[i].Width);
+        }
+    }
+
+    /// <summary>
+    /// The card behind one segment. Built through <see cref="HoverCard.Figure"/> rather than
+    /// as a third card shape — a kind's figure with a line naming it is exactly what that
+    /// shape is for, and the panel has shipped two unrelated tooltip designs before.
+    /// </summary>
+    private ToolTip SegmentCard(TokenKindSlice slice, string window, Brush swatch) =>
+        HoverCard.Figure(
+            this,
+            FormatTokens(slice.Tokens),
+            PanelText.TokenCardCaption(slice.Kind, slice.Share, slice.EstUsd, window),
+            swatch);
+
+    private Brush KindBrush(TokenKind kind) =>
+        (Brush)FindResource(TokenBarGeometry.PaletteKey(kind));
+
+    /// <summary>
+    /// The breakdown table: one row per kind, with <b>a share column per window</b>.
+    ///
+    /// <para>Two share columns rather than one shared, because the windows have measurably
+    /// different shapes — cache write ran 10.3% of a day against 0.93% of the month on the
+    /// machine this was designed against. One column between two token columns would be read
+    /// against whichever it sat nearer, which is the ambiguity issue #169 was reported about
+    /// in its original form.</para>
+    /// </summary>
+    private Grid BuildBreakdown(TokenComposition today, TokenComposition window31)
+    {
+        var table = new Grid();
+        table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+        for (var c = 0; c < 4; c++)
+        {
+            table.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        }
+
+        var muted = (Brush)FindResource("TextMuted");
+        var secondary = (Brush)FindResource("TextSecondary");
+        var primary = (Brush)FindResource("TextPrimary");
+
+        AddRow(table, 0, null,
+            PanelText.TokenBreakdownKindHeader, PanelText.TokenBreakdownTodayHeader,
+            PanelText.TokenBreakdownShareHeader, PanelText.TokenBreakdown31DaysHeader,
+            PanelText.TokenBreakdownShareHeader, muted, 9.5);
+
+        // Driven off today's order so both columns describe the same row, even where a kind
+        // is present in one window and absent from the other.
+        var kinds = today.HasTokens ? today.InDisplayOrder : window31.InDisplayOrder;
+        var row = 1;
+        foreach (var slice in kinds)
+        {
+            var other = window31.InDisplayOrder.First(s => s.Kind == slice.Kind);
+            var mine = today.InDisplayOrder.First(s => s.Kind == slice.Kind);
+
+            AddRow(table, row++, KindBrush(slice.Kind),
+                PanelText.TokenKindLabel(slice.Kind),
+                FormatTokens(mine.Tokens), PanelText.TokenShare(mine.Share),
+                FormatTokens(other.Tokens), PanelText.TokenShare(other.Share),
+                secondary, 10.5);
+        }
+
+        AddRow(table, row, null,
+            PanelText.TokenBreakdownTotalLabel,
+            FormatTokens(today.Total), PanelText.TokenShare(today.HasTokens ? 1 : 0),
+            FormatTokens(window31.Total), PanelText.TokenShare(window31.HasTokens ? 1 : 0),
+            primary, 10.5, bold: true);
+
+        return table;
+    }
+
+    private static void AddRow(
+        Grid table, int row, Brush? chip, string kind, string todayTokens, string todayShare,
+        string windowTokens, string windowShare, Brush foreground, double fontSize, bool bold = false)
+    {
+        table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+        var label = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+        if (chip is not null)
+        {
+            label.Children.Add(new Border
+            {
+                Width = 8,
+                Height = 8,
+                CornerRadius = new CornerRadius(2),
+                Background = chip,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 6, 0),
+            });
+        }
+
+        label.Children.Add(new TextBlock
+        {
+            Text = kind,
+            FontSize = fontSize,
+            FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
+            Foreground = foreground,
+        });
+        Grid.SetRow(label, row);
+        Grid.SetColumn(label, 0);
+        table.Children.Add(label);
+
+        var cells = new[] { todayTokens, todayShare, windowTokens, windowShare };
+        for (var i = 0; i < cells.Length; i++)
+        {
+            var cell = new TextBlock
+            {
+                Text = cells[i],
+                FontSize = fontSize,
+                FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
+                TextAlignment = TextAlignment.Right,
+                Margin = new Thickness(10, 2, 0, 2),
+                Foreground = foreground,
+            };
+            Grid.SetRow(cell, row);
+            Grid.SetColumn(cell, i + 1);
+            table.Children.Add(cell);
+        }
     }
 
     /// <summary>
@@ -629,6 +886,14 @@ public partial class PopupWindow : Window, IFlyout
     private void SetCompositionExpanded(bool expanded)
     {
         _compositionExpanded = expanded;
+
+        // The switch is the state's only visible indicator, so it has to move with it —
+        // including on the Populate reset, where nothing was clicked. Set before Apply and
+        // guarded by the equality check in ShowBreakdown, so the Checked handler this
+        // raises finds the state already correct and does not fold a second time.
+        TokenViewBars.IsChecked = !expanded;
+        TokenViewBreakdown.IsChecked = expanded;
+
         _disclosure.Apply(expanded);
     }
 
@@ -756,7 +1021,7 @@ public partial class PopupWindow : Window, IFlyout
         var barAreaHeight = Math.Max(18, GraphHost.Height - labelAreaHeight);
         var labelTop = barAreaHeight + 6;
         var col = width / series.Count;
-        var globalMax = Math.Max(1, series.Max(d => d.TotalTokens));
+        var globalMax = Math.Max(1, series.Max(d => d.OutputTokens));
 
         // The columns are LOCAL days (issue #211), so everything drawn over them has to be
         // placed in the same frame: a gridline positioned as though every column were 24 UTC
@@ -769,7 +1034,7 @@ public partial class PopupWindow : Window, IFlyout
         var weekMax = series
             .Where(d => !d.PreInstall)
             .GroupBy(weeks.IndexOf)
-            .ToDictionary(g => g.Key, g => Math.Max(1, g.Max(d => d.TotalTokens)));
+            .ToDictionary(g => g.Key, g => Math.Max(1, g.Max(d => d.OutputTokens)));
 
         var labelBrush = (Brush)FindResource("TextMuted");
 
@@ -779,10 +1044,10 @@ public partial class PopupWindow : Window, IFlyout
             var x = i * col;
 
             // Bar — height by absolute tokens, colour by within-week intensity.
-            if (!day.PreInstall && day.TotalTokens > 0)
+            if (!day.PreInstall && day.OutputTokens > 0)
             {
-                var intensity = day.TotalTokens / (double)weekMax[weeks.IndexOf(day)];
-                var height = Math.Max(2, barAreaHeight * day.TotalTokens / globalMax);
+                var intensity = day.OutputTokens / (double)weekMax[weeks.IndexOf(day)];
+                var height = Math.Max(2, barAreaHeight * day.OutputTokens / globalMax);
                 var barWidth = Math.Max(2, col - 2);
                 var bar = new Rectangle
                 {
@@ -797,7 +1062,7 @@ public partial class PopupWindow : Window, IFlyout
                     // otherwise entirely rounded cards on one palette.
                     ToolTip = HoverCard.Figure(
                         this,
-                        $"{FormatTokens(day.TotalTokens)} tokens",
+                        $"{FormatTokens(day.OutputTokens)} tokens",
                         day.Date.ToString("dddd d MMMM", CultureInfo.InvariantCulture)),
                 };
                 HoverCard.ApplyTiming(bar);

@@ -44,6 +44,49 @@
                     </Setter.Value>
                 </Setter>
             </Style>
+
+            <!-- One segment of the Bars/Breakdown switch (issue #253). Templated off
+                 RadioButton so the group keeps exclusivity, arrow-key traversal and the
+                 correct accessibility role; the bullet is replaced, not hidden, because a
+                 collapsed bullet still reserves its width and shifts the label. -->
+            <Style x:Key="ViewSwitchButton" TargetType="RadioButton">
+                <Setter Property="FontSize" Value="10.5"/>
+                <Setter Property="Padding" Value="8,3"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <Setter Property="Foreground" Value="{DynamicResource TextMuted}"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="RadioButton">
+                            <Border x:Name="Bd" Background="Transparent" CornerRadius="3"
+                                    Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                                <TextBlock Text="{TemplateBinding Content}"
+                                           FontSize="{TemplateBinding FontSize}"
+                                           Foreground="{TemplateBinding Foreground}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Bd" Property="Background"
+                                            Value="{DynamicResource TileHover}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
+                                </Trigger>
+                                <!-- Checked wins over hover: it is state, not feedback, and a
+                                     hover that repaints the selected segment reads as though
+                                     the selection moved with the pointer. -->
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="Bd" Property="Background"
+                                            Value="{DynamicResource BarTrack}"/>
+                                    <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Bd" Property="Background"
+                                            Value="{DynamicResource TilePressed}"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
         </ResourceDictionary>
     </Window.Resources>
 
@@ -147,48 +190,66 @@
             <TextBlock x:Name="TokenScopeLine" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"
                        Foreground="{DynamicResource TextMuted}"/>
 
-            <!-- What the token totals are made of (issue #169). ~90% of a Claude Code
-                 total is cached prompt re-reads, which is why the tiles read in millions
-                 where Claude's own context figure reads in thousands. The composition is
-                 the evidence; the hint below it is the sentence that stops the two being
-                 compared. Both are Collapsed when there is nothing to break down. -->
-            <TextBlock x:Name="TokenCompositionLine" FontSize="11" TextWrapping="Wrap" Margin="0,8,0,0"
-                       Foreground="{DynamicResource TextPrimary}" Visibility="Collapsed"/>
+            <!-- What was billed, beside the tiles that headline only output (issue #253).
+                 ~89% of a Claude Code total is cached prompt re-reads, which is why the
+                 tiles used to read in millions where Claude's own context figure reads in
+                 thousands. Drawn to scale that leaves output at 4 px of a 370 px track, so
+                 the bar's job is the composition and the tiles' job is the headline.
 
-            <!-- The figures are the answer for a reader who already knows what they mean;
-                 the prose behind this toggle is for the one who does not, and it was four
-                 lines of standing text every user read every time. Folded away, but one
-                 click from the panel that prompted the question. -->
-            <Button x:Name="TokenExplainToggle" Style="{StaticResource DisclosureButton}"
-                    HorizontalAlignment="Left" Margin="0,3,0,0" Cursor="Hand" Visibility="Collapsed">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock x:Name="TokenExplainLabel" FontSize="11"
-                               Foreground="{DynamicResource TextMuted}"/>
-                    <!-- One geometry, turned rather than swapped: the arrow rotates through
-                         the fold on the same curve as the body (DisclosureAnimation), and a
-                         half-turn of a down chevron IS the up chevron it used to be
-                         re-parsed into. -->
-                    <Path x:Name="TokenExplainChevron" VerticalAlignment="Center" Margin="5,1,0,0"
-                          Data="M0,0 L4,4 L8,0" RenderTransformOrigin="0.5,0.5"
-                          Stroke="{DynamicResource TextMuted}" StrokeThickness="1.4"
-                          StrokeStartLineCap="Round" StrokeEndLineCap="Round">
-                        <Path.RenderTransform>
-                            <RotateTransform x:Name="TokenExplainChevronRotation"/>
-                        </Path.RenderTransform>
-                    </Path>
-                </StackPanel>
-            </Button>
+                 This replaces the one-line split and its "Why so large?" disclosure. The
+                 disclosure answered a question the panel no longer prompts: nothing on
+                 screen is unexpectedly large any more. Collapsed entirely when there is
+                 nothing to break down — a composition of zero explains nothing. -->
+            <StackPanel x:Name="TokensUsedSection" Margin="0,12,0,0" Visibility="Collapsed">
 
-            <!-- Why the total is so large (issue #169), and which surfaces it is made of
-                 (issue #171). Both answer "is this number right?", so they fold together. -->
-            <!-- ClipToBounds is required, not cosmetic: the fold animates this panel's
-                 Height, and without it the text is drawn at full size outside the height it
-                 has been given — over the section below and past the panel's own border. -->
-            <StackPanel x:Name="TokenExplainBody" Visibility="Collapsed" ClipToBounds="True">
-                <TextBlock x:Name="TokenCompositionHint" FontSize="11" TextWrapping="Wrap" Margin="0,4,0,0"
-                           Foreground="{DynamicResource TextSecondary}"/>
-                <TextBlock x:Name="TokenCoverageLine" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"
-                           Foreground="{DynamicResource TextMuted}"/>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="TokensUsedHeading" Grid.Column="0" FontSize="11"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextSecondary}"/>
+
+                    <!-- RadioButtons rather than ToggleButtons: the two views are mutually
+                         exclusive, and the group gives arrow-key traversal and the correct
+                         accessibility role without a line of code. -->
+                    <Border Grid.Column="1" Background="{DynamicResource TileBg}" CornerRadius="4" Padding="2">
+                        <StackPanel Orientation="Horizontal">
+                            <RadioButton x:Name="TokenViewBars" GroupName="TokenView"
+                                         Style="{StaticResource ViewSwitchButton}" IsChecked="True"/>
+                            <RadioButton x:Name="TokenViewBreakdown" GroupName="TokenView"
+                                         Style="{StaticResource ViewSwitchButton}" Margin="2,0,0,0"/>
+                        </StackPanel>
+                    </Border>
+                </Grid>
+
+                <!-- Both views are built in code: the segment count varies with how many
+                     kinds are present, and a kind with no tokens gets no segment at all
+                     (TokenBarGeometry). Templating that in XAML would put the drop rule in
+                     two places. -->
+                <StackPanel x:Name="TokenBarsView" Margin="0,6,0,0"/>
+
+                <!-- The breakdown FOLDS in beneath the bars rather than replacing them, which
+                     is the one place this departs from the mockup and does so deliberately.
+                     Switching views changes the panel's height, and a panel that fits one way
+                     and not the other is clipped by the taskbar — the exact failure the
+                     disclosure's re-dock path was built to prevent, and the reason the
+                     fold-check harness exists. Reusing it is worth more than the pixels replacing the
+                     bars would save, and keeping the shape on screen while reading the figures
+                     is the better reading order anyway.
+
+                     ClipToBounds is required, not cosmetic: the fold animates this panel's
+                     Height, and without it the table is drawn at full size outside the height
+                     it has been given — over the section below and past the panel's border. -->
+                <StackPanel x:Name="TokenBreakdownView" Margin="0,6,0,0"
+                            Visibility="Collapsed" ClipToBounds="True"/>
+
+                <!-- Which surfaces these figures are made of (issue #171). It lives under the
+                     breakdown rather than the bars: it is provenance, which is what a reader
+                     switching to the detail view is asking about. -->
+                <TextBlock x:Name="TokenCoverageLine" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"
+                           Foreground="{DynamicResource TextMuted}" Visibility="Collapsed"/>
             </StackPanel>
 
             <!-- Scope note. The bars above and the tiles here measure DIFFERENT things:
