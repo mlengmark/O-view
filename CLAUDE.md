@@ -316,3 +316,4 @@ Four rules bind, and three of them exist because of a failure mode rather than a
 
 - [docs/adr/](docs/adr/) — decisions and their rationale
 - [docs/findings/jsonl-schema.md](docs/findings/jsonl-schema.md) — verified local data schema
+- [docs/reference/pricing.md](docs/reference/pricing.md) — how tokens are priced: the five published columns per model, the `speed` and `inference_geo` modifiers, and fail-to-unknown. Point at it rather than restating a rate — two copies of a rate is how the cache-write comment stayed accurate about itself while being wrong about the data (issue #255)

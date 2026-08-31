@@ -51,13 +51,6 @@ public readonly record struct UsageModifiers(ModifierValue Speed, ModifierValue 
         Speed == ModifierValue.Unrecognised || InferenceGeo == ModifierValue.Unrecognised;
 
     /// <summary>
-    /// Classifies the raw <c>usage.speed</c> and <c>usage.inference_geo</c> strings.
-    ///
-    /// <para>Null covers three cases that are one case here: the field was absent, it was
-    /// JSON <c>null</c> (observed on a Cowork audit record), or the row predates this build
-    /// tracking it. All three mean "nothing said the price was modified".</para>
-    /// </summary>
-    /// <summary>
     /// What an unrecognised value is stored as. The exact string is not kept — the finding is
     /// that <i>something</i> unrecognised was reported, and the transcript still holds the
     /// value itself.
@@ -91,6 +84,13 @@ public readonly record struct UsageModifiers(ModifierValue Speed, ModifierValue 
         _ => null,
     };
 
+    /// <summary>
+    /// Classifies the raw <c>usage.speed</c> and <c>usage.inference_geo</c> strings.
+    ///
+    /// <para>Null covers three cases that are one case here: the field was absent, it was
+    /// JSON <c>null</c> (observed on a Cowork audit record), or the row predates this build
+    /// tracking it. All three mean "nothing said the price was modified".</para>
+    /// </summary>
     public static UsageModifiers From(string? speed, string? inferenceGeo) => new(
         speed switch
         {

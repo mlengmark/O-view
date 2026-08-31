@@ -75,6 +75,13 @@ public sealed record RateCard(
     public bool IsStaleOn(DateOnly today) => today.DayNumber - AsOf.DayNumber > StaleAfter.TotalDays;
 
     /// <summary>
+    /// What to call this card's provenance on screen. Here rather than at each display site so
+    /// the panel's caveat and the diagnostics bundle cannot come to name the same source two
+    /// ways — the second reader is the one that drifts.
+    /// </summary>
+    public string SourceLabel => Source == RateCardSource.Bundled ? "bundled" : "user file";
+
+    /// <summary>
     /// The entry for a model id, or null when the model is unrecognised.
     ///
     /// <para>Longest prefix wins, decided by prefix <em>length</em> rather than by declaration

@@ -372,8 +372,7 @@ public static class DiagnosticsBundle
     {
         var age = today.DayNumber - card.AsOf.DayNumber;
 
-        text.AppendLine($"  rate card     : {card.Models.Count} model(s), "
-                        + $"{(card.Source == RateCardSource.Bundled ? "bundled" : "user file")}, "
+        text.AppendLine($"  rate card     : {card.Models.Count} model(s), {card.SourceLabel}, "
                         + $"as of {card.AsOf:yyyy-MM-dd} ({age} day(s) ago"
                         + $"{(card.IsStaleOn(today) ? ", stated on the Est. tiles" : "")})");
         text.AppendLine($"    drift check : weekly against {PublishedRates.PricingUrl} — "
