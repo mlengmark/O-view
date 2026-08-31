@@ -408,7 +408,7 @@ public static class PanelText
     /// </summary>
     public static string RateAge(RateCard card) => string.Create(
         CultureInfo.InvariantCulture,
-        $"rates: {(card.Source == RateCardSource.Bundled ? "bundled" : "user file")}, as of {card.AsOf:d MMM yyyy}");
+        $"rates: {card.SourceLabel}, as of {card.AsOf:d MMM yyyy}");
 
     /// <summary>
     /// What the token and cost tiles permanently do not cover (issue #235).
