@@ -89,7 +89,11 @@ public static class ModelCatalog
         new("claude-opus-4-7", "Opus 4.7",   5.00m, 25.00m, BillingClass.Plan),
         new("claude-opus-4-6", "Opus 4.6",   5.00m, 25.00m, BillingClass.Plan),
         new("claude-opus-4-5", "Opus 4.5",   5.00m, 25.00m, BillingClass.Plan),
-        new("claude-sonnet-5", "Sonnet 5",   3.00m, 15.00m, BillingClass.Plan),
+        new("claude-sonnet-5", "Sonnet 5",   2.00m, 10.00m, BillingClass.Plan),
+        // Covers Sonnet 4, 4.5 and 4.6 — three models on one row, correct only because
+        // all three share $3/$15. Load-bearing: longest-prefix matching will keep
+        // resolving all of them here, so if one diverges it needs its own row rather
+        // than a rate change here (GitHub issue #256).
         new("claude-sonnet-4", "Sonnet 4",   3.00m, 15.00m, BillingClass.Plan),
         new("claude-haiku-4-5", "Haiku 4.5", 1.00m,  5.00m, BillingClass.Plan),
     ];

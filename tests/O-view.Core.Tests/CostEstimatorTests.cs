@@ -37,7 +37,7 @@ public class CostEstimatorTests
         var fable = CostEstimator.EstimateUsd("claude-fable-5", 1_000_000, 0, 0, 0);
 
         Assert.Equal(5.00m, opus);
-        Assert.Equal(3.00m, sonnet);
+        Assert.Equal(2.00m, sonnet);
         Assert.Equal(1.00m, haiku);
         Assert.Equal(10.00m, fable);
     }
@@ -51,6 +51,29 @@ public class CostEstimatorTests
         Assert.Equal(25.00m, CostEstimator.EstimateUsd("claude-opus-5", 0, 0, 0, 1_000_000));
         // A dated snapshot of the same model must resolve via the prefix.
         Assert.Equal(5.00m, CostEstimator.EstimateUsd("claude-opus-5-20260501", 1_000_000, 0, 0, 0));
+    }
+
+    [Fact]
+    public void Sonnet5_IsPriced_AtPublishedRate()
+    {
+        // The table recorded $3/$15 — a price increase that had been scheduled for
+        // 2026-09-01 when the table was written, and was later cancelled. It was a
+        // forecast, not a stale rate, so no freshness check would have caught it; this
+        // test pins the published figure so a future edit has to be deliberate
+        // (GitHub issue #256). Published rate: $2 in / $10 out per MTok.
+        Assert.Equal(2.00m, CostEstimator.EstimateUsd("claude-sonnet-5", 1_000_000, 0, 0, 0));
+        Assert.Equal(10.00m, CostEstimator.EstimateUsd("claude-sonnet-5", 0, 0, 0, 1_000_000));
+        Assert.Equal(2.00m, CostEstimator.EstimateUsd("claude-sonnet-5-20260501", 1_000_000, 0, 0, 0));
+    }
+
+    [Fact]
+    public void Sonnet5_DoesNotCollideWithSonnet4Prefixes()
+    {
+        // The two rows no longer share a rate, so the prefix boundary is now
+        // load-bearing for money rather than only for the display name.
+        Assert.Equal(3.00m, CostEstimator.EstimateUsd("claude-sonnet-4-6", 1_000_000, 0, 0, 0));
+        Assert.Equal(3.00m, CostEstimator.EstimateUsd("claude-sonnet-4-5", 1_000_000, 0, 0, 0));
+        Assert.Equal(2.00m, CostEstimator.EstimateUsd("claude-sonnet-5", 1_000_000, 0, 0, 0));
     }
 
     [Fact]
