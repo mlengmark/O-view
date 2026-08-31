@@ -2,9 +2,14 @@ namespace OView.Core.Models;
 
 /// <summary>
 /// One model's contribution to a tile's total (GitHub issue #37) — the per-model
-/// breakdown behind "20.5M tokens today".
+/// breakdown behind "14.6K output tokens today".
 /// </summary>
 /// <param name="Model">The raw model id as recorded, e.g. <c>claude-opus-5</c>.</param>
+/// <param name="Tokens">
+/// <b>Output</b> tokens, matching the tile it sits behind (issue #253). Kept as
+/// <c>Tokens</c> rather than renamed because this type also backs the Est. value tiles,
+/// where the measure is money — <see cref="BreakdownMeasure"/> is what says which.
+/// </param>
 /// <param name="DisplayName">
 /// The friendly name, or the raw id when the model is not recognised. Never invented:
 /// an unknown id is shown as-is rather than guessed at (CLAUDE.md rule 6).

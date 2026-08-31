@@ -38,10 +38,14 @@ namespace OView.Tray.Popup;
 /// </summary>
 /// <param name="host">The flyout window, whose height follows the body's.</param>
 /// <param name="body">The folding content. Must clip to its bounds, or it spills mid-fold.</param>
-/// <param name="chevron">The disclosure arrow's rotation, turned by the same curve.</param>
+/// <param name="chevron">
+/// The disclosure arrow's rotation, turned by the same curve. <b>Null where the control
+/// carries no arrow</b> — the Bars/Breakdown switch (issue #253) shows its state by which
+/// segment is lit, so a chevron there would be a second, redundant indicator.
+/// </param>
 /// <param name="reposition">Re-docks the host — called on every frame the height changes.</param>
 internal sealed class DisclosureAnimation(
-    Window host, FrameworkElement body, RotateTransform chevron, Action reposition)
+    Window host, FrameworkElement body, RotateTransform? chevron, Action reposition)
 {
     /// <summary>
     /// How much of the entrance's travel this fold covers. The panel is ~700 px tall and
@@ -73,7 +77,7 @@ internal sealed class DisclosureAnimation(
     /// </summary>
     public (double Height, double Angle) Current => (
         body.Visibility == Visibility.Visible ? body.ActualHeight : 0,
-        chevron.Angle);
+        chevron?.Angle ?? 0);
 
     /// <summary>
     /// Puts the fold in its finished state immediately, with nothing left animating.
@@ -94,7 +98,7 @@ internal sealed class DisclosureAnimation(
 
         body.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
         body.Height = double.NaN;   // back to auto, so later content changes size naturally
-        chevron.Angle = expanded ? ExpandedAngle : 0;
+        if (chevron is not null) chevron.Angle = expanded ? ExpandedAngle : 0;
     }
 
     /// <summary>
@@ -114,7 +118,7 @@ internal sealed class DisclosureAnimation(
         var f = Math.Clamp(fraction, 0, 1);
         body.Visibility = Visibility.Visible;
         body.Height = naturalHeight * f;
-        chevron.Angle = ExpandedAngle * f;
+        if (chevron is not null) chevron.Angle = ExpandedAngle * f;
     }
 
     /// <summary>
@@ -193,7 +197,7 @@ internal sealed class DisclosureAnimation(
         height.Completed += (_, _) => Finish(expanded);
         body.BeginAnimation(FrameworkElement.HeightProperty, height);
 
-        chevron.BeginAnimation(RotateTransform.AngleProperty,
+        chevron?.BeginAnimation(RotateTransform.AngleProperty,
             Spline(fromAngle, expanded ? ExpandedAngle : 0, duration, spline));
 
         // Backstop, for the same reason the close transition has one: the symptom of a missed
@@ -252,7 +256,7 @@ internal sealed class DisclosureAnimation(
         _guard = null;
 
         body.BeginAnimation(FrameworkElement.HeightProperty, null);
-        chevron.BeginAnimation(RotateTransform.AngleProperty, null);
+        chevron?.BeginAnimation(RotateTransform.AngleProperty, null);
     }
 
     private static DoubleAnimationUsingKeyFrames Spline(

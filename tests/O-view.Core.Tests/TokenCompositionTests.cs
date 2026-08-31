@@ -1,6 +1,7 @@
 using System.Globalization;
 using OView.Core.Models;
 using OView.Core.Storage;
+using OView.Core.Pricing;
 
 namespace OView.Core.Tests;
 
@@ -61,7 +62,57 @@ public class TokenCompositionTests
         var composition = TokenComposition.From(rollups);
 
         Assert.Equal(rollups.Sum(r => r.TotalTokens), composition.Total);
-        Assert.Equal(MeasuredDay, composition);
+
+        // The token split, compared field by field rather than as a whole record: the record
+        // now also carries per-kind Est. values, and asserting on those here would make this
+        // case fail whenever a published rate changes — which is a different test's job.
+        Assert.Equal(MeasuredDay.Input, composition.Input);
+        Assert.Equal(MeasuredDay.CacheCreation, composition.CacheCreation);
+        Assert.Equal(MeasuredDay.CacheRead, composition.CacheRead);
+        Assert.Equal(MeasuredDay.Output, composition.Output);
+    }
+
+    /// <summary>
+    /// <b>The four cards must add up to the Est. tile above them.</b> They are separate
+    /// figures on screen at the same time, and a card that does not reconcile with its tile is
+    /// exactly the "is this number right?" failure issue #169 was reported as.
+    ///
+    /// <para>Guaranteed structurally — both sides go through <see cref="CostEstimator"/> over
+    /// the same rollups — and pinned here because the guarantee is one refactor away from
+    /// becoming two pricing paths.</para>
+    /// </summary>
+    [Fact]
+    public void ThePerKindValuesSumToTheEstimateTheTileShows()
+    {
+        var rollups = new[]
+        {
+            Rollup("claude-opus-5", 10, 30_000, 300_000, 2_000),
+            Rollup("claude-sonnet-5", 4, 14_347, 98_121, 1_666),
+        };
+
+        var composition = TokenComposition.From(rollups);
+        var tile = rollups.Sum(r => CostEstimator.EstimateUsd(
+            r.Model, r.InputTokens, r.CacheCreationTokens, r.CacheReadTokens, r.OutputTokens) ?? 0);
+
+        Assert.Equal(
+            tile,
+            composition.InputUsd + composition.CacheCreationUsd
+                + composition.CacheReadUsd + composition.OutputUsd);
+    }
+
+    /// <summary>
+    /// A model with no published rate yields unknown per kind, never a zero that would read
+    /// as "this cost nothing" — the same rule the Est. tiles follow (rule 6).
+    /// </summary>
+    [Fact]
+    public void AnUnpricedModelLeavesEveryKindUnknownRatherThanZero()
+    {
+        var composition = TokenComposition.From([Rollup("claude-not-a-model", 10, 20, 30, 40)]);
+
+        Assert.Equal(100, composition.Total);
+        Assert.Null(composition.OutputUsd);
+        Assert.Null(composition.CacheReadUsd);
+        Assert.All(composition.InDisplayOrder, s => Assert.Null(s.EstUsd));
     }
 
     [Fact]
@@ -83,44 +134,79 @@ public class TokenCompositionTests
 
     // ── the copy ────────────────────────────────────────────────────────────────────
 
-    /// <summary>The headline must carry its own definition — acceptance criterion for #169.</summary>
+    /// <summary>
+    /// The headline names its metric — the acceptance criterion #169 set, met by issue #253's
+    /// different answer. It must NOT read <c>incl. cache</c> any more: the qualifier was true
+    /// of a total these tiles no longer show, and a stale qualifier is the same rule-6 failure
+    /// as a wrong figure (the lesson of issue #210's "(UTC)").
+    /// </summary>
     [Fact]
-    public void BothTokenLabelsStateThatCacheIsIncluded()
+    public void BothTokenLabelsNameOutputAndDropTheCacheQualifier()
     {
-        Assert.Contains("incl. cache", PanelText.TokensTodayLabel, StringComparison.Ordinal);
-        Assert.Contains("incl. cache", PanelText.Tokens31DaysLabel, StringComparison.Ordinal);
-    }
+        Assert.Contains("Output tokens", PanelText.TokensTodayLabel, StringComparison.Ordinal);
+        Assert.Contains("Output tokens", PanelText.Tokens31DaysLabel, StringComparison.Ordinal);
 
-    /// <summary>All four kinds are named, so the 89% is visible rather than merely asserted.</summary>
-    [Fact]
-    public void TheCompositionLineNamesAllFourKinds()
-    {
-        var line = PanelText.TokenCompositionLine(MeasuredDay, PanelText.TokenCompositionTodayScope);
-
-        Assert.StartsWith("Today:", line, StringComparison.Ordinal);
-        Assert.Contains("input 14", line, StringComparison.Ordinal);
-        Assert.Contains("cache write 44.3K", line, StringComparison.Ordinal);
-        Assert.Contains("cache read 398.1K", line, StringComparison.Ordinal);
-        Assert.Contains("output 3.7K", line, StringComparison.Ordinal);
+        Assert.DoesNotContain("incl. cache", PanelText.TokensTodayLabel, StringComparison.Ordinal);
+        Assert.DoesNotContain("incl. cache", PanelText.Tokens31DaysLabel, StringComparison.Ordinal);
     }
 
     /// <summary>
-    /// The sentence the issue comes down to: it must name the comparison being warned
-    /// against, because the reader it exists for has already made it.
+    /// The bars are labelled differently from the tiles, on purpose. A bar totalling 446K
+    /// under a tile reading "3.7K" is a contradiction unless something says the two count
+    /// different things.
     /// </summary>
     [Fact]
-    public void TheHintNamesTheShareAndTheComparisonItWarnsAgainst()
+    public void TheBarHeadingsDoNotReuseTheTileWording()
     {
-        var hint = PanelText.TokenCompositionHint(MeasuredDay);
+        Assert.Contains("Tokens used", PanelText.TokensUsedTodayLabel, StringComparison.Ordinal);
+        Assert.Contains("Tokens used", PanelText.TokensUsed31DaysLabel, StringComparison.Ordinal);
 
-        Assert.Contains("89%", hint, StringComparison.Ordinal);
-        Assert.Contains("context", hint, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("48.0K", hint, StringComparison.Ordinal);   // excluding cache reads
+        Assert.NotEqual(PanelText.TokensTodayLabel, PanelText.TokensUsedTodayLabel);
+        Assert.NotEqual(PanelText.TokensUsedTodayLabel, PanelText.TokensUsed31DaysLabel);
+    }
+
+    /// <summary>
+    /// All four kinds are drawn, so the 89% is visible rather than merely asserted — and
+    /// <b>output leads</b>, which is the whole of the ordering decision: at 1.1% of the track
+    /// it is legible at the origin and a sliver anywhere else.
+    /// </summary>
+    [Fact]
+    public void TheDisplayOrderLeadsWithOutputAndNamesAllFourKinds()
+    {
+        var order = MeasuredDay.InDisplayOrder;
+
+        Assert.Equal(
+            [TokenKind.Output, TokenKind.Input, TokenKind.CacheWrite, TokenKind.CacheRead],
+            order.Select(s => s.Kind));
+
+        Assert.Equal(
+            ["output", "input", "cache write", "cache read"],
+            order.Select(s => PanelText.TokenKindLabel(s.Kind)));
+
+        Assert.Equal([3_666L, 14L, 44_347L, 398_121L], order.Select(s => s.Tokens));
+    }
+
+    /// <summary>
+    /// Input runs at 0.003% of a real day. Rounded to two decimals that is "0.00%", which
+    /// says it did not happen; the threshold says it is present and small.
+    /// </summary>
+    [Fact]
+    public void AShareTooSmallToRoundIsFlooredRatherThanShownAsZero()
+    {
+        var input = MeasuredDay.InDisplayOrder.Single(s => s.Kind == TokenKind.Input);
+
+        Assert.InRange(input.Share, 0, 0.0001);
+        Assert.Equal("<0.01%", PanelText.TokenShare(input.Share));
+
+        // A genuine zero still reads as zero — the threshold is for "small", not for "absent".
+        Assert.Equal("0%", PanelText.TokenShare(0));
+        Assert.Equal("100%", PanelText.TokenShare(1));
+        Assert.Equal("89.24%", PanelText.TokenShare(MeasuredDay.CacheReadShare));
     }
 
     /// <summary>
     /// The panel pins its own presentation rather than inheriting the desktop's. Under a
-    /// culture that formats percentages as "89 %", an uninvariant "P0" would silently
+    /// culture that formats percentages as "89 %", an uninvariant "P2" would silently
     /// produce copy this app never wrote.
     /// </summary>
     [Fact]
@@ -130,12 +216,39 @@ public class TokenCompositionTests
         try
         {
             CultureInfo.CurrentCulture = new CultureInfo("fr-FR");
-            Assert.Contains("89%", PanelText.TokenCompositionHint(MeasuredDay), StringComparison.Ordinal);
+            Assert.Equal("89.24%", PanelText.TokenShare(MeasuredDay.CacheReadShare));
         }
         finally
         {
             CultureInfo.CurrentCulture = original;
         }
+    }
+
+    /// <summary>
+    /// The card names its window. Two bars with measurably different shapes sit one above the
+    /// other, so a share with no window attached can be read against the wrong one.
+    /// </summary>
+    [Fact]
+    public void TheCardCaptionNamesTheKindTheWindowAndKeepsTheEstPrefix()
+    {
+        var caption = PanelText.TokenCardCaption(
+            TokenKind.CacheWrite, 0.10295, 0.87m, PanelText.TokenWindowToday);
+
+        Assert.Equal("cache write · 10.30% of today · Est. $0.87", caption);
+    }
+
+    /// <summary>
+    /// An unpriced window says so rather than showing <c>$0.00</c>, which would read as
+    /// "this cost nothing" (rule 6). The same rule the Est. tiles follow.
+    /// </summary>
+    [Fact]
+    public void AnUnpricedKindSaysUnknownRatherThanZero()
+    {
+        var caption = PanelText.TokenCardCaption(
+            TokenKind.Output, 0.5, null, PanelText.TokenWindow31Days);
+
+        Assert.Contains("value unknown", caption, StringComparison.Ordinal);
+        Assert.DoesNotContain("$0.00", caption, StringComparison.Ordinal);
     }
 
     // ── the sum is not changed ──────────────────────────────────────────────────────

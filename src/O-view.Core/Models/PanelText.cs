@@ -317,8 +317,14 @@ public static class PanelText
     /// <c>235.6M</c> beside the thousands Claude's own UI shows (issue #169). The sum was
     /// right — roughly 90% of it is cached prompt re-reads, which are billed and counted —
     /// but an unqualified "Tokens today" invites the comparison that makes it look like a
-    /// 1000× over-count. The qualifier is the headline's share of rule 6: a figure states
-    /// what it measures, and the detail follows in <see cref="TokenCompositionLine"/>.</para>
+    /// 1000× over-count. #169 answered that by qualifying the heading: <c>incl. cache</c>.</para>
+    ///
+    /// <para><b>Issue #253 changed the figure instead.</b> The qualifier was correct and
+    /// still left the panel leading with a number nobody reads — at a stable ~89% cache-read
+    /// share, output never exceeds about 1.5% of the total, so the one quantity that tracks
+    /// work done was buried in a figure dominated by conversation re-sends. The tiles now
+    /// headline output alone and say so. The composition moved beneath them
+    /// (<see cref="TokensUsedTodayLabel"/>), where explaining the rest is its whole job.</para>
     ///
     /// <para><b>"Today" means the reader's today.</b> It said "(UTC)" for one release because
     /// the bucket genuinely was a UTC day and a label that does not match its figure is the
@@ -326,57 +332,121 @@ public static class PanelText
     /// (issue #211), so the qualifier is gone: leaving it on would be the mislabelling
     /// pointed the other way.</para>
     /// </summary>
-    public const string TokensTodayLabel = "Tokens today · incl. cache";
+    public const string TokensTodayLabel = "Output tokens today";
 
     /// <inheritdoc cref="TokensTodayLabel"/>
-    public const string Tokens31DaysLabel = "Tokens · 31 days · incl. cache";
+    public const string Tokens31DaysLabel = "Output tokens · 31 days";
 
     /// <summary>
-    /// The four-way split behind a token total, as one line:
-    /// <c>Today: input 14 · cache write 44.3K · cache read 398.1K · output 3.7K</c>.
+    /// Headings for the two composition bars.
     ///
-    /// <para>Named "cache write" rather than "cache creation" because the pair reads as a
-    /// pair — a user scanning the line needs to see at once that two of the four entries
-    /// are cache traffic, which is the whole point of showing it.</para>
-    ///
-    /// <para><paramref name="scope"/> names which total is being explained, so the line can
-    /// never be read against the wrong tile. Only the daily one is rendered today; the
-    /// parameter is here because a line that says "input 14" beside two different totals
-    /// with no scope word is exactly the ambiguity this whole issue was about.</para>
+    /// <para><b>"Tokens used" rather than "Tokens", and deliberately not the tiles' wording.</b>
+    /// A bar totalling 1.4M sitting under a tile reading <c>Output tokens today 14.6K</c> is a
+    /// contradiction unless something says the two count different things. These name the
+    /// billed whole; the tiles name the work.</para>
     /// </summary>
-    public static string TokenCompositionLine(TokenComposition c, string scope) =>
-        $"{scope}: input {UsageFormatter.Tokens(c.Input)} · cache write {UsageFormatter.Tokens(c.CacheCreation)}"
-        + $" · cache read {UsageFormatter.Tokens(c.CacheRead)} · output {UsageFormatter.Tokens(c.Output)}";
+    /// <summary>
+    /// The section heading above both bars and the view switch. Names the section once so the
+    /// two bar headings can name only their windows.
+    /// </summary>
+    public const string TokensUsedHeading = "Tokens used";
 
-    /// <summary>Scope word for the daily composition line.</summary>
-    public const string TokenCompositionTodayScope = "Today";
+    /// <inheritdoc cref="TokensUsedHeading"/>
+    public const string TokensUsedTodayLabel = "Tokens used · today";
+
+    /// <inheritdoc cref="TokensUsedTodayLabel"/>
+    public const string TokensUsed31DaysLabel = "Tokens used · last 31 days";
 
     /// <summary>
-    /// Why that total is so much larger than the number Claude's own UI shows — the
-    /// sentence the whole of issue #169 comes down to.
+    /// One token kind's name.
     ///
-    /// <para>It states the share rather than asserting a fixed ratio: the proportion moves
-    /// with how long conversations run, and a hard-coded "about 90%" would be a fabricated
-    /// number on a machine where it is 60% (rule 6). It also names the comparison being
-    /// warned against explicitly, because a user who has already made that comparison is
-    /// the reader this line exists for.</para>
+    /// <para>"Cache write" rather than "cache creation" because the pair reads as a pair — a
+    /// reader scanning the legend needs to see at once that two of the four entries are cache
+    /// traffic, which is the whole point of showing the split.</para>
     /// </summary>
-    public static string TokenCompositionHint(TokenComposition c) =>
-        // Built rather than formatted with "P0", which renders "89 %" — with a space — under
-        // the INVARIANT culture as well as most European ones. The panel states its own
-        // figures rather than inheriting the desktop's, and invariant alone does not get
-        // there here.
-        $"Cache reads are {(c.CacheReadShare * 100).ToString("0", CultureInfo.InvariantCulture)}% of this: "
-        + "every turn re-sends the conversation and caching bills the re-send. It adds up every "
-        + "request, so it is not the context figure Claude's UI shows — that is one conversation "
-        + $"at one moment. Without cache reads: {UsageFormatter.Tokens(c.ExcludingCacheReads)}.";
+    public static string TokenKindLabel(TokenKind kind) => kind switch
+    {
+        TokenKind.Output => "output",
+        TokenKind.Input => "input",
+        TokenKind.CacheWrite => "cache write",
+        TokenKind.CacheRead => "cache read",
+        _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Not a token kind."),
+    };
 
     /// <summary>
-    /// The disclosure that reveals <see cref="TokenCompositionHint"/>. Phrased as the
-    /// question the reader is actually asking — the one that opened issue #169 — rather
-    /// than as a label for what is behind it.
+    /// A kind's share of its own window, to two decimals.
+    ///
+    /// <para>Built rather than formatted with <c>"P2"</c>, which renders "1.08 %" — with a
+    /// space — under the INVARIANT culture as well as most European ones. The panel states
+    /// its own figures rather than inheriting the desktop's, and invariant alone does not get
+    /// there here.</para>
+    ///
+    /// <para><b>Floored at <c>&lt;0.01%</c> rather than rounded to <c>0.00%</c>.</b> Input
+    /// runs at 0.003% of a day; printing that as zero says it did not happen, and printing
+    /// enough decimals to show it would set the column width for every other row.</para>
     /// </summary>
-    public const string TokenExplainToggleLabel = "Why so large?";
+    public static string TokenShare(double share) => share switch
+    {
+        >= 1 => "100%",
+        <= 0 => "0%",
+        < 0.0001 => "<0.01%",
+        _ => (share * 100).ToString("0.00", CultureInfo.InvariantCulture) + "%",
+    };
+
+    /// <summary>Scope words for a segment's hover card, naming which window it belongs to.</summary>
+    public const string TokenWindowToday = "today";
+
+    /// <inheritdoc cref="TokenWindowToday"/>
+    public const string TokenWindow31Days = "the last 31 days";
+
+    /// <summary>
+    /// The identifying line under a segment card's token figure:
+    /// <c>cache write · 10.30% of today · Est. $0.87</c>.
+    ///
+    /// <para>Built as one caption rather than as a third hover-card shape. The panel has two —
+    /// a figure with a caption, and a sentence — and <c>HoverCard</c> says to reuse them; a
+    /// per-kind card is a figure with a caption, so it is one.</para>
+    ///
+    /// <para><b>"Est." is never dropped here either.</b> A hover card is not an exemption from
+    /// the rule the tiles follow, and this is the figure a reader is most likely to quote back
+    /// as money spent. An unpriced window says so outright rather than showing <c>$0.00</c>,
+    /// which would read as "this cost nothing" (rule 6).</para>
+    ///
+    /// <para>The window is named because <b>the two bars have measurably different shapes</b> —
+    /// cache write ran 10.3% of a day against 0.93% of the month on the machine this was
+    /// designed against — so a share with no window attached can be read against the wrong bar.</para>
+    /// </summary>
+    public static string TokenCardCaption(TokenKind kind, double share, decimal? estUsd, string window)
+    {
+        var value = estUsd is null ? "value unknown" : $"Est. {UsageFormatter.Usd(estUsd)}";
+        return $"{TokenKindLabel(kind)} · {TokenShare(share)} of {window} · {value}";
+    }
+
+    /// <summary>Column headings for the breakdown view.</summary>
+    public const string TokenBreakdownKindHeader = "Kind";
+
+    /// <inheritdoc cref="TokenBreakdownKindHeader"/>
+    public const string TokenBreakdownTodayHeader = "Today";
+
+    /// <inheritdoc cref="TokenBreakdownKindHeader"/>
+    public const string TokenBreakdown31DaysHeader = "31 days";
+
+    /// <summary>
+    /// Heading for a share column. <b>There is one per window, not one shared.</b> The two
+    /// windows have measurably different shapes — cache write ran 10.3% of a day against
+    /// 0.93% of the month on the machine this was designed against — so a single share column
+    /// beside two token columns would be read against whichever one it sat nearer.
+    /// </summary>
+    public const string TokenBreakdownShareHeader = "Share";
+
+    /// <inheritdoc cref="TokenBreakdownKindHeader"/>
+    public const string TokenBreakdownTotalLabel = "Total";
+
+    /// <summary>Labels for the two views of the composition.</summary>
+    public const string TokenViewBarsLabel = "Bars";
+
+    /// <inheritdoc cref="TokenViewBarsLabel"/>
+    public const string TokenViewBreakdownLabel = "Breakdown";
 
     /// <summary>
     /// What the divergence banner says when local work is running past a meter that is not
