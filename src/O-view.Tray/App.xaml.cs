@@ -346,6 +346,10 @@ public partial class App : System.Windows.Application
         popup.DataReport = PlanHistoryDiagnostics.Inspect();
         popup.ScopeReport = TranscriptScopeReport.Inspect();
         popup.SettingsForDisplay = _engine.Settings;
+        // Read on open like the two reports above. The flag cache refreshes when Claude Code
+        // starts, not when /usage runs, so it is often fresher than the percentages and must
+        // be read on its own rather than folded into the poll (issue #254).
+        popup.BoostNotices = BoostNotices.TryRead();
         popup.ShowNearTrayIcon(
             _engine.Latest,
             _engine.BuildStatistics(),

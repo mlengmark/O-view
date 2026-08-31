@@ -157,10 +157,31 @@
             <TextBlock x:Name="SessionResetText" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
 
             <!-- Weekly bar -->
+            <!-- Three columns, not an overlay. The percentage is right-aligned in its own
+                 Auto column so it reserves its width, and the chip sits in the star column
+                 between them: the label and the figure both keep their space whatever the
+                 chip says, and an over-long chip is trimmed rather than drawn over the
+                 figure. Note the figure reads "51% used", not "51%" — a chip budget worked
+                 out against the shorter string is about 30px too generous. -->
             <Grid x:Name="WeeklyHeading" Margin="0,12,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
                 <TextBlock Text="Weekly" FontSize="12" FontWeight="SemiBold"
+                           VerticalAlignment="Center"
                            Foreground="{DynamicResource TextPrimary}"/>
-                <TextBlock x:Name="WeeklyPctText" FontSize="12" HorizontalAlignment="Right"
+                <Border x:Name="BoostChip" Grid.Column="1"
+                        Background="{DynamicResource BadgeBg}" CornerRadius="4"
+                        Padding="6,1" Margin="8,0,8,0" VerticalAlignment="Center"
+                        HorizontalAlignment="Left" Visibility="Collapsed">
+                    <TextBlock x:Name="BoostChipText" FontSize="10"
+                               TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource BadgeText}"/>
+                </Border>
+                <TextBlock x:Name="WeeklyPctText" Grid.Column="2" FontSize="12"
+                           VerticalAlignment="Center" HorizontalAlignment="Right"
                            Foreground="{DynamicResource TextSecondary}"/>
             </Grid>
             <Grid x:Name="WeeklyBar" Height="8" Margin="0,6,0,4">

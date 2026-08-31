@@ -5,6 +5,7 @@ using Avalonia.Platform;
 using OView.App;
 using OView.App.Rendering;
 using OView.Core.Models;
+using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 
@@ -114,9 +115,10 @@ public sealed class PanelWindow : Window
         ClaudeAccount? account,
         PlanHistoryReport? dataReport,
         TranscriptScopeReport? scopeReport,
-        DateTimeOffset utcNow)
+        DateTimeOffset utcNow,
+        BoostNotices? boostNotices = null)
     {
-        _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow);
+        _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow, boostNotices);
         _dismissal.Opening();
 
         // Decided before Show, applied after it: the corner needs the panel's size, and
@@ -158,7 +160,8 @@ public sealed class PanelWindow : Window
         ClaudeAccount? account,
         PlanHistoryReport? dataReport,
         TranscriptScopeReport? scopeReport,
-        DateTimeOffset utcNow)
+        DateTimeOffset utcNow,
+        BoostNotices? boostNotices = null)
     {
         if (TargetScreen() is not { } screen)
         {
@@ -176,7 +179,7 @@ public sealed class PanelWindow : Window
         }
 
         _content.Density = density;
-        _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow);
+        _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow, boostNotices);
         _log?.Write(
             $"panel density: compact (natural {natural:0} dip > available {available:0} dip)");
     }
@@ -237,9 +240,10 @@ public sealed class PanelWindow : Window
         ClaudeAccount? account,
         PlanHistoryReport? dataReport,
         TranscriptScopeReport? scopeReport,
-        DateTimeOffset utcNow)
+        DateTimeOffset utcNow,
+        BoostNotices? boostNotices = null)
     {
-        _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow);
+        _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow, boostNotices);
         return _content;
     }
 }
