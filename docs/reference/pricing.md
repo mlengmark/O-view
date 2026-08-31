@@ -73,7 +73,9 @@ unrecognised model already takes through `PanelStatistics.UnpricedModels`. Three
 - **an unrecognised model** — a Claude released after this table was written;
 - **an unrecognised modifier value** — anything `speed` or `inference_geo` carries that is not in
   the table above;
-- **fast mode on a model with no published fast row** — Sonnet, Haiku, Opus 4.7 and 4.5.
+- **fast mode on a model with no published fast row** — Sonnet, Haiku, Opus 4.7, 4.6 and 4.5.
+  Everything except Opus 5 and Opus 4.8, in other words: whether a model *accepts* the flag is
+  not the test, because a model can accept it and still have no published price to charge.
 
 Falling back to standard rates in any of these would put a confident *cheaper* number on screen.
 That is the failure this whole design is against.

@@ -146,4 +146,61 @@ public class RateCardTests
         // Haiku 4.5 is in the bundled card and not in this fixture's table.
         Assert.Contains(ModelCatalog.Bundled.Models, e => e.DisplayName == "Haiku 4.5");
     }
+
+    /// <summary>
+    /// The same table, naming its rows by model id instead of by display name — a page that
+    /// parses perfectly and matches nothing.
+    /// </summary>
+    private const string RenamedMarkdown = """
+        ## Model pricing
+
+        | Model          | Base Input Tokens | 5m Cache Writes | 1h Cache Writes | Cache Hits & Refreshes | Output Tokens |
+        | -------------- | ----------------- | --------------- | --------------- | ---------------------- | ------------- |
+        | claude-opus-5  | $5 / MTok         | $6.25 / MTok    | $10 / MTok      | $0.50 / MTok           | $25 / MTok    |
+        | claude-sonnet-5 | $2 / MTok        | $2.50 / MTok    | $4 / MTok       | $0.20 / MTok           | $10 / MTok    |
+        """;
+
+    /// <summary>
+    /// One missing model is "could not check that row"; every model missing is "could not
+    /// check", full stop. Without this the check reports agreement on the strength of zero
+    /// comparisons and goes on doing it weekly — a permanent silent pass, which is worse than
+    /// no check at all because it reads as evidence.
+    /// </summary>
+    [Fact]
+    public void APageThatMatchesNoModelAtAllIsNull_NotAnAgreement()
+    {
+        Assert.Null(PublishedRates.Compare(ModelCatalog.Bundled, RenamedMarkdown, Today));
+    }
+
+    /// <summary>
+    /// Fast mode is published for Opus 5 and Opus 4.8 and nothing else. Opus 4.6 is pinned by
+    /// name because it briefly carried a fast row at standard rates on the reasoning that it
+    /// accepts the flag — accepting a flag is not a published price, and standing the cheaper
+    /// rate in for a missing one is the failure this design is written against (issue #257).
+    /// </summary>
+    [Theory]
+    [InlineData("claude-opus-5", true)]
+    [InlineData("claude-opus-4-8", true)]
+    [InlineData("claude-opus-4-7", false)]
+    [InlineData("claude-opus-4-6", false)]
+    [InlineData("claude-opus-4-5", false)]
+    [InlineData("claude-sonnet-5", false)]
+    [InlineData("claude-haiku-4-5", false)]
+    public void OnlyTheModelsWithAPublishedFastRowCanPriceAFastRequest(string model, bool priced)
+    {
+        var fast = new UsageModifiers(ModifierValue.Applied, ModifierValue.Standard);
+        var rates = ModelCatalog.Bundled.RatesFor(model, fast);
+
+        if (!priced)
+        {
+            Assert.Null(rates);
+            return;
+        }
+
+        Assert.NotNull(rates);
+        // Priced at the published fast rate, and specifically not at the standard one.
+        Assert.Equal(10.00m, rates.InputPerMTok);
+        Assert.NotEqual(ModelCatalog.Bundled.RatesFor(model, UsageModifiers.Standard)!.InputPerMTok,
+            rates.InputPerMTok);
+    }
 }

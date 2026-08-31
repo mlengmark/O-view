@@ -58,7 +58,15 @@ public static class PublishedRates
     ///
     /// <para>A model in the card that the page does not list is <b>not</b> a difference. The
     /// published table names models by display name and this matches on that, so a rename
-    /// upstream must read as "could not check that row" rather than as a price change.</para>
+    /// upstream must read as "could not check that row" rather than as a price change. But
+    /// <b>no</b> model matching is a failed check rather than an agreement — see below.</para>
+    ///
+    /// <para><b>Two blind spots, both deliberate and neither reported.</b> Matching on display
+    /// name means the one <c>claude-sonnet-4</c> row covering Sonnet 4, 4.5 and 4.6 is only ever
+    /// checked against whichever row the page calls "Sonnet 4" — the check is blind exactly where
+    /// the prefix collision is. And the fast-mode rates are never compared at all, because
+    /// <see cref="ParseTable"/> skips that table by design. Both would need the card to carry the
+    /// page's own model ids to fix, which is a larger change than this check is worth.</para>
     /// </summary>
     public static RateCardDrift? Compare(RateCard card, string markdown, DateOnly checkedOn)
     {
@@ -68,6 +76,7 @@ public static class PublishedRates
         }
 
         var differences = new List<RateDelta>();
+        var matched = 0;
 
         foreach (var entry in card.Models)
         {
@@ -76,6 +85,7 @@ public static class PublishedRates
                 continue;
             }
 
+            matched++;
             Compare(entry.DisplayName, "input", entry.Rates.InputPerMTok, theirs.InputPerMTok);
             Compare(entry.DisplayName, "5m cache write", entry.Rates.CacheWrite5mPerMTok, theirs.CacheWrite5mPerMTok);
             Compare(entry.DisplayName, "1h cache write", entry.Rates.CacheWrite1hPerMTok, theirs.CacheWrite1hPerMTok);
@@ -83,7 +93,12 @@ public static class PublishedRates
             Compare(entry.DisplayName, "output", entry.Rates.OutputPerMTok, theirs.OutputPerMTok);
         }
 
-        return new RateCardDrift(checkedOn, differences);
+        // Not one model name matched, so the comparison compared nothing. Returning an empty
+        // difference list here would log "published table agrees" on the strength of zero
+        // comparisons, and would go on doing so every week — the permanent silent pass this
+        // check exists to prevent. The header parsing only proves the page still has a table
+        // of that shape, not that it still names the models we hold.
+        return matched > 0 ? new RateCardDrift(checkedOn, differences) : null;
 
         void Compare(string model, string column, decimal ours, decimal them)
         {
