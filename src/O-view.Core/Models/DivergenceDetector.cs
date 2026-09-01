@@ -24,10 +24,24 @@ public enum DivergenceState
     /// problem: there the meter is live and the work is too small to move it.</para>
     /// </summary>
     MeterNotReporting,
+
+    /// <summary>
+    /// The window holds one meter sample, so there is no rise to measure yet.
+    ///
+    /// <para>The third distinct way of saying "cannot tell", and it needed its own name
+    /// because the other two are both wrong about it: the meter <i>is</i> reporting, and the
+    /// activity <i>is</i> substantial. What is missing is a second point to subtract the
+    /// first from (issue #268).</para>
+    /// </summary>
+    RiseNotMeasurable,
 }
 
 /// <param name="OutputTokensInWindow">Deduplicated output tokens observed since the window start.</param>
-/// <param name="PlanRisePoints">Percentage points the plan meter rose across the same window.</param>
+/// <param name="PlanRisePoints">
+/// Percentage points the plan meter rose across the same window. Meaningful only where the
+/// state says a rise was measurable — a one-sample window reports 0 here because that is what
+/// subtracting a value from itself gives, not because the meter held still.
+/// </param>
 public sealed record DivergenceResult(
     DivergenceState State,
     long OutputTokensInWindow,
@@ -85,6 +99,28 @@ public static class DivergenceDetector
     /// </summary>
     public static readonly TimeSpan MaxMeterAge = PlanHistoryProvider.DefaultFreshness;
 
+    /// <summary>
+    /// Meter samples a window needs before a flat reading means anything.
+    ///
+    /// <para>Two, and the number is arithmetic rather than a threshold: a rise is a difference
+    /// between two points, and <c>percents[^1] - percents[0]</c> over one point is
+    /// <c>x - x</c>. It returned 0 and the detector read that 0 as "the meter held still"
+    /// (issue #268).</para>
+    ///
+    /// <para><b>It fired on ordinary use, not an edge case.</b> The divergence window is
+    /// anchored on the first plan-history sample of the new window and Claude Desktop samples
+    /// every 15 minutes, so <i>every</i> five-hour window holds exactly one sample for its
+    /// first quarter of an hour. Observed 2026-09-01: 64K output tokens nine minutes into a
+    /// fresh window, series <c>[5]</c>, <c>rise=0</c>, banner shown — against an account with
+    /// extra usage switched off and a meter that had in fact gone 5% → 24%.</para>
+    ///
+    /// <para>This gates the <see cref="DivergenceState.Diverging"/> verdict only.
+    /// <see cref="DivergenceState.PlanLimitReached"/> reads the latest value and needs no
+    /// rise, so a window that opens already exhausted is still reported from its first
+    /// sample.</para>
+    /// </summary>
+    public const int MinSamplesForRise = 2;
+
     /// <param name="planPercentsInWindow">
     /// Meter samples across the window, in time order. Must not span a reset — the
     /// caller anchors the window on the last observed reset.
@@ -127,6 +163,14 @@ public static class DivergenceDetector
         if (outputTokensInWindow < minOutputTokens)
         {
             return new DivergenceResult(DivergenceState.InsufficientActivity, outputTokensInWindow, rise);
+        }
+
+        // Last of the three "cannot tell" gates, and deliberately below the exhausted-plan
+        // branch above: that one reads the latest value rather than a difference, so it is the
+        // one verdict a single sample can still support.
+        if (planPercentsInWindow.Count < MinSamplesForRise)
+        {
+            return new DivergenceResult(DivergenceState.RiseNotMeasurable, outputTokensInWindow, rise);
         }
 
         return new DivergenceResult(

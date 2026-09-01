@@ -79,7 +79,10 @@ the figure it will not state.
 
 **Before v0.9.1 the banner asserted "usage is billing beyond your plan" at everyone whose
 window ran out**, including accounts with auto-billing switched off, which could not be billed
-anything. If you are on an older build, that message is wrong for you and upgrading is the fix.
+anything. **On v0.9.1 and earlier it could also raise the "not drawing from your plan" banner
+during the first quarter of an hour of a new 5-hour window** — the meter had moved, but had
+only been sampled once, so there was no movement to see yet. If you are on an older build,
+either message may be wrong for you and upgrading is the fix.
 
 ## Linux: read this before you file a bug about a missing icon
 
