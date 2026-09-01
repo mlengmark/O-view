@@ -358,6 +358,11 @@ public partial class App : System.Windows.Application
         // starts, not when /usage runs, so it is often fresher than the percentages and must
         // be read on its own rather than folded into the poll (issue #254).
         popup.BoostNotices = BoostNotices.TryRead();
+        // Whether extra usage is on for this account, for the off-plan banner (issue #259).
+        // Taken from the engine rather than read again here: it is the same block the poll
+        // above just refreshed, and the engine's reader is the one that honours the
+        // injected-provider guard.
+        popup.CachedUsage = _engine.CachedUsage;
         popup.ShowNearTrayIcon(
             _engine.Latest,
             _engine.BuildStatistics(),

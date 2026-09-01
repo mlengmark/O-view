@@ -263,7 +263,28 @@ The panel carries the signal in **two independent registers**:
 1. **An amber banner** above the quota bars — the bars are correct but no longer the whole story, so the correction must appear before them, not after.
 2. **Relabels the value tile** from `Est. value today` to `Est. spend today` with an `incl. off-plan usage` note. The "not money charged" framing is only true for plan usage; off-plan work bills at API rates, so the label flips with the reality.
 
-A notification fires once per onset (edge-triggered, re-armed when it clears). When the plan limit is reached (≥99%) the wording changes: continued work bills beyond the plan by definition rather than by inference.
+A notification fires once per onset (edge-triggered, re-armed when it clears). When the plan limit is reached (≥99%) the wording changes: continued work is not drawing from the window by definition rather than by inference.
+
+**What it may claim about billing is decided by the account, not by the meter** ([issue #259](https://github.com/mlengmark/O-view/issues/259)). The spec used to say an exhausted window meant work "bills beyond the plan by definition", and the banner said so — *"Plan limit reached — usage is billing beyond your plan"* — to every reader whose 5-hour window ran out, including the population that has extra usage switched off and cannot be billed anything. That is not a hedge that could be tightened; it is a false statement about the reader's money, and it read as an emergency.
+
+The premise was wrong twice over: the meter says nothing about billing, and the answer was already on the machine. Claude Code caches it in `cachedUsageUtilization.utilization.extra_usage.is_enabled` ([findings](findings/cached-usage-utilization.md#extra_usage-whether-the-account-can-bill-beyond-the-plan)). So the banner and the balloon carry three wordings, one per state, and `Unknown` is not a rounding of the other two:
+
+| Extra usage | Banner heading | What the detail adds |
+|---|---|---|
+| **On** | `Plan limit reached — further work bills as extra usage` | can bill beyond the plan, + provenance |
+| **Off** | `Plan limit reached — extra usage is switched off` | should not bill beyond the plan, + provenance |
+| **Unknown** | `Plan limit reached` | the setting could not be read; no claim either way |
+
+The diverging heading (`This session's usage is not drawing from your plan`) is the same in all three: a flat meter may not be about billing at all — a Cowork session in a cloud container leaves no local record either.
+
+Two rules on the wording:
+
+- **Relayed, never asserted in O-view's own voice.** It is another application's cache, refreshed only when `/usage` runs, so it can be days old while looking current. Every claim carries `(reported by Claude Code, read 09:07)`, gaining a date once the reading is not from the reader's own today. Same treatment as the boost chip's hover card, for the same reason (rule 6).
+- **The Est. figure is withheld from the balloon where nothing can be billed.** It is the API-rate *value* of the work, and the panel labels it as such in a tile and a hover; a three-line notification cannot, and `Est. $92.75 so far this window` beside `extra usage is switched off` contradicts itself. The panel still shows it in full.
+
+The banner also carries a link to Claude's own usage settings — the address Claude Code itself uses for that screen, not a plausible-looking guess. Every wording above ends by sending the reader there for the figure O-view will not state, so the instruction is the thing you click.
+
+**The three states have offscreen renders** (`--popup-samples` → `panel-offplan-{unknown,off,on}-{light,dark}.png`). They had none before, which is how a banner asserting a charge at accounts that could not be charged survived: no fixture had an exhausted meter, so nobody ever looked at it. Same shape as issues #58 and #170.
 
 **Standing (last 31 days)** — the `Off-plan usage · last 31 days` section ([GitHub issue #3](https://github.com/mlengmark/O-view/issues/3)):
 

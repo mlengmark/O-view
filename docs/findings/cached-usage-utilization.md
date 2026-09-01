@@ -83,6 +83,52 @@ the cache was the fresher of the two.
 - **It follows `CLAUDE_CONFIG_DIR`**, so locate it through `ClaudeAccount.Candidates()` rather
   than hard-coding the profile path (the failure of issues #44, #58 and #189).
 
+## `extra_usage`: whether the account can bill beyond the plan
+
+Read since issue #259, and the one field in this block that is not a meter.
+
+```jsonc
+"extra_usage": {
+  "is_enabled": false,        // the resolved answer — the only thing the state comes from
+  "user_disabled": true,      // the person turned it off, rather than being barred from it
+  "spend_limit_reached": false,
+  "credits_ever_enabled": true,
+  "disabled_reason": null,    // a string where an account is barred for some other reason
+  // the money half: null on an account with extra usage off, which has spent nothing
+  "monthly_limit": null, "used_credits": null, "utilization": null,
+  "currency": null, "decimal_places": null, "daily": null, "weekly": null
+}
+```
+
+It exists to stop the panel asserting a charge it cannot see. The off-plan banner used to read
+*"Plan limit reached — usage is billing beyond your plan"* at everyone whose 5-hour window ran
+out, which for an account with extra usage switched off is not a hedge but a false statement
+about their money. The three states are three wordings, and `Unknown` is not a rounding of the
+other two — see `ExtraUsageStatus`.
+
+Three things about it, and the second is the one that misread it the first time:
+
+- **`is_enabled` is the resolved answer; the rest are the reason behind it.** An account barred
+  by policy reads `is_enabled:false` with `user_disabled:false`, so taking `user_disabled` as the
+  answer would call that one enabled. `spend_limit_reached` looks like a second off switch for an
+  enabled account whose cap is spent, and may well be — but nothing has been observed with it
+  true, so branching on it would be reasoning from a field name (rule 6).
+- **Mostly-null is not empty.** Eight of its twelve fields are null and it was recorded in
+  [cli-usage-refresh.md](cli-usage-refresh.md) §4 as carrying nothing even when fresh. It carries
+  four booleans, and the nulls are what *off* looks like — nothing is spent, so there is no
+  currency and no limit to report.
+- **`is_enabled` is one of the fields Claude Code itself consumes** (15 occurrences in its
+  binary, against 0 for `user_disabled` and `spend_limit_reached`). That is why the state rests
+  on it alone and the other three are carried for diagnostics. See cli-usage-refresh.md §4 for
+  the full count and what it implies about the fields nothing in the vendor's client reads.
+
+**Not gated on freshness, unlike the percentages.** A percentage stops describing anything once
+its window rolls over; an account setting does not roll over, it is simply older or newer. So it
+is relayed with its `fetchedAtMs` stamped beside it — *"reported by Claude Code, read 09:07"*,
+carrying the date once the reading is no longer from the reader's own today — rather than the
+panel deciding on their behalf that an hour-old answer is no answer. Same treatment, same reason,
+as the promo notice below.
+
 ## A second block in the same file: promo notices
 
 `cachedGrowthBookFeatures.tengu_rate_limit_promo_notices` is what Claude Code renders beside its

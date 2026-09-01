@@ -926,6 +926,37 @@ public sealed class UsageEngine : IDisposable
     }
 
     /// <summary>
+    /// Claude Code's cached block as it stands now, or null when there is none to read —
+    /// which is also what a caller that injected its own <c>Provider</c> gets, because the
+    /// source is wired to return null for those (see the constructor).
+    ///
+    /// <para>Exposed so the panel can read the extra-usage setting and the instant it was
+    /// fetched from the same place the engine does. Reading the file again in the head would
+    /// be a second answer to one question, and the head has no way to honour the
+    /// injected-provider guard that keeps the tests off the developer's own profile.</para>
+    /// </summary>
+    public CachedUtilization? CachedUsage
+    {
+        get
+        {
+            try
+            {
+                return _cachedUtilizationSource();
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether extra usage is switched on for this account, per Claude Code's cache.
+    /// <see cref="ExtraUsageState.Unknown"/> when nothing said — never a guess (issue #259).
+    /// </summary>
+    private ExtraUsageStatus SafeExtraUsage() => CachedUsage?.ExtraUsage ?? ExtraUsageStatus.Unknown;
+
+    /// <summary>
     /// The weekly reset instant Claude Code last reported, past or future, or null.
     /// Never throws: a failure to harvest must not disturb the reading it decorates.
     /// </summary>
@@ -1231,18 +1262,44 @@ public sealed class UsageEngine : IDisposable
         }
 
         _offPlanNotified = true;
+
+        // What Claude Code says about extra usage on this account (issue #259). Read through
+        // the same source the reset anchor uses, so a test that supplied its own Provider gets
+        // Unknown rather than the developer's real ~/.claude.json — the hazard the comment on
+        // _planHistory above is about, pointed at this field.
+        var extraUsage = SafeExtraUsage();
+
         // The panel's formatter, not a pinned-culture "C" lookup. This balloon sends
         // the user to the Est. tile, so the two must write the same amount the same
         // way — and ICU's currency pattern is not the same instruction as composing
         // "$" + a fixed decimal format, even where they agree today (issue #55).
-        var spend = stats.EstOffPlanUsd is { } usd
+        //
+        // Withheld where extra usage is known to be off. The figure is the API-rate VALUE of
+        // the work, not a charge, and the panel has the room to label it as such; a balloon
+        // line reading "Est. $92.75 so far this window" beside "extra usage is switched off"
+        // just contradicts itself, and the half a reader carries away is the money.
+        var spend = stats.EstOffPlanUsd is { } usd && extraUsage.State != ExtraUsageState.Disabled
             ? $" Est. {UsageFormatter.Usd(usd)} so far this window."
             : "";
+
+        // The claim is made only where the setting supports it. Asserting a charge at an
+        // account that cannot be charged is issue #259, and it is worse in a balloon than in
+        // the panel: there is nothing beside it to qualify it.
+        var (title, setting) = extraUsage.State switch
+        {
+            ExtraUsageState.Enabled => ("Usage is billing beyond your plan",
+                " Extra usage is switched on for this account."),
+            ExtraUsageState.Disabled => ("Usage is not drawing from your plan",
+                " Extra usage is switched off, so this should not be billing beyond your plan."),
+            _ => ("Usage is not drawing from your plan", ""),
+        };
+
         // The two the engine raises are both genuine warnings, and they are the reason the
         // kind exists: these are what the yellow triangle is FOR, and it meant nothing while
         // every "up to date" balloon wore the same one.
-        NotificationRequested?.Invoke(new AppNotification("Usage is billing beyond your plan",
-            $"Work this session isn't drawing from your plan allowance.{spend} Open O-view for detail.",
+        NotificationRequested?.Invoke(new AppNotification(title,
+            $"Work this session isn't drawing from your plan allowance.{spend}{setting} " +
+            "Open O-view for detail.",
             NotificationKind.Warning));
     }
 
