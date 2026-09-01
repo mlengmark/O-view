@@ -63,6 +63,35 @@ nothing else changed anything. And the refresh floor should stay comfortably lon
 that internal window is; fifteen minutes clears it with room to spare, which is one more reason not
 to shorten it.
 
+### …but "ordinary" was over-applied, and it hid a failure for two releases
+
+**Corrected 2026-09-01.** The paragraph above is true of a machine that *has* a block. It was
+also being applied to one that has none, because both came back as `Unchanged` — the comparison
+was `after > before`, and a null `after` is simply "not greater".
+
+The two are not the same event:
+
+| Before | After | Meaning |
+|---|---|---|
+| a block | the same block | Claude Code served its own cache. Ordinary. |
+| **no block** | **still no block** | **The run produced the one thing it exists to produce — nothing.** |
+
+A refresh that had **never once worked** therefore logged exactly like a healthy no-op. Seen on a
+user's machine reporting v0.9.1: `usage refresh unchanged` on repeat, against a `~/.claude.json`
+carrying no `cachedUsageUtilization` at all, weekly reset unknown, and nothing anywhere saying so.
+Running `/usage` by hand filled it in immediately. **The cause is still unknown** — an old Claude
+Code, a trust prompt on the working directory and a login that exits quietly all fit — which is
+the point: the log gave nobody anything to pull on.
+
+`RefreshOutcome.NoBlockProduced` now names it, and the log line says what it means rather than an
+enum name. It is **not** fatal: the cause is not established, and stopping the feature on a state
+nobody understands trades a silent no-op for a silent latch.
+
+**It is keyed on the read succeeding, not on a null time.** A file that could not be opened —
+locked, mid-write, permissions — is *unknown*, and reporting that as "nothing was produced" would
+turn a transient into a standing accusation about the user's machine (rule 6). Unknown stays
+`Unchanged`.
+
 ### The transcript's folder is named after the caller's working directory
 
 Claude Code files each transcript under a project slug derived from the invoking process's working

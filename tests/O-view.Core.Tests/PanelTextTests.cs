@@ -575,4 +575,43 @@ public class PanelTextTests
         Assert.Contains("deliberately cautious", hint, StringComparison.Ordinal);
         Assert.Contains("Resume if", hint, StringComparison.Ordinal);
     }
+
+    // ── the weekly reset nobody has reported (ADR-0014) ──────────────────────
+
+    /// <summary>
+    /// The row states the fact. It must not promise a fill-in: the derivation that once justified
+    /// "Waiting for first reset…" was deleted by ADR-0014, so a wait is the one thing this state
+    /// is not.
+    /// </summary>
+    [Fact]
+    public void TheUnknownWeeklyResetRowDoesNotDescribeAWait()
+    {
+        Assert.Equal("Weekly reset time not known", PanelText.WeeklyResetUnknown);
+        Assert.DoesNotContain("Waiting", PanelText.WeeklyResetUnknown, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The hint names both routes and neither is chosen for the reader. Which one applies
+    /// depends on whether this machine has a usable Claude Code — and on the machine that
+    /// prompted this, O-view's own refresher was running and producing nothing, so a branch
+    /// would assert a cause nobody has established (rule 6 turned on ourselves).
+    /// </summary>
+    [Fact]
+    public void TheUnknownWeeklyResetHintCarriesBothRoutes()
+    {
+        Assert.Contains("/usage", PanelText.WeeklyResetUnknownHint, StringComparison.Ordinal);
+        Assert.Contains("Weekly reset", PanelText.WeeklyResetUnknownHint, StringComparison.Ordinal);
+        Assert.Contains("once is enough", PanelText.WeeklyResetUnknownHint,
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The Linux row has one line and no hover card, so the action rides on the row itself.
+    /// Both heads read these from here, which is what <see cref="PanelText"/> is for.
+    /// </summary>
+    [Fact]
+    public void TheShortActionNamesTheCommand()
+    {
+        Assert.Contains("/usage", PanelText.WeeklyResetUnknownAction, StringComparison.Ordinal);
+    }
 }

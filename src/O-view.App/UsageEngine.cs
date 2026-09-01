@@ -594,7 +594,7 @@ public sealed class UsageEngine : IDisposable
             return;
         }
 
-        _log?.Write($"usage refresh {result.Outcome.ToString().ToLowerInvariant()}" +
+        _log?.Write($"usage refresh {Describe(result.Outcome)}" +
                     (result.Detail is { Length: > 0 } d ? $" ({d})" : ""));
 
         if (result.Succeeded)
@@ -602,6 +602,22 @@ public sealed class UsageEngine : IDisposable
             Poll();
         }
     }
+
+    /// <summary>
+    /// The outcome as the log should carry it.
+    ///
+    /// <para>Every other outcome is legible as its own name. <see cref="RefreshOutcome.NoBlockProduced"/>
+    /// is not, and it is the one a reader most needs to understand: it is the state that used to
+    /// be indistinguishable from a healthy no-op, so the line has to say what it means rather
+    /// than name an enum. The log is what a bug report carries — one round trip should be enough
+    /// to see this (CLAUDE.md).</para>
+    /// </summary>
+    private static string Describe(RefreshOutcome outcome) => outcome switch
+    {
+        RefreshOutcome.NoBlockProduced =>
+            "ran but wrote no usage block — /usage is not refreshing on this machine",
+        _ => outcome.ToString().ToLowerInvariant(),
+    };
 
     /// <summary>
     /// The cheap half, on its own faster cadence: read the plan-history file and nothing else.

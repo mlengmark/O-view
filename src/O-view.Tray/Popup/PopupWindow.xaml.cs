@@ -496,19 +496,18 @@ public partial class PopupWindow : Window, IFlyout
     }
 
     /// <summary>
-    /// The weekly reset line, which mirrors the session one (issue #6, ADR-0011). Three
+    /// The weekly reset line, which mirrors the session one (issue #6, ADR-0014). Three
     /// states, and the middle one is the point of the whole feature:
     ///
     /// <list type="bullet">
-    /// <item><b>Derived</b> — same shape as the session line, with the weekday added
-    /// because a reset a week out needs one. A reset that was observed while Claude
-    /// Desktop was closed is only bracketed to within hours, so its time is prefixed
-    /// <c>~</c> and the hover says how wide the bracket is: showing an hour and a minute
-    /// we do not have would be a fabricated number (rule 6).</item>
-    /// <item><b>Waiting</b> — plan data is flowing but no `sd` drop has been seen yet.
-    /// This used to render as nothing at all, which is indistinguishable from a bug; it
-    /// now says what O-view is waiting for and the hover says how long that takes.</item>
-    /// <item><b>No plan data</b> — nothing to wait for yet, and the no-data banner above
+    /// <item><b>Known</b> — same shape as the session line, with the weekday added because a
+    /// reset a week out needs one. Exact, and never marked <c>~</c>: both remaining sources
+    /// report the instant rather than inferring it (ADR-0014).</item>
+    /// <item><b>Not known</b> — Claude Code has never reported one and nothing was entered.
+    /// The row says so and the hover carries the one step that ends it; clicking copies
+    /// <c>/usage</c>. This used to say "Waiting for first reset…", which described the
+    /// derivation ADR-0014 deleted — a wait nobody was serving and no action to take.</item>
+    /// <item><b>No plan data</b> — nothing to act on yet, and the no-data banner above
     /// already explains why, so the line is hidden rather than repeating it.</item>
     /// </list>
     /// </summary>
@@ -535,8 +534,8 @@ public partial class PopupWindow : Window, IFlyout
             return;
         }
 
-        WeeklyResetText.Text = PanelText.WeeklyResetWaiting;
-        WeeklyResetText.ToolTip = HoverCard.Text(this, PanelText.WeeklyResetWaitingHint);
+        WeeklyResetText.Text = PanelText.WeeklyResetUnknown;
+        WeeklyResetText.ToolTip = HoverCard.Text(this, PanelText.WeeklyResetUnknownHint);
         HoverCard.ApplyTiming(WeeklyResetText);
         WeeklyResetText.Visibility = authoritative ? Visibility.Visible : Visibility.Collapsed;
     }
