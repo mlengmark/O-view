@@ -248,6 +248,16 @@ public partial class PopupWindow : Window, IFlyout
     /// </summary>
     public BoostNotices? BoostNotices { get; set; }
 
+    /// <summary>
+    /// Claude Code's cached usage block, for the one thing the snapshot does not carry: whether
+    /// extra usage is switched on for this account, and when that was last read (issue #259).
+    ///
+    /// <para>Set on open from the engine, which owns the read. Null renders the banner's
+    /// unknown wording — the same thing a machine with no Claude Code gets, and correctly so.
+    /// </para>
+    /// </summary>
+    public CachedUtilization? CachedUsage { get; set; }
+
     private TraySettings? _lastSettings;
 
     public void ShowNearTrayIcon(UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account)
@@ -455,7 +465,7 @@ public partial class PopupWindow : Window, IFlyout
         PopulateBoostChip(local);
 
         PopulateTiles(stats);
-        PopulateDivergence(stats);
+        PopulateDivergence(stats, local);
 
         // Nothing recorded at all, while the plan meters show real usage: the tiles are
         // measuring a source this user does not feed, not measuring zero usage. Say which
@@ -950,7 +960,7 @@ public partial class PopupWindow : Window, IFlyout
     /// The two are independent: the 31-day figure shows even when the current window
     /// is on-plan, and the banner shows even before any credit spend has accrued.
     /// </summary>
-    private void PopulateDivergence(PanelStatistics stats)
+    private void PopulateDivergence(PanelStatistics stats, TimeZoneInfo local)
     {
         var d = stats.Divergence;
         var offPlan = stats.IsOffPlan;
@@ -963,13 +973,22 @@ public partial class PopupWindow : Window, IFlyout
 
         if (offPlan && d is not null)
         {
-            var limitReached = d.State == DivergenceState.PlanLimitReached;
-            DivergenceTitle.Text = limitReached
-                ? "Plan limit reached — usage is billing beyond your plan"
-                : "This session's usage is not drawing from your plan";
-            DivergenceDetail.Text = limitReached
-                ? PanelText.PlanLimitReachedDetail
-                : PanelText.DivergenceDetail(d.OutputTokensInWindow, d.PlanRisePoints);
+            // Both sentences live in PanelText, and the heading joined them there for issue
+            // #259: it was the half that asserted a charge — "usage is billing beyond your
+            // plan" — at readers whose accounts had extra usage switched off, while the detail
+            // line beneath it was already careful not to. A claim the panel makes in two
+            // registers should not be worded in two places.
+            var extraUsage = CachedUsage?.ExtraUsage ?? ExtraUsageStatus.Unknown;
+
+            DivergenceTitle.Text = PanelText.OffPlanTitle(d.State, extraUsage.State);
+            DivergenceDetail.Text = PanelText.OffPlanDetail(
+                d, extraUsage.State, CachedUsage?.FetchedAtUtc, Now(TimeZoneInfo.Utc), local);
+
+            // Filled here rather than in XAML so the label and the address have one definition
+            // in Core, next to the sentences that send the reader to them (issue #259).
+            DivergenceLinkAnchor.NavigateUri = new Uri(PanelText.UsageSettingsUrl);
+            DivergenceLinkAnchor.Inlines.Clear();
+            DivergenceLinkAnchor.Inlines.Add(PanelText.UsageSettingsLinkLabel);
         }
 
         // ── standing 31-day off-plan spend (issue #3) ────────────────────────────
@@ -1315,6 +1334,35 @@ public partial class PopupWindow : Window, IFlyout
             (byte)(a.R + (b.R - a.R) * t),
             (byte)(a.G + (b.G - a.G) * t),
             (byte)(a.B + (b.B - a.B) * t));
+    }
+
+    /// <summary>
+    /// Opens the off-plan banner's link in the user's browser (issue #259).
+    ///
+    /// <para><c>UseShellExecute</c> because the target is a URL rather than an executable —
+    /// the same call <see cref="OView.Tray.Updates.UpdateService.OpenInBrowser"/> makes, and
+    /// the only form that hands a URL to the default handler rather than trying to run it.</para>
+    ///
+    /// <para>Swallows its failures deliberately. A machine with no registered browser handler
+    /// throws here, and the panel losing a link is a smaller cost than the panel closing with
+    /// an unhandled exception while the reader is looking at a warning.</para>
+    /// </summary>
+    private void OnUsageSettingsNavigate(object sender, System.Windows.Navigation.RequestNavigateEventArgs e)
+    {
+        e.Handled = true;
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = e.Uri.AbsoluteUri,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception)
+        {
+            // No handler for https, or the shell refused. Nothing useful to say in a panel.
+        }
     }
 
     // ── formatting (display edge) ──────────────────────────────────────────────

@@ -100,29 +100,111 @@ runaway cost bug on a future Claude Code release.
 *Measured the hard way:* `-p "/usage"` under Git Bash is path-mangled by MSYS into
 `C:/Program Files/Git/usage` and goes to the model. Invoke without a shell, or escape it.
 
-## 4. What a fresh block contains: freshness only, on this account
+## 4. What a fresh block contains
 
-Populated: `five_hour` 70%, `seven_day` 38%, `nimbus_quill` 0%.
+**Re-measured 2026-09-01** (Claude Code `2.1.241`, same `claude_pro` account) against a block
+fetched 15 seconds earlier, reading `five_hour 20%`, `seven_day 2%`. **The re-measurement
+contradicts the first one on two fields, and the correction is the point of this section.**
 
-Empty **even when fresh**: `seven_day_cowork`, `seven_day_opus`, `seven_day_sonnet`,
-`seven_day_oauth_apps`, `extra_usage`, `spend`, `member_dashboard_available`, and the rest.
+### What is populated
 
-**The per-surface Cowork meter is not there.** The field exists in the schema and carries nothing.
-Caveat: this is a `claude_pro` account, and some of these plausibly populate where the corresponding
-separate limit exists — `seven_day_opus` on Max, for instance. Empty here is not proven empty
-everywhere. **Build nothing on them until an account is found where they fill.**
+| Field | Value on this account | Read by O-view |
+|---|---|---|
+| `five_hour` | `20%`, exact `resets_at` | yes |
+| `seven_day` | `2%`, exact `resets_at` | yes |
+| `limits[]` | two entries — see below | **no** (issue #238) |
+| `extra_usage` | four real booleans — see below | yes, since issue #259 |
+| `spend` | `enabled:false`, `used: {0, USD}`, a `disclaimer` sentence | no |
+| `member_dashboard_available` | `false` | no |
+| `nimbus_quill` | `0%`, no `resets_at` | no |
 
-`limits[]` **is** populated, and carries Anthropic's own classification:
+### What is empty even when fresh
+
+`seven_day_opus`, `seven_day_sonnet`, `seven_day_cowork`, `seven_day_oauth_apps`,
+`seven_day_omelette`, `tangelo`, `iguana_necktie`, `omelette_promotional`, `cinder_cove`,
+`amber_ladder`, `juniper_tide` — all explicit `null`.
+
+Caveat unchanged: this is a `claude_pro` account, and some of these plausibly populate where the
+corresponding separate limit exists — `seven_day_opus` on Max, for instance. **Empty here is not
+proven empty everywhere.** But see *no client contract* below before building on one.
+
+### The correction: `extra_usage` and `spend` are not empty
+
+This section previously listed both among the fields that carry nothing even when fresh. They do
+carry something, and `extra_usage` carries the answer to a question O-view had been hedging
+around in the panel for weeks:
+
+```jsonc
+"extra_usage": {
+  "is_enabled": false,          // the resolved answer
+  "user_disabled": true,        // the person turned it off
+  "spend_limit_reached": false,
+  "credits_ever_enabled": true,
+  // the money half — null BECAUSE it is switched off and nothing has been spent
+  "monthly_limit": null, "used_credits": null, "utilization": null,
+  "currency": null, "decimal_places": null, "disabled_reason": null,
+  "daily": null, "weekly": null
+}
+```
+
+**How the first reading got it wrong is worth recording**, because it is a shape a survey will
+meet again: the object is twelve fields of which eight are null, and it was read as empty. It is
+not empty — it is an *off* switch, and the nulls are what "off" looks like. A field that carries
+`false` is carrying an answer.
+
+That answer is now the basis of the off-plan banner's wording (issue #259). Before it, the panel
+told every user whose 5-hour window ran out that "usage is billing beyond your plan", including
+the ones who could not be billed anything.
+
+`spend` is populated too, though nothing needs it yet: `enabled:false`, `used` as a minor-unit
+money object, and a `disclaimer` sentence with a support link in it. `member_dashboard_available`
+is `false` — again a value, not an absence.
+
+### `limits[]` is a re-projection, not a second source
 
 ```
-kind=session     group=session  pct=70  severity=normal  is_active=true
-kind=weekly_all  group=weekly   pct=38  severity=normal  is_active=false
+kind=session     group=session  pct=20  severity=normal  is_active=true   scope=null
+                 resets_at=2026-09-01T12:00:00.156170+00:00
+kind=weekly_all  group=weekly   pct=2   severity=normal  is_active=false  scope=null
+                 resets_at=2026-09-07T21:00:00.156196+00:00
 ```
 
-Two things worth taking. `is_active` marks which limit currently binds — a distinction O-view does
-not make. And **`severity` disagrees with `UsageLevels`**: Anthropic calls 70% `normal` where
-O-view's bands call it red. O-view's threshold is a deliberate user-facing warning choice, so this
-is not a bug — but it should be a recorded decision rather than a surprise.
+Both entries match `five_hour` and `seven_day` **to the microsecond**. So `limits[]` holds no
+percentage and no reset instant O-view is not already reading. What it holds that nothing else
+does is three fields:
+
+- **`is_active`** — which limit currently binds. Session on both measurements; a case where the
+  weekly meter is the higher of the two has never been observed, so *what the flag means* is not
+  established from this data, only that it is reported rather than derived.
+- **`severity`** — Anthropic's own classification. **Only `normal` has ever been observed**, at
+  70%, 20% and 2%. The value names of the rest of the scale are unknown.
+- **`scope`** — null on both. The obvious carrier for a model-scoped limit, which makes `limits[]`
+  the shape a Max account's Opus limit would arrive in.
+
+### No client contract — the fact that decides how much weight these can bear
+
+Counted in Claude Code's own binary (`2.1.241`, 337 MB):
+
+| String | Occurrences |
+|---|---|
+| `five_hour` | 66 |
+| `seven_day` | 56 |
+| `seven_day_opus` | 31 |
+| `extra_usage` | 15 |
+| `is_enabled` | 15 |
+| `is_active` | **0** |
+| `weekly_all` | **0** |
+| `user_disabled` | **0** |
+| `spend_limit_reached` | **0** |
+| `member_dashboard_available` | **0** |
+| `nimbus_quill` | **0** |
+
+Claude Code caches the whole `utilization` object verbatim and renders four bars from it. The
+zero-count fields are **server payload passing through a client that never reads them**, so
+nothing in the vendor's own product would break if the server renamed or dropped one. Nothing
+here is discouraged by that — `extra_usage.is_enabled` is consumed by Claude Code and is read on
+that basis, while `user_disabled` and `spend_limit_reached` are carried for diagnostics and
+deliberately not branched on. It is the asymmetry to weigh before making any of them load-bearing.
 
 ## 5. The `/usage` text output carries more
 

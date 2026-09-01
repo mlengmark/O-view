@@ -1,4 +1,5 @@
 using OView.Core.Models;
+using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.PlanHistory;
 
 namespace OView.Core.Tests;
@@ -324,9 +325,150 @@ public class PanelTextTests
     public void TheLimitReachedWordingDoesNotAssertHowItBills()
     {
         Assert.Contains("exhausted", PanelText.PlanLimitReachedDetail, StringComparison.Ordinal);
-        Assert.Contains("O-view cannot read", PanelText.PlanLimitReachedDetail, StringComparison.Ordinal);
+        Assert.Contains("O-view could not read", PanelText.PlanLimitReachedDetail, StringComparison.Ordinal);
         Assert.DoesNotContain("bills as extra usage at API rates",
             PanelText.PlanLimitReachedDetail, StringComparison.Ordinal);
+    }
+
+    // ── off-plan heading and detail, against the extra-usage setting (issue #259) ────
+
+    private static readonly DateTimeOffset Fetched = new(2026, 7, 31, 9, 7, 0, TimeSpan.Zero);
+
+    private static DivergenceResult LimitReached =>
+        new(DivergenceState.PlanLimitReached, 120_000, 0);
+
+    private static DivergenceResult Diverging =>
+        new(DivergenceState.Diverging, 126_900, 0);
+
+    /// <summary>
+    /// The heading the issue was raised about. "Plan limit reached — usage is billing beyond
+    /// your plan" was shown to every reader whose 5-hour window ran out, including the ones who
+    /// had extra usage switched off and therefore could not be billed anything — a claim about
+    /// their money that was both alarming and false (issue #259).
+    /// </summary>
+    [Fact]
+    public void TheExhaustedWindowHeadingClaimsAChargeOnlyWhereTheAccountAllowsOne()
+    {
+        Assert.Equal("Plan limit reached — further work bills as extra usage",
+            PanelText.OffPlanTitle(DivergenceState.PlanLimitReached, ExtraUsageState.Enabled));
+
+        Assert.Equal("Plan limit reached — extra usage is switched off",
+            PanelText.OffPlanTitle(DivergenceState.PlanLimitReached, ExtraUsageState.Disabled));
+
+        // Unknown states the observation and nothing else. It is the state a machine with no
+        // Claude Code is in, so it must read as a complete sentence rather than a hedge.
+        Assert.Equal("Plan limit reached",
+            PanelText.OffPlanTitle(DivergenceState.PlanLimitReached, ExtraUsageState.Unknown));
+    }
+
+    /// <summary>
+    /// No state of the account turns the disabled heading into a billing claim. Written as an
+    /// exhaustive sweep rather than three literals because the wording will be edited again,
+    /// and what must survive the edit is the claim, not the sentence.
+    /// </summary>
+    [Theory]
+    [InlineData(ExtraUsageState.Unknown)]
+    [InlineData(ExtraUsageState.Disabled)]
+    public void OnlyAnEnabledAccountIsToldItsWorkIsBilling(ExtraUsageState state)
+    {
+        var title = PanelText.OffPlanTitle(DivergenceState.PlanLimitReached, state);
+        var detail = PanelText.OffPlanDetail(LimitReached, state, Fetched, Now, Utc);
+
+        Assert.DoesNotContain("billing beyond your plan", title, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("bills beyond", detail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The diverging heading never asserted a charge and does not gain one. The meter not
+    /// moving may not be about billing at all — a Cowork session in a cloud container leaves no
+    /// local record either (rule 9) — so the account setting changes the detail, not the claim.
+    /// </summary>
+    [Theory]
+    [InlineData(ExtraUsageState.Unknown)]
+    [InlineData(ExtraUsageState.Disabled)]
+    [InlineData(ExtraUsageState.Enabled)]
+    public void TheDivergingHeadingIsTheSameWhateverTheAccountSaysAboutExtraUsage(ExtraUsageState state) =>
+        Assert.Equal("This session's usage is not drawing from your plan",
+            PanelText.OffPlanTitle(DivergenceState.Diverging, state));
+
+    /// <summary>
+    /// The setting is relayed with its provenance, never asserted in O-view's own voice: it is
+    /// another application's cache, refreshed only when <c>/usage</c> runs, so it can be days
+    /// old while looking current. Same treatment, same reason, as the promo notice.
+    /// </summary>
+    [Fact]
+    public void TheSettingIsRelayedWithWhoSaidItAndWhen()
+    {
+        var off = PanelText.OffPlanDetail(LimitReached, ExtraUsageState.Disabled, Fetched, Now, Utc);
+
+        Assert.Contains("exhausted", off, StringComparison.Ordinal);
+        Assert.Contains("switched off", off, StringComparison.Ordinal);
+        Assert.Contains("should not bill beyond it", off, StringComparison.Ordinal);
+        Assert.Contains("reported by Claude Code, read 09:07", off, StringComparison.Ordinal);
+
+        var on = PanelText.OffPlanDetail(LimitReached, ExtraUsageState.Enabled, Fetched, Now, Utc);
+
+        Assert.Contains("switched on", on, StringComparison.Ordinal);
+        Assert.Contains("can bill beyond it", on, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A bare <c>09:07</c> on a four-day-old block reads as this morning, which hides the one
+    /// thing the provenance clause exists to disclose. The date appears as soon as the reading
+    /// is not from the reader's own today.
+    /// </summary>
+    [Fact]
+    public void AReadingFromAnotherDayCarriesItsDate()
+    {
+        var stale = PanelText.OffPlanDetail(
+            LimitReached, ExtraUsageState.Disabled, Now.AddDays(-4), Now, Utc);
+
+        Assert.Contains("read 27 Jul 12:00", stale, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Nothing read means nothing claimed, in both directions — and specifically not a stamp on
+    /// a reading that never happened. A null fetch time is treated as no answer even if a state
+    /// was somehow supplied alongside it.
+    /// </summary>
+    [Fact]
+    public void WithNothingReadTheDetailFallsBackToTheObservationAlone()
+    {
+        Assert.Equal(PanelText.PlanLimitReachedDetail,
+            PanelText.OffPlanDetail(LimitReached, ExtraUsageState.Unknown, Fetched, Now, Utc));
+
+        Assert.Equal(PanelText.PlanLimitReachedDetail,
+            PanelText.OffPlanDetail(LimitReached, ExtraUsageState.Disabled, null, Now, Utc));
+
+        Assert.Equal(PanelText.DivergenceDetail(126_900, 0),
+            PanelText.OffPlanDetail(Diverging, ExtraUsageState.Unknown, Fetched, Now, Utc));
+    }
+
+    /// <summary>
+    /// The diverging detail keeps its two numbers when the setting is known — the setting is
+    /// added to the observation, not substituted for it.
+    /// </summary>
+    [Fact]
+    public void TheDivergingDetailKeepsItsNumbersAndGainsTheSetting()
+    {
+        var text = PanelText.OffPlanDetail(Diverging, ExtraUsageState.Disabled, Fetched, Now, Utc);
+
+        Assert.Contains("126.9K output tokens", text, StringComparison.Ordinal);
+        Assert.Contains("moved 0 points", text, StringComparison.Ordinal);
+        Assert.Contains("switched off", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The link the issue asked for, and the reason it is a constant: every wording above ends
+    /// by sending the reader to Claude for the figure O-view will not state, so the address has
+    /// to be the one Claude Code itself uses for that screen rather than a plausible guess
+    /// (rule 6 applied to a URL).
+    /// </summary>
+    [Fact]
+    public void TheBannerLinkPointsAtClaudesOwnUsageSettings()
+    {
+        Assert.Equal("https://claude.ai/settings/usage", PanelText.UsageSettingsUrl);
+        Assert.NotEmpty(PanelText.UsageSettingsLinkLabel);
     }
 
     // ── tile labels ─────────────────────────────────────────────────────────────────

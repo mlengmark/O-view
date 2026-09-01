@@ -258,8 +258,53 @@ internal static class SampleRenderer
             SavePng(
                 boosted.RenderToBitmap(live with { WeeklyPercent = 100 }, stats, account, scale),
                 Path.Combine(dir, $"panel-boosted-{(light ? "light" : "dark")}.png"));
+
+            // The off-plan banner, in each of the three things Claude Code's cache can say
+            // about extra usage (issue #259).
+            //
+            // No ordinary sample reaches it — it needs an exhausted plan meter, which no
+            // fixture had — so the wording that told readers their work was billing beyond
+            // their plan, at accounts that had extra usage switched off and could not be
+            // billed anything, had never been rendered anywhere. That is the shape of #58 and
+            // #170 exactly: a state nobody looks at is a state that goes on being wrong.
+            var offPlanStats = stats with
+            {
+                Divergence = new DivergenceResult(DivergenceState.PlanLimitReached, 69_091, 0),
+                EstOffPlanUsd = 92.75m,
+            };
+
+            foreach (var (label, extra) in OffPlanCases)
+            {
+                var offPlan = new PopupWindow
+                {
+                    ThemeOverride = light,
+                    ScopeReport = bothSourcesScope,
+                    // Stamped with the pinned capture time rather than the real clock, so the
+                    // provenance clause in the banner reads the same on every run.
+                    CachedUsage = extra is null
+                        ? null
+                        : new CachedUtilization(capturedAt, null, null, null) { ExtraUsage = extra },
+                };
+
+                SavePng(
+                    offPlan.RenderToBitmap(
+                        live with { SessionPercent = 100 }, offPlanStats, account, scale),
+                    Path.Combine(dir, $"panel-offplan-{label}-{(light ? "light" : "dark")}.png"));
+            }
         }
     }
+
+    /// <summary>
+    /// The three states of the extra-usage setting, as the off-plan banner sees them. Null is
+    /// not a fourth: it is how <see cref="ExtraUsageState.Unknown"/> arrives in practice — no
+    /// Claude Code on the machine, so no block to read at all.
+    /// </summary>
+    private static readonly (string Label, ExtraUsageStatus? Status)[] OffPlanCases =
+    [
+        ("unknown", null),
+        ("off", new ExtraUsageStatus(ExtraUsageState.Disabled, UserDisabled: true)),
+        ("on", new ExtraUsageStatus(ExtraUsageState.Enabled)),
+    ];
 
     /// <summary>
     /// A promo notice in the shape Claude Code really caches, ending far enough out that all

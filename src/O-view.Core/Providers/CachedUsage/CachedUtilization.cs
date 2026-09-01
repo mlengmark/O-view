@@ -55,6 +55,23 @@ public sealed record CachedUtilization(
     public const string PropertyName = "cachedUsageUtilization";
 
     /// <summary>
+    /// Whether work past the plan allowance bills as extra usage on this account
+    /// (issue #259). <see cref="ExtraUsageState.Unknown"/> when the block does not say.
+    ///
+    /// <para>An <c>init</c> property rather than a sixth positional parameter, deliberately.
+    /// The four above are a fixed positional list that a new entry in the middle would
+    /// silently re-point — the hazard issue #248 hit on <see cref="UsageSnapshot"/>, whose
+    /// trailing arguments are named from that point on for the same reason.</para>
+    ///
+    /// <para><b>Not gated on freshness here.</b> A percentage stops describing anything once
+    /// its window rolls over, which is why <see cref="CachedUtilizationProvider"/> discards
+    /// one; an account setting does not roll over, it is simply older or newer. It is dated
+    /// by <see cref="FetchedAtUtc"/> and the panel says when it was read rather than deciding
+    /// on the reader's behalf that an hour-old answer is no answer.</para>
+    /// </summary>
+    public ExtraUsageStatus ExtraUsage { get; init; } = ExtraUsageStatus.Unknown;
+
+    /// <summary>
     /// Where to look — the same candidates as the account badge, so the two can never disagree
     /// about which <c>.claude.json</c> is in effect, and so this follows
     /// <c>CLAUDE_CONFIG_DIR</c> for free (<see cref="ClaudeAccount.Candidates"/>).
@@ -135,7 +152,10 @@ public sealed record CachedUtilization(
             DateTimeOffset.FromUnixTimeMilliseconds(fetchedMs),
             ReadString(block, "accountUuid"),
             ReadBar(bars, "five_hour"),
-            ReadBar(bars, "seven_day"));
+            ReadBar(bars, "seven_day"))
+        {
+            ExtraUsage = ExtraUsageStatus.Read(bars),
+        };
     }
 
     /// <summary>
