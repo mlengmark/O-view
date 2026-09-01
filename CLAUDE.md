@@ -265,10 +265,10 @@ Before anything is known, the reset time is genuinely **unknown** — show it as
 
 **A cached percentage whose window has rolled over is not a reading.** Claude Code refreshes that file only on `/usage`, so a block can sit days old across many boundaries and still report the old window's figure — 91% for a window that reset to nothing hours ago. Each bar carries its own `resets_at`, so this is checkable; check it, and report unknown rather than the stale number. That check is about the **percentage**, not the reset instant — the weekly instant is deliberately projected forward from the past, per the rule above.
 
-Two things about the weekly one are easy to "tidy up" back into the bug they fix:
+Two things about the weekly one are easy to "tidy up" back into the bug they fix. **Both bullets here described ADR-0011's derivation until 2026-09-01** — a gap-crossing `sd` drop stored as a bracket, in `weekly-resets.json` — which ADR-0014 deleted along with `WeeklyResetDetector`. Preserving deleted code is what this section was telling you to do:
 
-- **A drop across a gap in Desktop's sampling is a real reset, not a restart snap.** Weekly resets land overnight and Desktop is closed then, so rejecting gap-crossing drops rejects *every* observation — which is exactly why the panel showed no weekly reset for weeks. What the gap costs is precision, so the observation is stored as the bracket `(previous sample, drop sample]`, predicted from its upper bound, and marked `~` in the UI.
-- **Observed resets live in `%LOCALAPPDATA%\O-view\weekly-resets.json`, not in the rollup store.** The store is a rebuildable cache and wipes itself on corruption (rule 7 / issue #16); a weekly reset cannot be rebuilt and costs a week to re-observe. Do not move it back.
+- **The anchor is `%LOCALAPPDATA%\O-view\weekly-reset.json`, one instant, not a log of observations.** It is scoped by org and re-readable from `~/.claude.json` whenever Claude Code refreshes, so losing it costs a wait rather than a week. That is why it is *not* the unrebuildable state ADR-0011 kept out of the rollup store, and why the argument for its predecessor's location does not carry over.
+- **A weekly reset O-view has never been told is unknown, and the panel says so with the step that fixes it.** Do not re-derive it from `sd` drops to fill the gap: an overnight bracket is ~10 hours wide, which on the machine that prompted ADR-0014 meant a time 11.5 hours late and on the wrong day, wearing no uncertainty the user could act on. The honest row names the action instead — run `/usage`, or enter the time — and `PanelText.WeeklyResetUnknownHint` picks which from an observation, never from the presence of an account file.
 
 ## Build order
 

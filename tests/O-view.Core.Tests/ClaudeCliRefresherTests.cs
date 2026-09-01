@@ -91,6 +91,21 @@ public class ClaudeCliRefresherTests
         Assert.Equal(RefreshOutcome.Refreshed, refresher.Refresh().Outcome);
     }
 
+    /// <summary>
+    /// The state that hid the defect: Claude Code ran, exited 0, and there is still no block
+    /// to read. Reported as Unchanged until v0.9.3 — which findings/cli-usage-refresh.md
+    /// explicitly teaches as ordinary, so a refresh that had never once worked logged exactly
+    /// like a healthy no-op. Observed on a v0.9.1 machine whose weekly reset stayed unknown
+    /// while the log said "usage refresh unchanged" on repeat.
+    /// </summary>
+    [Fact]
+    public void ACleanRunThatWroteNoBlockIsNotUnchanged()
+    {
+        var refresher = Refresher(Block(null), Ok);
+
+        Assert.Equal(RefreshOutcome.NoBlockProduced, refresher.Refresh().Outcome);
+    }
+
     // ── the cost guard ──────────────────────────────────────────────────────
 
     /// <summary>
@@ -247,7 +262,12 @@ public class ClaudeCliRefresherTests
         Assert.Equal("InvalidOperationException", result.Detail);
     }
 
-    /// <summary>A reader that throws must not blank the outcome, only the comparison.</summary>
+    /// <summary>
+    /// A reader that throws must not blank the outcome, only the comparison — and must not be
+    /// read as NoBlockProduced either. An unreadable file is unknown (locked, mid-write,
+    /// permissions), not evidence that nothing was written, so it stays Unchanged and claims
+    /// nothing about the machine (rule 6).
+    /// </summary>
     [Fact]
     public void AThrowingReaderDoesNotEscape()
     {

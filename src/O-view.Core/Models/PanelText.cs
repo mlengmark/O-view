@@ -204,18 +204,52 @@ public static class PanelText
             + "if your plan changed.";
     }
 
-    /// <summary>Hover text for an approximate weekly reset, naming how wide the bracket is.</summary>
     /// <summary>
-    /// Shown while plan data is flowing but no weekly drop has been seen yet. This used to
-    /// render as nothing at all, which is indistinguishable from a bug.
+    /// Shown when no weekly reset is known: Claude Code has never reported one and nothing was
+    /// entered (ADR-0014).
+    ///
+    /// <para><b>This replaces "Waiting for first reset…", which described a mechanism that no
+    /// longer exists.</b> That copy is ADR-0011's, from when the reset was derived by watching
+    /// the weekly percentage fall; ADR-0014 deleted the derivation, so nothing was watching and
+    /// the promised fill-in could never arrive. A row that names a wait nobody is serving is the
+    /// blank row's defect — indistinguishable from a bug — wearing an explanation.</para>
+    ///
+    /// <para>It states the fact instead, and the hint carries the one action that ends it. The
+    /// action only has to work once: the reset is a fixed weekly grid and O-view keeps the
+    /// anchor, so this row is a one-time setup step rather than a standing gap.</para>
     /// </summary>
-    public const string WeeklyResetWaiting = "Waiting for first reset…";
+    public const string WeeklyResetUnknown = "Weekly reset time not known";
 
-    /// <summary>Why the wait is normal, and roughly how long it lasts.</summary>
-    public const string WeeklyResetWaitingHint =
-        "Claude Desktop reports weekly usage as a percentage and never reports when the "
-        + "window resets, so O-view derives it by watching that percentage fall. It checks "
-        + "on every refresh and fills this in on the first reset it sees — within a week.";
+    /// <summary>
+    /// What to do about it — both routes, in one string.
+    ///
+    /// <para>Claude Code writes the exact instant only when <c>/usage</c> runs: not on startup,
+    /// not on an ordinary prompt
+    /// ([findings/cli-usage-refresh.md](../../../../docs/findings/cli-usage-refresh.md)). O-view
+    /// asks it to on its own cadence (issue #234), so this row usually fills itself in; the hint
+    /// is for the machines where it has not. It names the command rather than describing it,
+    /// because the user has to type that exact string.</para>
+    ///
+    /// <para><b>Both routes, deliberately, rather than one chosen for the reader.</b> Choosing
+    /// would mean deciding whether this machine has a usable Claude Code — and on the machine
+    /// that prompted this, O-view's own refresher was running, reporting <c>Unchanged</c>, and
+    /// producing no block at all. Until that is understood, a branch would be the app asserting
+    /// a cause it has not established, which is rule 6 pointed at ourselves. Two sentences cost
+    /// a hover card nothing; a confident wrong one costs the user the fix.</para>
+    /// </summary>
+    public const string WeeklyResetUnknownHint =
+        "Claude reports the exact weekly reset only when /usage runs in Claude Code. O-view asks "
+        + "it to periodically; if this stays blank, run /usage in a Claude Code session yourself "
+        + "— once is enough, because the reset is a fixed weekly time O-view then remembers. "
+        + "With no Claude Code, enter it from Menu → Weekly reset…: Claude shows the time under "
+        + "Settings → Usage.";
+
+    /// <summary>
+    /// The same action in a few words, for a surface with no room for the full hint: the Linux
+    /// panel's bar rows carry a single line and no hover card, so the action rides on the row
+    /// itself or does not appear at all.
+    /// </summary>
+    public const string WeeklyResetUnknownAction = "run /usage in Claude Code";
 
     /// <summary>
     /// The menu row offered when usage refreshing has stopped itself (issue #234).

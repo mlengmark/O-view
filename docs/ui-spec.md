@@ -125,22 +125,21 @@ Hovering gives the card: Claude's sentence unedited, then `Ends Mon 31 Aug · re
 
 *Design note:* the original spec had the session bar showing **remaining time** and the weekly bar showing **remaining tokens**. Rejected during review: a time bar cannot warn about quota exhaustion — you could sit at 95% used with 4 hours "remaining" and the bar would still look healthy, which defeats the purpose of the tool. Time is still shown, as text.
 
-**Weekly reset ([GitHub issue #6](https://github.com/mlengmark/O-view/issues/6), [ADR-0011](adr/0011-weekly-reset-derivation.md)):** derived from `sd` drops the same way the 5-hour reset is derived from `fh` drops, and now presented the same way. The window is **7 days** — measured from two resets 7 d 0 h 14 m apart, with the 72-hour alternative disproved by the same file — so **one** observed reset is enough to predict the next, as one `fh` drop is. Observed resets are still **persisted**, in [`%LOCALAPPDATA%\O-view\weekly-resets.json`](adr/0011-weekly-reset-derivation.md): a reset that scrolls out of the source file is gone for good, and that state must not sit in the rollup store, which wipes itself on corruption.
+**Weekly reset ([GitHub issue #6](https://github.com/mlengmark/O-view/issues/6), [ADR-0014](adr/0014-weekly-reset-is-a-reported-constant.md)):** **reported, never derived.** Claude Code writes the exact instant to `~/.claude.json` → `cachedUsageUtilization.utilization.seven_day.resets_at`; O-view persists it as an anchor in `%LOCALAPPDATA%\O-view\weekly-reset.json` and projects it forward by whole weeks, including from a stored instant already in the past. The reset is a fixed weekly grid tied to the account — same weekday, same time, every week — so one report is correct forever. A user-entered time fills the gap where nothing has ever been reported; a discovered anchor outranks it, and says so rather than replacing it silently.
 
-The row has four states, and naming them is the point of the feature:
+The row has three states:
 
 | State | Line |
 |---|---|
-| Derived from a precise observation | `Resets in 6d 3h · Tue 06:28` |
-| Derived from a gap-bracketed observation | `Resets in 6d 3h · ~Tue 06:28` — hover gives the bracket width |
-| Plan data flowing, no reset seen yet | `Waiting for first reset…` — hover explains what is being watched for |
+| Known | `Resets in 6d 3h · Tue 06:28` — exact, no `~`; `· you entered this` when the source is the entry |
+| Not known | `Weekly reset time not known` — hover names the one step that ends it; clicking copies `/usage` |
 | No plan data at all | hidden; the no-data banner above already explains it |
 
-> **The `~` is load-bearing.** Weekly resets land in the small hours, and Claude Desktop stops sampling when it is closed — so a reset is typically only bracketed to within ~10 hours. Printing a bare `Tue 06:28` from that would be a fabricated minute (rule 6). The tilde and the hover state the precision; the time itself is the bracket's **upper** bound, so the panel never promises fresh quota before it arrives. Predictions anchor on the most precise observation on record, not the most recent, so the figure sharpens by itself as better observations accrue.
+> **The `~` is gone from this row, and its absence is the claim.** Both remaining sources report the instant rather than inferring it, so there is no bracket to state and the uncertainty field that carried one was removed (issue #248). The session row keeps its tilde — that window rolls from first use and is still derived.
 
-> **What the blank row cost.** Until now this line was simply hidden whenever the reset was underived — which, because gap-crossing drops were being discarded, was *always*. A permanently missing line is indistinguishable from a bug, and that is what issue #6 reported.
+> **"Not known" is a setup step, not a wait.** This line used to read `Waiting for first reset…`, from when the reset was derived by watching the weekly percentage fall. ADR-0014 deleted that derivation, so nothing was watching and the promised fill-in could never arrive — a row that names a wait nobody is serving is the blank row's defect wearing an explanation. It now states the fact and carries the action: **run `/usage` in Claude Code**, which is the only thing that refreshes the block Claude Code caches, or enter the time from **Menu → Weekly reset…** where there is no `claude` to run. Which sentence appears is an observation (`UsageEngine.ClaudeCodeFound`), never an inference from the account file — a machine can carry a `~/.claude.json` and no executable.
 
-Discovery runs on the ordinary poll loop: every refresh re-scans the retained series and folds any drops into the log, so there is no separate schedule and re-recording a known reset is a no-op. The API almost certainly reports the reset directly, but reading it needs the encrypted OAuth token (deferred — ADR-0007).
+O-view runs that command itself on its own cadence (`ClaudeCliRefresher`, issue #234), so for most users this row fills in without being read. The copy exists for the machines where it has not.
 
 Percentages come from the OAuth provider. On JSONL fallback they are estimates and must be labelled as such.
 

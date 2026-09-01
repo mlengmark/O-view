@@ -174,8 +174,9 @@ internal static class SampleRenderer
             TranscriptScopeReport? Scope, PlanHistoryReport? Plan)[]
         {
             ("plan-weeks", live, stats, bothSourcesScope, null),
-            // No reset observed: Monday-midnight gridlines, and "Waiting for first reset…".
-            ("awaiting-first-reset", new UsageSnapshot(DataSource.Live, 25, 3,
+            // No weekly reset known: Monday-midnight gridlines, and the row that names the
+            // step which fills it in (ADR-0014).
+            ("weekly-reset-unknown", new UsageSnapshot(DataSource.Live, 25, 3,
                 capturedAt.AddHours(3), capturedAt), stats, bothSourcesScope, null),
             // The token-scope note, which appears in no other state.
             ("no-local-transcripts", live, noLocalUsage, emptyScope, null),

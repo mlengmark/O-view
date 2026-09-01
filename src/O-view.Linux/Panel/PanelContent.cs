@@ -126,9 +126,16 @@ public sealed class PanelContent : Border
             return PanelText.WeeklyReset(reset, utcNow, local);
         }
 
-        // Plan data is flowing but no drop has been seen yet. Rendering nothing here is
-        // indistinguishable from a bug, so it says what it is waiting for.
-        return authoritative ? PanelText.WeeklyResetWaiting : null;
+        // Nothing has ever reported one and nothing was entered. Rendering nothing here is
+        // indistinguishable from a bug, so it names the state — and, unlike the copy this
+        // replaced, does not promise a derivation that ADR-0014 deleted.
+        //
+        // The hint the Windows panel puts in a hover card has nowhere to go here: this head's
+        // bar rows carry one line of text. The line itself is what differs, so the two heads
+        // still say the same thing about the same state, which is what PanelText is for.
+        return authoritative
+            ? $"{PanelText.WeeklyResetUnknown} · {PanelText.WeeklyResetUnknownAction}"
+            : null;
     }
 
     /// <summary>

@@ -13,6 +13,32 @@ public enum RefreshOutcome
     /// <summary>Claude Code ran and exited cleanly, but the block did not move.</summary>
     Unchanged,
 
+    /// <summary>
+    /// Claude Code ran and exited cleanly, and there is <b>still no cached block at all</b>.
+    ///
+    /// <para><b>Distinct from <see cref="Unchanged"/> because it is not the same event.</b>
+    /// Unchanged means a block exists and did not advance, which is ordinary — Claude Code keeps
+    /// its own freshness window and serves a cached answer to a second ask
+    /// ([findings/cli-usage-refresh.md](../../../../docs/findings/cli-usage-refresh.md)). This
+    /// means the one thing the refresh exists to produce was not produced, on a machine that has
+    /// never had one. Nothing about that is ordinary, and it cannot right itself by being asked
+    /// again on the same cadence.</para>
+    ///
+    /// <para><b>Why it needed its own name.</b> Both states came back as <c>Unchanged</c>, which
+    /// the finding above explicitly teaches as "an ordinary outcome, not a failure". So a refresh
+    /// that had never once worked logged exactly like a healthy no-op. Observed on a user's
+    /// machine reporting v0.9.1: <c>usage refresh unchanged</c> on repeat against a
+    /// <c>~/.claude.json</c> carrying no block, weekly reset unknown, and no indication anywhere
+    /// that anything was wrong — until they ran <c>/usage</c> by hand and it filled in at once.
+    /// </para>
+    ///
+    /// <para><b>Not fatal, and deliberately not.</b> The cause is not established — an old Claude
+    /// Code, a trust prompt on the working directory, and a login that exits quietly all produce
+    /// it — so this reports what was seen and lets the caller decide. Stopping the feature on a
+    /// state whose cause is unknown would trade a silent no-op for a silent latch.</para>
+    /// </summary>
+    NoBlockProduced,
+
     /// <summary>No <c>claude</c> on PATH. Not an error — most machines do not have one.</summary>
     NotFound,
 
@@ -260,25 +286,47 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
             return new ClaudeCliRefreshResult(RefreshOutcome.Failed, $"exit {run.ExitCode}");
         }
 
-        var after = SafeFetchedAt();
+        var after = SafeFetch();
 
         // Advanced, or appeared where there was nothing. Both are a refresh; a block that
         // exists now and did not before is the strongest possible version of one.
-        var moved = after is { } now && (before is not { } was || now > was);
+        if (after.FetchedAt is { } now && (before is not { } was || now > was))
+        {
+            return new ClaudeCliRefreshResult(RefreshOutcome.Refreshed);
+        }
 
+        // Ran clean and wrote nothing to find. Separated from Unchanged because the two are
+        // different events wearing one name: Unchanged is a block that did not move, which is
+        // ordinary, and this is the absence of the thing the run exists to create.
+        //
+        // Gated on the read having SUCCEEDED, not merely on it returning nothing. A file that
+        // could not be opened — locked, mid-write, permissions — is unknown, and reporting it
+        // as "nothing was produced" would turn a transient into a standing accusation about the
+        // machine (rule 6). Unknown stays Unchanged, which claims nothing either way.
         return new ClaudeCliRefreshResult(
-            moved ? RefreshOutcome.Refreshed : RefreshOutcome.Unchanged);
+            after is { Readable: true, FetchedAt: null }
+                ? RefreshOutcome.NoBlockProduced
+                : RefreshOutcome.Unchanged);
     }
 
-    private DateTimeOffset? SafeFetchedAt()
+    private DateTimeOffset? SafeFetchedAt() => SafeFetch().FetchedAt;
+
+    /// <summary>
+    /// The block's fetch time, and whether the file could be read at all.
+    ///
+    /// <para>The second half is the whole point: "read it, there is no block" and "could not
+    /// read it" both produce a null time and mean opposite things. Collapsing them is what let
+    /// <see cref="RefreshOutcome.NoBlockProduced"/> be indistinguishable from a locked file.</para>
+    /// </summary>
+    private (bool Readable, DateTimeOffset? FetchedAt) SafeFetch()
     {
         try
         {
-            return _read()?.FetchedAtUtc;
+            return (true, _read()?.FetchedAtUtc);
         }
         catch (Exception)
         {
-            return null;
+            return (false, null);
         }
     }
 
