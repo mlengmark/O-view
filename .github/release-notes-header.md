@@ -10,6 +10,14 @@
   the GNOME extension requirement, and that Linux updates come from the package manager
   rather than in-app. Auto-generated notes are a commit list and state none of that, which is
   why this file exists.
+
+  The off-plan banner section is here on the same terms, and it is worth saying why it is not
+  a changelog entry in disguise. What it states is standing behaviour — what the banner claims
+  and what it deliberately does not — which is true of every release from v0.9.1 on. The one
+  backward-looking sentence in it stays true forever too: someone on an older build reading a
+  much later release still needs to know that the message they are looking at is wrong for
+  them. If it ever needs a "and in this version we changed…", that belongs in the release body,
+  not here.
 -->
 
 ## Which file do I want?
@@ -54,6 +62,24 @@ gh attestation verify O-view-Setup.exe --repo mlengmark/O-view
 ```
 
 A file that fails this did not come from this pipeline, whatever else it claims.
+
+## The off-plan banner is about your plan window, not your bill
+
+O-view raises an amber banner when your 5-hour window is exhausted, or when substantial local
+work runs against a plan meter that is not moving. Both say the same thing: **your work has
+stopped drawing from the plan allowance.** Whether it is being *charged* is a separate
+question, and the answer is your account's extra-usage setting rather than anything the meter
+can tell you.
+
+So O-view reads that setting from Claude Code's own local cache and says which way it is set —
+stamped with the time Claude Code last read it, because that cache refreshes only when `/usage`
+runs and can be days old. Where there is nothing to read it says so instead of guessing. It
+never asserts a charge it cannot see, and the banner links to your usage settings in Claude for
+the figure it will not state.
+
+**Before v0.9.1 the banner asserted "usage is billing beyond your plan" at everyone whose
+window ran out**, including accounts with auto-billing switched off, which could not be billed
+anything. If you are on an older build, that message is wrong for you and upgrading is the fix.
 
 ## Linux: read this before you file a bug about a missing icon
 
