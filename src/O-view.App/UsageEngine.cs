@@ -158,9 +158,14 @@ public sealed class UsageEngine : IDisposable
     public string PlanHistoryPath => (_planHistory as PlanHistoryProvider)?.Path ?? "";
 
     /// <summary>
-    /// How many meter samples the off-plan comparison currently has to work with. Zero when
-    /// there is no plan history to read — the state every test with an injected provider chain
-    /// must be in (issue #212).
+    /// How many <b>plan-history</b> samples the current window holds. Zero when there is no
+    /// plan history to read — the state every test with an injected provider chain must be in
+    /// (issue #212).
+    ///
+    /// <para>Deliberately not the size of the series the detector evaluates, which may carry
+    /// one more (<see cref="MeterSeries.WithReportedReading"/>). This exists to assert what
+    /// was read from <i>this file</i>, so folding the other source in would blunt the
+    /// isolation check it is here for.</para>
     /// </summary>
     public int PlanWindowSampleCount =>
         _planHistory?.GetCurrentWindow(_clock.UtcNow).Percents.Count ?? 0;
@@ -1147,7 +1152,43 @@ public sealed class UsageEngine : IDisposable
             };
         }
 
-        return stats.WithDivergence(_store, windowStart, percents, meterAge);
+        // The meter as O-view actually knows it, not merely as Desktop last wrote it. Plan
+        // history alone leaves the comparison up to 15 minutes behind a reading already on
+        // screen — the gap issue #268 was reported through.
+        var reported = ReadReportedMeter(utcNow);
+        var (series, seriesAge) = MeterSeries.WithReportedReading(
+            percents, meterAge, reported.SessionPercent, reported.Age);
+
+        return stats.WithDivergence(_store, windowStart, series, seriesAge);
+    }
+
+    /// <summary>
+    /// Claude Code's cached five-hour reading and how old it is, or nulls when there is none.
+    ///
+    /// <para>Read through <see cref="_cachedUtilization"/> rather than the raw file so it
+    /// arrives with that provider's two rules already applied — a percentage whose window has
+    /// rolled over, and an aged zero, both come back null. It is also the seam a caller who
+    /// supplied its own <c>Provider</c> has already blanked, which is what keeps the off-plan
+    /// comparison from reaching into the developer's own <c>~/.claude.json</c> during tests
+    /// (issue #212, and the reasoning at the field's construction).</para>
+    ///
+    /// <para>A reader that throws yields nulls, not an exception: this refines a comparison
+    /// that was already correct without it.</para>
+    /// </summary>
+    private (int? SessionPercent, TimeSpan? Age) ReadReportedMeter(DateTimeOffset utcNow)
+    {
+        try
+        {
+            var reported = _cachedUtilization.GetSnapshot(utcNow);
+            return reported.SessionPercent is { } percent
+                ? (percent, utcNow - reported.CapturedAtUtc)
+                : (null, null);
+        }
+        catch (Exception ex)
+        {
+            _log?.Write($"reported meter skipped: {ex.GetType().Name}: {ex.Message}");
+            return (null, null);
+        }
     }
 
     /// <summary>

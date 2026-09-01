@@ -157,13 +157,74 @@ public class DivergenceDetectorTests
         Assert.False(result.IsOffPlan);
     }
 
+    // ── one sample is not a flat meter ────────────────────────────────────────
+
+    /// <summary>
+    /// Reported 2026-09-01 on 0.9.1 (issue #268). The five-hour window had opened minutes
+    /// earlier, so plan history held exactly one sample of it — <c>[5]</c> — and
+    /// <c>percents[^1] - percents[0]</c> was 0 because it is the same number twice. The panel
+    /// announced that 56.6K output tokens had moved the meter 0 points, on an account with
+    /// extra usage switched off, while Claude Code's own reading six minutes newer said 24%.
+    ///
+    /// <para>This test used to assert the opposite outcome, under the name
+    /// <c>SingleSample_HasZeroRise_AndCanDiverge</c>. It described the arithmetic faithfully
+    /// and mistook it for a finding.</para>
+    /// </summary>
     [Fact]
-    public void SingleSample_HasZeroRise_AndCanDiverge()
+    public void SingleSample_CannotBeFlat_HoweverMuchWorkRan()
     {
-        var result = DivergenceDetector.Evaluate([6], outputTokensInWindow: 60_000, meterAge: LiveMeter);
+        var result = DivergenceDetector.Evaluate([5], outputTokensInWindow: 56_600, meterAge: LiveMeter);
+
+        Assert.Equal(DivergenceState.RiseNotMeasurable, result.State);
+        Assert.False(result.IsOffPlan);
+    }
+
+    /// <summary>
+    /// The gate is the count, not the volume: no amount of work turns one point into two.
+    /// </summary>
+    [Fact]
+    public void SingleSample_StaysSilentUnderAnyLoad()
+    {
+        var result = DivergenceDetector.Evaluate([5], outputTokensInWindow: 5_000_000, meterAge: LiveMeter);
+
+        Assert.Equal(DivergenceState.RiseNotMeasurable, result.State);
+        Assert.False(result.IsOffPlan);
+    }
+
+    /// <summary>
+    /// The one verdict a single sample still supports, because it reads the latest value
+    /// rather than a difference. A window that opens already exhausted must not go unreported
+    /// for its first quarter of an hour.
+    /// </summary>
+    [Fact]
+    public void SingleSample_AtTheLimit_StillReportsLimitReached()
+    {
+        var result = DivergenceDetector.Evaluate([99], outputTokensInWindow: 60_000, meterAge: LiveMeter);
+
+        Assert.Equal(DivergenceState.PlanLimitReached, result.State);
+        Assert.True(result.IsOffPlan);
+    }
+
+    /// <summary>Two flat samples are still a measurement, and still divergence.</summary>
+    [Fact]
+    public void TwoSamples_AreEnoughToBeFlat()
+    {
+        var result = DivergenceDetector.Evaluate([5, 5], outputTokensInWindow: 56_600, meterAge: LiveMeter);
 
         Assert.Equal(DivergenceState.Diverging, result.State);
-        Assert.Equal(0, result.PlanRisePoints);
+        Assert.True(result.IsOffPlan);
+    }
+
+    /// <summary>
+    /// A quiet one-sample window keeps the more informative reason. Nothing ran, which is
+    /// worth saying; the sample count is beside the point when there is nothing to explain.
+    /// </summary>
+    [Fact]
+    public void SingleSample_WithNoActivity_IsInsufficientActivity()
+    {
+        var result = DivergenceDetector.Evaluate([5], outputTokensInWindow: 0, meterAge: LiveMeter);
+
+        Assert.Equal(DivergenceState.InsufficientActivity, result.State);
     }
 
     [Fact]
