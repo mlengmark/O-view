@@ -40,7 +40,7 @@ The records add four fields:
 | Field | Example | Notes |
 |---|---|---|
 | `isSidechain` | `true` | Marks a sub-agent's record rather than the conversation's |
-| `agentId` | `a93da32b6fda5604a` | Matches the `agent-<id>` in the file name |
+| `agentId` | `a0123456789abcdef` | Matches the `agent-<id>` in the file name |
 | `attributionAgent` | `general-purpose` | Which agent type ran. Parsed past today; enough for a per-agent breakdown if one is ever wanted |
 | `attributionSkill` | `security-review` | Which skill invoked it, where one did |
 

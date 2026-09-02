@@ -44,7 +44,19 @@ public class SubAgentTranscriptTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private const string ParentSessionId = "0af0c879-4290-4f9e-b8a8-ca4562ec1150";
+    /// <summary>
+    /// The all-zero placeholder, not a session id copied off a real machine.
+    ///
+    /// <para>The first draft of this file used an observed one, and CI's identifier scan
+    /// rejected it — correctly. Nothing here depends on the value: it is a directory name and a
+    /// file name, and the shape is all the fixture needs. <b>Do not "improve" this to something
+    /// that looks more realistic</b>; a realistic session id in a public repository is somebody's
+    /// actual session.</para>
+    /// </summary>
+    private const string ParentSessionId = "00000000-0000-0000-0000-000000000000";
+
+    /// <summary>Synthetic, for the same reason — agent ids are `a` followed by 16 hex digits.</summary>
+    private const string AgentId = "a0123456789abcdef";
 
     private string DbPath => Path.Combine(_dir, "usage.db");
 
@@ -71,7 +83,7 @@ public class SubAgentTranscriptTests : IDisposable
     private static string SubAgentRecord(string requestId, long outputTokens) =>
         "{\"type\":\"assistant\",\"requestId\":\"" + requestId + "\","
         + "\"timestamp\":\"2026-08-31T10:05:00Z\",\"isSidechain\":true,"
-        + "\"agentId\":\"a93da32b6fda5604a\","
+        + "\"agentId\":\"" + AgentId + "\","
         + "\"attributionAgent\":\"general-purpose\",\"attributionSkill\":\"security-review\","
         + "\"message\":{\"model\":\"claude-opus-5\",\"usage\":"
         + "{\"input_tokens\":2,\"cache_creation_input_tokens\":100,"
@@ -98,7 +110,7 @@ public class SubAgentTranscriptTests : IDisposable
             var subagents = Directory.CreateDirectory(
                 Path.Combine(encodedCwd, ParentSessionId, "subagents")).FullName;
             File.WriteAllText(
-                Path.Combine(subagents, "agent-a93da32b6fda5604a.jsonl"), subAgentLine + "\n");
+                Path.Combine(subagents, "agent-" + AgentId + ".jsonl"), subAgentLine + "\n");
         }
 
         return projects;
@@ -162,7 +174,7 @@ public class SubAgentTranscriptTests : IDisposable
 
         var found = ClaudeProjectsLocator.FindTranscripts(projects);
 
-        Assert.Contains(found, p => Path.GetFileName(p) == "agent-a93da32b6fda5604a.jsonl");
+        Assert.Contains(found, p => Path.GetFileName(p) == "agent-" + AgentId + ".jsonl");
         Assert.Contains(found, p => Path.GetFileName(p) == ParentSessionId + ".jsonl");
     }
 
