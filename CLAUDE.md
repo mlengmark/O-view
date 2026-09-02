@@ -125,6 +125,7 @@ Local token counts have **two** sources, and scanning one of them is the histori
 | Surface | Transcript |
 |---|---|
 | Claude Code (CLI **and** hosted in Desktop) | `%USERPROFILE%\.claude\projects\**\*.jsonl` |
+| Claude Code **sub-agents** | `%USERPROFILE%\.claude\projects\<mangled-cwd>\<parent-session>\subagents\agent-*.jsonl` — one directory **below** the session file |
 | **Cowork**, older builds | `<claude-data-root>\local-agent-mode-sessions\…\<session>\audit.jsonl` |
 | **Cowork**, current builds, running locally | `%USERPROFILE%\.claude\projects\**\*.jsonl` — the **same files as Claude Code** |
 | **Cowork**, running in a cloud container | **none reachable** — see below |
@@ -159,6 +160,24 @@ The authority on which surface wrote a transcript is Cowork's own register:
 `<claude-data-root>\claude-code-sessions\…\local_<id>.json` names the `cliSessionId` its session
 writes under, and that id is the transcript's file name. `CoworkSessionIndex` is the one place
 that match is made; do not re-derive a surface from a path.
+
+**Sub-agent transcripts sit one directory below the session file, and their tokens draw on the
+same plan window.** Claude Code gives each sub-agent its own file at
+`<mangled-cwd>\<parent-session>\subagents\agent-<agent-id>.jsonl`, carrying `isSidechain`,
+`agentId`, `attributionAgent`, `attributionSkill`, an ordinary `requestId` and a full `usage`
+block ([findings/jsonl-schema.md](docs/findings/jsonl-schema.md)). They are ingested only because
+`TranscriptFileScan` walks recursively — **do not narrow the projects scan to a top-level
+enumeration, a tighter pattern or a shallower depth**, which would drop every sub-agent token in
+silence. `SubAgentTranscriptTests` fails if the walk stops descending (issue #271). Measured:
+2026-08-31 ingested 230 sub-agent requests worth 62.0M tokens.
+
+**Known gap, breakdown only:** a sub-agent transcript is always labelled Claude Code, even when
+its parent was a Cowork session. `CoworkSessionIndex.Wrote` matches the register on the file's
+name, and `agent-<agent-id>` is never a `cliSessionId` — a sub-agent gets no session of its own,
+so its `sessionId` is the parent's. **Totals are unaffected**; only the per-source split in the
+support bundle is. The parent's id is right there as the containing directory name, so the fix is
+to ask the register about that rather than about the file — but it is a change to
+`CoworkSessionIndex`'s contract, not a one-liner, and it is not done.
 
 Three traps, all silent:
 
