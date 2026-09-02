@@ -18,6 +18,40 @@ C:\Users\Maximilian   →   C--Users-Maximilian
 
 Windows mangling differs from POSIX (drive letter plus colon produces the leading `C--`). **Write the resolver for Windows; do not adapt a POSIX implementation.**
 
+### Sub-agents write their own transcript, one directory below the session
+
+**Observed:** 2026-09-02 · same machine
+
+A sub-agent's turns are **not** appended to the session transcript. Each sub-agent gets its own
+file, inside a `subagents` directory named for the parent session:
+
+```
+%USERPROFILE%\.claude\projects\<mangled-cwd>\<parent-session-uuid>\subagents\agent-<agent-id>.jsonl
+```
+
+The directory and the session file are **siblings** — `<uuid>\` sits next to `<uuid>.jsonl`.
+
+Measured: 3 such files across 2 sessions, holding **391 assistant records**. Every one carried a
+`requestId` (none used the `request_id` spelling) and a full `usage` block, so nothing about
+accounting differs. It is an ordinary transcript in an extra directory.
+
+The records add four fields:
+
+| Field | Example | Notes |
+|---|---|---|
+| `isSidechain` | `true` | Marks a sub-agent's record rather than the conversation's |
+| `agentId` | `a0123456789abcdef` | Matches the `agent-<id>` in the file name |
+| `attributionAgent` | `general-purpose` | Which agent type ran. Parsed past today; enough for a per-agent breakdown if one is ever wanted |
+| `attributionSkill` | `security-review` | Which skill invoked it, where one did |
+
+`sessionId` is the **parent's** id — a sub-agent gets no session of its own. That is what leaves
+the directory name as the only thing tying the file back to a session, and it has a consequence
+for source attribution: see CLAUDE.md rule 9.
+
+**Nothing may narrow the projects scan to the top level.** These tokens draw on the same plan
+window as the session that spawned them, and the only reason they are counted is that
+`TranscriptFileScan` descends. `SubAgentTranscriptTests` asserts it (issue #271).
+
 ## Record types
 
 One JSON object per line. Observed `type` values in a single 61-line session:
