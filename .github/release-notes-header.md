@@ -81,8 +81,11 @@ the figure it will not state.
 window ran out**, including accounts with auto-billing switched off, which could not be billed
 anything. **On v0.9.1 and earlier it could also raise the "not drawing from your plan" banner
 during the first quarter of an hour of a new 5-hour window** — the meter had moved, but had
-only been sampled once, so there was no movement to see yet. If you are on an older build,
-either message may be wrong for you and upgrading is the fix.
+only been sampled once, so there was no movement to see yet. **On v0.9.4 and earlier it could
+raise that same banner after Claude Desktop had been closed for a while** — the window it
+measured against was anchored on the last reset Desktop had seen, which after an outage can be
+days back, so a flat run of stale readings was weighed against work done since. If you are on
+an older build, any of these may be wrong for you and upgrading is the fix.
 
 ## Linux: read this before you file a bug about a missing icon
 
