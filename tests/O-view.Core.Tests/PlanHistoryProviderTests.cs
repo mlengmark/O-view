@@ -312,6 +312,93 @@ public class PlanHistoryProviderTests : IDisposable
         Assert.Null(provider.GetSnapshot(Now).SessionResetAtUtc);
     }
 
+    // ── the divergence window is a window (issue #274) ──────────────────────────────
+
+    /// <summary>
+    /// The reported case, reduced. Desktop goes quiet for two days and resumes writing
+    /// <c>fh=0</c>; the zero blanks <see cref="ResetDetector.FindCurrentWindowStart"/>, and the
+    /// fallback anchors on the drop that opened the silence. Before bounding, the window handed
+    /// to the detector was two days wide and every sample in it was a zero written before the
+    /// gap — a series that spans nine boundaries, which the detector's contract forbids.
+    /// </summary>
+    [Fact]
+    public void AWindowStartOlderThanTheWindowIsPulledForward()
+    {
+        var path = WriteSamples(
+            (Now.AddDays(-2).AddHours(-1), "org-a", 25, 23),
+            (Now.AddDays(-2), "org-a", 0, 23),
+            (Now.AddDays(-2).AddMinutes(15), "org-a", 0, 23),
+            (Now.AddMinutes(-3), "org-a", 0, 25));
+
+        var (windowStart, percents, _) = new PlanHistoryProvider(path).GetCurrentWindow(Now);
+
+        Assert.Equal(Now - ResetDetector.WindowLength, windowStart);
+        Assert.Equal([0], percents);
+    }
+
+    /// <summary>
+    /// And the verdict that follows from it. 60,922 output tokens is the volume that was
+    /// actually on the machine, and against the unbounded window it read as
+    /// <see cref="DivergenceState.Diverging"/> — a flat meter under load — because the rise was
+    /// measured from a sample two days older than the reading. One sample cannot support that
+    /// claim, and now that is what the window contains.
+    /// </summary>
+    [Fact]
+    public void TheBoundedWindowCannotProduceAnOffPlanVerdict()
+    {
+        var path = WriteSamples(
+            (Now.AddDays(-2).AddHours(-1), "org-a", 25, 23),
+            (Now.AddDays(-2), "org-a", 0, 23),
+            (Now.AddDays(-2).AddMinutes(15), "org-a", 0, 23),
+            (Now.AddMinutes(-3), "org-a", 0, 25));
+
+        var (_, percents, age) = new PlanHistoryProvider(path).GetCurrentWindow(Now);
+        var result = DivergenceDetector.Evaluate(percents, outputTokensInWindow: 60_922, age);
+
+        Assert.Equal(DivergenceState.RiseNotMeasurable, result.State);
+        Assert.False(result.IsOffPlan);
+    }
+
+    /// <summary>
+    /// A start the samples support is left exactly as it was. The bound can only ever move a
+    /// start that no running window could have had, so a window that opened 25 minutes ago
+    /// keeps its own anchor rather than being squared off at five hours.
+    /// </summary>
+    [Fact]
+    public void AStartTheSamplesSupportIsLeftAlone()
+    {
+        var firstSeen = Now.AddMinutes(-25);
+        var path = WriteSamples(
+            (Now.AddMinutes(-40), "org-a", 0, 6),
+            (firstSeen, "org-a", 9, 7),
+            (Now.AddMinutes(-10), "org-a", 14, 7));
+
+        var (windowStart, percents, _) = new PlanHistoryProvider(path).GetCurrentWindow(Now);
+
+        Assert.Equal(firstSeen, windowStart);
+        Assert.Equal([9, 14], percents);
+    }
+
+    /// <summary>
+    /// The guard the fix has to survive: bounding must not silence the case the detector exists
+    /// for. A window that opened four hours ago is inside the bound, so a genuinely flat meter
+    /// across it still reports — same volume, same flatness, different span.
+    /// </summary>
+    [Fact]
+    public void AFlatMeterInsideTheBoundStillReportsDivergence()
+    {
+        var path = WriteSamples(
+            (Now.AddHours(-4).AddMinutes(-30), "org-a", 0, 6),
+            (Now.AddHours(-4), "org-a", 6, 6),
+            (Now.AddMinutes(-5), "org-a", 6, 6));
+
+        var (windowStart, percents, age) = new PlanHistoryProvider(path).GetCurrentWindow(Now);
+        var result = DivergenceDetector.Evaluate(percents, outputTokensInWindow: 60_922, age);
+
+        Assert.Equal(Now.AddHours(-4), windowStart);
+        Assert.Equal(DivergenceState.Diverging, result.State);
+    }
+
     // ── narrowing with local activity (issue #185) ──────────────────────────────────
 
     /// <summary>

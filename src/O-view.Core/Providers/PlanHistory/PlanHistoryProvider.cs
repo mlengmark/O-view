@@ -155,12 +155,13 @@ public sealed class PlanHistoryProvider : IUsageProvider
         // The current window, not merely the last drop: after an idle gap the last drop can
         // be days old, and summing output tokens since then would compare a two-day total
         // against a five-hour meter (issue #180). Falls back to the last drop, and then to
-        // the series start, because a divergence window that is too wide is a missed signal
-        // where no window at all is a crash.
-        var windowStart =
+        // the series start, so that a window O-view cannot locate exactly is still a window
+        // — and then bounds the result, because neither fallback is bounded by anything else.
+        var windowStart = NoOlderThanOneWindow(
             ResetDetector.FindCurrentWindowStart(samples)?.LatestUtc
             ?? ResetDetector.FindLastDrop(samples)
-            ?? samples[0].AtUtc;
+            ?? samples[0].AtUtc,
+            utcNow);
         var inWindow = samples.Where(s => s.AtUtc >= windowStart).ToList();
 
         // Measured against the newest sample in the FILE, not in the window: a window whose
@@ -170,6 +171,47 @@ public sealed class PlanHistoryProvider : IUsageProvider
 
         return (windowStart, inWindow.Select(s => s.FiveHourPercent).ToList(),
             age > TimeSpan.Zero ? age : TimeSpan.Zero);
+    }
+
+    /// <summary>
+    /// The window's start, held to being inside a window: <paramref name="start"/> or
+    /// <see cref="ResetDetector.WindowLength"/> ago, whichever is later.
+    ///
+    /// <para><b>Arithmetic, not a threshold.</b> The five-hour window rolls from first use, so
+    /// whenever one is running it began at most five hours ago. A start earlier than that does
+    /// not describe a wide window — it describes no window at all, and everything derived from
+    /// it inherits that: which samples are selected, the rise between the first and the last,
+    /// and the output tokens the caller sums over the same span.</para>
+    ///
+    /// <para><b>Only the first of the three anchors above was bounded.</b>
+    /// <see cref="ResetDetector.FindCurrentWindowStart"/> returns a sample from inside the
+    /// running window, so it cannot be older than one. It returns null whenever the newest
+    /// reading is <c>0</c> — "no window is running, because it starts on first use" — and the
+    /// fallbacks then reach back to the last observed drop, or to the start of the series,
+    /// either of which can be days old. The comment above used to defend that as a missed
+    /// signal being safer than a crash. It is neither: it is a false positive, which CLAUDE.md
+    /// rule 6 and <see cref="DivergenceDetector"/>'s own calibration both rank as the worse of
+    /// the two.</para>
+    ///
+    /// <para><b>Observed 2026-09-07 (issue #274).</b> Claude Desktop was closed from 09-05 17:31Z until
+    /// 09-07 14:44Z and resumed writing <c>fh=0</c>. That zero blanked
+    /// <see cref="ResetDetector.FindCurrentWindowStart"/>, the fallback anchored on the drop at
+    /// 09-05 13:16Z, and the window handed to the detector was 47 hours wide — nineteen zeros
+    /// spanning nine five-hour boundaries — against 60,922 output tokens spent in half an hour
+    /// that morning. The reported <c>rise=0</c> was a subtraction between a sample from
+    /// Saturday and a reading from Monday, and the balloon said "Usage is not drawing from your
+    /// plan" beside a panel that said, correctly, that it did not know what the session was or
+    /// when it resets. Bounded, the same data selects one sample and the detector returns a
+    /// verdict it can stand behind.</para>
+    ///
+    /// <para>This costs the honest cases nothing. A start the samples actually support is
+    /// already inside the bound, so the only starts this moves are the ones no window could
+    /// have had.</para>
+    /// </summary>
+    private static DateTimeOffset NoOlderThanOneWindow(DateTimeOffset start, DateTimeOffset utcNow)
+    {
+        var earliest = utcNow - ResetDetector.WindowLength;
+        return start < earliest ? earliest : start;
     }
 
     /// <summary>
