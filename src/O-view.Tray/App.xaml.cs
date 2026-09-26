@@ -44,7 +44,15 @@ public partial class App : System.Windows.Application
     private PopupWindow? _popup;
     private MenuWindow? _menu;
     private UpdateService? _updates;
+    private IAppLog? _log;
     private bool _updateFlowActive;
+
+    /// <summary>
+    /// Passed to the instance started by <see cref="RestartForMissingNativeLibrary"/>, so it
+    /// can say why it restarted — a tray icon that blinks out and back unexplained reads as
+    /// a crash.
+    /// </summary>
+    private const string RestartedForNativeLibraryFlag = "--restarted-native";
 
     /// <summary>
     /// An interactive update check is running, including its modal confirmation. Distinct
@@ -141,6 +149,14 @@ public partial class App : System.Windows.Application
         // on when it matters. FileLog bounds itself, so always-on costs a capped 6 MB.
         var log = new FileLog(args.TryGetValue("--log", out var logPath) ? logPath : null);
         log.WriteSessionHeader(UpdateService.CurrentVersion, UpdateService.CurrentInstallKind.ToString());
+        _log = log;
+
+        // Now, while the host has just (re-)extracted them, and not at the first click, by
+        // which time a temp cleaner may have deleted them (see WpfNativeLibraries).
+        var unpinned = WpfNativeLibraries.Pin();
+        log.Write(unpinned.Count == 0
+            ? "wpf native libraries pinned"
+            : $"wpf native libraries not pinned: {string.Join(", ", unpinned)}");
         var interval = args.TryGetValue("--interval-ms", out var ms) &&
                        int.TryParse(ms, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) && parsed >= 50
             ? TimeSpan.FromMilliseconds(parsed)
@@ -174,8 +190,8 @@ public partial class App : System.Windows.Application
         _trayHost = new NotifyIconTrayHost();
         _controller = new TrayController(_trayHost, _engine, _theme, log);
 
-        _trayHost.IconClicked += (_, _) => ShowPopup();
-        _trayHost.IconRightClicked += (_, _) => ShowMenu();
+        _trayHost.IconClicked += (_, _) => OpenFromTray(ShowPopup);
+        _trayHost.IconRightClicked += (_, _) => OpenFromTray(ShowMenu);
 
         // Auto-update (ADR-0009): a quiet background check surfaces a newer release as a
         // balloon; the actual download-and-install is only ever done from the menu, with
@@ -199,6 +215,14 @@ public partial class App : System.Windows.Application
         // the dispatcher, so a first ingest over a large transcript history cannot hold the
         // message pump (issue #125).
         _engine.Start(new DispatcherTimerFactory(), new WpfUiDispatcher());
+
+        if (args.ContainsKey(RestartedForNativeLibraryFlag))
+        {
+            _trayHost.ShowNotification("O-view restarted",
+                "A cleanup tool removed some of O-view's display files from your temp folder, " +
+                "so O-view restarted to restore them. Click the icon again to open it.",
+                NotificationKind.Warning);
+        }
 
         if (args.ContainsKey("--test-notify"))
         {
@@ -482,6 +506,55 @@ public partial class App : System.Windows.Application
     }
 
     private PopupWindow EnsurePopup() => _popup ??= new PopupWindow();
+
+    /// <summary>
+    /// Runs a tray-click action. Anything it throws arrives inside NotifyIcon's window
+    /// procedure, where WinForms shows its raw "Unhandled exception" box — which is how a
+    /// missing native library reached users. That one case is recoverable, because a fresh
+    /// launch re-extracts the files, so it restarts; anything else is logged and rethrown
+    /// unchanged rather than hidden.
+    /// </summary>
+    private void OpenFromTray(Action open)
+    {
+        try
+        {
+            open();
+        }
+        catch (Exception ex) when (WpfNativeLibraries.IsMissingNativeLibrary(ex))
+        {
+            _log?.Write($"tray open failed, native library missing; restarting: {ex}");
+            RestartForMissingNativeLibrary();
+        }
+        catch (Exception ex)
+        {
+            _log?.Write($"tray open failed: {ex}");
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Starts a new instance and exits this one. The single-instance mutex is released
+    /// first or the new process would see it held and exit silently. Not a loop: the new
+    /// instance only restarts again if a later click fails the same way.
+    /// </summary>
+    private void RestartForMissingNativeLibrary()
+    {
+        var exe = Environment.ProcessPath;
+        if (exe is null)
+        {
+            return;
+        }
+
+        _instance?.Dispose();
+        _instance = null;
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = exe,
+            Arguments = RestartedForNativeLibraryFlag,
+            UseShellExecute = false,
+        });
+        Shutdown();
+    }
 
     /// <summary>
     /// Right-click menu — a docked flyout window, not a ContextMenu (issue #33; see
