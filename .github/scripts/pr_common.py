@@ -105,7 +105,7 @@ def touches_patterns(text):
     if not value:
         return []
     patterns = []
-    for part in re.split(r",\s*", value):
+    for part in re.split(r",\s*(?![^{]*\})", value):  # commas inside {a,b} belong to the brace
         part = part.strip().strip("`").strip()
         if part and part.lower() != "none":
             patterns.extend(expand_braces(part))
