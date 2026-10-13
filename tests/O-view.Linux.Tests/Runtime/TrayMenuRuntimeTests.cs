@@ -107,6 +107,7 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
         // Always, not only on a failure: the timings are what this test is for, and a run where
         // the menu came back in 1.9 s is worth seeing before it becomes a red build.
         output.WriteLine(menu.Describe());
+        SaveToArtifacts(nameof(TheTrayMenuOpensWithinTwoSecondsWithTheRowsTheHeadBuilds), menu);
 
         var missing = menu.RowsMissing(TheRowsTheHeadBuilds);
         Assert.True(missing.Count == 0,
@@ -123,6 +124,40 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
         // Issue #143 was the click taking the app down with it. Reading a menu runs the same
         // bus-thread code, so it is worth the same check.
         Assert.False(app.HasExited, "o-view exited after its menu was read");
+    }
+
+    /// <summary>
+    /// Writes the menu and its timings where the <c>linux-runtime</c> job collects what the
+    /// runtime tests capture.
+    ///
+    /// <para><b>Why a file and not just the test's output.</b> On a passing run xunit keeps a
+    /// test's output to itself, so without this the one duration this test measures would be
+    /// readable only when it fails — and "it was under two seconds" with no number behind it is
+    /// not a report anyone can act on, least of all the next person asking whether the bound is
+    /// the right one. The <c>linux-runtime</c> artifact is where the other runtime tests already
+    /// leave their evidence.</para>
+    ///
+    /// <para>Does nothing outside the job, which does not set the variable, and a failure to
+    /// write is said rather than thrown: the timings are already in the output above, and
+    /// saving evidence must not become the failure.</para>
+    /// </summary>
+    private void SaveToArtifacts(string label, DBusMenu menu)
+    {
+        if (Environment.GetEnvironmentVariable("OVIEW_RUNTIME_ARTIFACTS") is not { Length: > 0 } directory)
+        {
+            return;
+        }
+
+        try
+        {
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(Path.Combine(directory, $"{label}.menu.txt"), menu.Describe());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                       or ArgumentException or NotSupportedException)
+        {
+            output.WriteLine($"the menu could not be saved to {directory}: {ex.GetType().Name}: {ex.Message}");
+        }
     }
 
     /// <summary>
