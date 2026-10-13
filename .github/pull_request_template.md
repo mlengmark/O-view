@@ -3,7 +3,7 @@
 - Depends on: PR #<n> "<title>" — merged ✓ | none
 - Stacked on: none | PR #<n> (this PR targets its branch; never edits its files)
 - In flight alongside: PR #<n> "<title>" (no shared files) | none
-- Touches: <the slice's Touches line, exactly>
+- Touches: <the slice's Touches line, exactly, entries separated by commas>
 
 ## Summary
 Two or three plain-English sentences: what changes for the app or the codebase, and why. No class names unless they are the point.
