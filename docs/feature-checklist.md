@@ -50,9 +50,9 @@ Everything O-view does today that a user would notice, and the test or golden im
 | F38 | Detects a newer release, comparing versions numerically per vector (0.6.10 > 0.6.9). | Windows, Linux | `ReleaseVersionTests.Every_vector_crosses_into_two_digits_numerically` · `UpdateCheckTests.Newer_release_with_installer_asset_is_offered` · `UpdateCheckTests.Older_published_release_is_up_to_date_never_offers_downgrade` |
 | F39 | Installed copy updates in place, checksum-verified; auto-update opt-in; portable gets the page. | Windows | `UpdatePolicyTests.OnlyAWindowsInstallerBuildReplacesItselfInPlace` · `UpdatePolicyTests.UserOwnedBuildsAreSentToTheReleasePage` · `ChecksumFileTests.DifferentDigestsDoNotMatch` · `TraySettingsTests.UpdateAutomatically_IsOffByDefault` |
 | F40 | Linux updates notify once per version and install nothing. | Linux | `LinuxUpdateNoticeTests.ARecordedTagSurvivesARestart` · `UpdatePolicyTests.AnAptInstalledBuildNeverDownloadsOrRuns` · `LinuxUpdateNoticeTests.ThePackageNoticeDoesNotClaimAptUpgradeWillFindIt` · `UpdateDetectionTests.EachLinuxBuildResolvesItsOwnArchitecture` |
-| F41 | With no tray host on the bus, O-view says so by notification; `--probe` reports it. | Linux | none yet — a SniHostProbe test against a fake bus with and without an `org.kde.StatusNotifierWatcher` owner |
+| F41 | With no tray host on the bus, O-view says so by notification; `--probe` reports it. | Linux | `StandInTrayHostTests.TheProbeReadsPresentWhileAHostRunsAndAbsentOnceItIsGone` |
 | F42 | Autostart via an XDG `.desktop` file, from the menu or `--startup-on/off/status`. | Linux | `XdgAutostartRegistrationTests.EnableWritesTheDesktopFileAndDisableRemovesIt` · `XdgAutostartRegistrationTests.ApplyReportsTheStateThatActuallyResulted` · `LinuxHeadWiringTests.TheHeadWiresRunAtStartupToTheXdgImplementation` |
-| F43 | Tray clicks and menu items run on the UI thread; panel survives refused focus. | Linux | `LinuxHeadWiringTests.TheTrayClickHandlerIsMarshalledOntoTheUiThread` · `LinuxHeadWiringTests.EveryMenuItemsClickHandlerIsMarshalledOntoTheUiThread` · `PanelDismissalTests.ADeactivationBeforeAnyActivationDoesNotDismiss` |
+| F43 | Tray clicks and menu items run on the UI thread; panel survives refused focus. | Linux | `LinuxHeadWiringTests.TheTrayClickHandlerIsMarshalledOntoTheUiThread` · `LinuxHeadWiringTests.EveryMenuItemsClickHandlerIsMarshalledOntoTheUiThread` · `PanelDismissalTests.ADeactivationBeforeAnyActivationDoesNotDismiss` · `TrayClickRuntimeTests.ALeftClickOpensThePanelWithinFiveSeconds` · `TrayMenuRuntimeTests.TheTrayMenuOpensWithinTwoSecondsWithTheRowsTheHeadBuilds` |
 | F44 | Panel follows the desktop's light/dark theme, re-read on every open. | Windows, Linux | `LinuxHeadWiringTests.TheHeadWiresTheThemeSourceToThePortalImplementation` · `PortalThemeSourceTests.RepeatedReadsNeverWait` · golden: typical (light and dark) · Windows: none yet — a RegistryThemeSource test reading `AppsUseLightTheme` |
 | F45 | Only one instance runs; a second launch exits. | Windows, Linux | `FileLockSingleInstanceGuardTests.SecondInstanceIsRefusedWhileTheFirstHolds` · `LinuxHeadWiringTests.TheSingleInstanceGuardIsClaimedBeforeTheToolkitStarts` · Windows: none yet — a MutexSingleInstanceGuard second-acquire test |
 
@@ -65,7 +65,6 @@ Features with no automated proof, or proof on one platform only. Closing one mea
 - **F34:** read-only against Claude's files; nothing asserts that nothing is written.
 - **F35:** no subscription credential handled; only the diagnostics bundle (F26) is tested.
 - **F37:** 31-day history surviving transcript deletion.
-- **F41:** the Linux tray-host probe and the "nowhere to put the icon" notification.
 - **F44 (Windows half):** following `AppsUseLightTheme` and re-reading it on open.
 - **F45 (Windows half):** the mutex single-instance guard.
 

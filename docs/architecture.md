@@ -35,6 +35,12 @@ References run one way: **skins → App → Presentation → Core**. A project m
 
 They live in whichever implementation gets constructed, never in `#if` blocks or runtime OS checks scattered through the logic. The one deliberate runtime check is data-root discovery (`ClaudeDataRoots`), which lives in a single named place.
 
+## The linux-runtime check
+
+CI's `linux-runtime` job runs a handful of tests under a virtual display (`xvfb-run`) and a real session bus (`dbus-run-session`), with `OVIEW_LINUX_RUNTIME=1` telling them to run rather than return early. A stand-in tray host stands in for a notification area — test code that owns `org.kde.StatusNotifierWatcher` on the bus and talks the real protocol — so the real Linux app's tray icon, click and menu reach it over a real D-Bus connection with Avalonia's own dispatcher on the other end.
+
+It proves a real left click opens the panel end to end, and that the tray menu answers within its budget, both under that virtual display and Avalonia 12.1.3. It does not prove `BusCallback`'s UI-thread hand-off: in this job the click already arrives on the UI thread, so there is no wrong-thread moment to catch. The mocked `BusCallbackTests` prove the hand-off instead, by choosing the thread themselves.
+
 ## What enforces this
 
 - **A reference test:** Presentation references no UI framework or platform API.
