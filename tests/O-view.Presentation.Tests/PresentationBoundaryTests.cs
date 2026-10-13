@@ -5,7 +5,8 @@ namespace OView.Presentation.Tests;
 /// <summary>
 /// Presentation is shared by both heads, so it must never pull in a UI toolkit or a platform
 /// API (docs/architecture.md). Checked on the compiled assembly's references, which is what
-/// actually ships, rather than on the project file.
+/// actually ships, rather than on the project file. Verified by hand: referencing SkiaSharp
+/// from Presentation fails with "O-view.Presentation references: SkiaSharp".
 /// </summary>
 public class PresentationBoundaryTests
 {
@@ -13,6 +14,7 @@ public class PresentationBoundaryTests
     [
         "PresentationFramework", "PresentationCore", "WindowsBase", "System.Windows",
         "System.Xaml", "Avalonia", "System.Drawing", "Microsoft.Win32", "Tmds.DBus",
+        "SkiaSharp",
     ];
 
     [Fact]
