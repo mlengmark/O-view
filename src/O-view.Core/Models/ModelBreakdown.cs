@@ -113,12 +113,16 @@ public static class ModelBreakdown
         named.Add(rest.Count == 1
             ? rest[0]
             : new ModelSlice(
-                Model: $"{rest.Count} more",
-                DisplayName: ModelDisplayName.Other,
+                // Neither field names anything once FoldedCount is set — every reader
+                // checks that first (OVIAA-39) — so these are left empty rather than
+                // carrying words ("Other", "<n> more") that are Presentation's to choose.
+                Model: "",
+                DisplayName: "",
                 Tokens: rest.Sum(s => s.Tokens),
                 // The remainder keeps a real summed value so the segment's width is the
                 // truth — but stays unknown if anything in it was unpriced.
-                EstUsd: rest.Any(s => s.EstUsd is null) ? null : rest.Sum(s => s.EstUsd ?? 0m)));
+                EstUsd: rest.Any(s => s.EstUsd is null) ? null : rest.Sum(s => s.EstUsd ?? 0m),
+                FoldedCount: rest.Count));
 
         return named;
     }

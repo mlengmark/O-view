@@ -25,7 +25,17 @@ namespace OView.Core.Models;
 /// O-view cannot price it and must say so rather than dropping the model from the
 /// picture.
 /// </param>
-public sealed record ModelSlice(string Model, string DisplayName, long Tokens, decimal? EstUsd);
+/// <param name="FoldedCount">
+/// Null for an ordinary model slice. <see cref="ModelBreakdown.Segments"/> sets it to the
+/// number of models folded into its remainder segment — a non-null count is what marks a
+/// slice as that remainder, rather than any word in <see cref="Model"/> or
+/// <see cref="DisplayName"/> (OVIAA-39). What to call it — "Other", "<c>&lt;n&gt;</c> more
+/// models" — is panel copy, built in Presentation from this count; Core does not write
+/// those words. A trailing parameter with a default so slices built before this field
+/// existed keep compiling.
+/// </param>
+public sealed record ModelSlice(
+    string Model, string DisplayName, long Tokens, decimal? EstUsd, int? FoldedCount = null);
 
 /// <summary>
 /// Friendly names for model ids, read from <see cref="ModelCatalog"/> — the one table that
@@ -37,18 +47,6 @@ public sealed record ModelSlice(string Model, string DisplayName, long Tokens, d
 /// </summary>
 public static class ModelDisplayName
 {
-    /// <summary>
-    /// Label for the aggregated remainder when there are more models than slots.
-    ///
-    /// <para><b>Not moved to Presentation with the rest of this file (OVIAA-39).</b> The only
-    /// place that writes this word into a <see cref="ModelSlice.DisplayName"/> is
-    /// <see cref="ModelBreakdown.Segments"/>, which is panel copy in Core for the same
-    /// reason this constant is — but that file is outside this slice's Touches list, so
-    /// moving one without the other would leave <c>ModelBreakdown</c> pointing at nothing.
-    /// Left as a known gap for a follow-up slice.</para>
-    /// </summary>
-    public const string Other = "Other";
-
     // No <synthetic> branch: Claude Code's marker for locally generated messages is
     // dropped at parse time by TranscriptReader, so it never reaches a ModelSlice. The
     // "Local" case that used to live here was unreachable (issue #57).

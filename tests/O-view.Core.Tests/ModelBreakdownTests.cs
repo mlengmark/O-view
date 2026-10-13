@@ -84,8 +84,8 @@ public class ModelBreakdownTests
         var order = ModelBreakdown.ColourOrder(Window);
         var segments = ModelBreakdown.Segments(Window, BreakdownMeasure.Tokens, order);
 
-        Assert.Equal(["Opus 4.8", "Opus 5", ModelDisplayName.Other],
-            segments.Select(s => s.DisplayName));
+        Assert.Equal(["Opus 4.8", "Opus 5"], segments.Take(2).Select(s => s.DisplayName));
+        Assert.NotNull(segments[^1].FoldedCount);
     }
 
     [Fact]
@@ -113,11 +113,10 @@ public class ModelBreakdownTests
         var segments = ModelBreakdown.Segments(Window, BreakdownMeasure.Tokens, order);
 
         var other = segments[^1];
-        Assert.Equal(ModelDisplayName.Other, other.DisplayName);
+        Assert.Equal(2, other.FoldedCount);
         Assert.Equal(45_000_000, other.Tokens);
         Assert.Equal(82.14m, other.EstUsd);
         Assert.Equal(Window.Sum(s => s.Tokens), segments.Sum(s => s.Tokens));
-        Assert.Equal("2 more", other.Model);
     }
 
     [Fact]
@@ -146,9 +145,8 @@ public class ModelBreakdownTests
 
         var segments = ModelBreakdown.Segments(slices, BreakdownMeasure.Tokens, order);
 
-        Assert.Equal(ModelDisplayName.Other, segments[^1].DisplayName);
-        Assert.DoesNotContain(segments.Take(segments.Count - 1),
-            s => s.DisplayName == ModelDisplayName.Other);
+        Assert.NotNull(segments[^1].FoldedCount);
+        Assert.DoesNotContain(segments.Take(segments.Count - 1), s => s.FoldedCount is not null);
     }
 
     [Fact]
@@ -202,7 +200,7 @@ public class ModelBreakdownTests
 
         var segments = ModelBreakdown.Segments(slices, BreakdownMeasure.Tokens, order);
 
-        Assert.Equal(ModelDisplayName.Other, segments[^1].DisplayName);
+        Assert.NotNull(segments[^1].FoldedCount);
         Assert.Null(segments[^1].EstUsd);
     }
 

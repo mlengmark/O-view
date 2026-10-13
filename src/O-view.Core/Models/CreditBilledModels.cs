@@ -18,30 +18,19 @@ namespace OView.Core.Models;
 /// </summary>
 public static class CreditBilledModels
 {
-    /// <summary>U+00A0, as an escape — the literal character is invisible in source.</summary>
-    private const char NonBreakingSpace = '\u00A0';
-
-    private static readonly IReadOnlyList<ModelEntry> Entries =
-        ModelCatalog.InClass(BillingClass.Credit);
-
     /// <summary>
-    /// Human-readable list of the covered models, for the UI caption. Derived from the
-    /// same entries <see cref="IsCreditBilled"/> matches, so the caption can never name a
-    /// different set than the one being summed.
+    /// The covered models, as data — the same entries <see cref="IsCreditBilled"/> matches,
+    /// so a caption built from them can never name a different set than the one being
+    /// summed.
     ///
-    /// <para>Spaces inside a name are non-breaking, so a model is never split across a
-    /// line. The caption sits in a wrapping run of prose whose entire job is stating
-    /// precisely which models are counted, and "Fable / 5, Mythos 5" broken over two lines
-    /// reads as three entries rather than two.</para>
-    ///
-    /// <para><b>Not moved to Presentation (OVIAA-39).</b> The join and the non-breaking-space
-    /// substitution are panel formatting and belong there, but the only caller,
-    /// <c>OffPlanText.OffPlanHint</c>, is outside this slice's Touches list — moving the
-    /// builder without its caller would leave that sentence pointing at nothing. Left as a
-    /// known gap for a follow-up slice.</para>
+    /// <para><b>The caption itself is Presentation's job (OVIAA-39).</b> This class used to
+    /// also join the names into a UI string, non-breaking spaces and all; that join is
+    /// panel formatting and now lives at
+    /// <see cref="OView.Presentation.Text.OffPlanText.CreditModelsCaption"/>, built from the
+    /// entries exposed here.</para>
     /// </summary>
-    public static string DisplayList { get; } =
-        string.Join(", ", Entries.Select(e => e.DisplayName.Replace(' ', NonBreakingSpace)));
+    public static IReadOnlyList<ModelEntry> Models { get; } =
+        ModelCatalog.InClass(BillingClass.Credit);
 
     public static bool IsCreditBilled(string model) =>
         ModelCatalog.Find(model)?.Billing == BillingClass.Credit;

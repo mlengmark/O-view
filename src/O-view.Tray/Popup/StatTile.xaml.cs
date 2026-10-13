@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using OView.App.Rendering;
 using OView.Core.Models;
+using OView.Presentation.Text;
 using Brush = System.Windows.Media.Brush;
 using Orientation = System.Windows.Controls.Orientation;
 using Point = System.Windows.Point;
@@ -279,7 +280,7 @@ public partial class StatTile : UserControl
         // light categorical hue is illegible as small text.
         panel.Children.Add(new TextBlock
         {
-            Text = slice.DisplayName,
+            Text = slice.FoldedCount is not null ? TokenText.OtherSegmentLabel : slice.DisplayName,
             FontSize = 9,
             Margin = new Thickness(3, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
@@ -310,7 +311,7 @@ public partial class StatTile : UserControl
         HoverCard.Figure(
             this,
             FormatSlice(slice),
-            slice.DisplayName == ModelDisplayName.Other ? $"{slice.Model} models" : slice.Model,
+            slice.FoldedCount is int foldedCount ? TokenText.FoldedModelsLabel(foldedCount) : slice.Model,
             swatch);
 
     /// <summary>A styled hover card carrying a sentence — used for the caption's caveat.</summary>

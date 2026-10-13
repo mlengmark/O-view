@@ -282,6 +282,22 @@ public static class TokenText
     /// <inheritdoc cref="TokenBreakdownKindHeader"/>
     public const string TokenBreakdownTotalLabel = "Total";
 
+    /// <summary>
+    /// Legend and hover-card label for a breakdown's folded remainder segment.
+    ///
+    /// <para><b>Moved here from Core (OVIAA-39).</b> <see cref="ModelBreakdown.Segments"/>
+    /// marks that segment with a non-null <see cref="ModelSlice.FoldedCount"/> rather than
+    /// writing this word into <see cref="ModelSlice.DisplayName"/>; a caller shows this
+    /// label for any slice where that count is set.</para>
+    /// </summary>
+    public const string OtherSegmentLabel = "Other";
+
+    /// <summary>
+    /// The folded remainder's identifying line, under <see cref="OtherSegmentLabel"/> in a
+    /// hover card: <c>3 more models</c>.
+    /// </summary>
+    public static string FoldedModelsLabel(int foldedCount) => $"{foldedCount} more models";
+
     /// <summary>Labels for the two views of the composition.</summary>
     public const string TokenViewBarsLabel = "Bars";
 

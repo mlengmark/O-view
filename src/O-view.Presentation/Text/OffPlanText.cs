@@ -12,6 +12,27 @@ namespace OView.Presentation.Text;
 /// </summary>
 public static class OffPlanText
 {
+    /// <summary>U+00A0, as an escape — the literal character is invisible in source.</summary>
+    private const char NonBreakingSpace = ' ';
+
+    /// <summary>
+    /// Human-readable list of the credit-billed models, for <see cref="OffPlanHint"/>'s
+    /// caption. Built from <see cref="CreditBilledModels.Models"/> — the same entries
+    /// <see cref="CreditBilledModels.IsCreditBilled"/> matches, so the caption can never
+    /// name a different set than the one being summed (GitHub issue #56).
+    ///
+    /// <para>Spaces inside a name are non-breaking, so a model is never split across a
+    /// line. The caption sits in a wrapping run of prose whose entire job is stating
+    /// precisely which models are counted, and "Fable / 5, Mythos 5" broken over two lines
+    /// reads as three entries rather than two.</para>
+    ///
+    /// <para><b>Moved here from Core (OVIAA-39).</b> The join and the non-breaking-space
+    /// substitution are panel formatting; <see cref="CreditBilledModels"/> keeps only the
+    /// membership test and the entries themselves.</para>
+    /// </summary>
+    public static string CreditModelsCaption { get; } = string.Join(
+        ", ", CreditBilledModels.Models.Select(e => e.DisplayName.Replace(' ', NonBreakingSpace)));
+
     // Token formatting lives in UsageFormatter, right beside this class. The sentence below
     // that embeds a figure still duplicates its one-line rule rather than call it directly.
     private static string FormatTokens(long tokens) => tokens switch
@@ -164,8 +185,8 @@ public static class OffPlanText
     /// simply being reassigned to a tooltip in place.</para>
     /// </summary>
     public static string OffPlanHint(bool hasCreditUsage) => hasCreditUsage
-        ? $"Estimated at published API rates for models billed as extra usage ({CreditBilledModels.DisplayList}). "
+        ? $"Estimated at published API rates for models billed as extra usage ({CreditModelsCaption}). "
           + "O-view cannot read your credit balance; check your billing page for exact figures."
-        : $"No credit-billed usage ({CreditBilledModels.DisplayList}) recorded in the last 31 days. "
+        : $"No credit-billed usage ({CreditModelsCaption}) recorded in the last 31 days. "
           + "Off-plan usage while O-view wasn't running isn't captured.";
 }
