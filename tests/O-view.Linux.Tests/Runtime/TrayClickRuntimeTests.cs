@@ -19,10 +19,10 @@ namespace OView.Linux.Tests.Runtime;
 /// not do, and the app still being alive afterwards is what #143 did not do.</para>
 ///
 /// <para><b>What proves the panel is up.</b> The app's own <c>panel opened</c> line, written once
-/// the window has been built and shown. The virtual display is photographed too, and that
-/// photograph is the only thing that shows a person what came up — but it is evidence for a
-/// reader, not an assertion: nothing installed in the <c>linux-runtime</c> job can ask X11 which
-/// windows are mapped, so the log line is the only signal a test can act on.</para>
+/// the window has been built and shown. The virtual display is photographed too, before the click
+/// and after it, and that pair is the only thing that shows a person what came up — but it is
+/// evidence for a reader, not an assertion: nothing installed in the <c>linux-runtime</c> job can
+/// ask X11 which windows are mapped, so the log line is the only signal a test can act on.</para>
 ///
 /// <para><b>Failing at once when the app has gone.</b> Every wait here goes through
 /// <see cref="LinuxAppProcess"/>, which stops waiting the moment the app exits and reports the
@@ -64,6 +64,21 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     private const int ClickX = 1200;
     private const int ClickY = 20;
 
+    /// <summary>The photograph this test exists to produce: the display with the panel on it.</summary>
+    private const string AfterTheClick = nameof(ALeftClickOpensThePanelWithinFiveSeconds);
+
+    /// <summary>The same display moments earlier, so the one above can be held against something.</summary>
+    private const string BeforeTheClick = AfterTheClick + "-before-the-click";
+
+    /// <summary>
+    /// How long the toolkit is given to put something on screen before the photograph is
+    /// settled for. Nothing is measured here and nothing fails when it runs out — see
+    /// <see cref="PhotographTheOpenPanelAsync"/>.
+    /// </summary>
+    private static readonly TimeSpan PaintPatience = TimeSpan.FromSeconds(5);
+
+    private static readonly TimeSpan BetweenPhotographs = TimeSpan.FromMilliseconds(250);
+
     private static bool InRuntimeJob => Environment.GetEnvironmentVariable("OVIEW_LINUX_RUNTIME") == "1";
 
     /// <summary>
@@ -83,7 +98,10 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
         // The host first: the app looks for a notification area once, before the toolkit starts,
         // so one that arrives later is a different case from the one every desktop presents.
         await using var host = await StandInTrayHost.StartAsync();
-        await using var app = await LinuxAppProcess.StartAsync(output, nameof(ALeftClickOpensThePanelWithinFiveSeconds));
+        await using var app = await LinuxAppProcess.StartAsync(output, AfterTheClick);
+
+        // Declared out here only so the settled photograph at the end has it to compare against.
+        byte[]? beforeTheClick = null;
 
         try
         {
@@ -99,6 +117,11 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
             // shared static the rest of the run — and the app's own code — depends on.
             using var area = new DBusConnection(SessionBusAddress());
             await area.ConnectAsync();
+
+            // The display as it was with no panel on it. Taken before the click so the
+            // photograph afterwards has something to be held against, and best effort: a
+            // picture that cannot be taken must not decide whether the click works.
+            beforeTheClick = Photograph(BeforeTheClick);
 
             // Sent, not yet answered. The five seconds run from here, because this is the moment
             // the person let go of the mouse button.
@@ -122,15 +145,16 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
         }
         catch
         {
-            // Best effort, and deliberately not the throwing call below: a photograph that cannot
-            // be taken must not replace the failure the test actually found.
-            TryCapture();
+            // Best effort, and deliberately not the settled photograph below: a picture that
+            // cannot be taken must not replace the failure the test actually found, and a
+            // failing run wants the display as it was when the test gave up, not later.
+            Photograph(AfterTheClick);
             throw;
         }
 
         // On the pass path the photograph is part of what this test produces — the only thing
         // that shows a reader what came up — so failing to take it fails the test.
-        DisplayCapture.CaptureTo(nameof(ALeftClickOpensThePanelWithinFiveSeconds));
+        await PhotographTheOpenPanelAsync(beforeTheClick);
     }
 
     /// <summary>
@@ -162,15 +186,86 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
         ?? throw new InvalidOperationException(
             "DBUS_SESSION_BUS_ADDRESS is not set: there is no session bus to click over.");
 
-    private void TryCapture()
+    /// <summary>
+    /// Photographs the display until it stops looking the way it did before the click, giving up
+    /// after <see cref="PaintPatience"/> and keeping the last photograph either way.
+    ///
+    /// <para><b>Why not photograph once and be done with it.</b> That is what this test did at
+    /// first, and the picture came back uniformly black — a truthful photograph of the display,
+    /// taken in the moment between the window being shown and its first frame reaching the X
+    /// server, and worth nothing to the reader it exists for. <c>panel opened</c> is written when
+    /// the window has been shown; nothing the app writes marks the frame after it, and here that
+    /// frame is drawn on the CPU because the runner has no usable GLX.</para>
+    ///
+    /// <para><b>Still not an assertion.</b> A display that never changes does not fail this test.
+    /// Whether the panel is up has already been settled by the app's own log, and a photograph
+    /// that disagrees with it is a reason for a person to open the screenshot — not grounds for
+    /// this test to call a click broken over a picture. It is said in the test's output instead,
+    /// where the run that produced the photograph will carry it.</para>
+    /// </summary>
+    private async Task PhotographTheOpenPanelAsync(byte[]? beforeTheClick)
+    {
+        var deadline = DateTime.UtcNow + PaintPatience;
+
+        while (true)
+        {
+            // Not best effort: on the passing path this photograph is half of what the test
+            // produces, so scrot failing to take it is a failure.
+            DisplayCapture.CaptureTo(AfterTheClick);
+
+            // Null off the runtime job, where capturing is deliberately a no-op — there is
+            // nothing to wait for and nothing to compare, so the first pass is the last.
+            var afterTheClick = ReadPhotograph(AfterTheClick);
+            if (beforeTheClick is null || afterTheClick is null
+                || !afterTheClick.AsSpan().SequenceEqual(beforeTheClick))
+            {
+                return;
+            }
+
+            if (DateTime.UtcNow >= deadline)
+            {
+                output.WriteLine(
+                    $"{PaintPatience.TotalSeconds:0} seconds after the panel was opened the display "
+                    + $"still looks exactly as it did before the click, so {AfterTheClick}.png is "
+                    + "probably showing an empty screen rather than the panel. The click itself "
+                    + "passed on the app's own log; it is the photograph that is worth doubting.");
+                return;
+            }
+
+            await Task.Delay(BetweenPhotographs);
+        }
+    }
+
+    /// <summary>
+    /// Photographs the display, returning what landed on disk, and swallows a failure to take it:
+    /// every caller of this one has something better to report than a screenshot that failed.
+    /// </summary>
+    private byte[]? Photograph(string name)
     {
         try
         {
-            DisplayCapture.CaptureTo(nameof(ALeftClickOpensThePanelWithinFiveSeconds));
+            DisplayCapture.CaptureTo(name);
+            return ReadPhotograph(name);
         }
         catch (Exception ex)
         {
             output.WriteLine($"the display could not be photographed: {ex.GetType().Name}: {ex.Message}");
+            return null;
         }
+    }
+
+    /// <summary>
+    /// The bytes of a photograph just taken, or null where none was — off the runtime job
+    /// <c>OVIEW_RUNTIME_ARTIFACTS</c> is unset and <see cref="DisplayCapture"/> writes nothing.
+    /// The path is rebuilt from the same two pieces DisplayCapture puts it together from, because
+    /// it photographs for the sake of the artifact folder and does not report where it wrote.
+    /// </summary>
+    private static byte[]? ReadPhotograph(string name)
+    {
+        var artifacts = Environment.GetEnvironmentVariable("OVIEW_RUNTIME_ARTIFACTS");
+        if (string.IsNullOrEmpty(artifacts)) return null;
+
+        var path = Path.Combine(artifacts, $"{name}.png");
+        return File.Exists(path) ? File.ReadAllBytes(path) : null;
     }
 }
