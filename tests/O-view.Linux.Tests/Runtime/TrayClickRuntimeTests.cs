@@ -13,16 +13,28 @@ namespace OView.Linux.Tests.Runtime;
 /// in-process test could see it — the report was a core dump and an empty log. Nothing short of
 /// a real click on a real bus reaches that code path, which is what this does.</para>
 ///
+/// <para><b>This is the live bus and the dispatcher together.</b> That combination was long
+/// written down as unreachable, and it is what let #124 ship and then let #143 ship past the fix
+/// for #124. It is reachable here — a real session bus, a real notification area, a real click,
+/// and the app's own Avalonia dispatcher on the other end — so the claim does not hold for this
+/// test. Older comments elsewhere in the suite still make it; they are stale, not a contract.</para>
+///
 /// <para><b>How a click arrives.</b> A notification area calls
 /// <c>org.kde.StatusNotifierItem.Activate</c> on the item, with the screen coordinates of the
 /// click, and waits for its answer. Both halves matter: the answer coming back is what #124 did
 /// not do, and the app still being alive afterwards is what #143 did not do.</para>
 ///
-/// <para><b>What proves the panel is up.</b> The app's own <c>panel opened</c> line, written once
-/// the window has been built and shown. The virtual display is photographed too, before the click
-/// and after it, and that pair is the only thing that shows a person what came up — but it is
-/// evidence for a reader, not an assertion: nothing installed in the <c>linux-runtime</c> job can
-/// ask X11 which windows are mapped, so the log line is the only signal a test can act on.</para>
+/// <para><b>What proves the panel is up, and that the right thread put it there.</b> The app's
+/// own <c>panel opened</c> line, written once the window has been built and shown, which also
+/// names the thread that built it. Both halves are asserted, and the second is the one that
+/// catches #143's defect: with <see cref="OView.Linux.Tray.BusCallback"/>'s hand-off removed the
+/// panel still opened under this job's virtual display and the line still arrived, because the
+/// runner has no usable GLX and the frame is drawn on the CPU (measured, PR #295). A test that
+/// waits only for the line passes on a head that has gone back to building windows on the bus
+/// thread. The virtual display is photographed too, before the click and after it, and that pair
+/// is the only thing that shows a person what came up — but it is evidence for a reader, not an
+/// assertion: nothing installed in the <c>linux-runtime</c> job can ask X11 which windows are
+/// mapped, so the log line is the only signal a test can act on.</para>
 ///
 /// <para><b>Failing at once when the app has gone.</b> Every wait here goes through
 /// <see cref="LinuxAppProcess"/>, which stops waiting the moment the app exits and reports the
@@ -39,6 +51,13 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
 {
     /// <summary>The line <c>LinuxApp.ShowPanel</c> writes once the panel window has been shown.</summary>
     public const string PanelOpenedLogLine = "panel opened";
+
+    /// <summary>
+    /// What that line says when the UI thread was the one that built and showed the window —
+    /// <c>Dispatcher.UIThread.CheckAccess()</c>, read inside <c>ShowPanel</c> itself. With
+    /// <see cref="OView.Linux.Tray.BusCallback"/>'s hand-off gone it reads <c>uiThread=false</c>.
+    /// </summary>
+    private const string OpenedByTheUiThread = "uiThread=true";
 
     private const string ItemInterface = "org.kde.StatusNotifierItem";
 
@@ -127,7 +146,15 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
             // the person let go of the mouse button.
             var answered = Activate(area, item);
 
-            await app.WaitForLogAsync(PanelOpenedLogLine, PanelPatience);
+            var panelOpened = await app.WaitForLogAsync(PanelOpenedLogLine, PanelPatience);
+
+            // Issue #143 is not "the panel did not open" — it is "the window was built on the
+            // D-Bus thread". Measured: with the hand-off removed the panel still opens here, so
+            // this assertion, not the line's arrival, is what makes the removal visible.
+            Assert.True(
+                panelOpened.Contains(OpenedByTheUiThread, StringComparison.Ordinal),
+                $"the panel was not opened by the UI thread, so the click reached the toolkit from "
+                + $"the bus thread the way issue #143 did: \"{panelOpened}\"");
 
             // The answer to the click, which the panel being up does not imply: a host calls
             // Activate and waits, so an item that opens its window and never replies hangs the

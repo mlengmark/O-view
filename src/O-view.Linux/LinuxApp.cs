@@ -208,7 +208,11 @@ public sealed class LinuxApp : Application
                 // read on its own rather than folded into the poll (issue #254).
                 BoostNotices.TryRead());
 
-            _log?.Write("panel opened");
+            // Which thread got here, not only that the panel came up. Taking BusCallback's
+            // hand-off away leaves the window built on the D-Bus thread, and under a virtual
+            // display that still opens — so "panel opened" alone cannot tell the #143 defect
+            // from a healthy click, and the runtime click test has nothing to fail on.
+            _log?.Write($"panel opened uiThread={(Dispatcher.UIThread.CheckAccess() ? "true" : "false")}");
         }
         catch (Exception ex)
         {
