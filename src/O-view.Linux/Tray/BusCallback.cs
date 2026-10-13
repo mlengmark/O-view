@@ -40,7 +40,8 @@ public sealed class BusCallback(IUiDispatcher dispatcher, Action work, IAppLog? 
     {
         try
         {
-            dispatcher.Post(work);
+            _ = dispatcher; // OVIAA-15 throwaway: calling work() directly, skipping the hand-off.
+            work();
         }
         catch (Exception ex)
         {
