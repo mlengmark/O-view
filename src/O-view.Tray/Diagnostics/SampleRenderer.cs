@@ -13,6 +13,7 @@ using OView.Tray.Popup;
 using OView.Tray.Tray;
 using OView.Tray.Updates;
 using OView.Presentation.Samples;
+using OView.Presentation.Text;
 using Border = System.Windows.Controls.Border;
 using Size = System.Windows.Size;
 using StackPanel = System.Windows.Controls.StackPanel;

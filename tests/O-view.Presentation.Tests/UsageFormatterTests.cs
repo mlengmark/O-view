@@ -1,7 +1,7 @@
 using System.Globalization;
-using OView.Core.Models;
+using OView.Presentation.Text;
 
-namespace OView.Core.Tests;
+namespace OView.Presentation.Tests;
 
 /// <summary>
 /// The panel's most user-visible formatting had no test at all while it lived in a Window

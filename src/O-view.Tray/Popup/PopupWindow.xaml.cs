@@ -1398,8 +1398,8 @@ public partial class PopupWindow : Window, IFlyout
     // reads better unqualified at its call sites — the same reason FormatTokens exists.
     private static string FormatCountdown(TimeSpan t) => PanelText.Countdown(t);
 
-    // Token and money formatting live in OView.Core.Models.UsageFormatter, shared with the
-    // off-plan notification and the verification renders so one amount cannot be written
+    // Token and money formatting live in OView.Presentation.Text.UsageFormatter, shared with
+    // the off-plan notification and the verification renders so one amount cannot be written
     // two ways (issue #55). Kept as local aliases because they read better unqualified at
     // the dozen call sites above.
     private static string FormatTokens(long tokens) => UsageFormatter.Tokens(tokens);
