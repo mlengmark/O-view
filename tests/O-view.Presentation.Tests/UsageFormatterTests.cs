@@ -1,4 +1,5 @@
 using System.Globalization;
+using OView.Core.Models;
 using OView.Presentation.Text;
 
 namespace OView.Presentation.Tests;
@@ -61,5 +62,42 @@ public class UsageFormatterTests
         {
             Thread.CurrentThread.CurrentCulture = original;
         }
+    }
+
+    // ── PanelText's private copies agree with this class ──────────────────────────────
+    //
+    // PanelText.Caveat, PanelText.TokenCardCaption and PanelText.DivergenceDetail each embed a
+    // formatted figure, but PanelText lives in Core and Core may not reference Presentation —
+    // so each keeps a private one-line copy of these two rules rather than calling this class
+    // (docs/architecture.md). These three tests are the guard that keeps the copies honest: the
+    // next person to change a rule here gets a red test instead of a tile that silently drifts
+    // from the sentences beside it.
+
+    [Fact]
+    public void PanelTextCaveat_CacheWriteFigure_AgreesWithTokens()
+    {
+        var stats = new PanelStatistics(0, null, 0, null, 31, 31, [], 0, null)
+        {
+            TtlUnrecordedCacheWrites = 4_200_000,
+        };
+
+        Assert.Contains(UsageFormatter.Tokens(4_200_000), PanelText.Caveat(stats), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PanelTextTokenCardCaption_EstimateFigure_AgreesWithUsd()
+    {
+        var caption = PanelText.TokenCardCaption(
+            TokenKind.CacheWrite, 0.10295, 0.87m, PanelText.TokenWindowToday);
+
+        Assert.Contains(UsageFormatter.Usd(0.87m), caption, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PanelTextDivergenceDetail_TokenFigure_AgreesWithTokens()
+    {
+        var detail = PanelText.DivergenceDetail(126_900, 0);
+
+        Assert.Contains(UsageFormatter.Tokens(126_900), detail, StringComparison.Ordinal);
     }
 }
