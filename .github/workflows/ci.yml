@@ -227,8 +227,16 @@ jobs:
         with:
           dotnet-version: "10.0.x"
 
-      - name: Install a virtual display and a session bus
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb dbus
+      # xvfb: the virtual display. dbus: the session bus.
+      # libx11-6, libice6, libsm6: Avalonia's X11 backend (Program.BuildAvaloniaApp picks it
+      # via UsePlatformDetect, since DISPLAY is set here). libfontconfig1: SkiaSharp's font
+      # loading. The same four packaging/linux/build.sh lists as the .deb's runtime Depends,
+      # for the same reason given there: .NET itself needs none of them.
+      # scrot: the one screenshot tool, to photograph the virtual display.
+      - name: Install what the Linux app and a screenshot tool need under Xvfb
+        run: >
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends
+          xvfb dbus libx11-6 libice6 libsm6 libfontconfig1 scrot
 
       - name: Build the Linux tests
         run: dotnet build tests/O-view.Linux.Tests -c Release
