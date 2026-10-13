@@ -32,11 +32,10 @@ namespace OView.Linux.Tests.Runtime;
 ///
 /// <para><b>And who was on the bus.</b> The toolkit's tray backend logs its own failures
 /// through a logger the app installs no sink for, so a registration that never happens says
-/// nothing anywhere. What the bus can still be asked is every name on it and the process
-/// behind each, and that separates the two ways this goes wrong: a
-/// <c>org.kde.StatusNotifierItem-…</c> name owned by the app with no registration behind it
-/// means the item was published and the call to the watcher is what failed, while an app with
-/// no connection of its own means the backend never got that far.</para>
+/// nothing anywhere. What the bus can still be asked is every name on it, and that separates
+/// the two ways this goes wrong: a <c>org.kde.StatusNotifierItem-…</c> name with no
+/// registration behind it means the item was published and the call to the watcher is what
+/// failed, while no such name means the backend never got that far.</para>
 /// </summary>
 public sealed class LinuxAppProcess : IAsyncDisposable
 {
@@ -381,15 +380,13 @@ public sealed class LinuxAppProcess : IAsyncDisposable
     }
 
     /// <summary>
-    /// Who is on the session bus, asked of the bus itself: every name, the process behind it,
-    /// and the app's own process id to read them against. The app's unique names count as much
-    /// as a <c>org.kde.StatusNotifierItem-…</c> one — how many connections it made is what
-    /// tells a tray backend that never connected apart from one that connected and published
-    /// nothing.
+    /// Every name on the session bus, asked of the bus itself. For a tray failure the telling
+    /// one is <c>org.kde.StatusNotifierItem-…</c>: present, and the item was published and the
+    /// call to the watcher is what failed; absent, and the backend never got that far.
     ///
-    /// <para>Every name is reported rather than only the app's, because "the app owns nothing"
-    /// and "this could not read anything" are different findings and a diagnostic that cannot
-    /// tell them apart is worse than none.</para>
+    /// <para>The whole list rather than a filtered one, because what owns which name is not
+    /// worth another round trip here — asking the bus for the process behind each name closed
+    /// this connection under it, and the list alone answers the question.</para>
     ///
     /// <para>Never throws, and catches broadly to make sure of it. This runs only while a
     /// failure message is being built, so an exception escaping here would replace the failure
@@ -412,19 +409,20 @@ public sealed class LinuxAppProcess : IAsyncDisposable
             using var connection = new DBusConnection(address);
             await connection.ConnectAsync().AsTask().WaitAsync(BusReadTimeout);
 
-            var names = await CallBusAsync(
-                connection, "ListNames", null, static (m, _) => ReadStrings(m));
+            var writer = connection.GetMessageWriter();
+            writer.WriteMethodCallHeader(
+                destination: "org.freedesktop.DBus",
+                path: "/org/freedesktop/DBus",
+                @interface: "org.freedesktop.DBus",
+                member: "ListNames",
+                signature: null,
+                flags: MessageFlags.None);
 
-            var described = new List<string>(names.Count);
-            foreach (var name in names)
-            {
-                var (pid, owner) = await OwnerProcessIdAsync(connection, name);
+            var names = await connection
+                .CallMethodAsync(writer.CreateMessage(), static (m, _) => ReadNames(m))
+                .WaitAsync(BusReadTimeout);
 
-                described.Add(pid == _process.Id ? $"{name}={owner} (the app)" : $"{name}={owner}");
-            }
-
-            return $"app pid {_process.Id} · "
-                + (described.Count > 0 ? string.Join(", ", described) : "the bus lists no names");
+            return names.Count > 0 ? string.Join(", ", names) : "(the bus lists no names)";
         }
         catch (Exception ex)
         {
@@ -432,64 +430,19 @@ public sealed class LinuxAppProcess : IAsyncDisposable
         }
     }
 
-    /// <summary>
-    /// The process behind a name, and how to say so. A name can be gone by the time it is
-    /// asked about, and some the bus will not answer for at all, so a refusal is reported as
-    /// what refused it rather than as a blank: that is the difference between the app owning
-    /// nothing and this not being able to tell.
-    /// </summary>
-    private static async Task<(int? Pid, string Owner)> OwnerProcessIdAsync(
-        DBusConnection connection, string name)
-    {
-        try
-        {
-            var pid = (int)await CallBusAsync(
-                connection,
-                "GetConnectionUnixProcessID",
-                writer => writer.WriteString(name),
-                static (m, _) => m.GetBodyReader().ReadUInt32());
-
-            return (pid, pid.ToString());
-        }
-        catch (Exception ex)
-        {
-            return (null, $"?({ex.GetType().Name})");
-        }
-    }
-
-    /// <summary>The <c>as</c> a reply carries, read off the body a name at a time.</summary>
-    private static List<string> ReadStrings(Message message)
+    /// <summary>The <c>as</c> the bus replies with, read off the body a name at a time.</summary>
+    private static List<string> ReadNames(Message message)
     {
         var reader = message.GetBodyReader();
         var end = reader.ReadArrayStart(DBusType.String);
 
-        var strings = new List<string>();
+        var names = new List<string>();
         while (reader.HasNext(end))
         {
-            strings.Add(reader.ReadString());
+            names.Add(reader.ReadString());
         }
 
-        return strings;
-    }
-
-    /// <summary>Calls the bus's own object, which is where both questions above are answered.</summary>
-    private static Task<T> CallBusAsync<T>(
-        DBusConnection connection,
-        string member,
-        Action<MessageWriter>? argument,
-        MessageValueReader<T> read)
-    {
-        var writer = connection.GetMessageWriter();
-        writer.WriteMethodCallHeader(
-            destination: "org.freedesktop.DBus",
-            path: "/org/freedesktop/DBus",
-            @interface: "org.freedesktop.DBus",
-            member: member,
-            signature: argument is null ? null : "s",
-            flags: MessageFlags.None);
-        argument?.Invoke(writer);
-
-        return connection.CallMethodAsync(writer.CreateMessage(), read).WaitAsync(BusReadTimeout);
+        return names;
     }
 
     private void CaptureConsole(object sender, DataReceivedEventArgs e)

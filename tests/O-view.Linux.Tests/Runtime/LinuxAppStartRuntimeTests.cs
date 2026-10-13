@@ -69,6 +69,35 @@ public class LinuxAppStartRuntimeTests(ITestOutputHelper output)
         Assert.False(app.HasExited, "o-view exited after registering its icon");
     }
 
+    /// <summary>
+    /// The same thing with the notification area arriving second, which is what a GNOME user
+    /// installing the AppIndicator extension while O-view runs does.
+    ///
+    /// <para>Here to tell two failures apart. The icon not arriving says nothing about why;
+    /// the icon not arriving when the area was there first but arriving when it appeared
+    /// afterwards says the tray backend only ever acts on the name changing hands, and never
+    /// on finding it already owned — which is the ordinary case on every desktop that ships a
+    /// notification area.</para>
+    /// </summary>
+    [Fact]
+    public async Task TheIconReachesAHostThatAppearedAfterTheApp()
+    {
+        if (!InRuntimeJob) return;
+
+        await using var app = await LinuxAppProcess.StartAsync(output, nameof(TheIconReachesAHostThatAppearedAfterTheApp));
+
+        var startup = await app.WaitForLogAsync(LinuxAppProcess.StartupLogLine, Patience);
+        Assert.Contains($"trayHost={TrayHostState.Absent}", startup);
+
+        await using var host = await StandInTrayHost.StartAsync();
+
+        var registered = await app.WaitForAsync(
+            host.WaitForItemAsync(Patience), Patience, "the icon to reach a host that started after it");
+
+        Assert.StartsWith(":", registered.BusName);
+        Assert.False(app.HasExited, "o-view exited after registering its icon");
+    }
+
     [Fact]
     public async Task AWaitFailsWithTheAppsOwnOutputAsSoonAsItHasGone()
     {
