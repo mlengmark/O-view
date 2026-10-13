@@ -278,7 +278,7 @@ public class CoverageMatrixTests : IDisposable
     ///
     /// <para>It used to end "Chat keeps no local record", justified by a heavy chat user with a
     /// small token figure having <i>no other way</i> to learn why. That premise stopped holding in
-    /// issue #235: <see cref="PanelText.TokenScopeCaveat"/> states it beneath the tiles, always
+    /// issue #235: <see cref="TokenText.TokenScopeCaveat"/> states it beneath the tiles, always
     /// visible, where this line sits inside a disclosure most readers never open. The permanent
     /// gap is now stated once, in the more visible of the two.</para>
     ///
@@ -295,7 +295,7 @@ public class CoverageMatrixTests : IDisposable
         var line = Scope().CoverageLine();
 
         Assert.DoesNotContain("chat", line, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("chat", PanelText.TokenScopeCaveat, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("chat", TokenText.TokenScopeCaveat, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>

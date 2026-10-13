@@ -151,7 +151,7 @@ public sealed class PanelContent : Border
     {
         var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(utcNow, local).DateTime);
         return notices?.For(BoostNotice.WeeklyBar, today, utcNow) is { } notice
-            ? PanelText.BoostChip(notice, utcNow, local)
+            ? BoostText.BoostChip(notice, utcNow, local)
             : null;
     }
 
@@ -262,19 +262,19 @@ public sealed class PanelContent : Border
 
     private void AddTiles(PanelStatistics stats, TranscriptScopeReport? scopeReport)
     {
-        var caveat = PanelText.Caveat(stats);
+        var caveat = TokenText.Caveat(stats);
         var offPlan = stats.IsOffPlan;
 
         _root.Children.Add(TileRow(
-            Tile(PanelText.TokensTodayLabel, UsageFormatter.Tokens(stats.TokensToday), PanelText.OffPlanNote(offPlan)),
-            Tile(PanelText.EstTodayLabel(offPlan), UsageFormatter.Usd(stats.EstTodayUsd), PanelText.OffPlanNote(offPlan))));
+            Tile(TokenText.TokensTodayLabel, UsageFormatter.Tokens(stats.TokensToday), OffPlanText.OffPlanNote(offPlan)),
+            Tile(TokenText.EstTodayLabel(offPlan), UsageFormatter.Usd(stats.EstTodayUsd), OffPlanText.OffPlanNote(offPlan))));
 
         // A muted line naming the UTC day's boundary stood here for one release, because the
         // tiles were a UTC day and this head has no hover to put the caveat behind (issue
         // #210). The tiles are the reader's own day now, so the line has nothing to say.
         _root.Children.Add(TileRow(
-            Tile(PanelText.Tokens31DaysLabel, UsageFormatter.Tokens(stats.Tokens31Days), caveat),
-            Tile(PanelText.Est31DaysLabel, UsageFormatter.Usd(stats.Est31DaysUsd), caveat)));
+            Tile(TokenText.Tokens31DaysLabel, UsageFormatter.Tokens(stats.Tokens31Days), caveat),
+            Tile(TokenText.Est31DaysLabel, UsageFormatter.Usd(stats.Est31DaysUsd), caveat)));
 
         // What none of the four tiles above cover (issue #235). The plan bars are account-wide;
         // these are not, because cloud-container Cowork sessions and chat leave no transcript on
@@ -288,7 +288,7 @@ public sealed class PanelContent : Border
         //
         // Not the line issue #232 removed — that one sat under the session BAR, described the
         // session window alone, and carried a disclosure.
-        _root.Children.Add(Muted(PanelText.TokenScopeCaveat));
+        _root.Children.Add(Muted(TokenText.TokenScopeCaveat));
 
         // What was billed, beside tiles that headline only output (issue #253). Omitted when
         // there is nothing to break down — a composition of zero explains nothing.
@@ -306,15 +306,15 @@ public sealed class PanelContent : Border
             Margin = new Thickness(0, 12, 0, 0),
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
         };
-        header.Children.Add(Text(PanelText.TokensUsedHeading, 11, _theme["TextSecondary"]));
+        header.Children.Add(Text(TokenText.TokensUsedHeading, 11, _theme["TextSecondary"]));
 
         var switcher = ViewSwitch(breakdown);
         Grid.SetColumn(switcher, 1);
         header.Children.Add(switcher);
         _root.Children.Add(header);
 
-        _root.Children.Add(TokenBar(today, PanelText.TokensUsedTodayLabel, PanelText.TokenWindowToday, 6));
-        _root.Children.Add(TokenBar(window31, PanelText.TokensUsed31DaysLabel, PanelText.TokenWindow31Days, 9));
+        _root.Children.Add(TokenBar(today, TokenText.TokensUsedTodayLabel, TokenText.TokenWindowToday, 6));
+        _root.Children.Add(TokenBar(window31, TokenText.TokensUsed31DaysLabel, TokenText.TokenWindow31Days, 9));
         _root.Children.Add(breakdown);
 
         // Which surfaces these figures are made of. Empty when nothing was found at all —
@@ -333,8 +333,8 @@ public sealed class PanelContent : Border
     /// </summary>
     private Control ViewSwitch(Control breakdown)
     {
-        var bars = SwitchButton(PanelText.TokenViewBarsLabel, active: true);
-        var table = SwitchButton(PanelText.TokenViewBreakdownLabel, active: false);
+        var bars = SwitchButton(TokenText.TokenViewBarsLabel, active: true);
+        var table = SwitchButton(TokenText.TokenViewBreakdownLabel, active: false);
 
         void Select(bool showBreakdown)
         {
@@ -449,7 +449,7 @@ public sealed class PanelContent : Border
                 VerticalAlignment = VerticalAlignment.Center,
             });
             entry.Children.Add(Text(
-                $"{PanelText.TokenKindLabel(slice.Kind)} {UsageFormatter.Tokens(slice.Tokens)}",
+                $"{TokenText.TokenKindLabel(slice.Kind)} {UsageFormatter.Tokens(slice.Tokens)}",
                 10.5, _theme["TextSecondary"]));
             ToolTip.SetTip(entry, SegmentTip(slice, window));
             legend.Children.Add(entry);
@@ -461,7 +461,7 @@ public sealed class PanelContent : Border
 
     private string SegmentTip(TokenKindSlice slice, string window) =>
         $"{UsageFormatter.Tokens(slice.Tokens)} · "
-        + PanelText.TokenCardCaption(slice.Kind, slice.Share, slice.EstUsd, window);
+        + TokenText.TokenCardCaption(slice.Kind, slice.Share, slice.EstUsd, window);
 
     private IBrush KindBrush(TokenKind kind) => _theme[TokenBarGeometry.PaletteKey(kind)];
 
@@ -480,9 +480,9 @@ public sealed class PanelContent : Border
         };
 
         AddBreakdownRow(table, 0, null,
-            PanelText.TokenBreakdownKindHeader, PanelText.TokenBreakdownTodayHeader,
-            PanelText.TokenBreakdownShareHeader, PanelText.TokenBreakdown31DaysHeader,
-            PanelText.TokenBreakdownShareHeader, _theme["TextMuted"], 9.5);
+            TokenText.TokenBreakdownKindHeader, TokenText.TokenBreakdownTodayHeader,
+            TokenText.TokenBreakdownShareHeader, TokenText.TokenBreakdown31DaysHeader,
+            TokenText.TokenBreakdownShareHeader, _theme["TextMuted"], 9.5);
 
         var row = 1;
         foreach (var slice in (today.HasTokens ? today : window31).InDisplayOrder)
@@ -491,16 +491,16 @@ public sealed class PanelContent : Border
             var other = window31.InDisplayOrder.First(s => s.Kind == slice.Kind);
 
             AddBreakdownRow(table, row++, KindBrush(slice.Kind),
-                PanelText.TokenKindLabel(slice.Kind),
-                UsageFormatter.Tokens(mine.Tokens), PanelText.TokenShare(mine.Share),
-                UsageFormatter.Tokens(other.Tokens), PanelText.TokenShare(other.Share),
+                TokenText.TokenKindLabel(slice.Kind),
+                UsageFormatter.Tokens(mine.Tokens), TokenText.TokenShare(mine.Share),
+                UsageFormatter.Tokens(other.Tokens), TokenText.TokenShare(other.Share),
                 _theme["TextSecondary"], 10.5);
         }
 
         AddBreakdownRow(table, row, null,
-            PanelText.TokenBreakdownTotalLabel,
-            UsageFormatter.Tokens(today.Total), PanelText.TokenShare(today.HasTokens ? 1 : 0),
-            UsageFormatter.Tokens(window31.Total), PanelText.TokenShare(window31.HasTokens ? 1 : 0),
+            TokenText.TokenBreakdownTotalLabel,
+            UsageFormatter.Tokens(today.Total), TokenText.TokenShare(today.HasTokens ? 1 : 0),
+            UsageFormatter.Tokens(window31.Total), TokenText.TokenShare(window31.HasTokens ? 1 : 0),
             _theme["TextPrimary"], 10.5, FontWeight.SemiBold);
 
         return table;

@@ -194,7 +194,7 @@ public class PanelTextTests
 
     [Fact]
     public void AFullyCoveredWindowWithEverythingPricedHasNoCaveat() =>
-        Assert.Equal("", PanelText.Caveat(Stats(31)));
+        Assert.Equal("", TokenText.Caveat(Stats(31)));
 
     /// <summary>
     /// The scope note is <b>not</b> part of the per-tile caveat (issue #235).
@@ -209,7 +209,7 @@ public class PanelTextTests
     {
         foreach (var stats in new[] { Stats(31), Stats(3), Stats(31, "claude-x"), Stats(3, "claude-x") })
         {
-            Assert.DoesNotContain(PanelText.TokenScopeCaveat, PanelText.Caveat(stats), StringComparison.Ordinal);
+            Assert.DoesNotContain(TokenText.TokenScopeCaveat, TokenText.Caveat(stats), StringComparison.Ordinal);
         }
     }
 
@@ -224,7 +224,7 @@ public class PanelTextTests
     [Fact]
     public void TheScopeNoteNamesTheSurfacesItExcludes()
     {
-        Assert.Equal("chat and cloud sessions not counted", PanelText.TokenScopeCaveat);
+        Assert.Equal("chat and cloud sessions not counted", TokenText.TokenScopeCaveat);
     }
 
     /// <summary>
@@ -233,7 +233,7 @@ public class PanelTextTests
     /// </summary>
     [Fact]
     public void PartialHistoryStatesItsCoverage() =>
-        Assert.Equal("3 of 31 days recorded", PanelText.Caveat(Stats(3)));
+        Assert.Equal("3 of 31 days recorded", TokenText.Caveat(Stats(3)));
 
     /// <summary>
     /// An unpriced model is named rather than silently dropped — and must not void the
@@ -241,13 +241,13 @@ public class PanelTextTests
     /// </summary>
     [Fact]
     public void AnUnpricedModelIsNamed() =>
-        Assert.Equal("excludes claude-x (no published rate)", PanelText.Caveat(Stats(31, "claude-x")));
+        Assert.Equal("excludes claude-x (no published rate)", TokenText.Caveat(Stats(31, "claude-x")));
 
     [Fact]
     public void BothCaveatsAppearTogether() =>
         Assert.Equal(
             "3 of 31 days recorded · excludes claude-x, claude-y (no published rate)",
-            PanelText.Caveat(Stats(3, "claude-x", "claude-y")));
+            TokenText.Caveat(Stats(3, "claude-x", "claude-y")));
 
     /// <summary>
     /// Cache writes whose TTL was never recorded are priced at the 5-minute rate, and the panel
@@ -258,7 +258,7 @@ public class PanelTextTests
     [Fact]
     public void UnattributedCacheWritesNameTheAssumptionTheyArePricedUnder()
     {
-        var caveat = PanelText.Caveat(Stats(31) with { TtlUnrecordedCacheWrites = 4_200_000 });
+        var caveat = TokenText.Caveat(Stats(31) with { TtlUnrecordedCacheWrites = 4_200_000 });
 
         Assert.Contains("4.2M cache writes", caveat, StringComparison.Ordinal);
         Assert.Contains("5-minute rate", caveat, StringComparison.Ordinal);
@@ -270,7 +270,7 @@ public class PanelTextTests
     /// </summary>
     [Fact]
     public void NoUnattributedWritesMeansNoAssumptionToState() =>
-        Assert.Equal("", PanelText.Caveat(Stats(31) with { TtlUnrecordedCacheWrites = 0 }));
+        Assert.Equal("", TokenText.Caveat(Stats(31) with { TtlUnrecordedCacheWrites = 0 }));
 
     /// <summary>
     /// The rate table's age reaches the tiles past a threshold, naming its source as well as its
@@ -285,7 +285,7 @@ public class PanelTextTests
             RatesAreStale = true,
         };
 
-        Assert.Equal("rates: bundled, as of 24 Jun 2026", PanelText.Caveat(stats));
+        Assert.Equal("rates: bundled, as of 24 Jun 2026", TokenText.Caveat(stats));
     }
 
     /// <summary>
@@ -294,7 +294,7 @@ public class PanelTextTests
     /// </summary>
     [Fact]
     public void ACurrentRateTableIsNotWorthSaying() =>
-        Assert.Equal("", PanelText.Caveat(Stats(31) with { RatesAreStale = false }));
+        Assert.Equal("", TokenText.Caveat(Stats(31) with { RatesAreStale = false }));
 
     // ── divergence wording ──────────────────────────────────────────────────────────
 
@@ -308,7 +308,7 @@ public class PanelTextTests
     [Fact]
     public void TheDivergenceBannerStatesTheObservationAndNamesNoCause()
     {
-        var text = PanelText.DivergenceDetail(126_900, 0);
+        var text = OffPlanText.DivergenceDetail(126_900, 0);
 
         Assert.Contains("126.9K output tokens", text, StringComparison.Ordinal);
         Assert.Contains("moved 0 points", text, StringComparison.Ordinal);
@@ -319,16 +319,16 @@ public class PanelTextTests
 
     [Fact]
     public void OnePointIsNotPluralised() =>
-        Assert.Contains("moved 1 point.", PanelText.DivergenceDetail(60_000, 1), StringComparison.Ordinal);
+        Assert.Contains("moved 1 point.", OffPlanText.DivergenceDetail(60_000, 1), StringComparison.Ordinal);
 
     /// <summary>An exhausted window is stated as such, without asserting how it bills.</summary>
     [Fact]
     public void TheLimitReachedWordingDoesNotAssertHowItBills()
     {
-        Assert.Contains("exhausted", PanelText.PlanLimitReachedDetail, StringComparison.Ordinal);
-        Assert.Contains("O-view could not read", PanelText.PlanLimitReachedDetail, StringComparison.Ordinal);
+        Assert.Contains("exhausted", OffPlanText.PlanLimitReachedDetail, StringComparison.Ordinal);
+        Assert.Contains("O-view could not read", OffPlanText.PlanLimitReachedDetail, StringComparison.Ordinal);
         Assert.DoesNotContain("bills as extra usage at API rates",
-            PanelText.PlanLimitReachedDetail, StringComparison.Ordinal);
+            OffPlanText.PlanLimitReachedDetail, StringComparison.Ordinal);
     }
 
     // ── off-plan heading and detail, against the extra-usage setting (issue #259) ────
@@ -351,15 +351,15 @@ public class PanelTextTests
     public void TheExhaustedWindowHeadingClaimsAChargeOnlyWhereTheAccountAllowsOne()
     {
         Assert.Equal("Plan limit reached — further work bills as extra usage",
-            PanelText.OffPlanTitle(DivergenceState.PlanLimitReached, ExtraUsageState.Enabled));
+            OffPlanText.OffPlanTitle(DivergenceState.PlanLimitReached, ExtraUsageState.Enabled));
 
         Assert.Equal("Plan limit reached — extra usage is switched off",
-            PanelText.OffPlanTitle(DivergenceState.PlanLimitReached, ExtraUsageState.Disabled));
+            OffPlanText.OffPlanTitle(DivergenceState.PlanLimitReached, ExtraUsageState.Disabled));
 
         // Unknown states the observation and nothing else. It is the state a machine with no
         // Claude Code is in, so it must read as a complete sentence rather than a hedge.
         Assert.Equal("Plan limit reached",
-            PanelText.OffPlanTitle(DivergenceState.PlanLimitReached, ExtraUsageState.Unknown));
+            OffPlanText.OffPlanTitle(DivergenceState.PlanLimitReached, ExtraUsageState.Unknown));
     }
 
     /// <summary>
@@ -372,8 +372,8 @@ public class PanelTextTests
     [InlineData(ExtraUsageState.Disabled)]
     public void OnlyAnEnabledAccountIsToldItsWorkIsBilling(ExtraUsageState state)
     {
-        var title = PanelText.OffPlanTitle(DivergenceState.PlanLimitReached, state);
-        var detail = PanelText.OffPlanDetail(LimitReached, state, Fetched, Now, Utc);
+        var title = OffPlanText.OffPlanTitle(DivergenceState.PlanLimitReached, state);
+        var detail = OffPlanText.OffPlanDetail(LimitReached, state, Fetched, Now, Utc);
 
         Assert.DoesNotContain("billing beyond your plan", title, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("bills beyond", detail, StringComparison.OrdinalIgnoreCase);
@@ -390,7 +390,7 @@ public class PanelTextTests
     [InlineData(ExtraUsageState.Enabled)]
     public void TheDivergingHeadingIsTheSameWhateverTheAccountSaysAboutExtraUsage(ExtraUsageState state) =>
         Assert.Equal("This session's usage is not drawing from your plan",
-            PanelText.OffPlanTitle(DivergenceState.Diverging, state));
+            OffPlanText.OffPlanTitle(DivergenceState.Diverging, state));
 
     /// <summary>
     /// The setting is relayed with its provenance, never asserted in O-view's own voice: it is
@@ -400,14 +400,14 @@ public class PanelTextTests
     [Fact]
     public void TheSettingIsRelayedWithWhoSaidItAndWhen()
     {
-        var off = PanelText.OffPlanDetail(LimitReached, ExtraUsageState.Disabled, Fetched, Now, Utc);
+        var off = OffPlanText.OffPlanDetail(LimitReached, ExtraUsageState.Disabled, Fetched, Now, Utc);
 
         Assert.Contains("exhausted", off, StringComparison.Ordinal);
         Assert.Contains("switched off", off, StringComparison.Ordinal);
         Assert.Contains("should not bill beyond it", off, StringComparison.Ordinal);
         Assert.Contains("reported by Claude Code, read 09:07", off, StringComparison.Ordinal);
 
-        var on = PanelText.OffPlanDetail(LimitReached, ExtraUsageState.Enabled, Fetched, Now, Utc);
+        var on = OffPlanText.OffPlanDetail(LimitReached, ExtraUsageState.Enabled, Fetched, Now, Utc);
 
         Assert.Contains("switched on", on, StringComparison.Ordinal);
         Assert.Contains("can bill beyond it", on, StringComparison.Ordinal);
@@ -421,7 +421,7 @@ public class PanelTextTests
     [Fact]
     public void AReadingFromAnotherDayCarriesItsDate()
     {
-        var stale = PanelText.OffPlanDetail(
+        var stale = OffPlanText.OffPlanDetail(
             LimitReached, ExtraUsageState.Disabled, Now.AddDays(-4), Now, Utc);
 
         Assert.Contains("read 27 Jul 12:00", stale, StringComparison.Ordinal);
@@ -435,14 +435,14 @@ public class PanelTextTests
     [Fact]
     public void WithNothingReadTheDetailFallsBackToTheObservationAlone()
     {
-        Assert.Equal(PanelText.PlanLimitReachedDetail,
-            PanelText.OffPlanDetail(LimitReached, ExtraUsageState.Unknown, Fetched, Now, Utc));
+        Assert.Equal(OffPlanText.PlanLimitReachedDetail,
+            OffPlanText.OffPlanDetail(LimitReached, ExtraUsageState.Unknown, Fetched, Now, Utc));
 
-        Assert.Equal(PanelText.PlanLimitReachedDetail,
-            PanelText.OffPlanDetail(LimitReached, ExtraUsageState.Disabled, null, Now, Utc));
+        Assert.Equal(OffPlanText.PlanLimitReachedDetail,
+            OffPlanText.OffPlanDetail(LimitReached, ExtraUsageState.Disabled, null, Now, Utc));
 
-        Assert.Equal(PanelText.DivergenceDetail(126_900, 0),
-            PanelText.OffPlanDetail(Diverging, ExtraUsageState.Unknown, Fetched, Now, Utc));
+        Assert.Equal(OffPlanText.DivergenceDetail(126_900, 0),
+            OffPlanText.OffPlanDetail(Diverging, ExtraUsageState.Unknown, Fetched, Now, Utc));
     }
 
     /// <summary>
@@ -452,7 +452,7 @@ public class PanelTextTests
     [Fact]
     public void TheDivergingDetailKeepsItsNumbersAndGainsTheSetting()
     {
-        var text = PanelText.OffPlanDetail(Diverging, ExtraUsageState.Disabled, Fetched, Now, Utc);
+        var text = OffPlanText.OffPlanDetail(Diverging, ExtraUsageState.Disabled, Fetched, Now, Utc);
 
         Assert.Contains("126.9K output tokens", text, StringComparison.Ordinal);
         Assert.Contains("moved 0 points", text, StringComparison.Ordinal);
@@ -468,8 +468,8 @@ public class PanelTextTests
     [Fact]
     public void TheBannerLinkPointsAtClaudesOwnUsageSettings()
     {
-        Assert.Equal("https://claude.ai/settings/usage", PanelText.UsageSettingsUrl);
-        Assert.NotEmpty(PanelText.UsageSettingsLinkLabel);
+        Assert.Equal("https://claude.ai/settings/usage", OffPlanText.UsageSettingsUrl);
+        Assert.NotEmpty(OffPlanText.UsageSettingsLinkLabel);
     }
 
     // ── tile labels ─────────────────────────────────────────────────────────────────
@@ -482,9 +482,9 @@ public class PanelTextTests
     [Fact]
     public void TheTodayLabelFlipsWhenSpendStopsBeingHypothetical()
     {
-        Assert.Equal("Est. value today", PanelText.EstTodayLabel(offPlan: false));
-        Assert.Equal("Est. spend today", PanelText.EstTodayLabel(offPlan: true));
-        Assert.StartsWith("Est.", PanelText.EstTodayLabel(offPlan: true), StringComparison.Ordinal);
+        Assert.Equal("Est. value today", TokenText.EstTodayLabel(offPlan: false));
+        Assert.Equal("Est. spend today", TokenText.EstTodayLabel(offPlan: true));
+        Assert.StartsWith("Est.", TokenText.EstTodayLabel(offPlan: true), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -496,9 +496,9 @@ public class PanelTextTests
     [Fact]
     public void NeitherTodayLabelStillClaimsAUtcDay()
     {
-        Assert.DoesNotContain("UTC", PanelText.TokensTodayLabel, StringComparison.Ordinal);
-        Assert.DoesNotContain("UTC", PanelText.EstTodayLabel(offPlan: false), StringComparison.Ordinal);
-        Assert.DoesNotContain("UTC", PanelText.EstTodayLabel(offPlan: true), StringComparison.Ordinal);
+        Assert.DoesNotContain("UTC", TokenText.TokensTodayLabel, StringComparison.Ordinal);
+        Assert.DoesNotContain("UTC", TokenText.EstTodayLabel(offPlan: false), StringComparison.Ordinal);
+        Assert.DoesNotContain("UTC", TokenText.EstTodayLabel(offPlan: true), StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -507,13 +507,13 @@ public class PanelTextTests
     /// </summary>
     [Fact]
     public void The31DayLabelDoesNotFlip() =>
-        Assert.Equal("Est. value · 31 days", PanelText.Est31DaysLabel);
+        Assert.Equal("Est. value · 31 days", TokenText.Est31DaysLabel);
 
     [Fact]
     public void TheOffPlanNoteOnlyAppearsOffPlan()
     {
-        Assert.Equal("", PanelText.OffPlanNote(offPlan: false));
-        Assert.Equal("incl. off-plan usage", PanelText.OffPlanNote(offPlan: true));
+        Assert.Equal("", OffPlanText.OffPlanNote(offPlan: false));
+        Assert.Equal("incl. off-plan usage", OffPlanText.OffPlanNote(offPlan: true));
     }
 
     /// <summary>
@@ -525,7 +525,7 @@ public class PanelTextTests
     [Fact]
     public void TheOffPlanHintKeepsItsCaveatInBothStates()
     {
-        var withUsage = PanelText.OffPlanHint(hasCreditUsage: true);
+        var withUsage = OffPlanText.OffPlanHint(hasCreditUsage: true);
         Assert.Contains("Estimated at published API rates", withUsage, StringComparison.Ordinal);
         Assert.Contains("billing page", withUsage, StringComparison.Ordinal);
         Assert.Contains("cannot read your credit balance", withUsage, StringComparison.Ordinal);
@@ -533,7 +533,7 @@ public class PanelTextTests
         // The zero state has its own caveat, and it is the more important of the two: a
         // confident "$0.00" is only honest alongside "usage while O-view wasn't running
         // isn't captured".
-        var without = PanelText.OffPlanHint(hasCreditUsage: false);
+        var without = OffPlanText.OffPlanHint(hasCreditUsage: false);
         Assert.Contains("No credit-billed usage", without, StringComparison.Ordinal);
         Assert.Contains("wasn't running isn't captured", without, StringComparison.Ordinal);
     }
@@ -546,7 +546,7 @@ public class PanelTextTests
         {
             Assert.Contains(
                 CreditBilledModels.DisplayList,
-                PanelText.OffPlanHint(hasUsage),
+                OffPlanText.OffPlanHint(hasUsage),
                 StringComparison.Ordinal);
         }
     }

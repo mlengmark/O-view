@@ -442,6 +442,6 @@ public class PanelStatisticsTests : IDisposable
         var stats = PanelStatistics.Build(_store, Now, Utc);
 
         Assert.Equal(4_000, stats.TtlUnrecordedCacheWrites);
-        Assert.Contains("5-minute rate", PanelText.Caveat(stats), StringComparison.Ordinal);
+        Assert.Contains("5-minute rate", TokenText.Caveat(stats), StringComparison.Ordinal);
     }
 }
