@@ -2,8 +2,9 @@ using OView.Core.Pricing;
 using OView.Core.Models;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Storage;
+using OView.Presentation.Text;
 
-namespace OView.Core.Tests;
+namespace OView.Presentation.Tests;
 
 public class PanelStatisticsTests : IDisposable
 {

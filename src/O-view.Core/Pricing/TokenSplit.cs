@@ -15,7 +15,7 @@ namespace OView.Core.Pricing;
 /// total with no TTL attribution, and it cannot be recovered from the store — the transcripts
 /// that would answer are the ones Claude Code has since deleted. Re-ingesting what is still on
 /// disk recovers recent history; what is out of that reach lands here, is priced at the
-/// 5-minute rate, and the panel says so (<see cref="Models.PanelText.Caveat"/>). Pricing it
+/// 5-minute rate, and the panel says so (<c>PanelText.Caveat</c> in Presentation). Pricing it
 /// silently at 1.25× with no bucket and no caveat was rejected outright: that is the original
 /// defect with a migration in front of it.</para>
 /// </summary>

@@ -76,7 +76,7 @@ public sealed record PanelStatistics(
     /// (issue #253). The tile headlines output; this says what else was billed alongside it,
     /// which on a Claude Code workload is roughly nine times as much again in cached prompt
     /// re-reads. The panel labels the two differently for that reason — see
-    /// <see cref="PanelText.TokensUsedTodayLabel"/>.</para>
+    /// <c>PanelText.TokensUsedTodayLabel</c> in Presentation.</para>
     /// </summary>
     public TokenComposition CompositionToday { get; init; } = TokenComposition.Empty;
 

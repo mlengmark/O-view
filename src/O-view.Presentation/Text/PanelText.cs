@@ -1,9 +1,10 @@
 using System.Globalization;
+using OView.Core.Models;
 using OView.Core.Pricing;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.PlanHistory;
 
-namespace OView.Core.Models;
+namespace OView.Presentation.Text;
 
 /// <summary>
 /// The words the detail panel puts on screen.

@@ -13,6 +13,7 @@ using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Core.Storage;
 using OView.Core.Updates;
+using OView.Presentation.Text;
 using OView.Tray.Diagnostics;
 using OView.Tray.Popup;
 using OView.Tray.Tray;

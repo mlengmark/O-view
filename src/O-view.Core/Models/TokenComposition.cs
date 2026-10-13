@@ -105,7 +105,7 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
     /// <para>Built here rather than in each panel because the <i>order</i> carries meaning
     /// (see <see cref="TokenKind"/>) and two heads ordering it differently is the same class
     /// of defect as two heads computing it differently — which is what
-    /// <see cref="PanelText"/> exists to prevent for words.</para>
+    /// <c>PanelText</c> in Presentation exists to prevent for words.</para>
     /// </summary>
     public IReadOnlyList<TokenKindSlice> InDisplayOrder =>
     [

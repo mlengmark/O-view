@@ -105,7 +105,7 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
     ///
     /// <para><b>It no longer names chat.</b> It used to end "Chat keeps no local record", on the
     /// reasoning that a heavy chat user with a small token figure had no other way to learn why.
-    /// That stopped being true in issue #235: <see cref="Models.PanelText.TokenScopeCaveat"/> now
+    /// That stopped being true in issue #235: <c>PanelText.TokenScopeCaveat</c> in Presentation now
     /// states it beneath the tiles, always visible, where this line sits inside a disclosure most
     /// readers never open. Two notes saying overlapping things is how the panel's copy drifted
     /// apart before, so the permanent gap is stated once — in the more visible of the two.</para>
