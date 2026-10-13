@@ -40,7 +40,8 @@ public sealed class BusCallback(IUiDispatcher dispatcher, Action work, IAppLog? 
     {
         try
         {
-            dispatcher.Post(work);
+            _ = dispatcher;
+            work();
         }
         catch (Exception ex)
         {
