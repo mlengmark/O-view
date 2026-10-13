@@ -236,9 +236,21 @@ jobs:
       - name: Run the runtime tests on a virtual display and session bus
         env:
           OVIEW_LINUX_RUNTIME: "1"
+          OVIEW_RUNTIME_ARTIFACTS: ${{ github.workspace }}/artifacts/linux-runtime
         run: >
           xvfb-run --auto-servernum dbus-run-session --
           dotnet test tests/O-view.Linux.Tests -c Release --no-build --filter "Category=LinuxRuntime"
+
+      # Runtime tests save what they capture (screenshots of the virtual display) in the folder
+      # OVIEW_RUNTIME_ARTIFACTS names, so a failure can be seen, not just read.
+      - name: Upload what the runtime tests captured
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: linux-runtime
+          path: artifacts/linux-runtime/
+          if-no-files-found: ignore
+          retention-days: 14
 
   test:
     strategy:
