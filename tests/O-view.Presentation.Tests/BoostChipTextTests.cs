@@ -1,7 +1,8 @@
 using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
+using OView.Presentation.Text;
 
-namespace OView.Core.Tests;
+namespace OView.Presentation.Tests;
 
 /// <summary>
 /// The words on the boost chip and in the card behind it (issue #254).

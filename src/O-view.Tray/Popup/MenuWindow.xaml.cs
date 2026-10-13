@@ -4,6 +4,7 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using OView.Core.Models;
+using OView.Presentation.Text;
 using OView.Tray.Tray;
 using Path = System.Windows.Shapes.Path;
 using Point = System.Windows.Point;

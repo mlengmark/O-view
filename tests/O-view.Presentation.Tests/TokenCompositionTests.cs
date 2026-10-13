@@ -2,8 +2,9 @@ using System.Globalization;
 using OView.Core.Models;
 using OView.Core.Storage;
 using OView.Core.Pricing;
+using OView.Presentation.Text;
 
-namespace OView.Core.Tests;
+namespace OView.Presentation.Tests;
 
 /// <summary>
 /// A user reported the token tiles as inflated: <c>235.6M</c> where Claude's own UI showed

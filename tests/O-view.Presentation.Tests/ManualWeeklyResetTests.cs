@@ -1,7 +1,8 @@
 using OView.Core.Models;
 using OView.Core.Providers.PlanHistory;
+using OView.Presentation.Text;
 
-namespace OView.Core.Tests;
+namespace OView.Presentation.Tests;
 
 /// <summary>
 /// The weekly reset is the one figure where a stated value outranks a measured one, and the

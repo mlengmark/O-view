@@ -1384,8 +1384,8 @@ public partial class PopupWindow : Window, IFlyout
 
     private DateTimeOffset Now(TimeZoneInfo zone) => TimeZoneInfo.ConvertTime(FixedNow ?? DateTimeOffset.UtcNow, zone);
 
-    // The header's freshness line lives in OView.Core.Models.PanelText, shared with the Linux
-    // panel: it is a statement about how old the figures are, and two panels wording that
+    // The header's freshness line lives in OView.Presentation.Text.PanelText, shared with the
+    // Linux panel: it is a statement about how old the figures are, and two panels wording that
     // differently is the failure PanelText exists to prevent (issue #192).
 
     /// <summary>
@@ -1393,7 +1393,7 @@ public partial class PopupWindow : Window, IFlyout
     /// 7-day reset rendered in the hours format reads "163h 45m", which is technically
     /// right and useless.
     /// </summary>
-    // Duration wording lives in OView.Core.Models.PanelText, shared with the Linux panel so
+    // Duration wording lives in OView.Presentation.Text.PanelText, shared with the Linux panel so
     // the two cannot describe the same reset differently. Kept as a local alias because it
     // reads better unqualified at its call sites — the same reason FormatTokens exists.
     private static string FormatCountdown(TimeSpan t) => PanelText.Countdown(t);
