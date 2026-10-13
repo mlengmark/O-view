@@ -100,13 +100,18 @@ def expand_braces(pattern):
 
 
 def touches_patterns(text):
-    """The Touches line, split into glob patterns."""
+    """The Touches line, split into glob patterns.
+
+    Entries are separated by commas, but '|', ';' and '·' are accepted too: the template uses
+    '|' for "or", builders copied it into Touches, and the first run of every such PR failed on
+    punctuation alone. A trailing note in brackets, such as "(that job's steps only)", is dropped.
+    """
     value = field(text, "Touches")
     if not value:
         return []
     patterns = []
-    for part in re.split(r",\s*(?![^{]*\})", value):  # commas inside {a,b} belong to the brace
-        part = part.strip().strip("`").strip()
+    for part in re.split(r"\s*[,;|·]\s*(?![^{]*\})", value):  # separators inside {a,b} belong to the brace
+        part = re.sub(r"\s*\([^)]*\)\s*$", "", part.strip()).strip().strip("`").strip()
         if part and part.lower() != "none":
             patterns.extend(expand_braces(part))
     return patterns
