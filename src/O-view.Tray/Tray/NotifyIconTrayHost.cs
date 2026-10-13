@@ -2,6 +2,7 @@ using System.Drawing;
 using System.Windows.Forms;
 using OView.App;
 using OView.Core.Models;
+using OView.Presentation.Text;
 
 namespace OView.Tray.Tray;
 

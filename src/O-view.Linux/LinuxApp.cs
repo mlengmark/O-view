@@ -17,6 +17,7 @@ using OView.Linux.Panel;
 using OView.Linux.Platform;
 using OView.Linux.Rendering;
 using OView.Linux.Tray;
+using OView.Presentation.Text;
 
 namespace OView.Linux;
 
