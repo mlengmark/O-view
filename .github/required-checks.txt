@@ -1,0 +1,11 @@
+# Every check that must pass before a PR merges into main. Branch protection requires exactly
+# these. This list only grows: guard-ratchet fails any PR that removes a line.
+identifiers
+workflows
+test (windows-latest)
+test (ubuntu-latest)
+visual
+linux-runtime
+pr-format
+merge-order
+guard-ratchet
