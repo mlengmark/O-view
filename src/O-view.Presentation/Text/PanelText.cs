@@ -22,10 +22,10 @@ namespace OView.Presentation.Text;
 /// </summary>
 public static class PanelText
 {
-    // Token and money formatting now live in OView.Presentation.Text.UsageFormatter, and
-    // Core may not reference Presentation (docs/architecture.md: references run one way).
-    // The handful of sentences below that embed a figure duplicate its two one-line rules
-    // rather than wait on PanelText's own move to Presentation, which is a later slice.
+    // Token and money formatting live in UsageFormatter, right beside this class now. The
+    // handful of sentences below that embed a figure still duplicate its two one-line rules
+    // rather than call it directly — untangling that duplication is the PanelText split,
+    // which is a later slice.
     private static string FormatTokens(long tokens) => tokens switch
     {
         >= 1_000_000 => string.Create(CultureInfo.InvariantCulture, $"{tokens / 1_000_000.0:0.0}M"),
