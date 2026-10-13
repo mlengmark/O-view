@@ -21,6 +21,20 @@ namespace OView.Core.Models;
 /// </summary>
 public static class PanelText
 {
+    // Token and money formatting now live in OView.Presentation.Text.UsageFormatter, and
+    // Core may not reference Presentation (docs/architecture.md: references run one way).
+    // The handful of sentences below that embed a figure duplicate its two one-line rules
+    // rather than wait on PanelText's own move to Presentation, which is a later slice.
+    private static string FormatTokens(long tokens) => tokens switch
+    {
+        >= 1_000_000 => string.Create(CultureInfo.InvariantCulture, $"{tokens / 1_000_000.0:0.0}M"),
+        >= 1_000 => string.Create(CultureInfo.InvariantCulture, $"{tokens / 1_000.0:0.0}K"),
+        _ => tokens.ToString(CultureInfo.InvariantCulture),
+    };
+
+    private static string FormatUsd(decimal usd) =>
+        "$" + usd.ToString("0.00", CultureInfo.InvariantCulture);
+
     /// <summary>
     /// The header's freshness line: <c>As of now</c>, <c>As of 11:34</c>,
     /// <c>Local estimate · as of 11:34</c>, <c>No data</c>.
@@ -419,7 +433,7 @@ public static class PanelText
 
         if (stats.TtlUnrecordedCacheWrites > 0)
         {
-            parts.Add($"{UsageFormatter.Tokens(stats.TtlUnrecordedCacheWrites)} cache writes "
+            parts.Add($"{FormatTokens(stats.TtlUnrecordedCacheWrites)} cache writes "
                       + "with no recorded duration, priced at the 5-minute rate");
         }
 
@@ -603,7 +617,7 @@ public static class PanelText
     /// </summary>
     public static string TokenCardCaption(TokenKind kind, double share, decimal? estUsd, string window)
     {
-        var value = estUsd is null ? "value unknown" : $"Est. {UsageFormatter.Usd(estUsd)}";
+        var value = estUsd is null ? "value unknown" : $"Est. {FormatUsd(estUsd.Value)}";
         return $"{TokenKindLabel(kind)} · {TokenShare(share)} of {window} · {value}";
     }
 
@@ -649,7 +663,7 @@ public static class PanelText
     /// differently when the meter is the part at fault.</para>
     /// </summary>
     public static string DivergenceDetail(long outputTokens, int risePoints) =>
-        $"About {UsageFormatter.Tokens(outputTokens)} output tokens ran in this window while the "
+        $"About {FormatTokens(outputTokens)} output tokens ran in this window while the "
         + $"plan meter moved {risePoints} point{(risePoints == 1 ? "" : "s")}. Usage that a plan "
         + "meter does not account for is billed some other way — O-view cannot see your billing, "
         + "so check Settings → Usage in Claude for what it was.";

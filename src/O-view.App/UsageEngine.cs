@@ -6,6 +6,7 @@ using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Core.Storage;
+using OView.Presentation.Text;
 
 namespace OView.App;
 

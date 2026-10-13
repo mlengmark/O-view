@@ -1,13 +1,14 @@
 using System.Globalization;
 
-namespace OView.Core.Models;
+namespace OView.Presentation.Text;
 
 /// <summary>
 /// Display formatting for token counts and estimated values.
 ///
-/// <para>Sibling of <see cref="TooltipFormatter"/>, and here for the same reason:
-/// display-edge formatting belongs in Core, where it is testable without a desktop
-/// session. These two methods previously existed as four copies across a
+/// <para>Beside the rest of the panel's wording rather than in Core — <see
+/// cref="TooltipFormatter"/> has already made that move. <see
+/// cref="OView.Core.Models.PanelText"/> has not yet, and still carries a private copy of these
+/// two rules until it does. These two methods previously existed as four copies across a
 /// <c>Window</c> code-behind and an <c>Application</c> subclass — <c>FormatTokens</c>
 /// byte-identical in two places, and money written two different ways (GitHub issue
 /// #55). The off-plan balloon composed <c>"$" + "0.00"</c> in one place and asked ICU
