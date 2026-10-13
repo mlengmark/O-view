@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text;
 using Avalonia;
+using Avalonia.Logging;
 using OView.App;
 using OView.App.Diagnostics;
 using OView.App.Platform;
@@ -155,6 +157,18 @@ internal static class Program
             DetectInstallKind().ToString());
         log.Write($"startup desktop={DesktopEnvironment()} session={SessionType()} trayHost={hostState}");
 
+        // The toolkit's own log, into this file. Everything that can fail on this head fails
+        // inside Avalonia's FreeDesktop backends — publishing the tray icon, reading the
+        // portal theme, accessibility — and each of them reports itself through Avalonia's
+        // logger and nowhere else. See AvaloniaLog for what was happening to those reports
+        // until now.
+        //
+        // Written down as a line of its own because the absence of toolkit lines below is
+        // itself a finding: it means the toolkit said nothing, rather than that nobody was
+        // listening, and those two have been indistinguishable in every report so far.
+        Logger.Sink = new AvaloniaLog(log);
+        log.Write($"avalonia log into this file, {AvaloniaLog.Floor} and above");
+
         var interval = parsed.TryGetValue("--interval-ms", out var ms)
                        && int.TryParse(ms, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedMs)
                        && parsedMs >= 50
@@ -191,8 +205,85 @@ internal static class Program
         }
     }
 
+    /// <summary>
+    /// Builds the toolkit. Deliberately without <c>LogToTrace</c>, which used to end this
+    /// chain: see <see cref="AvaloniaLog"/>. Avalonia keeps one sink, so leaving it there
+    /// would simply replace the one <see cref="Main"/> installs.
+    /// </summary>
     public static AppBuilder BuildAvaloniaApp() =>
-        AppBuilder.Configure<LinuxApp>().UsePlatformDetect().LogToTrace();
+        AppBuilder.Configure<LinuxApp>().UsePlatformDetect();
+
+    /// <summary>
+    /// Avalonia's own log, written into O-view's log file.
+    ///
+    /// <para><b>Why this exists.</b> The builder used to end in <c>LogToTrace</c>, which routes
+    /// the toolkit's log into <see cref="System.Diagnostics.Trace"/>. A shipped build registers
+    /// no trace listener, so every line Avalonia wrote was formatted and dropped — including the
+    /// handful its FreeDesktop backends write when they give up, which are the only account
+    /// anything gives of why an icon or a theme read did not happen.</para>
+    ///
+    /// <para><b>Warning and above only.</b> Below that the toolkit narrates layout and property
+    /// changes by the thousand, which would roll a bounded log away before anything worth
+    /// reading reached it. What is wanted is the few lines a backend writes when it stops.</para>
+    ///
+    /// <para>Each line is marked <c>avalonia</c> and carries the toolkit's own area, because
+    /// this file is pasted whole into bug reports and "which of these did O-view write" is
+    /// otherwise guesswork.</para>
+    /// </summary>
+    private sealed class AvaloniaLog(IAppLog log) : ILogSink
+    {
+        /// <summary>The lowest level passed through — named so the log can state it.</summary>
+        public const LogEventLevel Floor = LogEventLevel.Warning;
+
+        public bool IsEnabled(LogEventLevel level, string area) => level >= Floor;
+
+        public void Log(LogEventLevel level, string area, object? source, string messageTemplate) =>
+            Write(level, area, source, messageTemplate);
+
+        public void Log(
+            LogEventLevel level,
+            string area,
+            object? source,
+            string messageTemplate,
+            params object?[] propertyValues) =>
+            Write(level, area, source, Fill(messageTemplate, propertyValues));
+
+        private void Write(LogEventLevel level, string area, object? source, string message) =>
+            log.Write($"avalonia {level} [{area}] {source?.GetType().Name ?? "-"}: {message}");
+
+        /// <summary>
+        /// Puts the values into the template's <c>{...}</c> holes in the order Avalonia passed
+        /// them. A hole with no value left for it is kept as written rather than throwing: this
+        /// runs on the toolkit's failure paths, where an exception would replace a reported
+        /// failure with an unreported one.
+        /// </summary>
+        private static string Fill(string template, object?[] values)
+        {
+            var filled = new StringBuilder(template.Length);
+            var next = 0;
+
+            for (var i = 0; i < template.Length; i++)
+            {
+                if (template[i] != '{')
+                {
+                    filled.Append(template[i]);
+                    continue;
+                }
+
+                var close = template.IndexOf('}', i);
+                if (close < 0 || next >= values.Length)
+                {
+                    filled.Append(template.AsSpan(i));
+                    break;
+                }
+
+                filled.Append(values[next++]);
+                i = close;
+            }
+
+            return filled.ToString();
+        }
+    }
 
     /// <summary>
     /// Renders the tray icon at every size an SNI host might ask for, in both panel
