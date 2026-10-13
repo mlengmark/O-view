@@ -1012,7 +1012,7 @@ public partial class PopupWindow : Window, IFlyout
             CreditsBadgeText.Text = "credit-billed";
             CreditsSpendLabel.Text = "Est. credit spend";
             CreditsSpendValue.Text = FormatUsd(stats.EstCredit31DaysUsd);
-            CreditsCoverage.Text = stats.CoverageNote;
+            CreditsCoverage.Text = TokenText.CoverageNote(stats);
         }
         else
         {

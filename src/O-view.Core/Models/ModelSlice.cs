@@ -13,6 +13,11 @@ namespace OView.Core.Models;
 /// <param name="DisplayName">
 /// The friendly name, or the raw id when the model is not recognised. Never invented:
 /// an unknown id is shown as-is rather than guessed at (CLAUDE.md rule 6).
+///
+/// <para><b>Stays in Core, unlike most panel-facing text.</b> This is the model's own
+/// published name — <see cref="ModelCatalog"/>'s data, carried alongside the id it
+/// names rather than invented at render time — not prose composed about the model, so
+/// Phase A's "display text moves to Presentation" does not reach it.</para>
 /// </param>
 /// <param name="EstUsd">
 /// Null when the model has no published rate. Distinct from zero — zero is a real,
@@ -32,7 +37,16 @@ public sealed record ModelSlice(string Model, string DisplayName, long Tokens, d
 /// </summary>
 public static class ModelDisplayName
 {
-    /// <summary>Label for the aggregated remainder when there are more models than slots.</summary>
+    /// <summary>
+    /// Label for the aggregated remainder when there are more models than slots.
+    ///
+    /// <para><b>Not moved to Presentation with the rest of this file (OVIAA-39).</b> The only
+    /// place that writes this word into a <see cref="ModelSlice.DisplayName"/> is
+    /// <see cref="ModelBreakdown.Segments"/>, which is panel copy in Core for the same
+    /// reason this constant is — but that file is outside this slice's Touches list, so
+    /// moving one without the other would leave <c>ModelBreakdown</c> pointing at nothing.
+    /// Left as a known gap for a follow-up slice.</para>
+    /// </summary>
     public const string Other = "Other";
 
     // No <synthetic> branch: Claude Code's marker for locally generated messages is

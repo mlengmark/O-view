@@ -33,6 +33,12 @@ public static class CreditBilledModels
     /// line. The caption sits in a wrapping run of prose whose entire job is stating
     /// precisely which models are counted, and "Fable / 5, Mythos 5" broken over two lines
     /// reads as three entries rather than two.</para>
+    ///
+    /// <para><b>Not moved to Presentation (OVIAA-39).</b> The join and the non-breaking-space
+    /// substitution are panel formatting and belong there, but the only caller,
+    /// <c>OffPlanText.OffPlanHint</c>, is outside this slice's Touches list — moving the
+    /// builder without its caller would leave that sentence pointing at nothing. Left as a
+    /// known gap for a follow-up slice.</para>
     /// </summary>
     public static string DisplayList { get; } =
         string.Join(", ", Entries.Select(e => e.DisplayName.Replace(' ', NonBreakingSpace)));

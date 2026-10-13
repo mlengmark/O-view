@@ -124,7 +124,7 @@ public class PanelStatisticsTests : IDisposable
 
         Assert.Equal(31, stats.RecordedDays);
         Assert.False(stats.HasPartialHistory);
-        Assert.Equal("", stats.CoverageNote);
+        Assert.Equal("", TokenText.CoverageNote(stats));
     }
 
     /// <summary>
@@ -160,7 +160,7 @@ public class PanelStatisticsTests : IDisposable
         var stats = PanelStatistics.Build(_store, Now, Utc);
 
         Assert.Equal(31, stats.RecordedDays);
-        Assert.Equal("", stats.CoverageNote);
+        Assert.Equal("", TokenText.CoverageNote(stats));
     }
 
     [Fact]
@@ -278,12 +278,14 @@ public class PanelStatisticsTests : IDisposable
 
         var partial = PanelStatistics.Build(_store, Now, Utc);
         Assert.True(partial.HasPartialHistory);
-        Assert.Equal($"{partial.RecordedDays} of {partial.WindowDays} days recorded", partial.CoverageNote);
+        Assert.Equal(
+            $"{partial.RecordedDays} of {partial.WindowDays} days recorded",
+            TokenText.CoverageNote(partial));
 
         // Complete coverage says nothing — an empty note is what collapses the label.
         var complete = partial with { RecordedDays = partial.WindowDays };
         Assert.False(complete.HasPartialHistory);
-        Assert.Equal("", complete.CoverageNote);
+        Assert.Equal("", TokenText.CoverageNote(complete));
     }
 
     // A "<synthetic> does not count as unpriced" test used to sit here. It seeded the
