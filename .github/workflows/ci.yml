@@ -213,6 +213,33 @@ jobs:
           path: artifacts/
           retention-days: 14
 
+  # The Linux head running for real: a virtual display (Xvfb) and a session bus, so tests
+  # tagged LinuxRuntime can start the app and drive it the way a desktop would — the gap
+  # behind #124 and #143, which shipped because no test could reach a live session bus and a
+  # dispatcher together. Phase 0b adds the tests that click the tray icon through a stand-in
+  # tray host; until then this proves the environment comes up.
+  linux-runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Install a virtual display and a session bus
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends xvfb dbus
+
+      - name: Build the Linux tests
+        run: dotnet build tests/O-view.Linux.Tests -c Release
+
+      - name: Run the runtime tests on a virtual display and session bus
+        env:
+          OVIEW_LINUX_RUNTIME: "1"
+        run: >
+          xvfb-run --auto-servernum dbus-run-session --
+          dotnet test tests/O-view.Linux.Tests -c Release --no-build --filter "Category=LinuxRuntime"
+
   test:
     strategy:
       # Deliberately not fail-fast. When a change breaks portability you want to see the
