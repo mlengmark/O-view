@@ -577,9 +577,9 @@ public partial class PopupWindow : Window, IFlyout
             return;
         }
 
-        BoostChipText.Text = PanelText.BoostChip(notice, utcNow, local);
+        BoostChipText.Text = BoostText.BoostChip(notice, utcNow, local);
         BoostChip.ToolTip = HoverCard.Text(
-            this, PanelText.BoostCard(notice, BoostNotices!.FetchedAtUtc, local));
+            this, BoostText.BoostCard(notice, BoostNotices!.FetchedAtUtc, local));
         HoverCard.ApplyTiming(BoostChip);
         BoostChip.Visibility = Visibility.Visible;
     }
@@ -599,13 +599,13 @@ public partial class PopupWindow : Window, IFlyout
         // reads as low usage rather than short history (ADR-0006). An unpriced model is
         // the same class of caveat: the total is real but incomplete, so say which model
         // is missing rather than letting the figure read as the whole picture.
-        var coverage = PanelText.Caveat(stats);
+        var coverage = TokenText.Caveat(stats);
 
         // Always shown, unlike the caveat above it. Partial history and an unpriced model are
         // conditions that pass; the tiles excluding chat and cloud sessions is the standing shape
         // of the data, and a note that appeared only sometimes would teach a reader that its
         // absence means full coverage (issue #235).
-        TokenScopeLine.Text = PanelText.TokenScopeCaveat;
+        TokenScopeLine.Text = TokenText.TokenScopeCaveat;
 
         // The "not money charged" framing is only true for plan usage. Off-plan work
         // bills at API rates, so the label has to flip with it.
@@ -616,24 +616,24 @@ public partial class PopupWindow : Window, IFlyout
         // so there is nothing left to qualify.
         TileTokensToday.FormatSlice = s => FormatTokens(s.Tokens);
         TileTokensToday.Populate(
-            PanelText.TokensTodayLabel, FormatTokens(stats.TokensToday), "",
+            TokenText.TokensTodayLabel, FormatTokens(stats.TokensToday), "",
             stats.ModelsToday, BreakdownMeasure.Tokens, stats.ModelColourOrder);
 
         TileEstToday.FormatSlice = s => FormatUsd(s.EstUsd);
         TileEstToday.Populate(
-            PanelText.EstTodayLabel(offPlan),
+            TokenText.EstTodayLabel(offPlan),
             FormatUsd(stats.EstTodayUsd),
-            PanelText.OffPlanNote(offPlan),
+            OffPlanText.OffPlanNote(offPlan),
             stats.ModelsToday, BreakdownMeasure.EstValue, stats.ModelColourOrder);
 
         TileTokens31.FormatSlice = s => FormatTokens(s.Tokens);
         TileTokens31.Populate(
-            PanelText.Tokens31DaysLabel, FormatTokens(stats.Tokens31Days), coverage,
+            TokenText.Tokens31DaysLabel, FormatTokens(stats.Tokens31Days), coverage,
             stats.Models31Days, BreakdownMeasure.Tokens, stats.ModelColourOrder);
 
         TileEst31.FormatSlice = s => FormatUsd(s.EstUsd);
         TileEst31.Populate(
-            PanelText.Est31DaysLabel, FormatUsd(stats.Est31DaysUsd), coverage,
+            TokenText.Est31DaysLabel, FormatUsd(stats.Est31DaysUsd), coverage,
             stats.Models31Days, BreakdownMeasure.EstValue, stats.ModelColourOrder);
 
         // Which surfaces these figures are made of. Empty when nothing was found at all —
@@ -663,7 +663,7 @@ public partial class PopupWindow : Window, IFlyout
     /// </summary>
     /// <summary>
     /// Sets a line's text and hides it when there is none. The empty string is the signal —
-    /// every <c>PanelText</c> member that can have nothing to say returns one, so the decision
+    /// every text member that can have nothing to say returns one, so the decision
     /// lives with the text rather than being re-derived from the statistics at each call site.
     /// A visible but empty <see cref="TextBlock"/> leaves a gap that reads as a figure which
     /// failed to load.
@@ -692,12 +692,12 @@ public partial class PopupWindow : Window, IFlyout
             return;
         }
 
-        TokensUsedHeading.Text = PanelText.TokensUsedHeading;
-        TokenViewBars.Content = PanelText.TokenViewBarsLabel;
-        TokenViewBreakdown.Content = PanelText.TokenViewBreakdownLabel;
+        TokensUsedHeading.Text = TokenText.TokensUsedHeading;
+        TokenViewBars.Content = TokenText.TokenViewBarsLabel;
+        TokenViewBreakdown.Content = TokenText.TokenViewBreakdownLabel;
 
-        AddBar(today, PanelText.TokensUsedTodayLabel, PanelText.TokenWindowToday, first: true);
-        AddBar(window31, PanelText.TokensUsed31DaysLabel, PanelText.TokenWindow31Days, first: false);
+        AddBar(today, TokenText.TokensUsedTodayLabel, TokenText.TokenWindowToday, first: true);
+        AddBar(window31, TokenText.TokensUsed31DaysLabel, TokenText.TokenWindow31Days, first: false);
 
         TokenBreakdownView.Children.Add(BuildBreakdown(today, window31));
 
@@ -796,7 +796,7 @@ public partial class PopupWindow : Window, IFlyout
             });
             entry.Children.Add(new TextBlock
             {
-                Text = $"{PanelText.TokenKindLabel(slice.Kind)} {FormatTokens(slice.Tokens)}",
+                Text = $"{TokenText.TokenKindLabel(slice.Kind)} {FormatTokens(slice.Tokens)}",
                 FontSize = 10.5,
                 Margin = new Thickness(5, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
@@ -836,7 +836,7 @@ public partial class PopupWindow : Window, IFlyout
         HoverCard.Figure(
             this,
             FormatTokens(slice.Tokens),
-            PanelText.TokenCardCaption(slice.Kind, slice.Share, slice.EstUsd, window),
+            TokenText.TokenCardCaption(slice.Kind, slice.Share, slice.EstUsd, window),
             swatch);
 
     private Brush KindBrush(TokenKind kind) =>
@@ -865,9 +865,9 @@ public partial class PopupWindow : Window, IFlyout
         var primary = (Brush)FindResource("TextPrimary");
 
         AddRow(table, 0, null,
-            PanelText.TokenBreakdownKindHeader, PanelText.TokenBreakdownTodayHeader,
-            PanelText.TokenBreakdownShareHeader, PanelText.TokenBreakdown31DaysHeader,
-            PanelText.TokenBreakdownShareHeader, muted, 9.5);
+            TokenText.TokenBreakdownKindHeader, TokenText.TokenBreakdownTodayHeader,
+            TokenText.TokenBreakdownShareHeader, TokenText.TokenBreakdown31DaysHeader,
+            TokenText.TokenBreakdownShareHeader, muted, 9.5);
 
         // Driven off today's order so both columns describe the same row, even where a kind
         // is present in one window and absent from the other.
@@ -879,16 +879,16 @@ public partial class PopupWindow : Window, IFlyout
             var mine = today.InDisplayOrder.First(s => s.Kind == slice.Kind);
 
             AddRow(table, row++, KindBrush(slice.Kind),
-                PanelText.TokenKindLabel(slice.Kind),
-                FormatTokens(mine.Tokens), PanelText.TokenShare(mine.Share),
-                FormatTokens(other.Tokens), PanelText.TokenShare(other.Share),
+                TokenText.TokenKindLabel(slice.Kind),
+                FormatTokens(mine.Tokens), TokenText.TokenShare(mine.Share),
+                FormatTokens(other.Tokens), TokenText.TokenShare(other.Share),
                 secondary, 10.5);
         }
 
         AddRow(table, row, null,
-            PanelText.TokenBreakdownTotalLabel,
-            FormatTokens(today.Total), PanelText.TokenShare(today.HasTokens ? 1 : 0),
-            FormatTokens(window31.Total), PanelText.TokenShare(window31.HasTokens ? 1 : 0),
+            TokenText.TokenBreakdownTotalLabel,
+            FormatTokens(today.Total), TokenText.TokenShare(today.HasTokens ? 1 : 0),
+            FormatTokens(window31.Total), TokenText.TokenShare(window31.HasTokens ? 1 : 0),
             primary, 10.5, bold: true);
 
         return table;
@@ -988,22 +988,22 @@ public partial class PopupWindow : Window, IFlyout
 
         if (offPlan && d is not null)
         {
-            // Both sentences live in PanelText, and the heading joined them there for issue
+            // Both sentences live in OffPlanText, and the heading joined them there for issue
             // #259: it was the half that asserted a charge — "usage is billing beyond your
             // plan" — at readers whose accounts had extra usage switched off, while the detail
             // line beneath it was already careful not to. A claim the panel makes in two
             // registers should not be worded in two places.
             var extraUsage = CachedUsage?.ExtraUsage ?? ExtraUsageStatus.Unknown;
 
-            DivergenceTitle.Text = PanelText.OffPlanTitle(d.State, extraUsage.State);
-            DivergenceDetail.Text = PanelText.OffPlanDetail(
+            DivergenceTitle.Text = OffPlanText.OffPlanTitle(d.State, extraUsage.State);
+            DivergenceDetail.Text = OffPlanText.OffPlanDetail(
                 d, extraUsage.State, CachedUsage?.FetchedAtUtc, Now(TimeZoneInfo.Utc), local);
 
             // Filled here rather than in XAML so the label and the address have one definition
             // in Core, next to the sentences that send the reader to them (issue #259).
-            DivergenceLinkAnchor.NavigateUri = new Uri(PanelText.UsageSettingsUrl);
+            DivergenceLinkAnchor.NavigateUri = new Uri(OffPlanText.UsageSettingsUrl);
             DivergenceLinkAnchor.Inlines.Clear();
-            DivergenceLinkAnchor.Inlines.Add(PanelText.UsageSettingsLinkLabel);
+            DivergenceLinkAnchor.Inlines.Add(OffPlanText.UsageSettingsLinkLabel);
         }
 
         // ── standing 31-day off-plan spend (issue #3) ────────────────────────────
@@ -1025,8 +1025,8 @@ public partial class PopupWindow : Window, IFlyout
         // The explanation is on hover now rather than standing under the figure (issue #181).
         // Both wordings still carry the rule-6 caveat that this is not what was charged —
         // moving a caveat behind a hover is the obvious way to lose one, so the sentences
-        // live in PanelText where they have one definition and a test can assert them.
-        CreditsSection.ToolTip = HoverCard.Text(this, PanelText.OffPlanHint(stats.HasCreditUsage));
+        // live in OffPlanText where they have one definition and a test can assert them.
+        CreditsSection.ToolTip = HoverCard.Text(this, OffPlanText.OffPlanHint(stats.HasCreditUsage));
         HoverCard.ApplyTiming(CreditsSection);
     }
 

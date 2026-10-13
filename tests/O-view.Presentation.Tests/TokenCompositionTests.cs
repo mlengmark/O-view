@@ -150,11 +150,11 @@ public class TokenCompositionTests
     [Fact]
     public void BothTokenLabelsNameOutputAndDropTheCacheQualifier()
     {
-        Assert.Contains("Output tokens", PanelText.TokensTodayLabel, StringComparison.Ordinal);
-        Assert.Contains("Output tokens", PanelText.Tokens31DaysLabel, StringComparison.Ordinal);
+        Assert.Contains("Output tokens", TokenText.TokensTodayLabel, StringComparison.Ordinal);
+        Assert.Contains("Output tokens", TokenText.Tokens31DaysLabel, StringComparison.Ordinal);
 
-        Assert.DoesNotContain("incl. cache", PanelText.TokensTodayLabel, StringComparison.Ordinal);
-        Assert.DoesNotContain("incl. cache", PanelText.Tokens31DaysLabel, StringComparison.Ordinal);
+        Assert.DoesNotContain("incl. cache", TokenText.TokensTodayLabel, StringComparison.Ordinal);
+        Assert.DoesNotContain("incl. cache", TokenText.Tokens31DaysLabel, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -165,11 +165,11 @@ public class TokenCompositionTests
     [Fact]
     public void TheBarHeadingsDoNotReuseTheTileWording()
     {
-        Assert.Contains("Tokens used", PanelText.TokensUsedTodayLabel, StringComparison.Ordinal);
-        Assert.Contains("Tokens used", PanelText.TokensUsed31DaysLabel, StringComparison.Ordinal);
+        Assert.Contains("Tokens used", TokenText.TokensUsedTodayLabel, StringComparison.Ordinal);
+        Assert.Contains("Tokens used", TokenText.TokensUsed31DaysLabel, StringComparison.Ordinal);
 
-        Assert.NotEqual(PanelText.TokensTodayLabel, PanelText.TokensUsedTodayLabel);
-        Assert.NotEqual(PanelText.TokensUsedTodayLabel, PanelText.TokensUsed31DaysLabel);
+        Assert.NotEqual(TokenText.TokensTodayLabel, TokenText.TokensUsedTodayLabel);
+        Assert.NotEqual(TokenText.TokensUsedTodayLabel, TokenText.TokensUsed31DaysLabel);
     }
 
     /// <summary>
@@ -188,7 +188,7 @@ public class TokenCompositionTests
 
         Assert.Equal(
             ["output", "input", "cache write", "cache read"],
-            order.Select(s => PanelText.TokenKindLabel(s.Kind)));
+            order.Select(s => TokenText.TokenKindLabel(s.Kind)));
 
         Assert.Equal([3_666L, 14L, 44_347L, 398_121L], order.Select(s => s.Tokens));
     }
@@ -203,12 +203,12 @@ public class TokenCompositionTests
         var input = MeasuredDay.InDisplayOrder.Single(s => s.Kind == TokenKind.Input);
 
         Assert.InRange(input.Share, 0, 0.0001);
-        Assert.Equal("<0.01%", PanelText.TokenShare(input.Share));
+        Assert.Equal("<0.01%", TokenText.TokenShare(input.Share));
 
         // A genuine zero still reads as zero — the threshold is for "small", not for "absent".
-        Assert.Equal("0%", PanelText.TokenShare(0));
-        Assert.Equal("100%", PanelText.TokenShare(1));
-        Assert.Equal("89.24%", PanelText.TokenShare(MeasuredDay.CacheReadShare));
+        Assert.Equal("0%", TokenText.TokenShare(0));
+        Assert.Equal("100%", TokenText.TokenShare(1));
+        Assert.Equal("89.24%", TokenText.TokenShare(MeasuredDay.CacheReadShare));
     }
 
     /// <summary>
@@ -223,7 +223,7 @@ public class TokenCompositionTests
         try
         {
             CultureInfo.CurrentCulture = new CultureInfo("fr-FR");
-            Assert.Equal("89.24%", PanelText.TokenShare(MeasuredDay.CacheReadShare));
+            Assert.Equal("89.24%", TokenText.TokenShare(MeasuredDay.CacheReadShare));
         }
         finally
         {
@@ -238,8 +238,8 @@ public class TokenCompositionTests
     [Fact]
     public void TheCardCaptionNamesTheKindTheWindowAndKeepsTheEstPrefix()
     {
-        var caption = PanelText.TokenCardCaption(
-            TokenKind.CacheWrite, 0.10295, 0.87m, PanelText.TokenWindowToday);
+        var caption = TokenText.TokenCardCaption(
+            TokenKind.CacheWrite, 0.10295, 0.87m, TokenText.TokenWindowToday);
 
         Assert.Equal("cache write · 10.30% of today · Est. $0.87", caption);
     }
@@ -251,8 +251,8 @@ public class TokenCompositionTests
     [Fact]
     public void AnUnpricedKindSaysUnknownRatherThanZero()
     {
-        var caption = PanelText.TokenCardCaption(
-            TokenKind.Output, 0.5, null, PanelText.TokenWindow31Days);
+        var caption = TokenText.TokenCardCaption(
+            TokenKind.Output, 0.5, null, TokenText.TokenWindow31Days);
 
         Assert.Contains("value unknown", caption, StringComparison.Ordinal);
         Assert.DoesNotContain("$0.00", caption, StringComparison.Ordinal);

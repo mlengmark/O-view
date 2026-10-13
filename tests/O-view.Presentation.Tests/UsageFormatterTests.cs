@@ -81,14 +81,14 @@ public class UsageFormatterTests
             TtlUnrecordedCacheWrites = 4_200_000,
         };
 
-        Assert.Contains(UsageFormatter.Tokens(4_200_000), PanelText.Caveat(stats), StringComparison.Ordinal);
+        Assert.Contains(UsageFormatter.Tokens(4_200_000), TokenText.Caveat(stats), StringComparison.Ordinal);
     }
 
     [Fact]
     public void PanelTextTokenCardCaption_EstimateFigure_AgreesWithUsd()
     {
-        var caption = PanelText.TokenCardCaption(
-            TokenKind.CacheWrite, 0.10295, 0.87m, PanelText.TokenWindowToday);
+        var caption = TokenText.TokenCardCaption(
+            TokenKind.CacheWrite, 0.10295, 0.87m, TokenText.TokenWindowToday);
 
         Assert.Contains(UsageFormatter.Usd(0.87m), caption, StringComparison.Ordinal);
     }
@@ -96,7 +96,7 @@ public class UsageFormatterTests
     [Fact]
     public void PanelTextDivergenceDetail_TokenFigure_AgreesWithTokens()
     {
-        var detail = PanelText.DivergenceDetail(126_900, 0);
+        var detail = OffPlanText.DivergenceDetail(126_900, 0);
 
         Assert.Contains(UsageFormatter.Tokens(126_900), detail, StringComparison.Ordinal);
     }

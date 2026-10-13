@@ -8,7 +8,7 @@ namespace OView.Presentation.Tests;
 /// The words on the boost chip and in the card behind it (issue #254).
 ///
 /// <para>Shared copy, so both heads say the same thing — the reason
-/// <see cref="PanelText"/> exists at all.</para>
+/// <see cref="BoostText"/> exists at all.</para>
 /// </summary>
 public class BoostChipTextTests
 {
@@ -36,7 +36,7 @@ public class BoostChipTextTests
     {
         Assert.Equal(
             "50% Boosted · until 31 Aug · ends in 15h",
-            PanelText.BoostChip(Notice(50, new DateOnly(2026, 8, 31)), Now, Utc));
+            BoostText.BoostChip(Notice(50, new DateOnly(2026, 8, 31)), Now, Utc));
     }
 
     [Theory]
@@ -48,7 +48,7 @@ public class BoostChipTextTests
     public void CarriesWhateverResolved(int? percent, string endsOn, string expected)
     {
         Assert.Equal(expected,
-            PanelText.BoostChip(Notice(percent, DateOnly.Parse(endsOn)), Now, Utc));
+            BoostText.BoostChip(Notice(percent, DateOnly.Parse(endsOn)), Now, Utc));
     }
 
     /// <summary>
@@ -60,7 +60,7 @@ public class BoostChipTextTests
     [InlineData(null, "Boosted")]
     public void WithoutADateThereIsNoCountdown(int? percent, string expected)
     {
-        Assert.Equal(expected, PanelText.BoostChip(Notice(percent, endsOn: null), Now, Utc));
+        Assert.Equal(expected, BoostText.BoostChip(Notice(percent, endsOn: null), Now, Utc));
     }
 
     /// <summary>
@@ -78,7 +78,7 @@ public class BoostChipTextTests
     {
         var left = TimeSpan.FromDays((weeks * 7) + days) + TimeSpan.FromHours(hours);
 
-        Assert.Equal(expected, PanelText.BoostRemaining(left));
+        Assert.Equal(expected, BoostText.BoostRemaining(left));
     }
 
     /// <summary>
@@ -91,7 +91,7 @@ public class BoostChipTextTests
     [InlineData(-90)]
     public void TheLastStretchIsNotCountedInMinutes(int minutes)
     {
-        Assert.Equal("under an hour", PanelText.BoostRemaining(TimeSpan.FromMinutes(minutes)));
+        Assert.Equal("under an hour", BoostText.BoostRemaining(TimeSpan.FromMinutes(minutes)));
     }
 
     /// <summary>
@@ -105,7 +105,7 @@ public class BoostChipTextTests
 
         Assert.Equal(
             "50% Boosted · until 31 Aug · ends in 1h",
-            PanelText.BoostChip(Notice(50, new DateOnly(2026, 8, 31)), justBeforeMidnight, Utc));
+            BoostText.BoostChip(Notice(50, new DateOnly(2026, 8, 31)), justBeforeMidnight, Utc));
     }
 
     /// <summary>
@@ -122,7 +122,7 @@ public class BoostChipTextTests
         Assert.Equal(
             "+50% weekly limits promo through Aug 31 · clau.de/cc-50-promo\n\n"
             + "Ends Mon 31 Aug · reported by Claude Code, read 08:24",
-            PanelText.BoostCard(notice, Now, Utc));
+            BoostText.BoostCard(notice, Now, Utc));
     }
 
     /// <summary>Without a date the card drops that clause rather than inventing one.</summary>
@@ -131,6 +131,6 @@ public class BoostChipTextTests
     {
         Assert.Equal(
             "Weekly limits boosted\n\nreported by Claude Code, read 08:24",
-            PanelText.BoostCard(Notice(null, null, "Weekly limits boosted"), Now, Utc));
+            BoostText.BoostCard(Notice(null, null, "Weekly limits boosted"), Now, Utc));
     }
 }
