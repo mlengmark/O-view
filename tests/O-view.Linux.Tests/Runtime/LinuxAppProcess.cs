@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
+using Tmds.DBus.Protocol;
 using Xunit.Abstractions;
 using Xunit.Sdk;
 
@@ -28,6 +29,14 @@ namespace OView.Linux.Tests.Runtime;
 /// nothing; the same failure with the app's log underneath it usually says which bus call did
 /// not come back. For the same reason <see cref="DisposeAsync"/> always reports the log,
 /// passing or failing, and saves it where the <c>linux-runtime</c> job collects artifacts.</para>
+///
+/// <para><b>And what it held on the bus.</b> The toolkit's tray backend logs its own failures
+/// through a logger the app installs no sink for, so a registration that never happens says
+/// nothing anywhere. What the bus can still be asked is which names the app's own connections
+/// owned, and that separates the two ways this goes wrong: a
+/// <c>org.kde.StatusNotifierItem-…</c> name with no registration behind it means the item was
+/// published and the call to the watcher is what failed, while no name at all means the
+/// backend never got that far.</para>
 /// </summary>
 public sealed class LinuxAppProcess : IAsyncDisposable
 {
@@ -50,6 +59,13 @@ public sealed class LinuxAppProcess : IAsyncDisposable
     /// <summary>Log lines carried in a failure message. Enough for a startup, not the whole run.</summary>
     private const int ReportedLogLines = 80;
 
+    /// <summary>
+    /// How long the bus is given to say what the app owns while a failure is being built.
+    /// Short on purpose: this is evidence for a test that has already failed, and a diagnostic
+    /// that hangs would replace the real failure with a timeout of its own.
+    /// </summary>
+    private static readonly TimeSpan BusReadTimeout = TimeSpan.FromSeconds(2);
+
     private readonly Process _process;
     private readonly ITestOutputHelper? _output;
     private readonly string _label;
@@ -60,6 +76,7 @@ public sealed class LinuxAppProcess : IAsyncDisposable
 
     private bool _started;
     private bool _disposed;
+    private string _busNames = "(not read)";
 
     private LinuxAppProcess(Process process, ITestOutputHelper? output, string label, string root, string logPath)
     {
@@ -170,12 +187,12 @@ public sealed class LinuxAppProcess : IAsyncDisposable
             if (HasExited)
             {
                 return MatchingLogLine(containing)
-                    ?? throw Failure($"waiting for a log line containing \"{containing}\"");
+                    ?? throw await FailureAsync($"waiting for a log line containing \"{containing}\"");
             }
 
             if (DateTime.UtcNow >= deadline)
             {
-                throw Failure(
+                throw await FailureAsync(
                     $"waiting {timeout.TotalSeconds:0.#} s for a log line containing \"{containing}\"");
             }
 
@@ -209,11 +226,11 @@ public sealed class LinuxAppProcess : IAsyncDisposable
                 }
                 catch (Exception ex)
                 {
-                    throw Failure($"waiting for {what}", ex);
+                    throw await FailureAsync($"waiting for {what}", ex);
                 }
             }
 
-            throw Failure(finished == exited
+            throw await FailureAsync(finished == exited
                 ? $"waiting for {what} — the app exited first"
                 : $"waiting {timeout.TotalSeconds:0.#} s for {what}");
         }
@@ -258,6 +275,18 @@ public sealed class LinuxAppProcess : IAsyncDisposable
     }
 
     /// <summary>
+    /// A failure, with the bus asked what the app owns before the message is built. Every
+    /// throwing path goes through here rather than through <see cref="Failure"/> directly,
+    /// because the answer is only available while the app is still on the bus — once it has
+    /// been killed on dispose there is nothing left to ask.
+    /// </summary>
+    private async Task<XunitException> FailureAsync(string what, Exception? cause = null)
+    {
+        _busNames = await ReadOwnedBusNamesAsync();
+        return Failure(what, cause);
+    }
+
+    /// <summary>
     /// A failure message with everything known about the app underneath it: how it was
     /// started, how it ended, its log and its console output.
     /// </summary>
@@ -275,6 +304,7 @@ public sealed class LinuxAppProcess : IAsyncDisposable
         report.AppendLine($"home        : {Home}");
         report.AppendLine($"display     : {Value("DISPLAY")}");
         report.AppendLine($"session bus : {Value("DBUS_SESSION_BUS_ADDRESS")}");
+        report.AppendLine($"its names   : {_busNames}");
 
         report.AppendLine($"──── its log ({_logPath}) ────");
         var lines = LogLines();
@@ -348,6 +378,110 @@ public sealed class LinuxAppProcess : IAsyncDisposable
         {
             // Saving evidence must not become the failure; it is already reported above.
         }
+    }
+
+    /// <summary>
+    /// Which names on the session bus belong to the app, asked of the bus itself: every name
+    /// whose owning connection reports the app's process id. The unique names count too — how
+    /// many connections the app made is what tells a tray backend that never connected apart
+    /// from one that connected and then published nothing.
+    ///
+    /// <para>Never throws, and catches broadly to make sure of it. This runs only while a
+    /// failure message is being built, so an exception escaping here would replace the failure
+    /// the test actually found with one from reading about it.</para>
+    /// </summary>
+    private async Task<string> ReadOwnedBusNamesAsync()
+    {
+        if (!_started) return "(never started)";
+
+        if (Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS") is not { Length: > 0 } address)
+        {
+            return "(no session bus)";
+        }
+
+        try
+        {
+            // Its own connection, dropped on the way out. DBusConnection.Session is a shared
+            // static that the app's own code and the other runtime tests use, and closing that
+            // one would take the bus away from the rest of the run.
+            using var connection = new DBusConnection(address);
+            await connection.ConnectAsync().AsTask().WaitAsync(BusReadTimeout);
+
+            var names = await CallBusAsync(
+                connection, "ListNames", null, static (m, _) => ReadStrings(m));
+
+            var mine = new List<string>();
+            foreach (var name in names)
+            {
+                if (await OwnerProcessIdAsync(connection, name) == _process.Id)
+                {
+                    mine.Add(name);
+                }
+            }
+
+            return mine.Count > 0
+                ? string.Join(", ", mine)
+                : "(none: the app owns no name on this bus)";
+        }
+        catch (Exception ex)
+        {
+            return $"(could not be read: {ex.GetType().Name}: {ex.Message})";
+        }
+    }
+
+    /// <summary>
+    /// The process behind a name, or null when the bus will not say — a name can be gone by
+    /// the time it is asked about, which is ordinary and not worth failing over.
+    /// </summary>
+    private static async Task<int?> OwnerProcessIdAsync(DBusConnection connection, string name)
+    {
+        try
+        {
+            return (int)await CallBusAsync(
+                connection,
+                "GetConnectionUnixProcessID",
+                writer => writer.WriteString(name),
+                static (m, _) => m.GetBodyReader().ReadUInt32());
+        }
+        catch (Exception ex) when (ex is DBusExceptionBase or IOException or TimeoutException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The <c>as</c> a reply carries, read off the body a name at a time.</summary>
+    private static List<string> ReadStrings(Message message)
+    {
+        var reader = message.GetBodyReader();
+        var end = reader.ReadArrayStart(DBusType.String);
+
+        var strings = new List<string>();
+        while (reader.HasNext(end))
+        {
+            strings.Add(reader.ReadString());
+        }
+
+        return strings;
+    }
+
+    /// <summary>Calls the bus's own object, which is where both questions above are answered.</summary>
+    private static Task<T> CallBusAsync<T>(
+        DBusConnection connection,
+        string member,
+        Action<MessageWriter>? argument,
+        MessageValueReader<T> read)
+    {
+        var writer = connection.GetMessageWriter();
+        writer.WriteMethodCallHeader(
+            destination: "org.freedesktop.DBus",
+            path: "/org/freedesktop/DBus",
+            @interface: "org.freedesktop.DBus",
+            member: member,
+            signature: argument is null ? null : "s",
+            flags: MessageFlags.None);
+        argument?.Invoke(writer);
+
+        return connection.CallMethodAsync(writer.CreateMessage(), read).WaitAsync(BusReadTimeout);
     }
 
     private void CaptureConsole(object sender, DataReceivedEventArgs e)

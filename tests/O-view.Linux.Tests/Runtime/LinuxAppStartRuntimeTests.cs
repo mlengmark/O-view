@@ -74,10 +74,11 @@ public class LinuxAppStartRuntimeTests(ITestOutputHelper output)
     {
         if (!InRuntimeJob) return;
 
+        // A notification area is there so the app starts the way it does everywhere else, and
+        // nothing here waits for the icon: what is under test is the harness's behaviour once
+        // the app has gone, and StartAsync has already returned a started app.
         await using var host = await StandInTrayHost.StartAsync();
         await using var app = await LinuxAppProcess.StartAsync(output, nameof(AWaitFailsWithTheAppsOwnOutputAsSoonAsItHasGone));
-
-        await app.WaitForAsync(host.WaitForItemAsync(Patience), Patience, "the icon to reach the stand-in host");
 
         // Killed from outside, as a crash would take it. Without this check the harness is
         // trustworthy only when it passes: a later slice waiting five seconds for a panel from
