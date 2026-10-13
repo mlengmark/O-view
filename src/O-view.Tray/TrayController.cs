@@ -2,6 +2,7 @@ using System.Diagnostics;
 using OView.App;
 using OView.App.Platform;
 using OView.Core.Models;
+using OView.Presentation.Text;
 using OView.Tray.Tray;
 
 namespace OView.Tray;

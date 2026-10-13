@@ -1,6 +1,7 @@
 using System.Globalization;
+using OView.Core.Models;
 
-namespace OView.Core.Models;
+namespace OView.Presentation.Text;
 
 /// <summary>
 /// Builds the tray tooltip. NotifyIcon.Text caps at 127 characters (measured —
@@ -48,9 +49,6 @@ public static class TooltipFormatter
             : "";
         return session + (staleSuffix ?? "") + reset + weekly + weeklyReset;
     }
-
-    private static string Approx(TimeSpan? uncertainty) =>
-        uncertainty > Providers.PlanHistory.WeeklyWindow.PreciseBracket ? "~" : "";
 
     private static DateTimeOffset ToLocal(DateTimeOffset utc, TimeZoneInfo zone) =>
         TimeZoneInfo.ConvertTime(utc, zone);

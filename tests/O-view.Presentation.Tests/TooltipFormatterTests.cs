@@ -1,6 +1,7 @@
 using OView.Core.Models;
+using OView.Presentation.Text;
 
-namespace OView.Core.Tests;
+namespace OView.Presentation.Tests;
 
 public class TooltipFormatterTests
 {
@@ -46,7 +47,7 @@ public class TooltipFormatterTests
     /// stops the marker being reintroduced alongside a value that has nothing to qualify.</para>
     ///
     /// <para><b>The session reset keeps its <c>~</c></b> — that window rolls from first use and is
-    /// still derived. <see cref="PanelTextTests"/> covers it.</para>
+    /// still derived. <c>PanelTextTests</c> covers it.</para>
     /// </summary>
     [Fact]
     public void TheWeeklyResetIsNeverMarkedApproximate()
