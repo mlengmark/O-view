@@ -1,0 +1,105 @@
+using System.Diagnostics;
+using OView.Linux.Tray;
+using Xunit.Abstractions;
+using Xunit.Sdk;
+
+// Every runtime test that needs a notification area owns org.kde.StatusNotifierWatcher, and a
+// bus name can only have one owner: two test classes doing it at once means one of them fails
+// on a collision rather than on anything it was testing. xunit runs collections — and so
+// classes — in parallel by default, so without this the stand-in host's own tests and this
+// file's would race. The rest of the assembly is unit tests measured in milliseconds, so
+// serialising the whole thing costs nothing worth having.
+//
+// It lives in this file because an assembly-level attribute has to live in some file, and this
+// is the one that needs it; its own file would read better.
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
+namespace OView.Linux.Tests.Runtime;
+
+/// <summary>
+/// The shipped Linux app, started on the virtual display with a stand-in notification area
+/// waiting for it.
+///
+/// <para>This is the first test anywhere that runs the real head. Up to now the Linux skin
+/// was proved by unit tests over its pieces, which is why every tray defect that reached a
+/// desktop — a first click that deadlocked (#124), a menu that took tens of seconds (#125) —
+/// got through: all of them needed the toolkit, the dispatcher and the bus together. The
+/// click and the menu are tested in their own slices; what is proved here is the thing they
+/// both stand on, that the app comes up and its icon arrives.</para>
+///
+/// <para>Runs only in the <c>linux-runtime</c> job, which provides the display
+/// (<c>xvfb-run</c>), the bus (<c>dbus-run-session</c>) and <c>OVIEW_LINUX_RUNTIME=1</c>.
+/// Elsewhere there is nothing to start the app on, so each test returns early the same way
+/// <see cref="LinuxRuntimeEnvironmentTests"/> does.</para>
+/// </summary>
+[Trait("Category", "LinuxRuntime")]
+public class LinuxAppStartRuntimeTests(ITestOutputHelper output)
+{
+    private static bool InRuntimeJob => Environment.GetEnvironmentVariable("OVIEW_LINUX_RUNTIME") == "1";
+
+    /// <summary>
+    /// How long any one step may take. Generous because this is a shared CI runner starting a
+    /// GUI toolkit cold: nothing here measures a duration, it only refuses to hang for ever.
+    /// </summary>
+    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
+
+    [Fact]
+    public async Task TheIconReachesTheStandInHostAndTheAppCarriesOnRunning()
+    {
+        if (!InRuntimeJob) return;
+
+        // The host first, deliberately: the app asks the bus for a notification area once,
+        // before the toolkit starts, and one started afterwards would be found by the retry
+        // path instead — a different thing from the one under test.
+        await using var host = await StandInTrayHost.StartAsync();
+        await using var app = await LinuxAppProcess.StartAsync(output, nameof(TheIconReachesTheStandInHostAndTheAppCarriesOnRunning));
+
+        var startup = await app.WaitForLogAsync(LinuxAppProcess.StartupLogLine, Patience);
+        Assert.Contains($"trayHost={TrayHostState.Present}", startup);
+
+        var registered = await app.WaitForAsync(
+            host.WaitForItemAsync(Patience), Patience, "the icon to reach the stand-in host");
+
+        // A unique bus name, assigned by the bus to the connection the registration came from.
+        Assert.StartsWith(":", registered.BusName);
+        Assert.Equal([registered], host.Items);
+
+        // The point of the whole phase: the app is still there afterwards. An icon that
+        // arrives from a process that then dies is the failure this job exists to catch.
+        Assert.False(app.HasExited, "o-view exited after registering its icon");
+    }
+
+    [Fact]
+    public async Task AWaitFailsWithTheAppsOwnOutputAsSoonAsItHasGone()
+    {
+        if (!InRuntimeJob) return;
+
+        await using var host = await StandInTrayHost.StartAsync();
+        await using var app = await LinuxAppProcess.StartAsync(output, nameof(AWaitFailsWithTheAppsOwnOutputAsSoonAsItHasGone));
+
+        await app.WaitForAsync(host.WaitForItemAsync(Patience), Patience, "the icon to reach the stand-in host");
+
+        // Killed from outside, as a crash would take it. Without this check the harness is
+        // trustworthy only when it passes: a later slice waiting five seconds for a panel from
+        // an app that died on its first click would report a timeout, and the real failure —
+        // and the log line naming it — would be thrown away.
+        using (var victim = Process.GetProcessById(app.ProcessId))
+        {
+            victim.Kill();
+            await victim.WaitForExitAsync().WaitAsync(Patience);
+        }
+
+        var waited = Stopwatch.StartNew();
+        var failure = await Assert.ThrowsAsync<XunitException>(
+            () => app.WaitForLogAsync("a line o-view will never write", TimeSpan.FromMinutes(1)));
+        waited.Stop();
+
+        Assert.True(waited.Elapsed < Patience,
+            $"the wait took {waited.Elapsed.TotalSeconds:0.#} s rather than failing as soon as the app had gone");
+
+        // The app's own output, which is the whole value of the failure: its startup line, and
+        // the log it was read from.
+        Assert.Contains(LinuxAppProcess.StartupLogLine, failure.Message);
+        Assert.Contains(app.LogPath, failure.Message);
+    }
+}
