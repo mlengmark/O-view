@@ -49,6 +49,13 @@ public sealed class LinuxAppProcess : IAsyncDisposable
     /// </summary>
     public const string StartupLogLine = "startup desktop=";
 
+    /// <summary>
+    /// The line the app writes each time it draws its gauge into the tray icon. Waiting for the
+    /// first one is how a test says the toolkit came up and the engine's snapshot reached it —
+    /// the whole path that deadlocked in v0.6.1 (issue #124), end to end.
+    /// </summary>
+    public const string IconRenderedLogLine = "icon rendered";
+
     /// <summary>How long the app is given to die once asked. It is killed, so this is only a bound on the wait.</summary>
     private static readonly TimeSpan ShutdownPatience = TimeSpan.FromSeconds(5);
 
