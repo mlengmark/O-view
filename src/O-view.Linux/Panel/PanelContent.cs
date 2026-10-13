@@ -8,6 +8,7 @@ using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
+using OView.Presentation.Text;
 
 namespace OView.Linux.Panel;
 

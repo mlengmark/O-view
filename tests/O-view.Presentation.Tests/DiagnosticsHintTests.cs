@@ -1,8 +1,9 @@
 using OView.Core.Models;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
+using OView.Presentation.Text;
 
-namespace OView.Core.Tests;
+namespace OView.Presentation.Tests;
 
 /// <summary>
 /// The panel's explanatory copy tells a stuck user what to do next. Until v0.6.0 it said
