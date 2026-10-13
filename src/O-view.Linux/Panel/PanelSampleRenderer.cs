@@ -1,50 +1,40 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
-using OView.Core.Models;
+using OView.Presentation.Samples;
 
 namespace OView.Linux.Panel;
 
 /// <summary>
-/// Renders the panel offscreen to PNGs — the Linux counterpart of the WPF head's
-/// <c>--popup-samples</c>.
+/// Renders the panel offscreen to PNGs, for every shared sample state
+/// (<see cref="SampleStates"/>) in both themes: the Linux golden images
+/// (<c>tools/check.ps1</c>), and the counterpart of the WPF head's <c>--popup-samples</c>.
 ///
-/// <para>It exists because the panel is otherwise only inspectable by running it on a
-/// desktop none of its authors has. Rendering to a file means legibility and layout can be
-/// judged from images, by someone who is not the tester, before anyone installs anything —
-/// and it reaches states real data on any one machine may never produce.</para>
+/// <para>It exists because the panel is otherwise only inspectable on a desktop none of its
+/// authors has. Rendering to a file means legibility and layout can be judged from images
+/// before anyone installs anything, and it reaches states real data on any one machine may
+/// never produce. The Windows head renders the same states under the same names, so where
+/// the two panels differ is visible side by side.</para>
 /// </summary>
 public static class PanelSampleRenderer
 {
-    /// <summary>Fixed clock, so a sample is reproducible rather than carrying the time it was taken.</summary>
-    private static readonly DateTimeOffset At = new(2026, 7, 31, 12, 0, 0, TimeSpan.Zero);
-
     public static void RenderAll(string directory)
     {
         Directory.CreateDirectory(directory);
 
-        (string Name, UsageSnapshot Snapshot, PanelStatistics Stats)[] cases =
-        [
-            ("typical", Live(25, 3), Stats(recordedDays: 31)),
-            ("partial-history", Live(47, 61), Stats(recordedDays: 10)),
-            ("unpriced-model", Live(58, 44), Stats(recordedDays: 31, unpriced: ["claude-brandnew-9"])),
-            ("high-usage", Live(91, 80), Stats(recordedDays: 31)),
-            ("estimate-only", new UsageSnapshot(DataSource.Estimate, null, null, null, At), Stats(recordedDays: 12)),
-            ("no-data", UsageSnapshot.None, Stats(recordedDays: 0)),
-        ];
-
         var written = 0;
         foreach (var light in new[] { false, true })
         {
-            foreach (var (name, snapshot, stats) in cases)
+            foreach (var state in SampleStates.All)
             {
                 // A FRESH control per sample. Reusing one silently produced eleven copies
                 // of the first image: layout is cached against the tree, so re-populating
                 // and re-rendering returns the size and content already arranged.
                 var content = new PanelContent(new LinuxPanelTheme(light));
-                content.Populate(snapshot, stats, Account, null, null, At);
+                content.Populate(state.Snapshot, state.Stats, state.Account, state.Plan, state.Scope,
+                    SampleStates.Now, state.Boost, SampleStates.Zone);
 
-                Save(content, Path.Combine(directory, $"panel-{name}-{(light ? "light" : "dark")}.png"));
+                Save(content, Path.Combine(directory, $"panel-{state.Name}-{(light ? "light" : "dark")}.png"));
                 written++;
             }
         }
@@ -66,38 +56,5 @@ public static class PanelSampleRenderer
         using var bitmap = new RenderTargetBitmap(pixel, new Vector(96, 96));
         bitmap.Render(content);
         bitmap.Save(path, new PngBitmapEncoderOptions());
-    }
-
-    private static UsageSnapshot Live(int session, int weekly) => new(
-        DataSource.Live, session, weekly,
-        SessionResetAtUtc: At.AddHours(2).AddMinutes(14),
-        CapturedAtUtc: At,
-        WeeklyResetAtUtc: At.AddDays(3).AddHours(4));
-
-    private static readonly ClaudeAccount Account = new("Sample User", "sample@example.com", "claude_pro", "org-uuid");
-
-    private static PanelStatistics Stats(int recordedDays, string[]? unpriced = null)
-    {
-        var series = Enumerable.Range(0, 31)
-            .Select(i => new DayUsage(
-                DateOnly.FromDateTime(At.UtcDateTime).AddDays(i - 30),
-                // Days before the store existed have NO data, not zero data.
-                i < 31 - recordedDays ? 0 : 8_000_000 + (i * 900_000 % 17_000_000),
-                PreInstall: i < 31 - recordedDays))
-            .ToList();
-
-        return new PanelStatistics(
-            TokensToday: 12_700_000,
-            EstTodayUsd: 9.36m,
-            Tokens31Days: 684_600_000,
-            Est31DaysUsd: 492.52m,
-            RecordedDays: recordedDays,
-            WindowDays: 31,
-            DailySeries: series,
-            CreditTokens31Days: 0,
-            EstCredit31DaysUsd: null)
-        {
-            UnpricedModels = unpriced ?? [],
-        };
     }
 }

@@ -127,6 +127,13 @@ public sealed record UsageEngineOptions
     public string? PlanHistoryPath { get; init; }
 
     /// <summary>
+    /// Reads Claude's files from these locations instead of this machine's: the smoke test's
+    /// fixture. Null — the default, and always in the shipped app — reads the real ones.
+    /// Takes precedence over <see cref="PlanHistoryPath"/>.
+    /// </summary>
+    public ClaudeDataLocations? ClaudeData { get; init; }
+
+    /// <summary>
     /// Verification hook (<c>--simulate-divergence</c>): feeds the real
     /// <see cref="Core.Models.DivergenceDetector"/> synthetic inputs rather than faking its
     /// output, so the simulation exercises the same code path the real case would.

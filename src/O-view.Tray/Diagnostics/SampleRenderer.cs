@@ -12,6 +12,7 @@ using OView.Core.Providers.PlanHistory;
 using OView.Tray.Popup;
 using OView.Tray.Tray;
 using OView.Tray.Updates;
+using OView.Presentation.Samples;
 using Border = System.Windows.Controls.Border;
 using Size = System.Windows.Size;
 using StackPanel = System.Windows.Controls.StackPanel;
@@ -39,295 +40,73 @@ namespace OView.Tray.Diagnostics;
 internal static class SampleRenderer
 {
     /// <summary>
-    /// Renders the detail panel offscreen, in both themes, across the states that change
-    /// what it asserts about the weekly window.
+    /// Renders the detail panel offscreen, in both themes, for every shared sample state
+    /// (<see cref="SampleStates"/>), plus the views only this head has: the token
+    /// explanation open and caught mid-fold, the compact density, and the graph's hover cards.
     ///
-    /// The 31-day graph is the reason this exists. Its week gridlines sit on the derived
-    /// weekly reset, and whether they land correctly cannot be judged from unit tests —
-    /// those cover the boundary arithmetic, not where a line ends up on a Canvas. Opening
-    /// the real panel needs the single-instance mutex and a free display, and it silently
-    /// fails when something is running fullscreen.
+    /// <para>These are the Windows golden images (<c>tools/check.ps1</c>). The clock and the
+    /// time zone are pinned to <see cref="SampleStates.Now"/> and <see cref="SampleStates.Zone"/>,
+    /// so the same code renders the same pixels on any machine; the Linux head renders the
+    /// same states under the same names, so the two can be compared side by side.</para>
     ///
-    /// The data is constructed rather than read from the store: the interesting contrast is
-    /// a plan-derived boundary at 06:28 (which falls INSIDE a day column) against the
-    /// Monday-midnight fallback (which lands on a column edge), and one machine's history
-    /// shows only whichever it happens to be in.
+    /// <para>The 31-day graph is why rendering is needed at all: its week gridlines sit on
+    /// the derived weekly reset, and whether they land correctly inside a day column cannot be
+    /// judged from unit tests, which cover the arithmetic, not where a line ends up on a
+    /// Canvas.</para>
     /// </summary>
     public static void RenderPopupSamples(string dir)
     {
         Directory.CreateDirectory(dir);
         const double scale = 2.0;
 
-        // A fixed "today" pins the graph — the part being verified — so a rerun that shows
-        // different gridlines means the rendering changed, not the date. The header clock
-        // and the reset countdowns still read the real time, so the images are not byte-
-        // identical between runs; compare the chart, not the file hash.
-        var today = new DateOnly(2026, 7, 28);
-        var installed = today.AddDays(-9);       // partial history, so pre-install days show
+        var typical = SampleStates.All.Single(s => s.Name == "typical");
 
-        var series = new List<DayUsage>();
-        for (var offset = 30; offset >= 0; offset--)
+        PopupWindow NewPopup(bool light, SampleState state) => new()
         {
-            var date = today.AddDays(-offset);
-            var preInstall = date < installed;
-            // A shape with visible within-week variation, so the intensity bands are legible.
-            // OUTPUT tokens since issue #253, so the scale is ~1% of what it was — the bars
-            // are relative to each other, but a series still in the millions would contradict
-            // the tile above it.
-            long tokens = preInstall ? 0 : (long)(60_000 + 89_000 * Math.Abs(Math.Sin(offset * 0.9)));
-            series.Add(new DayUsage(date, tokens, preInstall));
-        }
-
-        var stats = new PanelStatistics(
-            // The token tiles headline OUTPUT and the Est. tiles price EVERYTHING (issue
-            // #253), so these two pairs are deliberately built from different measures. The
-            // token figures are exactly the compositions' Output below; the Est. figures value
-            // all four kinds, which is why $9.36 sits beside 128.6K rather than tracking it.
-            TokensToday: 128_600, EstTodayUsd: 9.36m,
-            Tokens31Days: 6_771_000, Est31DaysUsd: 492.52m,
-            RecordedDays: 10, WindowDays: 31,
-            DailySeries: series,
-            CreditTokens31Days: 395_000, EstCredit31DaysUsd: 92.75m)
-        {
-            // Compositions in the proportions measured on real transcripts — ~89% cache reads
-            // (issue #169) — whose Output matches the token tiles above exactly. A sample
-            // carrying a plausible-looking but non-agreeing split would render a panel
-            // contradicting itself, which is the one thing these images exist to catch.
-            CompositionToday = new TokenComposition(
-                Input: 1_400, CacheCreation: 1_270_000, CacheRead: 11_300_000, Output: 128_600),
-            Composition31Days = new TokenComposition(
-                Input: 75_000, CacheCreation: 68_460_000, CacheRead: 609_294_000, Output: 6_771_000),
+            ThemeOverride = light,
+            FixedNow = SampleStates.Now,
+            FixedZone = SampleStates.Zone,
+            ScopeReport = state.Scope,
+            DataReport = state.Plan,
+            CachedUsage = state.CachedUsage,
+            BoostNotices = state.Boost,
         };
 
-        var capturedAt = new DateTimeOffset(today.ToDateTime(new TimeOnly(10, 47)), TimeSpan.Zero);
-        var account = new ClaudeAccount("Maximilian", "sample@example.com", "claude_pro", "sample-org");
-
-        // The reset the dev machine actually observed: 06:28:57Z, i.e. a boundary a quarter
-        // of the way into its day column rather than on the edge.
-        var nextWeekly = new DateTimeOffset(2026, 8, 4, 6, 28, 57, TimeSpan.Zero);
-
-        var live = new UsageSnapshot(DataSource.Live, 25, 3,
-            capturedAt.AddHours(3), capturedAt, nextWeekly, TimeSpan.FromDays(7));
-
-        // Plan meters showing real usage while NOTHING is recorded locally — the state that
-        // triggers the token-scope note. Constructed, because a machine that feeds the
-        // transcripts can never produce it, which is exactly why the note went years
-        // carrying a hard-coded path and a source list that had been wrong since issue #44:
-        // no sample ever rendered it (issue #58).
-        var noLocalUsage = stats with
-        {
-            TokensToday = 0, EstTodayUsd = 0m,
-            Tokens31Days = 0, Est31DaysUsd = 0m,
-            RecordedDays = 0,
-            DailySeries = [.. series.Select(d => d with { OutputTokens = 0, PreInstall = true })],
-            CreditTokens31Days = 0, EstCredit31DaysUsd = 0m,
-            // Nothing recorded means nothing to break down: the composition lines are
-            // hidden here, and the scope note carries the explanation instead.
-            CompositionToday = TokenComposition.Empty,
-            Composition31Days = TokenComposition.Empty,
-        };
-
-        // Fixed roots rather than the real machine's, so the note is deterministic and the
-        // sample does not leak this profile's paths into a committed screenshot.
-        var emptyScope = TranscriptScopeReport.Inspect(
-            projectsRoot: @"C:\Users\<user>\.claude\projects",
-            coworkRoots: [@"C:\Users\<user>\AppData\Roaming\Claude\local-agent-mode-sessions"]);
-
-        // A Claude Code CLI user: no plan-history file to read, so the two gauges have no
-        // source — while the token tiles are filled from their own transcripts. Both reports
-        // are constructed with fixed values so the sample is deterministic and leaks no real
-        // path. This state had never been rendered, which is how the banner came to say
-        // "No usage data" above two populated tiles and tell the reader to start an
-        // application they do not use (issue #170).
-        var cliOnlyPlan = new PlanHistoryReport(
-            PlanDataStatus.FileMissing,
-            @"C:\Users\<user>\AppData\Roaming\Claude\plan-usage-history.json",
-            FileExists: false, FileBytes: 0, RawSampleCount: 0, ValidSampleCount: 0,
-            Orgs: [], LatestSampleAge: null, Detail: null)
-        {
-            Searched = [@"C:\Users\<user>\AppData\Roaming\Claude\plan-usage-history.json"],
-        };
-
-        var cliOnlyScope = TranscriptScopeReport.Inspect(
-            projectsRoot: @"C:\Users\<user>\.claude\projects",
-            coworkRoots: []) with
-        {
-            // Inspect finds nothing under a path that does not exist here, and the point of
-            // this sample is the opposite case: transcripts present, plan file absent.
-            Sources = [new TranscriptSource("Claude Code", [@"C:\Users\<user>\.claude\projects"], 42, 6_700_000, capturedAt)],
-        };
-
-        // Both transcript surfaces present, so the coverage line renders its full form
-        // (issue #171). Constructed rather than inspected for the same reason as the two
-        // above: a null scope would make these samples reflect whichever surfaces this
-        // developer happens to use, which is not a fixture.
-        var bothSourcesScope = cliOnlyScope with
-        {
-            Sources =
-            [
-                new TranscriptSource("Claude Code", [@"C:\Users\<user>\.claude\projects"], 42, 6_700_000, capturedAt),
-                new TranscriptSource("Cowork", [@"C:\Users\<user>\AppData\Roaming\Claude\local-agent-mode-sessions"], 3, 220_000, capturedAt),
-            ],
-        };
-
-        var cases = new (string Name, UsageSnapshot Snapshot, PanelStatistics Stats,
-            TranscriptScopeReport? Scope, PlanHistoryReport? Plan)[]
-        {
-            ("plan-weeks", live, stats, bothSourcesScope, null),
-            // No weekly reset known: Monday-midnight gridlines, and the row that names the
-            // step which fills it in (ADR-0014).
-            ("weekly-reset-unknown", new UsageSnapshot(DataSource.Live, 25, 3,
-                capturedAt.AddHours(3), capturedAt), stats, bothSourcesScope, null),
-            // The token-scope note, which appears in no other state.
-            ("no-local-transcripts", live, noLocalUsage, emptyScope, null),
-            // The CLI-only banner and its "needs Claude Desktop" gauges. Estimate, not None:
-            // the transcripts do resolve, so the composite labels the snapshot a local
-            // estimate and the header reads that way — it just carries no percentages,
-            // because no true percentage-of-limit is derivable from JSONL (ADR-0002).
-            ("cli-only", new UsageSnapshot(DataSource.Estimate, null, null, null, capturedAt),
-                stats, cliOnlyScope, cliOnlyPlan),
-        };
+        string File(string name, bool light) => Path.Combine(dir, $"panel-{name}-{(light ? "light" : "dark")}.png");
 
         foreach (var light in new[] { true, false })
         {
-            // The graph's hover cards, rendered standalone — a ToolTip cannot be given a
-            // parent, so it appears in no screenshot of the panel and hover is otherwise
-            // the only way to see one.
-            RenderHoverCards(dir, light,
-                [.. new PopupWindow { ThemeOverride = light }.BuildSampleHoverCards(light)],
-                "graph-hover-cards");
-
-            foreach (var (name, snapshot, caseStats, scope, plan) in cases)
+            foreach (var state in SampleStates.All)
             {
-                var popup = new PopupWindow { ThemeOverride = light, ScopeReport = scope, DataReport = plan };
-                var bitmap = popup.RenderToBitmap(snapshot, caseStats, account, scale);
-
-                SavePng(bitmap, Path.Combine(dir, $"panel-{name}-{(light ? "light" : "dark")}.png"));
+                SavePng(NewPopup(light, state).RenderToBitmap(state.Snapshot, state.Stats, state.Account, scale),
+                    File(state.Name, light));
             }
 
-            // The token explanation with its disclosure open. It resets on every Populate,
-            // so this state exists in no other render — and a state nothing renders is how
-            // the no-data banner spent its life saying the wrong thing (#58, #170).
-            var expanded = new PopupWindow { ThemeOverride = light, ScopeReport = bothSourcesScope };
-            SavePng(
-                expanded.RenderToBitmap(live, stats, account, scale, expandComposition: true),
-                Path.Combine(dir, $"panel-tokens-explained-{(light ? "light" : "dark")}.png"));
+            // The token explanation with its disclosure open. It resets on every Populate, so
+            // this view exists in no other render.
+            SavePng(NewPopup(light, typical).RenderToBitmap(typical.Snapshot, typical.Stats, typical.Account, scale,
+                    expandComposition: true),
+                File("typical-tokens-explained", light));
 
-            // The disclosure caught mid-fold. On a real desktop this frame lasts
-            // about 80 ms, and the fault it exists to catch — the explanation drawn at full
-            // size outside the height the fold has given it, over the section below and past
-            // the panel's own border — cannot be seen at either end of the transition.
-            // Rendered at 45%, where the clip crosses the middle of the first sentence.
-            var folding = new PopupWindow { ThemeOverride = light, ScopeReport = bothSourcesScope };
-            SavePng(
-                folding.RenderToBitmap(live, stats, account, scale, compositionReveal: 0.45),
-                Path.Combine(dir, $"panel-tokens-folding-{(light ? "light" : "dark")}.png"));
+            // Caught mid-fold, at 45%, where the clip crosses the first sentence. On a desktop
+            // this frame lasts about 80 ms, and the fault it catches (the explanation drawn at
+            // full size outside the height the fold has given it) shows at neither end.
+            SavePng(NewPopup(light, typical).RenderToBitmap(typical.Snapshot, typical.Stats, typical.Account, scale,
+                    compositionReveal: 0.45),
+                File("typical-tokens-folding", light));
 
-            // The same panel at compact density — what a display too short for the natural
-            // layout gets. Rendered rather than reasoned about: whether a tightened layout
-            // still reads as sections cannot be judged from the constants.
-            //
-            // The disclosure is open, because that is the tallest the panel can be and so the
-            // case the density exists for. A sample that stops being the extreme it claims to
-            // be is worse than none, because it is still trusted.
-            var compact = new PopupWindow { ThemeOverride = light, ScopeReport = bothSourcesScope };
-            SavePng(
-                compact.RenderToBitmap(live, stats, account, scale,
+            // Compact density with the disclosure open: the tallest the panel can be, which is
+            // the case the density exists for.
+            SavePng(NewPopup(light, typical).RenderToBitmap(typical.Snapshot, typical.Stats, typical.Account, scale,
                     expandComposition: true, density: PanelDensity.Compact),
-                Path.Combine(dir, $"panel-compact-{(light ? "light" : "dark")}.png"));
+                File("typical-compact", light));
 
-            // The boost chip (issue #254). No ordinary sample can show it: it appears only
-            // while Claude Code has a live promo cached, and the one this was built against
-            // expired the day it was found — so without this render the chip would be
-            // inspectable on nobody's machine, which is how the no-data banner spent its life
-            // saying the wrong thing (#58, #170).
-            //
-            // Unlike the pinned `today` above, this is dated from the real clock, because the
-            // chip's own visibility is decided against the machine's date.
-            // Rendered at the WIDEST the row can get, not a comfortable middle: a promo far
-            // enough out for all three countdown units, beside "100% used" — the longest the
-            // figure on the right ever is. The first render of this sample was the reason,
-            // and it did not fit: the heading had one column, so the chip drew straight over
-            // the figure, and a budget worked out against "51%" is 30px short of what
-            // "51% used" actually needs.
-            var boosted = new PopupWindow
-            {
-                ThemeOverride = light,
-                ScopeReport = bothSourcesScope,
-                BoostNotices = SampleBoostNotices(),
-            };
-            SavePng(
-                boosted.RenderToBitmap(live with { WeeklyPercent = 100 }, stats, account, scale),
-                Path.Combine(dir, $"panel-boosted-{(light ? "light" : "dark")}.png"));
-
-            // The off-plan banner, in each of the three things Claude Code's cache can say
-            // about extra usage (issue #259).
-            //
-            // No ordinary sample reaches it — it needs an exhausted plan meter, which no
-            // fixture had — so the wording that told readers their work was billing beyond
-            // their plan, at accounts that had extra usage switched off and could not be
-            // billed anything, had never been rendered anywhere. That is the shape of #58 and
-            // #170 exactly: a state nobody looks at is a state that goes on being wrong.
-            var offPlanStats = stats with
-            {
-                Divergence = new DivergenceResult(DivergenceState.PlanLimitReached, 69_091, 0),
-                EstOffPlanUsd = 92.75m,
-            };
-
-            foreach (var (label, extra) in OffPlanCases)
-            {
-                var offPlan = new PopupWindow
-                {
-                    ThemeOverride = light,
-                    ScopeReport = bothSourcesScope,
-                    // Stamped with the pinned capture time rather than the real clock, so the
-                    // provenance clause in the banner reads the same on every run.
-                    CachedUsage = extra is null
-                        ? null
-                        : new CachedUtilization(capturedAt, null, null, null) { ExtraUsage = extra },
-                };
-
-                SavePng(
-                    offPlan.RenderToBitmap(
-                        live with { SessionPercent = 100 }, offPlanStats, account, scale),
-                    Path.Combine(dir, $"panel-offplan-{label}-{(light ? "light" : "dark")}.png"));
-            }
+            // The graph's hover cards, standalone: a ToolTip cannot be given a parent, so it
+            // appears in no render of the panel.
+            RenderHoverCards(dir, light,
+                [.. NewPopup(light, typical).BuildSampleHoverCards(light)],
+                "graph-hover-cards");
         }
-    }
-
-    /// <summary>
-    /// The three states of the extra-usage setting, as the off-plan banner sees them. Null is
-    /// not a fourth: it is how <see cref="ExtraUsageState.Unknown"/> arrives in practice — no
-    /// Claude Code on the machine, so no block to read at all.
-    /// </summary>
-    private static readonly (string Label, ExtraUsageStatus? Status)[] OffPlanCases =
-    [
-        ("unknown", null),
-        ("off", new ExtraUsageStatus(ExtraUsageState.Disabled, UserDisabled: true)),
-        ("on", new ExtraUsageStatus(ExtraUsageState.Enabled)),
-    ];
-
-    /// <summary>
-    /// A promo notice in the shape Claude Code really caches, ending far enough out that all
-    /// three countdown units appear — the widest the chip ever gets, which is the case worth
-    /// looking at rather than the shortest.
-    ///
-    /// <para><b>Built by parsing a sentence, not by filling in the fields.</b> The magnitude and
-    /// the date come from <see cref="PromoText"/>, so the render shows what the extractors
-    /// actually produce from a real-shaped message rather than what a hand-written fixture
-    /// asserts they would.</para>
-    /// </summary>
-    private static BoostNotices SampleBoostNotices()
-    {
-        var now = DateTimeOffset.UtcNow;
-        var ends = DateOnly.FromDateTime(now.UtcDateTime).AddDays(18);
-        var text = string.Create(CultureInfo.InvariantCulture,
-            $"+50% weekly limits promo through {ends:MMM d} · clau.de/cc-50-promo");
-
-        return new BoostNotices(now, [
-            new BoostNotice(
-                BoostNotice.WeeklyBar, text, PromoText.Percent(text), PromoText.EndDate(text, now)),
-        ]);
     }
 
     /// <summary>

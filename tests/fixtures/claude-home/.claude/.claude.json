@@ -1,0 +1,8 @@
+{
+  "oauthAccount": {
+    "displayName": "Smoke Test",
+    "emailAddress": "smoke@example.com",
+    "organizationType": "claude_pro",
+    "organizationUuid": "00000000-0000-0000-0000-000000000000"
+  }
+}

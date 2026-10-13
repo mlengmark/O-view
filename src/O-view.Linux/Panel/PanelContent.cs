@@ -66,7 +66,8 @@ public sealed class PanelContent : Border
         PlanHistoryReport? dataReport,
         TranscriptScopeReport? scopeReport,
         DateTimeOffset utcNow,
-        BoostNotices? boostNotices = null)
+        BoostNotices? boostNotices = null,
+        TimeZoneInfo? zone = null)
     {
         _root.Children.Clear();
 
@@ -76,7 +77,9 @@ public sealed class PanelContent : Border
         Padding = new Thickness(Density.RootPadding);
         _root.Spacing = NaturalRootSpacing * Density.SpacingScale;
 
-        var local = TimeZoneInfo.Local;
+        // A pinned zone is for verification renders, so a UTC CI runner and a CET desktop
+        // draw the same reset times; the live panel always follows the machine.
+        var local = zone ?? TimeZoneInfo.Local;
         var authoritative = snapshot.Source is DataSource.Live or DataSource.Stale;
 
         AddHeader(snapshot, account, local, utcNow);

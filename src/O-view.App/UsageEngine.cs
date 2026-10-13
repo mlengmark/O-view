@@ -222,7 +222,8 @@ public sealed class UsageEngine : IDisposable
         // whereas a missed reset costs a week. Older builds kept them in the store, so any
         // rows it still holds are carried across on the way past — idempotent, so this is
         // safe to run on every launch.
-        var account = ClaudeAccount.TryRead();
+        var data = _options.ClaudeData;
+        var account = ClaudeAccount.TryRead(data?.AccountFile);
 
         // Every Core seam below takes the log as a delegate rather than an interface, so the
         // accounting layer keeps knowing nothing about how this app logs. What they all now
@@ -241,7 +242,7 @@ public sealed class UsageEngine : IDisposable
         // has passed, and a passed instant is precisely what the anchor is made of.
         _cachedUtilizationSource = _options.CachedUtilizationSource
             ?? (_options.Provider is null
-                ? () => CachedUtilization.TryRead()
+                ? () => CachedUtilization.TryRead(data?.CachedUsageFile)
                 : () => null);
 
         // A caller that supplied its own Provider has described the whole world, so an
@@ -258,7 +259,8 @@ public sealed class UsageEngine : IDisposable
         //
         // Same fix, and the same reasoning, as CachedUtilization gets a few lines below.
         _planHistory = _options.PlanHistory ?? new PlanHistoryProvider(
-            path: _options.PlanHistoryPath
+            path: data?.PlanHistoryFile
+                ?? _options.PlanHistoryPath
                 ?? (_options.Provider is null ? null : PlanHistoryFile.NoFile),
             orgUuid: account?.OrganizationUuid,
             // Local request times tighten the five-hour window's start bracket (issue #185).
@@ -284,13 +286,17 @@ public sealed class UsageEngine : IDisposable
         // machine of whoever last used Claude Code. Reaching past an injected provider to real
         // user data is the bug, not the test that caught it.
         _cachedUtilization = _options.CachedUtilization ?? (_options.Provider is null
-            ? new CachedUtilizationProvider()
+            ? new CachedUtilizationProvider(data?.CachedUsageFile)
             : new CachedUtilizationProvider(() => null));
+
+        var transcripts = data is null
+            ? new JsonlUsageProvider(_store) { Log = logLine }
+            : new JsonlUsageProvider(_store, data.ProjectsRoot, data.CoworkRoots, data.SessionRegistryRoots) { Log = logLine };
 
         _provider = _options.Provider ?? new CompositeUsageProvider(
             _planHistory,
             _cachedUtilization,
-            new JsonlUsageProvider(_store) { Log = logLine })
+            transcripts)
         {
             Log = logLine,
         };
