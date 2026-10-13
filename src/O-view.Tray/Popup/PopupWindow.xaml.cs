@@ -9,6 +9,7 @@ using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
+using OView.Presentation.Text;
 using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
 using Point = System.Windows.Point;

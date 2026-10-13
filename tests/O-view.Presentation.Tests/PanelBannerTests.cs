@@ -1,8 +1,8 @@
-using OView.Core.Models;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
+using OView.Presentation.Text;
 
-namespace OView.Core.Tests;
+namespace OView.Presentation.Tests;
 
 /// <summary>
 /// A user who runs only the Claude Code CLI was shown "No usage data", and told to start

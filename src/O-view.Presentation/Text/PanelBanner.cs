@@ -1,7 +1,8 @@
+using OView.Core.Models;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 
-namespace OView.Core.Models;
+namespace OView.Presentation.Text;
 
 /// <summary>
 /// The banner across the top of the panel, and the placeholder the two percentage gauges
