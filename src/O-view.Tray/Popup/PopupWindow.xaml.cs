@@ -34,6 +34,21 @@ public partial class PopupWindow : Window, IFlyout
     public bool? ThemeOverride { get; set; }
 
     /// <summary>
+    /// Pins the clock for verification renders; null reads the real one. Golden images are
+    /// compared pixel for pixel, so a countdown that ticked between two renders would fail
+    /// every comparison.
+    /// </summary>
+    internal DateTimeOffset? FixedNow { get; set; }
+
+    /// <summary>
+    /// Pins the time zone for verification renders; null follows the machine. Without it a
+    /// UTC CI runner and a CET desktop render different reset times for the same sample.
+    /// </summary>
+    internal TimeZoneInfo? FixedZone { get; set; }
+
+    private TimeZoneInfo LocalZone => FixedZone ?? TimeZoneInfo.Local;
+
+    /// <summary>
     /// Docking, the open/close transitions and the toggle grace window — shared with the
     /// tray menu rather than reimplemented here (issue #54).
     /// </summary>
@@ -425,7 +440,7 @@ public partial class PopupWindow : Window, IFlyout
         _lastSnapshot = snapshot;
         _lastSettings = SettingsForDisplay;
 
-        var local = TimeZoneInfo.Local;
+        var local = LocalZone;
 
         UpdatedText.Text = PanelText.Freshness(snapshot, Now(TimeZoneInfo.Utc), local);
         NameText.Text = account?.DisplayName ?? "account unknown";
@@ -1084,7 +1099,7 @@ public partial class PopupWindow : Window, IFlyout
         // The columns are LOCAL days (issue #211), so everything drawn over them has to be
         // placed in the same frame: a gridline positioned as though every column were 24 UTC
         // hours drifts against the bar it annotates from the DST change onwards.
-        var weeks = PlanWeeks.ForSeries(series, snapshot, TimeZoneInfo.Local);
+        var weeks = PlanWeeks.ForSeries(series, snapshot, LocalZone);
 
         // Per-week peak, so colour intensity is normalised within each week. The week is
         // the PLAN's week wherever it is known, so the shading and the gridlines below
@@ -1213,7 +1228,7 @@ public partial class PopupWindow : Window, IFlyout
                 ToolTip = weeks.IsPlanDerived
                     ? HoverCard.Figure(
                         this,
-                        TimeZoneInfo.ConvertTime(boundary.AtUtc, TimeZoneInfo.Local)
+                        TimeZoneInfo.ConvertTime(boundary.AtUtc, LocalZone)
                             .ToString("ddd d MMM · HH:mm", CultureInfo.InvariantCulture),
                         "Weekly limit reset")
                     : HoverCard.Text(
@@ -1366,7 +1381,7 @@ public partial class PopupWindow : Window, IFlyout
 
     // ── formatting (display edge) ──────────────────────────────────────────────
 
-    private static DateTimeOffset Now(TimeZoneInfo zone) => TimeZoneInfo.ConvertTime(DateTimeOffset.UtcNow, zone);
+    private DateTimeOffset Now(TimeZoneInfo zone) => TimeZoneInfo.ConvertTime(FixedNow ?? DateTimeOffset.UtcNow, zone);
 
     // The header's freshness line lives in OView.Core.Models.PanelText, shared with the Linux
     // panel: it is a statement about how old the figures are, and two panels wording that
