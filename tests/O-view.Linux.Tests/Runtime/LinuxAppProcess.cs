@@ -30,13 +30,13 @@ namespace OView.Linux.Tests.Runtime;
 /// not come back. For the same reason <see cref="DisposeAsync"/> always reports the log,
 /// passing or failing, and saves it where the <c>linux-runtime</c> job collects artifacts.</para>
 ///
-/// <para><b>And what it held on the bus.</b> The toolkit's tray backend logs its own failures
+/// <para><b>And who was on the bus.</b> The toolkit's tray backend logs its own failures
 /// through a logger the app installs no sink for, so a registration that never happens says
-/// nothing anywhere. What the bus can still be asked is which names the app's own connections
-/// owned, and that separates the two ways this goes wrong: a
-/// <c>org.kde.StatusNotifierItem-…</c> name with no registration behind it means the item was
-/// published and the call to the watcher is what failed, while no name at all means the
-/// backend never got that far.</para>
+/// nothing anywhere. What the bus can still be asked is every name on it and the process
+/// behind each, and that separates the two ways this goes wrong: a
+/// <c>org.kde.StatusNotifierItem-…</c> name owned by the app with no registration behind it
+/// means the item was published and the call to the watcher is what failed, while an app with
+/// no connection of its own means the backend never got that far.</para>
 /// </summary>
 public sealed class LinuxAppProcess : IAsyncDisposable
 {
@@ -282,7 +282,7 @@ public sealed class LinuxAppProcess : IAsyncDisposable
     /// </summary>
     private async Task<XunitException> FailureAsync(string what, Exception? cause = null)
     {
-        _busNames = await ReadOwnedBusNamesAsync();
+        _busNames = await ReadBusNamesAsync();
         return Failure(what, cause);
     }
 
@@ -304,7 +304,7 @@ public sealed class LinuxAppProcess : IAsyncDisposable
         report.AppendLine($"home        : {Home}");
         report.AppendLine($"display     : {Value("DISPLAY")}");
         report.AppendLine($"session bus : {Value("DBUS_SESSION_BUS_ADDRESS")}");
-        report.AppendLine($"its names   : {_busNames}");
+        report.AppendLine($"bus names   : {_busNames}");
 
         report.AppendLine($"──── its log ({_logPath}) ────");
         var lines = LogLines();
@@ -381,16 +381,21 @@ public sealed class LinuxAppProcess : IAsyncDisposable
     }
 
     /// <summary>
-    /// Which names on the session bus belong to the app, asked of the bus itself: every name
-    /// whose owning connection reports the app's process id. The unique names count too — how
-    /// many connections the app made is what tells a tray backend that never connected apart
-    /// from one that connected and then published nothing.
+    /// Who is on the session bus, asked of the bus itself: every name, the process behind it,
+    /// and the app's own process id to read them against. The app's unique names count as much
+    /// as a <c>org.kde.StatusNotifierItem-…</c> one — how many connections it made is what
+    /// tells a tray backend that never connected apart from one that connected and published
+    /// nothing.
+    ///
+    /// <para>Every name is reported rather than only the app's, because "the app owns nothing"
+    /// and "this could not read anything" are different findings and a diagnostic that cannot
+    /// tell them apart is worse than none.</para>
     ///
     /// <para>Never throws, and catches broadly to make sure of it. This runs only while a
     /// failure message is being built, so an exception escaping here would replace the failure
     /// the test actually found with one from reading about it.</para>
     /// </summary>
-    private async Task<string> ReadOwnedBusNamesAsync()
+    private async Task<string> ReadBusNamesAsync()
     {
         if (!_started) return "(never started)";
 
@@ -410,18 +415,16 @@ public sealed class LinuxAppProcess : IAsyncDisposable
             var names = await CallBusAsync(
                 connection, "ListNames", null, static (m, _) => ReadStrings(m));
 
-            var mine = new List<string>();
+            var described = new List<string>(names.Count);
             foreach (var name in names)
             {
-                if (await OwnerProcessIdAsync(connection, name) == _process.Id)
-                {
-                    mine.Add(name);
-                }
+                var (pid, owner) = await OwnerProcessIdAsync(connection, name);
+
+                described.Add(pid == _process.Id ? $"{name}={owner} (the app)" : $"{name}={owner}");
             }
 
-            return mine.Count > 0
-                ? string.Join(", ", mine)
-                : "(none: the app owns no name on this bus)";
+            return $"app pid {_process.Id} · "
+                + (described.Count > 0 ? string.Join(", ", described) : "the bus lists no names");
         }
         catch (Exception ex)
         {
@@ -430,22 +433,27 @@ public sealed class LinuxAppProcess : IAsyncDisposable
     }
 
     /// <summary>
-    /// The process behind a name, or null when the bus will not say — a name can be gone by
-    /// the time it is asked about, which is ordinary and not worth failing over.
+    /// The process behind a name, and how to say so. A name can be gone by the time it is
+    /// asked about, and some the bus will not answer for at all, so a refusal is reported as
+    /// what refused it rather than as a blank: that is the difference between the app owning
+    /// nothing and this not being able to tell.
     /// </summary>
-    private static async Task<int?> OwnerProcessIdAsync(DBusConnection connection, string name)
+    private static async Task<(int? Pid, string Owner)> OwnerProcessIdAsync(
+        DBusConnection connection, string name)
     {
         try
         {
-            return (int)await CallBusAsync(
+            var pid = (int)await CallBusAsync(
                 connection,
                 "GetConnectionUnixProcessID",
                 writer => writer.WriteString(name),
                 static (m, _) => m.GetBodyReader().ReadUInt32());
+
+            return (pid, pid.ToString());
         }
-        catch (Exception ex) when (ex is DBusExceptionBase or IOException or TimeoutException)
+        catch (Exception ex)
         {
-            return null;
+            return (null, $"?({ex.GetType().Name})");
         }
     }
 
