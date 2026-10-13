@@ -1,0 +1,46 @@
+name: PR checks
+
+# The gates every pull request is judged by besides the build and tests. All three are
+# required on main (.github/required-checks.txt), so auto-merge waits for them. They re-run
+# when the PR's description is edited, because two of them read it.
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  # The standard format (.github/pull_request_template.md): every section, in order, with
+  # the merge order and guarded changes stated, and screenshots for any golden change.
+  pr-format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - run: python3 .github/scripts/pr_format.py
+
+  # Planned order and no collisions: a dependency must have merged, the PR may change only
+  # the files it declared, and no other open PR may change the same ones.
+  merge-order:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: python3 .github/scripts/merge_order.py
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+  # No weakening: required checks only grow, features and tests are never removed, golden
+  # and guarded changes are declared.
+  guard-ratchet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - run: python3 .github/scripts/guard_ratchet.py
