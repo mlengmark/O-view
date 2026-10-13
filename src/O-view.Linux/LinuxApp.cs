@@ -91,6 +91,17 @@ public sealed class LinuxApp : Application
         };
         _tray.Clicked += TrayClickHandler(engine);
 
+        // What actually publishes the icon, and the line whose absence meant this head never
+        // reached a notification area on any desktop. A constructed TrayIcon has no platform
+        // implementation behind it: the toolkit builds one only for an icon in the
+        // application's own collection, and until then every property set above is dropped by
+        // a null-conditional call that reports nothing and returns nothing to check. So the
+        // gauge was drawn every poll, the icon reported itself visible, and the session bus
+        // never heard a word — which is also why the toolkit's log has nothing to say about
+        // it (see Program.AvaloniaLog): the backend that would have complained was never
+        // constructed.
+        TrayIcon.SetIcons(this, new TrayIcons { _tray });
+
         // No Post needed: the engine publishes through the dispatcher handed to Start below,
         // so this already arrives on the UI thread.
         engine.SnapshotUpdated += Render;

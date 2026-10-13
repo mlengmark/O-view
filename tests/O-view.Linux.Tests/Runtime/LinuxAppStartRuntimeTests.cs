@@ -25,14 +25,14 @@ namespace OView.Linux.Tests.Runtime;
 /// desktop — a first click that deadlocked (#124), a menu that took tens of seconds (#125) —
 /// got through: all of them needed the toolkit, the dispatcher and the bus together. The
 /// click and the menu are tested in their own slices; what is proved here is the thing they
-/// both stand on, that the app comes up and stays up.</para>
+/// both stand on, that the app comes up, its icon arrives, and it stays up.</para>
 ///
-/// <para><b>What is deliberately not asserted here: that the icon reaches the notification
-/// area.</b> It does not, and this harness is how that was found: the app comes up healthy,
-/// finds the area and draws its gauge, yet no <c>org.kde.StatusNotifierItem-…</c> name ever
-/// appears on the session bus — the item is never published, rather than published and
-/// refused. The tests that wait for the registration live with the change that makes it
-/// happen, because that is where they can pass.</para>
+/// <para><b>The icon arriving is asserted twice, for an area that was already there and for
+/// one that appears afterwards.</b> Both failed before the icon was put in the application's
+/// icon collection, and they failed in the telling way: the app came up healthy, found the
+/// area and drew its gauge, while no <c>org.kde.StatusNotifierItem-…</c> name ever appeared
+/// on the session bus. Either of them going red again means the item is not being published
+/// at all, rather than published and refused.</para>
 ///
 /// <para>Runs only in the <c>linux-runtime</c> job, which provides the display
 /// (<c>xvfb-run</c>), the bus (<c>dbus-run-session</c>) and <c>OVIEW_LINUX_RUNTIME=1</c>.
@@ -68,7 +68,7 @@ public class LinuxAppStartRuntimeTests(ITestOutputHelper output)
 
         // The host first, deliberately: the app asks the bus for a notification area once,
         // before the toolkit starts, so one started afterwards would be a different case —
-        // the retry path, which has a test of its own in the slice that fixes registration.
+        // the one TheIconReachesAHostThatAppearedAfterTheApp covers.
         await using var host = await StandInTrayHost.StartAsync();
         await using var app = await LinuxAppProcess.StartAsync(output, nameof(TheAppStartsOnTheVirtualDisplayAndCarriesOnRunning));
 
@@ -81,6 +81,65 @@ public class LinuxAppStartRuntimeTests(ITestOutputHelper output)
         await app.WaitForLogAsync(LinuxAppProcess.IconRenderedLogLine, Patience);
 
         Assert.False(app.HasExited, "o-view exited after rendering its icon");
+    }
+
+    /// <summary>
+    /// The icon reaching a notification area that was already there, which is the ordinary
+    /// case on every desktop that ships one.
+    /// </summary>
+    [Fact]
+    public async Task TheIconReachesTheStandInHostAndTheAppCarriesOnRunning()
+    {
+        if (!InRuntimeJob) return;
+
+        // The host first, deliberately: the app asks the bus for a notification area once,
+        // before the toolkit starts, and one started afterwards would be found by the retry
+        // path instead — a different thing from the one under test.
+        await using var host = await StandInTrayHost.StartAsync();
+        await using var app = await LinuxAppProcess.StartAsync(output, nameof(TheIconReachesTheStandInHostAndTheAppCarriesOnRunning));
+
+        var startup = await app.WaitForLogAsync(LinuxAppProcess.StartupLogLine, Patience);
+        Assert.Contains($"trayHost={TrayHostState.Present}", startup);
+
+        var registered = await app.WaitForAsync(
+            host.WaitForItemAsync(Patience), Patience, "the icon to reach the stand-in host");
+
+        // A unique bus name, assigned by the bus to the connection the registration came from.
+        Assert.StartsWith(":", registered.BusName);
+        Assert.Equal([registered], host.Items);
+
+        // The point of the whole phase: the app is still there afterwards. An icon that
+        // arrives from a process that then dies is the failure this job exists to catch.
+        Assert.False(app.HasExited, "o-view exited after registering its icon");
+    }
+
+    /// <summary>
+    /// The same thing with the notification area arriving second, which is what a GNOME user
+    /// installing the AppIndicator extension while O-view runs does.
+    ///
+    /// <para>Here to tell two failures apart. The icon not arriving says nothing about why;
+    /// the icon not arriving when the area was there first but arriving when it appeared
+    /// afterwards says the tray backend only ever acts on the name changing hands, and never
+    /// on finding it already owned — which is the ordinary case on every desktop that ships a
+    /// notification area.</para>
+    /// </summary>
+    [Fact]
+    public async Task TheIconReachesAHostThatAppearedAfterTheApp()
+    {
+        if (!InRuntimeJob) return;
+
+        await using var app = await LinuxAppProcess.StartAsync(output, nameof(TheIconReachesAHostThatAppearedAfterTheApp));
+
+        var startup = await app.WaitForLogAsync(LinuxAppProcess.StartupLogLine, Patience);
+        Assert.Contains($"trayHost={TrayHostState.Absent}", startup);
+
+        await using var host = await StandInTrayHost.StartAsync();
+
+        var registered = await app.WaitForAsync(
+            host.WaitForItemAsync(Patience), Patience, "the icon to reach a host that started after it");
+
+        Assert.StartsWith(":", registered.BusName);
+        Assert.False(app.HasExited, "o-view exited after registering its icon");
     }
 
     /// <summary>
