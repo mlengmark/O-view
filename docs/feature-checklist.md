@@ -55,6 +55,8 @@ Everything O-view does today that a user would notice, and the test or golden im
 | F43 | Tray clicks and menu items run on the UI thread; panel survives refused focus. | Linux | `LinuxHeadWiringTests.TheTrayClickHandlerIsMarshalledOntoTheUiThread` · `LinuxHeadWiringTests.EveryMenuItemsClickHandlerIsMarshalledOntoTheUiThread` · `PanelDismissalTests.ADeactivationBeforeAnyActivationDoesNotDismiss` · `TrayClickRuntimeTests.ALeftClickOpensThePanelWithinFiveSeconds` · `TrayMenuRuntimeTests.TheTrayMenuOpensWithinTwoSecondsWithTheRowsTheHeadBuilds` |
 | F44 | Panel follows the desktop's light/dark theme, re-read on every open. | Windows, Linux | `LinuxHeadWiringTests.TheHeadWiresTheThemeSourceToThePortalImplementation` · `PortalThemeSourceTests.RepeatedReadsNeverWait` · golden: typical (light and dark) · Windows: none yet — a RegistryThemeSource test reading `AppsUseLightTheme` |
 | F45 | Only one instance runs; a second launch exits. | Windows, Linux | `FileLockSingleInstanceGuardTests.SecondInstanceIsRefusedWhileTheFirstHolds` · `LinuxHeadWiringTests.TheSingleInstanceGuardIsClaimedBeforeTheToolkitStarts` · Windows: none yet — a MutexSingleInstanceGuard second-acquire test |
+| F46 | No skin names a class the shell is made of; it reaches the shell only through `ISkinToShell`/`IShellToSkin`. | Windows, Linux | `SkinBoundaryTests.NeitherSkinNamesAShellClass` |
+| F47 | Every push from the shell to a skin is dispatched onto the skin's own thread, never called directly. | Windows, Linux | `ShellToSkinDispatchTests.ASnapshotWaitsForTheDispatcher` · `ShellToSkinDispatchTests.ANotificationWaitsForTheDispatcherAndStaysBehindItsSnapshot` · `ShellToSkinDispatchTests.TheUpdateAndRateChecksWaitForTheDispatcher` |
 
 ## Gaps
 

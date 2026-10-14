@@ -227,22 +227,27 @@ O-view.slnx
 │   ├── O-view.Presentation/  # net10.0        Wording, formatting and view models shared by both
 │   │                         #                heads — PanelText, BoostText, TokenText, OffPlanText,
 │   │                         #                and the sample states the goldens render. Core only.
-│   ├── O-view.App/           # net10.0        Orchestration: UsageEngine, update policy, diagnostics,
-│   │                         #                shared rendering geometry (TrayIconGeometry). Platform
-│   │                         #                behaviour arrives through injected interfaces only.
+│   ├── O-view.App/           # net10.0        The shell. UsageEngine implements ISkinToShell (what
+│   │                         #                a skin asks) and is split into UsageCacheRefresh,
+│   │                         #                WeeklyResetCoordinator, PlanHistoryPoll, UsageAlerts,
+│   │                         #                PollRunner and UsageProviders, each owning one of
+│   │                         #                its former pieces. ShellHost builds and owns the
+│   │                         #                engine, and posts every IShellToSkin push (what the
+│   │                         #                shell tells a skin) through IUiDispatcher.
 │   ├── O-view.Tray/          # net10.0-windows  WPF + WinForms NotifyIcon, icon rendering, popup
 │   └── O-view.Linux/         # net10.0        Avalonia + SkiaSharp, SNI over D-Bus, freedesktop
 │                             #                notifications, XDG autostart, portal theme
 ├── tests/
 │   ├── O-view.Core.Tests/          # xUnit, 626
-│   ├── O-view.Presentation.Tests/  # xUnit, 201
-│   ├── O-view.App.Tests/           # xUnit, 304
-│   └── O-view.Linux.Tests/         # xUnit,  65
+│   ├── O-view.Presentation.Tests/  # xUnit, 249
+│   ├── O-view.App.Tests/           # xUnit, 312
+│   └── O-view.Linux.Tests/         # xUnit,  70
 └── packaging/linux/build.sh  # .deb + tarball; the same script CI runs
 ```
 
 Those counts are a **snapshot, not a contract** — measured 2026-08-21, with #163 merged, and
-nothing enforces them. Re-measured 2026-08-28, and again 2026-10-14. They are here for the shape they show (Core carries most of the logic,
+nothing enforces them. Re-measured 2026-08-28, and again 2026-10-14, after Phase B's shell/skin
+split. They are here for the shape they show (Core carries most of the logic,
 and that is the design working) rather than as figures to cite. If one matters to an argument,
 run the suite and use what it says; do not quote this block as evidence. The ADRs' own test
 counts are different and correctly so — those record what was true when each decision was
