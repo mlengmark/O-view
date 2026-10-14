@@ -24,18 +24,40 @@ namespace OView.Linux;
 /// <summary>
 /// The Linux face: a StatusNotifierItem carrying the live-rendered gauge, its tooltip, a
 /// menu, and freedesktop notifications. Everything about what the numbers <i>mean</i> lives
-/// in <see cref="UsageEngine"/> and is shared with the Windows head (ADR-0012).
+/// behind the seam and is shared with the Windows head (ADR-0012): this head asks through
+/// <see cref="ISkinToShell"/> and is told through <see cref="IShellToSkin"/>, which it
+/// implements, so it names nothing the shell is made of.
 /// </summary>
-public sealed class LinuxApp : Application
+public sealed class LinuxApp : Application, IShellToSkin
 {
-    private static UsageEngine? _engine;
-    private static TrayHostState _hostState;
-    private static IAppLog? _log;
-
     private readonly FreedesktopNotifier _notifier = new();
     private readonly IThemeSource _theme = new PortalThemeSource();
     private readonly IStartupRegistration _startup = new XdgAutostartRegistration();
+
+    /// <summary>
+    /// This head's one hop onto the UI thread. <see cref="Program"/> hands the same object to
+    /// the shell, so a push and a bus callback arrive by exactly the same route — and there is
+    /// one place to look when either turns out not to.
+    /// </summary>
     private readonly IUiDispatcher _dispatcher = new AvaloniaUiDispatcher();
+
+    /// <summary>The shell's lifetime: this head starts it, <see cref="Program"/> disposes it.</summary>
+    private ShellHost? _host;
+
+    /// <summary>What this head asks of the shell — the same object for the shell's whole life.</summary>
+    private ISkinToShell? _shell;
+
+    private TrayHostState _hostState;
+    private IAppLog? _log;
+
+    /// <summary>
+    /// The two things the shell only tells this head it is <i>time</i> for. Both are built in
+    /// <see cref="StartTray"/>, which finishes by starting the polling that is the only source
+    /// of those pushes, so neither can be asked for before it exists.
+    /// </summary>
+    private LinuxUpdateNotice? _updateNotice;
+    private RateCardFeed? _rates;
+
     private NativeMenuItem? _startupItem;
 
     /// <summary>The resume row (issue #234), hidden until the refresh blocks itself.</summary>
@@ -50,10 +72,25 @@ public sealed class LinuxApp : Application
     /// <summary>Set by <c>--panel-samples</c>: render the panel offscreen and exit.</summary>
     internal static string? SampleDirectory { get; set; }
 
-    /// <summary>Supplied before the framework starts; Avalonia constructs this type itself.</summary>
-    internal static void Configure(UsageEngine engine, TrayHostState hostState, IAppLog? log)
+    /// <summary>
+    /// The hop the shell is given, so both halves of this head use one object. Named around
+    /// Avalonia's own <see cref="Avalonia.Threading.Dispatcher"/>, which this file also uses.
+    /// </summary>
+    internal IUiDispatcher UiDispatcher => _dispatcher;
+
+    /// <summary>
+    /// Handed the shell once it exists — Avalonia constructs this type itself, so this cannot
+    /// be a constructor argument.
+    ///
+    /// <para>Polling is deliberately <i>not</i> started here: <see cref="StartTray"/> does
+    /// that, once the icon and the menu are up to receive the first snapshot. Disposing is
+    /// <see cref="Program"/>'s, whose exit paths are the only ones that cover every way this
+    /// process can end.</para>
+    /// </summary>
+    internal void Attach(ShellHost host, TrayHostState hostState, IAppLog? log)
     {
-        _engine = engine;
+        _host = host;
+        _shell = host.Shell;
         _hostState = hostState;
         _log = log;
     }
@@ -62,7 +99,7 @@ public sealed class LinuxApp : Application
     {
         if (SampleDirectory is { Length: > 0 } directory)
         {
-            // Offscreen render and exit — no tray, no bus, no engine. The panel is
+            // Offscreen render and exit — no tray, no bus, no shell. The panel is
             // otherwise only inspectable on a desktop none of its authors has.
             PanelSampleRenderer.RenderAll(directory);
 
@@ -73,24 +110,24 @@ public sealed class LinuxApp : Application
             return;
         }
 
-        if (_engine is not null)
+        if (_host is not null)
         {
-            StartTray(_engine);
+            StartTray(_host);
         }
 
         base.OnFrameworkInitializationCompleted();
     }
 
-    private void StartTray(UsageEngine engine)
+    private void StartTray(ShellHost host)
     {
         _tray = new TrayIcon
         {
             Icon = ToWindowIcon(UsageSnapshot.None),
             ToolTipText = "O-view",
             IsVisible = true,
-            Menu = BuildMenu(engine),
+            Menu = BuildMenu(host.Shell),
         };
-        _tray.Clicked += TrayClickHandler(engine);
+        _tray.Clicked += TrayClickHandler(host.Shell);
 
         // What actually publishes the icon, and the line whose absence meant this head never
         // reached a notification area on any desktop. A constructed TrayIcon has no platform
@@ -103,38 +140,26 @@ public sealed class LinuxApp : Application
         // constructed.
         TrayIcon.SetIcons(this, new TrayIcons { _tray });
 
-        // No Post needed: the engine publishes through the dispatcher handed to Start below,
-        // so this already arrives on the UI thread.
-        engine.SnapshotUpdated += Render;
-        // n.Kind is deliberately dropped here rather than mapped. A freedesktop notification
-        // already shows O-view's own app icon, so there is no severity glyph to pick; the only
-        // severity channel the spec offers is the urgency hint, and marking anything critical
-        // makes it persist on screen until dismissed — wrong for all three kinds, and already
-        // decided against in FreedesktopNotifier. The Windows head needs the kind because its
-        // balloon draws a severity glyph whether you choose one or not.
-        engine.NotificationRequested += n => _ = _notifier.ShowAsync(n.Title, n.Message);
-
         // Says a newer version exists; never downloads or runs anything (ADR-0009 as
-        // amended). Without this the engine raises UpdateCheckDue and nothing listens, which
+        // amended). Without this the shell says it is time to check and nothing listens, which
         // is how a Linux install ended up with no update path at all: the app said nothing,
         // and apt cannot know about a release it has no repository for.
-        var notice = new LinuxUpdateNotice(
+        _updateNotice = new LinuxUpdateNotice(
             Program.DetectInstallKind(),
             ReleaseFeed.VersionOf(typeof(LinuxApp).Assembly),
             (title, body) => _notifier.ShowAsync(title, body),
             _log);
-        engine.UpdateCheckDue += () => _ = notice.CheckAsync();
 
         // The rate-card drift check (ADR-0016). One line in the log, no UI, no rate ever
         // installed — see the Windows head, which wires it identically because there is
         // nothing platform-specific about asking a public page what it says.
-        var rates = new RateCardFeed(_log);
-        engine.RateCheckDue += () => _ = rates.CheckAsync(ModelCatalog.Bundled);
+        _rates = new RateCardFeed(_log);
 
-        // Ticks arrive on the UI thread; the reading happens off it and comes back through
-        // the dispatcher. The pair is what keeps the icon and the menu responsive while a
-        // first run ingests a large transcript history (issue #125).
-        engine.Start(new AvaloniaTimerFactory(), _dispatcher);
+        // Last, so the four pushes below cannot arrive before what answers them exists. Ticks
+        // arrive on the UI thread; the reading happens off it and comes back through the
+        // dispatcher this head handed the shell. The pair is what keeps the icon and the menu
+        // responsive while a first run ingests a large transcript history (issue #125).
+        host.Start(new AvaloniaTimerFactory());
 
         // The icon reports IsVisible = true whether or not anything can display it, so a
         // missing host has to be discovered from the bus and said out loud. Notifications
@@ -148,6 +173,35 @@ public sealed class LinuxApp : Application
         }
     }
 
+    // ── what the shell pushes at this skin ───────────────────────────────────────────
+    //
+    // All four arrive on the UI thread without a Post of their own: the shell puts every push
+    // through the dispatcher it was handed in Program, including the ones that were already on
+    // this thread, so there is no per-callback rule for this head to get wrong (issue #125).
+
+    /// <summary>A new snapshot to draw, in the icon and its tooltip.</summary>
+    public void ShowSnapshot(UsageSnapshot snapshot) => Render(snapshot);
+
+    /// <summary>
+    /// A freedesktop notification.
+    ///
+    /// <para><see cref="AppNotification.Kind"/> is deliberately dropped here rather than
+    /// mapped. A freedesktop notification already shows O-view's own app icon, so there is no
+    /// severity glyph to pick; the only severity channel the spec offers is the urgency hint,
+    /// and marking anything critical makes it persist on screen until dismissed — wrong for all
+    /// three kinds, and already decided against in <see cref="FreedesktopNotifier"/>. The
+    /// Windows head needs the kind because its balloon draws a glyph whether you choose one or
+    /// not.</para>
+    /// </summary>
+    public void ShowNotification(AppNotification notification) =>
+        _ = _notifier.ShowAsync(notification.Title, notification.Message);
+
+    /// <summary>Time to look for a newer release. The HTTP and the notice stay on this side.</summary>
+    public void UpdateCheckDue() => _ = _updateNotice?.CheckAsync();
+
+    /// <summary>Time to compare the bundled rate card against the published one.</summary>
+    public void RateCheckDue() => _ = _rates?.CheckAsync(ModelCatalog.Bundled);
+
     /// <summary>
     /// The tray icon's click handler, marshalled onto the UI thread (issue #143).
     ///
@@ -157,8 +211,8 @@ public sealed class LinuxApp : Application
     /// marshalling is still in place; it cannot prove <see cref="StartTray"/> still uses this
     /// method, and nothing available on a machine with no Linux desktop can.</para>
     /// </summary>
-    internal EventHandler TrayClickHandler(UsageEngine engine) =>
-        BusCallback.For(_dispatcher, () => ShowPanel(engine), _log);
+    internal EventHandler TrayClickHandler(ISkinToShell shell) =>
+        BusCallback.For(_dispatcher, () => ShowPanel(shell), _log);
 
     /// <summary>
     /// Opens the detail panel, rebuilt for the current theme so a desktop switched between
@@ -170,7 +224,7 @@ public sealed class LinuxApp : Application
     /// (issue #143) — and note that the <c>catch</c> below cannot help with that: a SIGSEGV
     /// is not an exception, which is why the report was a core dump and an empty log.</para>
     /// </summary>
-    private void ShowPanel(UsageEngine engine)
+    private void ShowPanel(ISkinToShell shell)
     {
         try
         {
@@ -185,11 +239,11 @@ public sealed class LinuxApp : Application
             // usage-cache refresh rather than a timer (issue #234). Forced, because a person
             // looking is not a poll and must not be held to the background floor.
             //
-            // This is safe where the synchronous Refresh() above was not: it spawns Claude Code
-            // off the UI thread through the engine's own poll runner and publishes back when it
-            // lands, so nothing waits behind the user's click. The panel still opens on the last
-            // polled snapshot; the refresh only affects what the next one carries.
-            engine.RefreshUsageCache(force: true);
+            // This is safe where the synchronous Refresh() above was not: the shell spawns
+            // Claude Code off the UI thread and publishes back when it lands, so nothing waits
+            // behind the user's click. The panel still opens on the last polled snapshot; the
+            // refresh only affects what the next one carries.
+            shell.RefreshUsageCache(force: true);
 
             _panel?.Close();
             _panel = new PanelWindow(new LinuxPanelTheme(_theme.IsPanelLight()), _log);
@@ -197,8 +251,8 @@ public sealed class LinuxApp : Application
             // Both reports are inspected on open, not cached, so the banners describe the
             // machine as it is now rather than as it was at startup.
             _panel.ShowWith(
-                engine.Latest,
-                engine.BuildStatistics(),
+                shell.Latest,
+                shell.BuildStatistics(),
                 ClaudeAccount.TryRead(),
                 PlanHistoryDiagnostics.Inspect(),
                 TranscriptScopeReport.Inspect(),
@@ -241,11 +295,11 @@ public sealed class LinuxApp : Application
             Dispatcher.UIThread.Post(() =>
             {
                 _log?.Write("tray host appeared — re-showing icon");
-                if (_tray is not null && _engine is not null)
+                if (_tray is not null && _shell is not null)
                 {
                     _tray.IsVisible = false;
                     _tray.IsVisible = true;
-                    Render(_engine.Latest);
+                    Render(_shell.Latest);
                 }
             });
         }, token);
@@ -289,7 +343,7 @@ public sealed class LinuxApp : Application
         return new WindowIcon(stream);
     }
 
-    private NativeMenu BuildMenu(UsageEngine engine)
+    private NativeMenu BuildMenu(ISkinToShell shell)
     {
         var startup = new NativeMenuItem(MenuText.RunAtStartupRow)
         {
@@ -334,11 +388,11 @@ public sealed class LinuxApp : Application
         // exception any catch could reach.
         resume.Click += BusCallback.For(_dispatcher, () =>
         {
-            if (engine.ResumeUsageRefresh())
+            if (shell.ResumeUsageRefresh())
             {
                 // Immediately, not at the next background beat: someone who has just re-enabled
                 // this is asking for it now.
-                engine.RefreshUsageCache(force: true);
+                shell.RefreshUsageCache(force: true);
                 _log?.Write("usage refresh resumed from menu");
             }
 
@@ -348,10 +402,10 @@ public sealed class LinuxApp : Application
         _resumeItem = resume;
 
         // A closure, deliberately not invoked here. Building the menu must not dereference the
-        // engine — LinuxHeadWiringTests constructs it with a null one to inspect the click
+        // shell — LinuxHeadWiringTests constructs it with a null one to inspect the click
         // handlers without opening a store or touching this machine's paths. The row starts
         // hidden, which is the correct initial state anyway, and Render corrects it every poll.
-        _usageRefreshBlocked = () => engine.UsageRefreshBlocked;
+        _usageRefreshBlocked = () => shell.UsageRefreshBlocked;
 
         _startupItem = startup;
         return [startup, resume, exit];
