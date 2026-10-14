@@ -223,31 +223,38 @@ One hardware report exists (see *What this is* above) and it covers the tray ico
 ```
 O-view.slnx
 ├── src/
-│   ├── O-view.Core/      # net10.0        Providers, rollup store, window math — no UI, no Win32
-│   ├── O-view.App/       # net10.0        Orchestration: UsageEngine, update policy, diagnostics,
-│   │                     #                shared rendering geometry and panel text. Platform
-│   │                     #                behaviour arrives through injected interfaces only.
-│   ├── O-view.Tray/      # net10.0-windows  WPF + WinForms NotifyIcon, icon rendering, popup
-│   └── O-view.Linux/     # net10.0        Avalonia + SkiaSharp, SNI over D-Bus, freedesktop
-│                         #                notifications, XDG autostart, portal theme
+│   ├── O-view.Core/          # net10.0        Providers, rollup store, window math — no UI, no Win32
+│   ├── O-view.Presentation/  # net10.0        Wording, formatting and view models shared by both
+│   │                         #                heads — PanelText, BoostText, TokenText, OffPlanText,
+│   │                         #                and the sample states the goldens render. Core only.
+│   ├── O-view.App/           # net10.0        Orchestration: UsageEngine, update policy, diagnostics,
+│   │                         #                shared rendering geometry (TrayIconGeometry). Platform
+│   │                         #                behaviour arrives through injected interfaces only.
+│   ├── O-view.Tray/          # net10.0-windows  WPF + WinForms NotifyIcon, icon rendering, popup
+│   └── O-view.Linux/         # net10.0        Avalonia + SkiaSharp, SNI over D-Bus, freedesktop
+│                             #                notifications, XDG autostart, portal theme
 ├── tests/
-│   ├── O-view.Core.Tests/   # xUnit, 650
-│   ├── O-view.App.Tests/    # xUnit, 269
-│   └── O-view.Linux.Tests/  # xUnit,  40
+│   ├── O-view.Core.Tests/          # xUnit, 626
+│   ├── O-view.Presentation.Tests/  # xUnit, 201
+│   ├── O-view.App.Tests/           # xUnit, 304
+│   └── O-view.Linux.Tests/         # xUnit,  65
 └── packaging/linux/build.sh  # .deb + tarball; the same script CI runs
 ```
 
 Those counts are a **snapshot, not a contract** — measured 2026-08-21, with #163 merged, and
-nothing enforces them. Re-measured 2026-08-28. They are here for the shape they show (Core carries most of the logic,
+nothing enforces them. Re-measured 2026-08-28, and again 2026-10-14. They are here for the shape they show (Core carries most of the logic,
 and that is the design working) rather than as figures to cite. If one matters to an argument,
 run the suite and use what it says; do not quote this block as evidence. The ADRs' own test
 counts are different and correctly so — those record what was true when each decision was
 taken.
 
 **Both heads are thin.** Anything a Linux user and a Windows user would expect to behave
-identically — what the countdown says, which release asset to offer, what the panel's text
-reads — belongs in `App`, not duplicated into each head. `PanelText` and `TrayIconGeometry`
-exist because that duplication had already started.
+identically — what the countdown says, which release asset to offer, the tray icon's
+geometry — belongs in `App`, not duplicated into each head. Wording itself — what the panel's
+text reads — belongs in `Presentation` instead, shared the same way. `TrayIconGeometry` exists
+in `App` because icon-geometry duplication had already started; `PanelText` (now split into
+`PanelText`, `BoostText`, `TokenText` and `OffPlanText`) lives in `Presentation` for the same
+reason.
 
 On Linux, build the projects, not the solution: `O-view.Tray` is WPF and will not build there.
 
