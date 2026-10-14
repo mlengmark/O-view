@@ -16,13 +16,42 @@ namespace OView.Presentation.Text;
 /// and issues #55 and #56 were both exactly that.</para>
 ///
 /// <para>Layout, colour and interaction stay with each platform's panel. Only the sentences
-/// live here. This class keeps the panel's rows — freshness, countdowns, resets and hints.
+/// live here. This class keeps the panel's rows — the section labels, freshness, countdowns,
+/// resets and hints.
 /// The boost chip and card live in <see cref="BoostText"/>, the token labels and captions in
 /// <see cref="TokenText"/>, and the off-plan headings and details in
 /// <see cref="OffPlanText"/>.</para>
 /// </summary>
 public static class PanelText
 {
+    /// <summary>
+    /// The name of the rolling five-hour meter. Both panels put it above the first bar, and
+    /// both used to spell it out themselves.
+    /// </summary>
+    public const string SessionBarLabel = "Current session";
+
+    /// <summary>The name of the weekly meter, above the second bar.</summary>
+    public const string WeeklyBarLabel = "Weekly";
+
+    /// <summary>
+    /// Stood in for the account name when the plan file has not been read yet, or carries no
+    /// name. Lower case, because it is the absence of a name rather than a name
+    /// (<see cref="ClaudeAccount"/>): a reader must not take it for what their account is
+    /// called.
+    /// </summary>
+    public const string AccountUnknown = "account unknown";
+
+    /// <summary>The same for the tier badge beside it.</summary>
+    public const string TierUnknown = "tier unknown";
+
+    /// <summary>
+    /// The daily-usage chart's heading. <b>The day count is the window the figures actually
+    /// cover</b> (<see cref="PanelStatistics.WindowDays"/>), not a literal: the heading and the
+    /// bars under it have to describe the same span, and a hard-coded number would keep
+    /// reading 31 the day the window changes.
+    /// </summary>
+    public static string UsageWindowHeading(int days) => $"Usage · last {days} days";
+
     /// <summary>
     /// The header's freshness line: <c>As of now</c>, <c>As of 11:34</c>,
     /// <c>Local estimate · as of 11:34</c>, <c>No data</c>.

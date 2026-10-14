@@ -97,10 +97,10 @@ public sealed class PanelContent : Border
 
         var placeholder = banner?.GaugePlaceholder ?? PanelBanner.UnknownGauge;
 
-        AddBar("Current session", authoritative ? snapshot.SessionPercent : null,
+        AddBar(PanelText.SessionBarLabel, authoritative ? snapshot.SessionPercent : null,
             PanelText.SessionReset(snapshot.SessionResetAtUtc, utcNow, local, snapshot.SessionResetUncertainty), placeholder);
 
-        AddBar("Weekly", authoritative ? snapshot.WeeklyPercent : null,
+        AddBar(PanelText.WeeklyBarLabel, authoritative ? snapshot.WeeklyPercent : null,
             WeeklyResetLine(snapshot, authoritative, utcNow, local), placeholder,
             BoostChipText(boostNotices, utcNow, local));
 
@@ -165,7 +165,7 @@ public sealed class PanelContent : Border
             PanelText.Freshness(snapshot, utcNow, local), 12, _theme["TextSecondary"]));
 
         var right = new StackPanel { Spacing = 2, HorizontalAlignment = HorizontalAlignment.Right };
-        right.Children.Add(Text(account?.DisplayName ?? "account unknown", 13, _theme["TextPrimary"]));
+        right.Children.Add(Text(account?.DisplayName ?? PanelText.AccountUnknown, 13, _theme["TextPrimary"]));
         if (account?.Email is { Length: > 0 } email)
         {
             right.Children.Add(Text(email, 11, _theme["TextSecondary"]));
@@ -178,7 +178,7 @@ public sealed class PanelContent : Border
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(6, 2),
             HorizontalAlignment = HorizontalAlignment.Right,
-            Child = Text(account?.Tier ?? "tier unknown", 11, _theme["BadgeText"]),
+            Child = Text(account?.Tier ?? PanelText.TierUnknown, 11, _theme["BadgeText"]),
         });
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -639,7 +639,8 @@ public sealed class PanelContent : Border
         }
 
         var block = new StackPanel { Spacing = 4 };
-        block.Children.Add(Text($"Usage · last {stats.WindowDays} days", 13, _theme["TextPrimary"], FontWeight.SemiBold));
+        block.Children.Add(Text(
+            PanelText.UsageWindowHeading(stats.WindowDays), 13, _theme["TextPrimary"], FontWeight.SemiBold));
         block.Children.Add(bars);
         _root.Children.Add(block);
     }

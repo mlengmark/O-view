@@ -680,4 +680,42 @@ public class PanelTextTests
     {
         Assert.Contains("/usage", PanelText.WeeklyResetUnknownAction, StringComparison.Ordinal);
     }
+
+    // ── the labels both panels used to spell out themselves ─────────────────────────
+
+    /// <summary>
+    /// The two meter names, character for character as both panels already showed them. The
+    /// Windows panel had them typed into its markup and the Linux one into its builder, so
+    /// the pair could have drifted on either side without a test noticing.
+    /// </summary>
+    [Fact]
+    public void TheMeterNamesAreTheOnesBothPanelsAlreadyShowed()
+    {
+        Assert.Equal("Current session", PanelText.SessionBarLabel);
+        Assert.Equal("Weekly", PanelText.WeeklyBarLabel);
+    }
+
+    /// <summary>
+    /// Both stand-ins stay lower case. They sit where a name and a tier go, and a capitalised
+    /// "Account unknown" reads as a label for something the account is rather than as the
+    /// absence of one.
+    /// </summary>
+    [Fact]
+    public void TheUnknownAccountStandinsReadAsAbsences()
+    {
+        Assert.Equal("account unknown", PanelText.AccountUnknown);
+        Assert.Equal("tier unknown", PanelText.TierUnknown);
+    }
+
+    /// <summary>
+    /// The chart heading counts the window it describes. Both panels read it from the same
+    /// place now, and the Windows one no longer carries a 31 typed into its markup — which
+    /// would have gone on claiming 31 days over a chart of some other length.
+    /// </summary>
+    [Fact]
+    public void TheChartHeadingCountsTheWindowItDescribes()
+    {
+        Assert.Equal("Usage · last 31 days", PanelText.UsageWindowHeading(31));
+        Assert.Equal("Usage · last 7 days", PanelText.UsageWindowHeading(7));
+    }
 }
