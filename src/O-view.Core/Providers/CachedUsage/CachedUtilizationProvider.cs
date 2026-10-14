@@ -94,7 +94,16 @@ public sealed class CachedUtilizationProvider : IUsageProvider
             // Reported rather than inferred, so this carries no bracket. The weekly one no
             // longer exists at all (ADR-0014); the session window still rolls from first use,
             // so it keeps the field even when this source can fill it exactly.
-            SessionResetUncertainty: sessionReset is null ? null : TimeSpan.Zero);
+            SessionResetUncertainty: sessionReset is null ? null : TimeSpan.Zero)
+        {
+            // Every figure here is what Claude reported, not something this provider derived —
+            // the whole reason this source exists (see the class summary above).
+            SessionPercentValue = UsageSnapshot.Measured(session),
+            WeeklyPercentValue = UsageSnapshot.Measured(weekly),
+            SessionResetAtUtcValue = UsageSnapshot.Measured(sessionReset),
+            WeeklyResetAtUtcValue = UsageSnapshot.Measured(weeklyReset),
+            CapturedAtUtcValue = UsageSnapshot.Measured(cached.FetchedAtUtc),
+        };
     }
 
     /// <summary>

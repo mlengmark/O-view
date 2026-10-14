@@ -122,6 +122,18 @@ public sealed class JsonlUsageProvider : IUsageProvider
 
         return _store.LatestActivityUtc() is { } latest
             ? new UsageSnapshot(DataSource.Estimate, null, null, null, latest)
+            {
+                // No percentage and no reset time ever comes from a local token count (see the
+                // class summary above) — both absent. The one figure this fallback does
+                // produce, the latest-activity instant, is modelled from local records rather
+                // than reported by a vendor, matching the Estimate label the whole snapshot
+                // already carries.
+                SessionPercentValue = new(null, UsageValueStatus.Unavailable),
+                WeeklyPercentValue = new(null, UsageValueStatus.Unavailable),
+                SessionResetAtUtcValue = new(null, UsageValueStatus.Unavailable),
+                WeeklyResetAtUtcValue = new(null, UsageValueStatus.Unavailable),
+                CapturedAtUtcValue = UsageSnapshot.Estimated(latest),
+            }
             : UsageSnapshot.None;
     }
 

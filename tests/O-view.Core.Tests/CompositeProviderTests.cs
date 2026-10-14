@@ -100,6 +100,25 @@ public class CompositeProviderTests
     }
 
     /// <summary>
+    /// The composite picks a snapshot whole and returns it unchanged (see the class summary
+    /// on <see cref="CompositeUsageProvider"/>) — so the typed status beside each value survives
+    /// just as the plain nullable members already do, rather than being re-derived or dropped.
+    /// </summary>
+    [Fact]
+    public void TypedValues_SurviveSelectionUnchanged()
+    {
+        var withStatus = new UsageSnapshot(DataSource.Live, 47, null, null, Now)
+        {
+            SessionPercentValue = new UsagePercent(47, UsageValueStatus.Estimated),
+        };
+        var composite = new CompositeUsageProvider(new Fixed(withStatus));
+
+        var result = composite.GetSnapshot(Now);
+
+        Assert.Equal(UsageValueStatus.Estimated, result.SessionPercentValue.Status);
+    }
+
+    /// <summary>
     /// Choosing between two sources that report the same meters — Claude Desktop's sampled
     /// series and Claude Code's cached figures. Before these, the tier was the whole rule and
     /// list position quietly decided the rest; a monitoring tool must prefer the most accurate
