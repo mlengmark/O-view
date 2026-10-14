@@ -29,7 +29,25 @@ References run one way: **skins → App → Presentation → Core**. A project m
 
 - **Snapshots are chosen whole**, from one source at a time, and never merged field by field.
 - **Every value says what it is** (real, estimated or unknown). Unknown is shown as unknown, never as zero.
-- **The shell calls skins on the UI thread, always.** On Linux, D-Bus callbacks arrive on another thread: they go through `BusCallback`, which posts to the UI thread and never blocks it.
+- **The shell calls skins on the UI thread, always, and only through `IUiDispatcher`.** `ShellHost` is the one place the engine is built, started and disposed; it posts every `IShellToSkin` push onto the dispatcher, including the ones that already arrive on the UI thread, so a skin never has to work out which of the four it can assume the thread on. On Linux, D-Bus callbacks arrive on a thread of their own first: they go through `BusCallback`, which posts to the UI thread and never blocks it, before reaching `ShellHost`'s dispatcher the same way every other push does.
+
+## The two interfaces
+
+- **`ISkinToShell`** — what a skin asks of the shell: the latest snapshot, settings, cached usage, the panel's statistics, and the refresh and weekly-reset commands. `UsageEngine` implements it.
+- **`IShellToSkin`** — what the shell tells a skin: show a snapshot, show a notification, and the two "something is due" pushes (an update check, a rate-card check). Both skins implement it; `ShellHost` is what calls it, always through `IUiDispatcher`.
+
+## UsageEngine's pieces
+
+`UsageEngine` now composes the following, each owning one part of what it used to do all itself; `UsageEngine` forwards to them rather than re-implementing, so no caller outside `O-view.App` changed:
+
+- **`UsageProviders`** — the account read, the plan-history and cached-utilization sources, the JSONL fallback, and the composite provider they feed.
+- **`PollRunner`** — the off-thread read/publish mechanics and the per-cadence gate, shared by the full poll, the plan poll and the usage-cache refresh.
+- **`PlanHistoryPoll`** — the cheap plan-history-only cadence, and the panel's statistics build.
+- **`WeeklyResetCoordinator`** — the weekly reset end to end: the manual override, Claude Code's reported instant, and the conflict between the two (ADR-0014).
+- **`UsageAlerts`** — the threshold and off-plan notification decisions (the wording itself lives in Presentation's `NoticeText` and `OffPlanText`).
+- **`UsageCacheRefresh`** — the floor, freshness gate and billed-charge latch behind the Claude-CLI usage-cache refresh (issue #234).
+
+`ShellHost` sits outside this list: it is the attach point a skin is built from, not a piece `UsageEngine` was carved out of.
 
 ## Where platform differences live
 
@@ -44,6 +62,8 @@ It proves a real left click opens the panel end to end, and that the tray menu a
 ## What enforces this
 
 - **A reference test:** `PresentationBoundaryTests` fails if Presentation's compiled assembly references a UI framework or platform API.
+- **A source scan:** `SkinBoundaryTests` fails if either skin's source names `UsageEngine` or any of the classes it split into — a skin may reach the shell only through `ISkinToShell` and `IShellToSkin`.
+- **A dispatch test:** `ShellToSkinDispatchTests` fails if any `IShellToSkin` push reaches a skin before `IUiDispatcher` has run it, including the three pushes that already arrive on the UI thread.
 - **Golden images:** every shared sample state is rendered for both skins and compared, pixel for pixel, with `tests/golden/` (`tools/check.ps1`, and CI's `visual` job).
 - **The smoke test:** the real engine runs against `tests/fixtures/claude-home`, so files on disk must reach the numbers the panel shows.
 - **`docs/feature-checklist.md`:** each feature has a test or sample state that proves it.
