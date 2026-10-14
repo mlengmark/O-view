@@ -1,6 +1,6 @@
 # Architecture
 
-O-view reads Claude's usage from files on this machine and shows it in the notification area on Windows and Linux. This page describes the rules the code follows. Some older code doesn't follow them yet; it is being moved over. **All new code follows them.**
+O-view reads Claude's usage from files on this machine and shows it in the notification area on Windows and Linux. This page describes the rules the code follows, and **all new code follows them.** Display text has moved out of Core into Presentation; what's left in Core by design is Core's own provider reports, which compose prose from data they resolve, and `DiagnosticsHint`, a phrase each head supplies once at startup.
 
 ## Layers
 
@@ -43,13 +43,13 @@ It proves a real left click opens the panel end to end, and that the tray menu a
 
 ## What enforces this
 
-- **A reference test:** Presentation references no UI framework or platform API.
+- **A reference test:** `PresentationBoundaryTests` fails if Presentation's compiled assembly references a UI framework or platform API.
 - **Golden images:** every shared sample state is rendered for both skins and compared, pixel for pixel, with `tests/golden/` (`tools/check.ps1`, and CI's `visual` job).
 - **The smoke test:** the real engine runs against `tests/fixtures/claude-home`, so files on disk must reach the numbers the panel shows.
 - **`docs/feature-checklist.md`:** each feature has a test or sample state that proves it.
 - **CI's `guard-ratchet` check:** no PR removes a required check, a feature, its proof or a test.
 - **CI's `merge-order` check:** parallel PRs never change the same files, and land in their planned order.
-- **Once display text has moved out of Core,** a reflection test keeps it out.
+- **A reflection test keeps display text out of `OView.Core.Models`:** `CoreModelsHoldNoDisplayTextTests.NoPublicMemberInCoreModelsReadsLikeDisplayCopy` fails on a public member named like copy (ending `Note`, `Label`, `Caption`, `Hint`, `Title`, `Detail`, `Caveat`, `Heading`, `Message`, `Summary`, `Text` or `Instruction`) or a public string constant whose value reads as a sentence.
 
 Changes to the checks themselves, to CI or to dependencies are guarded. They're made only when a phase brief lists them.
 
