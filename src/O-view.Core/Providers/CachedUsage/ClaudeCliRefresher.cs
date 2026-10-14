@@ -151,6 +151,14 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(20);
 
     /// <summary>
+    /// O-view's own data directory, before the fallback is applied. The one place that path is
+    /// written, so <see cref="WorkingDirectory"/> and <see cref="OwnProjectFolder"/> can each
+    /// use it without drifting apart.
+    /// </summary>
+    private static string PreferredWorkingDirectory => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "O-view");
+
+    /// <summary>
     /// Working directory for the spawned process, chosen rather than inherited.
     ///
     /// <para><b>Claude Code files its transcript under a slug derived from the process's working
@@ -171,8 +179,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     /// slug their real home-directory sessions already use.</para>
     /// </summary>
     public static string WorkingDirectory => ResolveWorkingDirectory(
-        Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "O-view"),
+        PreferredWorkingDirectory,
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile));
 
     /// <summary>
@@ -185,6 +192,59 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     /// </summary>
     public static string ResolveWorkingDirectory(string preferred, string fallback) =>
         Directory.Exists(preferred) ? preferred : fallback;
+
+    /// <summary>
+    /// The project folder Claude Code files this refresher's own transcript under — the one
+    /// place this is worked out, from <see cref="PreferredWorkingDirectory"/> rather than from
+    /// <see cref="WorkingDirectory"/>. Null while that preferred directory does not exist and
+    /// the refresher is actually spawning out of the user-profile fallback instead.
+    ///
+    /// <para><see cref="TranscriptScopeReport"/> uses this to leave those files out of both
+    /// its file count and its byte count, so a machine whose only transcripts are the ones
+    /// this refresher created reports "no transcripts" rather than "that is unexpected".
+    /// Ingestion is untouched: it still reads this folder like any other, so nothing is
+    /// excluded from the store — only from that one report.</para>
+    ///
+    /// <para><b>Null rather than the fallback's own mangled folder.</b> The fallback is the
+    /// user profile — not O-view's own directory, but the same home directory their real
+    /// sessions already use (first run, a fresh install, or a cleared data folder all hit it,
+    /// since O-view only creates that folder when the rollup store opens). Excluding it would
+    /// drop every genuine transcript the user has, which is issue #313 the other way round:
+    /// the user's own usage reported as absent. Nothing can be excluded in that case anyway —
+    /// the refresher's own transcript and the user's real ones would sit in the exact same
+    /// folder, and no folder-level rule can tell them apart.</para>
+    /// </summary>
+    public static string? OwnProjectFolder => ResolveOwnProjectFolder(PreferredWorkingDirectory);
+
+    /// <summary>
+    /// As above, but with the preferred directory named explicitly — the seam
+    /// <see cref="TranscriptScopeReportTests"/> uses to pin the null-when-on-the-fallback rule
+    /// without depending on whether this machine's own <see cref="PreferredWorkingDirectory"/>
+    /// happens to exist.
+    /// </summary>
+    public static string? ResolveOwnProjectFolder(string preferred) =>
+        Directory.Exists(preferred)
+            ? Path.Combine(ClaudeProjectsLocator.DefaultRoot, MangleCwd(preferred))
+            : null;
+
+    /// <summary>
+    /// Reproduces how Claude Code turns a working directory into a project folder name, by
+    /// replacing path separators and colons with <c>-</c>
+    /// (<c>C:\Users\X</c> → <c>C--Users-X</c>, docs/findings/jsonl-schema.md). Both forward
+    /// slash and backslash are handled so the result is meaningful on either platform.
+    ///
+    /// <para><b>That finding is incomplete: Claude Code also maps <c>.</c> and <c>_</c> to
+    /// <c>-</c>.</b> Observed against this machine's own real project folder —
+    /// <c>C:\Users\Maximilian\.paperclip\...\_default</c> is filed as
+    /// <c>C--Users-Maximilian--paperclip-...--default</c>, where the <c>.</c> and the <c>_</c>
+    /// each became a second <c>-</c>. Missing either one leaves <c>~/.local/share/O-view</c> —
+    /// Linux's <see cref="WorkingDirectory"/> — mangled to <c>-home-user-.local-share-O-view</c>
+    /// while Claude Code itself writes <c>-home-user--local-share-O-view</c>, so
+    /// <see cref="OwnProjectFolder"/> never matches on Linux at all, and the same silent miss
+    /// hits Windows whenever the user name holds a <c>.</c> or <c>_</c> (issue #313).</para>
+    /// </summary>
+    public static string MangleCwd(string cwd) =>
+        cwd.Replace('\\', '-').Replace('/', '-').Replace(':', '-').Replace('.', '-').Replace('_', '-');
 
     private readonly Func<CachedUtilization?> _read;
     private readonly Func<TimeSpan, ProcessRun> _run;

@@ -1,3 +1,4 @@
+using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 
 namespace OView.Core.Tests;
@@ -155,5 +156,106 @@ public class TranscriptScopeReportTests : IDisposable
         Assert.Equal(0, report.TotalFiles);
         Assert.Null(report.NewestWriteUtc);
         Assert.Equal(TranscriptScopeStatus.NoTranscripts, report.Status);
+    }
+
+    [Fact]
+    public void ExcludesTheRefreshersOwnProjectFolder_FromCountAndBytes()
+    {
+        // A session the refresher itself produced sits beside genuine ones. It must not
+        // inflate either figure, because neither is evidence of the user's own usage.
+        WriteTranscript(Path.Combine(Projects, "proj-a"), "session.jsonl", "{}\n");
+        var ownFolder = Path.Combine(Projects, "own-refresher-folder");
+        WriteTranscript(ownFolder, "refresh-session.jsonl", new string('x', 4096));
+
+        var report = TranscriptScopeReport.Inspect(Projects, [Cowork], ownFolder);
+
+        Assert.Equal(1, report.TotalFiles);
+        Assert.Equal(1, report.Sources.Single(s => s.Label == "Claude Code").FileCount);
+        Assert.Equal(3, report.TotalBytes); // "{}\n" from the one file left after exclusion
+    }
+
+    [Fact]
+    public void OnlyTheRefreshersOwnTranscripts_ReportNoTranscripts_NeverUnexpected()
+    {
+        // The whole point of the exclusion: a machine whose only transcripts are the ones
+        // O-view's own usage refresh created must not be told that is unexpected and to
+        // report a bug (issue #313).
+        var ownFolder = Path.Combine(Projects, "own-refresher-folder");
+        WriteTranscript(ownFolder, "refresh-session.jsonl", "{}\n");
+
+        var report = TranscriptScopeReport.Inspect(Projects, [Cowork], ownFolder);
+
+        Assert.Equal(0, report.TotalFiles);
+        Assert.Equal(TranscriptScopeStatus.NoTranscripts, report.Status);
+        Assert.DoesNotContain("unexpected", report.Explain(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ASiblingFolderWithASimilarName_IsNotExcludedByPrefix()
+    {
+        // "...own-refresher-folder-2" must not be treated as sitting inside
+        // "...own-refresher-folder" — a plain string prefix check would get this wrong.
+        var ownFolder = Path.Combine(Projects, "own-refresher-folder");
+        WriteTranscript(ownFolder + "-2", "session.jsonl", "{}\n");
+
+        var report = TranscriptScopeReport.Inspect(Projects, [Cowork], ownFolder);
+
+        Assert.Equal(1, report.TotalFiles);
+    }
+
+    [Theory]
+    // Windows, this machine's own layout — matches, which is why the exclusion worked here.
+    [InlineData(
+        @"C:\Users\Maximilian\AppData\Local\O-view",
+        "C--Users-Maximilian-AppData-Local-O-view")]
+    // Windows, a user name holding a dot or an underscore — "." and "_" are each a separate
+    // character Claude Code also maps to "-", missed before and silently breaking the
+    // exclusion for exactly this population.
+    [InlineData(@"C:\Users\john_doe\AppData\Local\O-view", "C--Users-john-doe-AppData-Local-O-view")]
+    [InlineData(
+        @"C:\Users\Maximilian\.paperclip\instances\default\_default",
+        "C--Users-Maximilian--paperclip-instances-default--default")]
+    // Linux — WorkingDirectory resolves to this shape, and the leading "/" plus the "."
+    // immediately after it must both become "-", producing a double dash.
+    [InlineData("/home/user/.local/share/O-view", "-home-user--local-share-O-view")]
+    public void MangleCwd_MatchesHowClaudeCodeNamesTheProjectFolder(string cwd, string expected)
+    {
+        // issue #313: a folder name derived with only separators and colons replaced never
+        // matches Claude Code's own folder on Linux, and silently misses on Windows whenever
+        // the user name holds a "." or "_" — so the exclusion this whole report depends on
+        // quietly does nothing.
+        Assert.Equal(expected, ClaudeCliRefresher.MangleCwd(cwd));
+    }
+
+    [Fact]
+    public void ResolveOwnProjectFolder_MangledPreferredDirectory_WhenItExists()
+    {
+        var preferred = Directory.CreateTempSubdirectory("oview-own-").FullName;
+        try
+        {
+            var expected = Path.Combine(
+                ClaudeProjectsLocator.DefaultRoot, ClaudeCliRefresher.MangleCwd(preferred));
+
+            Assert.Equal(expected, ClaudeCliRefresher.ResolveOwnProjectFolder(preferred));
+        }
+        finally
+        {
+            Directory.Delete(preferred);
+        }
+    }
+
+    [Fact]
+    public void ResolveOwnProjectFolder_Null_WhenThePreferredDirectoryIsMissing()
+    {
+        // O-view's data directory does not exist yet — first run, a fresh install, or a
+        // cleared folder — so the refresher actually spawns out of the user-profile fallback
+        // instead (ClaudeCliRefresher.WorkingDirectory). That fallback is the same home
+        // directory the user's real sessions already use, so excluding its mangled form would
+        // drop every genuine transcript they have — issue #313 the other way round. Null means
+        // "exclude nothing", which is the only safe answer once the refresher and the user
+        // share one folder.
+        var absent = Path.Combine(Path.GetTempPath(), $"oview-own-absent-{Guid.NewGuid():N}");
+
+        Assert.Null(ClaudeCliRefresher.ResolveOwnProjectFolder(absent));
     }
 }
