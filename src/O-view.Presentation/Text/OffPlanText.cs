@@ -26,9 +26,9 @@ public static class OffPlanText
     /// precisely which models are counted, and "Fable / 5, Mythos 5" broken over two lines
     /// reads as three entries rather than two.</para>
     ///
-    /// <para><b>Moved here from Core (OVIAA-39).</b> The join and the non-breaking-space
-    /// substitution are panel formatting; <see cref="CreditBilledModels"/> keeps only the
-    /// membership test and the entries themselves.</para>
+    /// <para>The join and the non-breaking-space substitution are panel formatting;
+    /// <see cref="CreditBilledModels"/> keeps only the membership test and the entries
+    /// themselves.</para>
     /// </summary>
     public static string CreditModelsCaption { get; } = string.Join(
         ", ", CreditBilledModels.Models.Select(e => e.DisplayName.Replace(' ', NonBreakingSpace)));

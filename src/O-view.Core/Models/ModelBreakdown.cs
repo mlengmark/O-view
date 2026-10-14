@@ -114,8 +114,8 @@ public static class ModelBreakdown
             ? rest[0]
             : new ModelSlice(
                 // Neither field names anything once FoldedCount is set — every reader
-                // checks that first (OVIAA-39) — so these are left empty rather than
-                // carrying words ("Other", "<n> more") that are Presentation's to choose.
+                // checks that first — so these are left empty rather than carrying
+                // words ("Other", "<n> more") that are Presentation's to choose.
                 Model: "",
                 DisplayName: "",
                 Tokens: rest.Sum(s => s.Tokens),

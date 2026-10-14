@@ -561,10 +561,10 @@ public class PanelTextTests
     private static string CreditCaption => OffPlanText.CreditModelsCaption.Replace(Nbsp, ' ');
 
     /// <summary>
-    /// Moved from ModelCatalogTests.cs (OVIAA-39) — the caption now lives in Presentation,
-    /// built from <see cref="CreditBilledModels.Models"/>, but what it must still prove is
-    /// unchanged: the caption names exactly the set <see cref="CreditBilledModels.IsCreditBilled"/>
-    /// matches. The regression this issue was filed for: the caption said "Fable" while the
+    /// The caption lives in Presentation, built from <see cref="CreditBilledModels.Models"/>,
+    /// but what it must still prove is unchanged: the caption names exactly the set
+    /// <see cref="CreditBilledModels.IsCreditBilled"/> matches. The regression this issue
+    /// was filed for: the caption said "Fable" while the
     /// classifier matched Fable AND Mythos, so credit spend was summed for a model the note
     /// told the user was not included (GitHub issue #56).
     /// </summary>

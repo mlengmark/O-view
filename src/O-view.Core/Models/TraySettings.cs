@@ -14,11 +14,10 @@ namespace OView.Core.Models;
 /// source of truth, so the two can never disagree about whether O-view starts with Windows,
 /// and Task Manager's startup page — which edits that key directly — stays authoritative.</para>
 ///
-/// <para><b>Audited for display text (OVIAA-39) and found to hold none.</b> Every field here
-/// is either a flag, a percentage, a weekday/time pair the user typed, or a tag the update
+/// <para><b>Audited for display text and found to hold none.</b> Every field here is
+/// either a flag, a percentage, a weekday/time pair the user typed, or a tag the update
 /// checker compares against — values a skin reads and formats, never a sentence this type
-/// composes itself. Phase A's "display text moves to Presentation" therefore has nothing to
-/// move out of this record; this note is the deliverable for that item.</para>
+/// composes itself.</para>
 /// </summary>
 /// <param name="LastUpdateNoticeTag">
 /// The release tag the user has already been told about, so a build that cannot update

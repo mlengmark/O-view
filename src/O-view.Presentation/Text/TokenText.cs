@@ -285,10 +285,10 @@ public static class TokenText
     /// <summary>
     /// Legend and hover-card label for a breakdown's folded remainder segment.
     ///
-    /// <para><b>Moved here from Core (OVIAA-39).</b> <see cref="ModelBreakdown.Segments"/>
-    /// marks that segment with a non-null <see cref="ModelSlice.FoldedCount"/> rather than
-    /// writing this word into <see cref="ModelSlice.DisplayName"/>; a caller shows this
-    /// label for any slice where that count is set.</para>
+    /// <para><see cref="ModelBreakdown.Segments"/> marks that segment with a non-null
+    /// <see cref="ModelSlice.FoldedCount"/> rather than writing this word into
+    /// <see cref="ModelSlice.DisplayName"/>; a caller shows this label for any slice
+    /// where that count is set.</para>
     /// </summary>
     public const string OtherSegmentLabel = "Other";
 

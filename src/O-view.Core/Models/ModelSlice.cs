@@ -16,8 +16,7 @@ namespace OView.Core.Models;
 ///
 /// <para><b>Stays in Core, unlike most panel-facing text.</b> This is the model's own
 /// published name — <see cref="ModelCatalog"/>'s data, carried alongside the id it
-/// names rather than invented at render time — not prose composed about the model, so
-/// Phase A's "display text moves to Presentation" does not reach it.</para>
+/// names rather than invented at render time — not prose composed about the model.</para>
 /// </param>
 /// <param name="EstUsd">
 /// Null when the model has no published rate. Distinct from zero — zero is a real,
@@ -29,7 +28,7 @@ namespace OView.Core.Models;
 /// Null for an ordinary model slice. <see cref="ModelBreakdown.Segments"/> sets it to the
 /// number of models folded into its remainder segment — a non-null count is what marks a
 /// slice as that remainder, rather than any word in <see cref="Model"/> or
-/// <see cref="DisplayName"/> (OVIAA-39). What to call it — "Other", "<c>&lt;n&gt;</c> more
+/// <see cref="DisplayName"/>. What to call it — "Other", "<c>&lt;n&gt;</c> more
 /// models" — is panel copy, built in Presentation from this count; Core does not write
 /// those words. A trailing parameter with a default so slices built before this field
 /// existed keep compiling.

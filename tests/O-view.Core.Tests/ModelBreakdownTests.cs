@@ -84,8 +84,9 @@ public class ModelBreakdownTests
         var order = ModelBreakdown.ColourOrder(Window);
         var segments = ModelBreakdown.Segments(Window, BreakdownMeasure.Tokens, order);
 
+        Assert.Equal(3, segments.Count);
         Assert.Equal(["Opus 4.8", "Opus 5"], segments.Take(2).Select(s => s.DisplayName));
-        Assert.NotNull(segments[^1].FoldedCount);
+        Assert.Equal(2, segments[^1].FoldedCount);
     }
 
     [Fact]
