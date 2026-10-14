@@ -2,6 +2,7 @@ using OView.App.Updates;
 using OView.Core.Models;
 using OView.Core.Updates;
 using OView.Linux.Updates;
+using OView.Presentation.Text;
 
 namespace OView.Linux.Tests;
 
@@ -64,6 +65,35 @@ public class LinuxUpdateNoticeTests : IDisposable
         }
 
         Assert.NotEqual(package, tarball);
+    }
+
+    /// <summary>
+    /// The sentences themselves are Presentation's now; what stays here is the mapping from
+    /// <see cref="InstallKind"/>, which lives in O-view.App and so is out of Presentation's
+    /// sight (docs/architecture.md).
+    ///
+    /// <para>Asserted as an equality against each Presentation member rather than by
+    /// keyword, because the failure this guards against is a local copy quietly reappearing
+    /// beside the shared one — which every keyword assertion above would still pass.</para>
+    /// </summary>
+    [Fact]
+    public void TheWordsComeFromPresentationAndOnlyTheMappingIsHere()
+    {
+        var url = ReleaseFeed.ReleasePageUrl(Update);
+
+        Assert.Equal(UpdateText.NoticeTitle(Update.Version), LinuxUpdateNotice.NoticeTitle(Update));
+
+        Assert.Equal(
+            UpdateText.PackageNoticeBody(url),
+            LinuxUpdateNotice.NoticeBody(InstallKind.LinuxPackage, Update));
+
+        // Everything that is not a .deb takes the tarball wording, including a kind this head
+        // should never be handed — guessing a third message for it would be worse.
+        foreach (var kind in Enum.GetValues<InstallKind>().Where(k => k != InstallKind.LinuxPackage))
+        {
+            Assert.Equal(
+                UpdateText.TarballNoticeBody(url), LinuxUpdateNotice.NoticeBody(kind, Update));
+        }
     }
 
     // ── behaviour ───────────────────────────────────────────────────────────────────

@@ -3,6 +3,7 @@ using OView.App;
 using OView.App.Updates;
 using OView.Core.Models;
 using OView.Core.Updates;
+using OView.Presentation.Text;
 
 namespace OView.Linux.Updates;
 
@@ -93,26 +94,22 @@ public sealed class LinuxUpdateNotice
         }
     }
 
-    public static string NoticeTitle(AvailableUpdate update) => $"O-view {update.Version} is available";
+    public static string NoticeTitle(AvailableUpdate update) =>
+        UpdateText.NoticeTitle(update.Version);
 
     /// <summary>
     /// What the user should actually do — which differs by how they installed, and is the
     /// whole reason this says more than "an update is available".
     ///
-    /// <para>It deliberately does not say "run apt upgrade". There is no O-view apt
-    /// repository, so that command would report nothing to do and the user would reasonably
-    /// conclude the notification was wrong. Naming the real step is the honest version
-    /// (CLAUDE.md rule 6).</para>
+    /// <para>Both sentences are in <see cref="UpdateText"/>, beside the rest of the update
+    /// flow's copy. What stays here is only the mapping, because <see cref="InstallKind"/>
+    /// lives in O-view.App and Presentation cannot see it (docs/architecture.md).</para>
     /// </summary>
     public static string NoticeBody(InstallKind kind, AvailableUpdate update) => kind switch
     {
         InstallKind.LinuxPackage =>
-            $"Download the new .deb from {ReleaseFeed.ReleasePageUrl(update)} and install it "
-            + "with sudo apt install. O-view will not update itself: these files belong to "
-            + "your package manager.",
+            UpdateText.PackageNoticeBody(ReleaseFeed.ReleasePageUrl(update)),
 
-        _ =>
-            $"Download the new tarball from {ReleaseFeed.ReleasePageUrl(update)} and extract "
-            + "it over your existing copy. O-view will not update itself.",
+        _ => UpdateText.TarballNoticeBody(ReleaseFeed.ReleasePageUrl(update)),
     };
 }
