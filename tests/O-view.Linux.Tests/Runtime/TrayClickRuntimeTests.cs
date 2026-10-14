@@ -335,20 +335,14 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     /// <summary>
     /// Puts the panel away the way a click on the desktop does, and says whether it took.
     ///
-    /// <para>There is no window manager under this job and no desktop to click, so what a click
-    /// away actually does is done directly: the keyboard focus is taken off the panel, which is
-    /// what Avalonia turns into the deactivation <c>PanelWindow</c> hides on.</para>
-    ///
-    /// <para><b>Best effort, deliberately.</b> Whether an X server with no window manager delivers
-    /// that focus change is not this test's subject, and a dismissal that does not take leaves the
-    /// panel open — which the next open closes just the same, and closing it is the defect. So a
-    /// hide that never arrives is reported in the test's output and the run carries on; what it
-    /// must not do is go unsaid, which would leave a reader believing a panel was dismissed when
-    /// it was not.</para>
+    /// <para><b>Best effort, deliberately.</b> A dismissal that does not take leaves the panel on
+    /// screen — and the next open closes it just the same, which is the defect. So a hide that
+    /// never arrives is recorded rather than failed on; what it must not do is go unsaid, which
+    /// would leave a reader believing a panel was dismissed when it was not.</para>
     /// </summary>
     private async Task<bool> DismissThePanelAsync(LinuxAppProcess app)
     {
-        TakeTheKeyboardFocusAway();
+        var how = await DismissWithTheFocusAsync();
 
         try
         {
@@ -357,49 +351,151 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
                 DismissalPatience + Grace,
                 "the panel to hide once the focus had gone");
 
-            output.WriteLine($"the panel was dismissed: {hidden}");
+            SaveToArtifacts($"the panel was dismissed — {how}, and the app wrote: {hidden}");
             return true;
         }
         catch (Exception ex)
         {
-            output.WriteLine(
-                $"the panel did not hide within {DismissalPatience.TotalSeconds:0} s of the focus "
-                + "being taken off it, so the second open below closes a panel that is still on "
-                + $"screen rather than a hidden one. Either way the close is what issue #312 turned "
-                + $"on. ({ex.GetType().Name}: {ex.Message})");
+            SaveToArtifacts(
+                $"the panel was NOT dismissed — {how}, and no \"{PanelHiddenLogLine}\" line arrived "
+                + $"within {DismissalPatience.TotalSeconds:0} s ({ex.GetType().Name}: {ex.Message})."
+                + $"{Environment.NewLine}The second open below therefore closes a panel that is still "
+                + "on screen rather than a hidden one. Either way the close is what ended the app in "
+                + "issue #312, so the test carries on — but the dismissal half of it is unproven.");
             return false;
         }
     }
 
     /// <summary>
-    /// Takes the keyboard focus off whatever holds it — under this job the panel, which is the
-    /// only window on the display and asks for the focus itself as it opens.
+    /// Dismisses the panel with the keyboard focus, and says what it did either way.
     ///
-    /// <para>Focus goes to no window rather than to the pointer's root, which would hand it
-    /// straight back if the pointer happened to be over the panel.</para>
+    /// <para><b>Both halves of a click away.</b> The focus arrives somewhere else, and the panel
+    /// deactivates. <c>PanelWindow</c> hides only on a deactivation that follows an activation —
+    /// deliberately, because a compositor that refuses the activation would otherwise hide the
+    /// panel in the frame it appeared (<c>PanelDismissal</c>) — so the focus is put on the panel
+    /// first and then taken off it.</para>
     ///
-    /// <para>libX11 directly because there is nothing else to use: the job installs no
-    /// <c>xdotool</c> and no XTEST, and there is no window manager to ask. This is the one call a
-    /// desktop makes that this test needs.</para>
+    /// <para><b>Why by hand.</b> This display has no window manager, which is also why the panel
+    /// does not end up focused by itself: Avalonia asks the window manager to activate a window,
+    /// and here there is nobody to ask. The job installs no <c>xdotool</c> and no XTEST either, so
+    /// these are the X calls a desktop would have made.</para>
+    ///
+    /// <para>Focus is then given to no window rather than to the pointer's root, which would hand
+    /// it straight back if the pointer happened to be over the panel.</para>
     /// </summary>
-    private void TakeTheKeyboardFocusAway()
+    private static async Task<string> DismissWithTheFocusAsync()
     {
         var display = XOpenDisplay(IntPtr.Zero);
         if (display == IntPtr.Zero)
         {
-            output.WriteLine(
-                "the X display could not be opened, so the focus could not be moved off the panel.");
+            return "the X display could not be opened, so the focus was never moved";
+        }
+
+        try
+        {
+            if (LargestWindow(display) is not { } panel)
+            {
+                return "no window big enough to be the panel was on the display, so the focus was "
+                    + "never moved";
+            }
+
+            XSetInputFocus(display, panel, RevertToPointerRoot, CurrentTime);
+            XFlush(display);
+
+            // The toolkit has to get round to the focus change before the next one undoes it: a
+            // deactivation arriving with no activation behind it is the one PanelWindow suppresses.
+            await Task.Delay(BetweenFocusChanges);
+
+            XSetInputFocus(display, NoWindow, RevertToPointerRoot, CurrentTime);
+            XFlush(display);
+
+            return $"the focus was put on window 0x{panel.ToString("x")} and then taken off it";
+        }
+        finally
+        {
+            XCloseDisplay(display);
+        }
+    }
+
+    /// <summary>
+    /// The biggest window on the display, which is the panel: nothing here can ask which window
+    /// belongs to which process, and the panel is the only one with a size a person would call a
+    /// window. Anything smaller than <see cref="SmallestPanel"/> either way is one of the toolkit's
+    /// own helpers rather than something a user looks at.
+    /// </summary>
+    private static IntPtr? LargestWindow(IntPtr display)
+    {
+        if (XQueryTree(display, XDefaultRootWindow(display), out _, out _, out var children, out var count) == 0
+            || children == IntPtr.Zero)
+        {
+            return null;
+        }
+
+        try
+        {
+            IntPtr? largest = null;
+            long largestArea = 0;
+
+            for (var i = 0; i < count; i++)
+            {
+                var window = Marshal.ReadIntPtr(children, i * IntPtr.Size);
+
+                if (XGetGeometry(
+                        display, window, out _, out _, out _,
+                        out var width, out var height, out _, out _) == 0)
+                {
+                    continue;
+                }
+
+                var area = (long)width * height;
+                if (width < SmallestPanel || height < SmallestPanel || area <= largestArea)
+                {
+                    continue;
+                }
+
+                largest = window;
+                largestArea = area;
+            }
+
+            return largest;
+        }
+        finally
+        {
+            XFree(children);
+        }
+    }
+
+    /// <summary>
+    /// Writes what the dismissal did where the <c>linux-runtime</c> job collects what the runtime
+    /// tests capture, beside the app's own log.
+    ///
+    /// <para><b>Why a file and not the test's output.</b> On a passing run xunit keeps a test's
+    /// output to itself, and whether the panel was really dismissed is exactly the thing a reader
+    /// of a green run needs to know: the assertions below hold whether it was or not, and a
+    /// dismissal nobody can check is a step this test only claims to have taken.</para>
+    ///
+    /// <para>Does nothing outside the job, which does not set the variable.</para>
+    /// </summary>
+    private void SaveToArtifacts(string what)
+    {
+        output.WriteLine(what);
+
+        if (Environment.GetEnvironmentVariable("OVIEW_RUNTIME_ARTIFACTS") is not { Length: > 0 } directory)
+        {
             return;
         }
 
         try
         {
-            XSetInputFocus(display, NoWindow, RevertToPointerRoot, CurrentTime);
-            XFlush(display);
+            Directory.CreateDirectory(directory);
+            File.WriteAllText(Path.Combine(directory, $"{TheSecondOpen}.dismissal.txt"), what);
         }
-        finally
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                       or ArgumentException or NotSupportedException)
         {
-            XCloseDisplay(display);
+            output.WriteLine(
+                $"what the dismissal did could not be saved to {directory}: "
+                + $"{ex.GetType().Name}: {ex.Message}");
         }
     }
 
@@ -635,12 +731,12 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
         return File.Exists(path) ? File.ReadAllBytes(path) : null;
     }
 
-    // ── the three X calls a dismissal needs ──────────────────────────────────────────
+    // ── the X calls a dismissal needs ────────────────────────────────────────────────
     //
     // Classic DllImport, as the Windows head's native methods are, and for the same reason given
-    // there: these are three calls with no marshalling to speak of. They are reached only from
-    // inside the linux-runtime job — this assembly also builds and runs on Windows, where libX11
-    // does not exist and nothing here is called.
+    // there: these are a handful of calls with no marshalling to speak of. They are reached only
+    // from inside the linux-runtime job — this assembly also builds and runs on Windows, where
+    // libX11 does not exist and nothing here is called.
 
     /// <summary>X's <c>None</c>: the focus belongs to no window, so nothing has it.</summary>
     private static readonly IntPtr NoWindow = IntPtr.Zero;
@@ -651,14 +747,38 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     /// <summary>X's <c>CurrentTime</c> — let the server timestamp it.</summary>
     private static readonly IntPtr CurrentTime = IntPtr.Zero;
 
+    /// <summary>
+    /// Smaller than this, either way, and a window is one of the toolkit's own rather than the
+    /// panel — which is 400 dip wide and taller than that.
+    /// </summary>
+    private const uint SmallestPanel = 100;
+
+    /// <summary>How long the toolkit has to notice the focus arriving before it is taken away.</summary>
+    private static readonly TimeSpan BetweenFocusChanges = TimeSpan.FromMilliseconds(500);
+
     [DllImport("libX11.so.6")]
     private static extern IntPtr XOpenDisplay(IntPtr name);
+
+    [DllImport("libX11.so.6")]
+    private static extern IntPtr XDefaultRootWindow(IntPtr display);
+
+    [DllImport("libX11.so.6")]
+    private static extern int XQueryTree(
+        IntPtr display, IntPtr window, out IntPtr root, out IntPtr parent, out IntPtr children, out uint count);
+
+    [DllImport("libX11.so.6")]
+    private static extern int XGetGeometry(
+        IntPtr display, IntPtr drawable, out IntPtr root, out int x, out int y,
+        out uint width, out uint height, out uint borderWidth, out uint depth);
 
     [DllImport("libX11.so.6")]
     private static extern int XSetInputFocus(IntPtr display, IntPtr focus, int revertTo, IntPtr time);
 
     [DllImport("libX11.so.6")]
     private static extern int XFlush(IntPtr display);
+
+    [DllImport("libX11.so.6")]
+    private static extern int XFree(IntPtr data);
 
     [DllImport("libX11.so.6")]
     private static extern int XCloseDisplay(IntPtr display);
