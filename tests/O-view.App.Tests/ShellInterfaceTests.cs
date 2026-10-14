@@ -1,6 +1,7 @@
 using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.PlanHistory;
+using OView.Core.Storage;
 
 namespace OView.App.Tests;
 
@@ -42,6 +43,11 @@ public class ShellInterfaceTests
         public DateTimeOffset? NoticedConflict { get; private set; }
 
         public PanelStatistics BuildStatistics() => new(0, null, 0, null, 0, 31, [], 0, null);
+
+        // Named as uninspected rather than described: this shell has no store, and a report
+        // that read as a clean one would be the fabrication the real reader exists to avoid.
+        public RollupStoreReport InspectStore() => RollupStoreReport.Unavailable(
+            path: "", origin: RollupStoreReport.LiveInstance, failure: "no store on this shell");
         public void Refresh() => RefreshCalls++;
         public void RefreshUsageCache(bool force = false) { }
         public bool ResumeUsageRefresh() => true;
