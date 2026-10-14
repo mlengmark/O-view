@@ -9,6 +9,7 @@ using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
+using OView.Presentation.Panel;
 using OView.Presentation.Text;
 using Brush = System.Windows.Media.Brush;
 using Color = System.Windows.Media.Color;
@@ -443,15 +444,16 @@ public partial class PopupWindow : Window, IFlyout
         _lastSettings = SettingsForDisplay;
 
         var local = LocalZone;
+        var utcNow = Now(TimeZoneInfo.Utc);
 
-        UpdatedText.Text = PanelText.Freshness(snapshot, Now(TimeZoneInfo.Utc), local);
-        NameText.Text = account?.DisplayName ?? PanelText.AccountUnknown;
-        EmailText.Text = account?.Email ?? "";
-        EmailText.Visibility = account?.Email is null ? Visibility.Collapsed : Visibility.Visible;
-        // Tier from organizationType — seatTier is empty and would render blank (rule 8).
-        TierText.Text = account?.Tier ?? PanelText.TierUnknown;
+        var header = PanelSections.Header(snapshot, account, utcNow, local);
+        UpdatedText.Text = header.Freshness;
+        NameText.Text = header.AccountName;
+        EmailText.Text = header.Email ?? "";
+        EmailText.Visibility = header.Email is null ? Visibility.Collapsed : Visibility.Visible;
+        TierText.Text = header.Tier;
 
-        var authoritative = snapshot.Source is DataSource.Live or DataSource.Stale;
+        var authoritative = PanelSections.IsAuthoritative(snapshot);
 
         // Explain a blank panel rather than leaving the user to guess (rule 6: if data is
         // unavailable, say so). Only shown when the figures are actually unavailable, and
@@ -469,17 +471,17 @@ public partial class PopupWindow : Window, IFlyout
             NoDataBanner.Visibility = Visibility.Collapsed;
         }
 
-        var placeholder = banner?.GaugePlaceholder ?? PanelBanner.UnknownGauge;
+        var session = PanelSections.SessionMeter(snapshot, banner, utcNow, local);
+        PopulateBar(SessionPctText, SessionBar, SessionBarFill, session);
+        // The session line always has something to say — the unknown state is a sentence of its
+        // own, not an absence — so SetLine's empty case is unreachable here.
+        SetLine(SessionResetText, session.ResetLine ?? "");
 
-        PopulateBar(SessionPctText, SessionBar, SessionBarFill,
-            authoritative ? snapshot.SessionPercent : null, placeholder);
-        SessionResetText.Text = PanelText.SessionReset(
-            snapshot.SessionResetAtUtc, Now(TimeZoneInfo.Utc), local, snapshot.SessionResetUncertainty);
-
-        PopulateBar(WeeklyPctText, WeeklyBar, WeeklyBarFill,
-            authoritative ? snapshot.WeeklyPercent : null, placeholder);
-        PopulateWeeklyReset(snapshot, authoritative, local);
-        PopulateBoostChip(local);
+        var weekly = PanelSections.WeeklyMeter(
+            snapshot, banner, _lastSettings, BoostNotices, utcNow, local);
+        PopulateBar(WeeklyPctText, WeeklyBar, WeeklyBarFill, weekly);
+        PopulateWeeklyReset(weekly);
+        PopulateBoostChip(weekly.Chip);
 
         PopulateTiles(stats);
         PopulateDivergence(stats, local);
@@ -517,74 +519,38 @@ public partial class PopupWindow : Window, IFlyout
     }
 
     /// <summary>
-    /// The weekly reset line, which mirrors the session one (issue #6, ADR-0014). Three
-    /// states, and the middle one is the point of the whole feature:
+    /// Places the weekly reset line, which mirrors the session one (issue #6, ADR-0014).
     ///
-    /// <list type="bullet">
-    /// <item><b>Known</b> — same shape as the session line, with the weekday added because a
-    /// reset a week out needs one. Exact, and never marked <c>~</c>: both remaining sources
-    /// report the instant rather than inferring it (ADR-0014).</item>
-    /// <item><b>Not known</b> — Claude Code has never reported one and nothing was entered.
-    /// The row says so and the hover carries the one step that ends it; clicking copies
-    /// <c>/usage</c>. This used to say "Waiting for first reset…", which described the
-    /// derivation ADR-0014 deleted — a wait nobody was serving and no action to take.</item>
-    /// <item><b>No plan data</b> — nothing to act on yet, and the no-data banner above
-    /// already explains why, so the line is hidden rather than repeating it.</item>
-    /// </list>
+    /// <para>Which of its three states applies — known, not known, or no plan data at all —
+    /// is <see cref="PanelSections.WeeklyMeter"/>'s to decide, and the hint it hands over is
+    /// the hover card's content rather than a hint about whether to have one. No line means no
+    /// row, which is the no-plan-data case: the banner above already explains it.</para>
     /// </summary>
-    private void PopulateWeeklyReset(UsageSnapshot snapshot, bool authoritative, TimeZoneInfo local)
+    private void PopulateWeeklyReset(PanelMeterView weekly)
     {
-        if (snapshot.WeeklyResetAtUtc is { } reset)
-        {
-            // A user-supplied reset is labelled, so an unexpectedly precise time is explained
-            // rather than mysterious (issue #186).
-            //
-            // This used to also require a zero bracket, to exclude a *derived* reset on a
-            // machine that happened to have an entered one. That distinction died with the
-            // derivation (ADR-0014): every weekly reset is exact now, so the bracket term was
-            // always true and removing it changes nothing observable.
-            var userSupplied = _lastSettings?.WeeklyReset is not null;
-
-            WeeklyResetText.Text = PanelText.WeeklyReset(reset, Now(TimeZoneInfo.Utc), local)
-                + (userSupplied ? $" · {PanelText.WeeklyResetUserSupplied}" : "");
-            WeeklyResetText.ToolTip = userSupplied
-                ? HoverCard.Text(this, PanelText.WeeklyResetUserSuppliedHint)
-                : null;
-            HoverCard.ApplyTiming(WeeklyResetText);
-            WeeklyResetText.Visibility = Visibility.Visible;
-            return;
-        }
-
-        WeeklyResetText.Text = PanelText.WeeklyResetUnknown;
-        WeeklyResetText.ToolTip = HoverCard.Text(this, PanelText.WeeklyResetUnknownHint);
+        SetLine(WeeklyResetText, weekly.ResetLine ?? "");
+        WeeklyResetText.ToolTip = weekly.ResetHint is { } hint ? HoverCard.Text(this, hint) : null;
         HoverCard.ApplyTiming(WeeklyResetText);
-        WeeklyResetText.Visibility = authoritative ? Visibility.Visible : Visibility.Collapsed;
     }
 
     /// <summary>
-    /// The boost chip beside the weekly label, when Claude Code has cached a promo notice for
-    /// that meter and it has not ended (issue #254).
+    /// The boost chip beside the weekly label (issue #254). Absent in every other case, and
+    /// absent is the ordinary state — most of the time there is no promo running.
     ///
-    /// <para>Hidden in every other case, and hidden is the ordinary state — most of the time
-    /// there is no promo running. The chip carries O-view's summary; the hover card carries
-    /// Claude's own sentence, unedited, with who said it and when it was read.</para>
+    /// <para>The chip carries O-view's summary; the hover card carries Claude's own sentence,
+    /// unedited, with who said it and when it was read.</para>
     /// </summary>
-    private void PopulateBoostChip(TimeZoneInfo local)
+    private void PopulateBoostChip(PanelBoostChipView? chip)
     {
-        var utcNow = Now(TimeZoneInfo.Utc);
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(utcNow, local).DateTime);
-        var notice = BoostNotices?.For(BoostNotice.WeeklyBar, today, utcNow);
-
-        if (notice is null)
+        if (chip is null)
         {
             BoostChip.Visibility = Visibility.Collapsed;
             BoostChip.ToolTip = null;
             return;
         }
 
-        BoostChipText.Text = BoostText.BoostChip(notice, utcNow, local);
-        BoostChip.ToolTip = HoverCard.Text(
-            this, BoostText.BoostCard(notice, BoostNotices!.FetchedAtUtc, local));
+        BoostChipText.Text = chip.Text;
+        BoostChip.ToolTip = HoverCard.Text(this, chip.Card);
         HoverCard.ApplyTiming(BoostChip);
         BoostChip.Visibility = Visibility.Visible;
     }
@@ -1040,33 +1006,35 @@ public partial class PopupWindow : Window, IFlyout
         HoverCard.ApplyTiming(CreditsSection);
     }
 
-    private void PopulateBar(TextBlock pctText, Grid bar, Border fill, int? percent, string placeholder)
+    /// <summary>
+    /// Draws one meter from what <see cref="PanelSections"/> decided: the figure's own words,
+    /// the band it falls in, and how wide the fill runs. This panel's three colours are the
+    /// only part of it that is this head's own.
+    /// </summary>
+    private void PopulateBar(TextBlock pctText, Grid bar, Border fill, PanelMeterView meter)
     {
         System.Windows.Data.BindingOperations.ClearBinding(fill, WidthProperty);
+        pctText.Text = meter.Value;
 
-        if (percent is { } p)
+        if (meter.FillPercent is not { } p)
         {
-            pctText.Text = PanelText.BarPercentUsed(p);
-            // Shared colour bands (UsageLevels) so the popup and tray icon agree.
-            fill.Background = new SolidColorBrush(UsageLevels.Classify(p) switch
-            {
-                UsageLevel.Critical => Red,
-                UsageLevel.Warning => Amber,
-                _ => Green,
-            });
-            // Fill width tracks the bar's laid-out width × percent.
-            fill.SetBinding(WidthProperty, new System.Windows.Data.Binding(nameof(bar.ActualWidth))
-            {
-                Source = bar,
-                Converter = new PercentWidthConverter(),
-                ConverterParameter = Math.Clamp(p, 0, 100),
-            });
-        }
-        else
-        {
-            pctText.Text = placeholder;
             fill.Width = 0;
+            return;
         }
+
+        fill.Background = new SolidColorBrush(meter.Band switch
+        {
+            UsageLevel.Critical => Red,
+            UsageLevel.Warning => Amber,
+            _ => Green,
+        });
+        // Fill width tracks the bar's laid-out width × percent.
+        fill.SetBinding(WidthProperty, new System.Windows.Data.Binding(nameof(bar.ActualWidth))
+        {
+            Source = bar,
+            Converter = new PercentWidthConverter(),
+            ConverterParameter = p,
+        });
     }
 
     // Blue gradient endpoints for within-week intensity (issue #5): light → dark.
