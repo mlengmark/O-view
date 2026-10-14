@@ -444,11 +444,11 @@ public partial class PopupWindow : Window, IFlyout
         var local = LocalZone;
 
         UpdatedText.Text = PanelText.Freshness(snapshot, Now(TimeZoneInfo.Utc), local);
-        NameText.Text = account?.DisplayName ?? "account unknown";
+        NameText.Text = account?.DisplayName ?? PanelText.AccountUnknown;
         EmailText.Text = account?.Email ?? "";
         EmailText.Visibility = account?.Email is null ? Visibility.Collapsed : Visibility.Visible;
         // Tier from organizationType — seatTier is empty and would render blank (rule 8).
-        TierText.Text = account?.Tier ?? "tier unknown";
+        TierText.Text = account?.Tier ?? PanelText.TierUnknown;
 
         var authoritative = snapshot.Source is DataSource.Live or DataSource.Stale;
 
@@ -507,6 +507,10 @@ public partial class PopupWindow : Window, IFlyout
         {
             TokenScopeNote.Visibility = Visibility.Collapsed;
         }
+
+        // Set here rather than in the markup so the day count is the window the bars below it
+        // actually cover, which is the same thing the Linux panel's heading reads.
+        GraphHeading.Text = PanelText.UsageWindowHeading(stats.WindowDays);
 
         // BuildGraph is deferred to ShowNearTrayIcon (needs post-layout ActualWidth).
     }
