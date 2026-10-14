@@ -9,6 +9,7 @@ using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
+using OView.Core.Updates;
 using OView.Tray.Popup;
 using OView.Tray.Tray;
 using OView.Tray.Updates;
@@ -234,7 +235,7 @@ internal static class SampleRenderer
                     // catch it going missing (it did).
                     pending.Add((tokensTile, "Tokens · 31 days",
                         UsageFormatter.Tokens(slices.Sum(s => s.Tokens)), slices, BreakdownMeasure.Tokens));
-                    pending.Add((valueTile, "Est. value · 31 days",
+                    pending.Add((valueTile, TokenText.Est31DaysLabel,
                         SumSampleUsd(slices), slices, BreakdownMeasure.EstValue));
                 }
 
@@ -309,12 +310,17 @@ internal static class SampleRenderer
         const double scale = 2.0;
         const double pad = 16;
 
+        var newVersion = new ReleaseVersion(0, 5, 1);
+        const string currentVersion = "0.5.0";
+
         var variants = new (string Name, string Message, string Confirm, string Detail)[]
         {
-            ("installed", "O-view 0.5.1 is available — you have 0.5.0. Download and install it now?",
-                "Update now", "O-view will close briefly and reopen automatically."),
-            ("portable", "O-view 0.5.1 is available — you have 0.5.0. Open the download page for the new version?",
-                "Open page", ""),
+            ("installed",
+                UpdateText.DialogMessage(newVersion, currentVersion, UpdateText.InstallQuestion),
+                UpdateText.InstallConfirm, UpdateText.InstallDetail),
+            ("portable",
+                UpdateText.DialogMessage(newVersion, currentVersion, UpdateText.OpenPageQuestion),
+                UpdateText.OpenPageConfirm, ""),
         };
 
         foreach (var light in new[] { true, false })
@@ -322,7 +328,7 @@ internal static class SampleRenderer
             foreach (var (name, message, confirm, detail) in variants)
             {
                 var dialog = new DialogWindow { ThemeOverride = light };
-                dialog.Populate("Update available", message, confirm, "Not now", detail);
+                dialog.Populate(UpdateText.DialogTitle, message, confirm, UpdateText.DialogCancel, detail);
                 var card = dialog.RenderToBitmap(scale);
 
                 SavePng(
@@ -338,7 +344,7 @@ internal static class SampleRenderer
                      {
                          ("empty", null, null),
                          ("set", new ManualWeeklyReset(DayOfWeek.Monday, new TimeOnly(22, 59)), null),
-                         ("invalid", null, "'10:59 PM' is not a 24-hour time. Enter it as HH:mm — 22:59, not 10:59 PM."),
+                         ("invalid", null, WeeklyResetText.TimeError("10:59 PM")),
                      })
             {
                 var entryDialog = new WeeklyResetDialog { ThemeOverride = light };
