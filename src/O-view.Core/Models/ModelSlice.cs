@@ -34,7 +34,22 @@ namespace OView.Core.Models;
 /// existed keep compiling.
 /// </param>
 public sealed record ModelSlice(
-    string Model, string DisplayName, long Tokens, decimal? EstUsd, int? FoldedCount = null);
+    string Model, string DisplayName, long Tokens, decimal? EstUsd, int? FoldedCount = null)
+{
+    /// <summary>
+    /// <see cref="Tokens"/>, paired with its <see cref="UsageValueStatus"/>. Always
+    /// <see cref="UsageValueStatus.Real"/> — a model's token count is read directly from its
+    /// rollups, never modelled, regardless of whether the model can be priced.
+    /// </summary>
+    public TokenCount TokensCount { get; init; }
+
+    /// <summary>
+    /// <see cref="EstUsd"/>, paired with its <see cref="UsageValueStatus"/>:
+    /// <see cref="UsageValueStatus.Unavailable"/> when the model has no published rate,
+    /// <see cref="UsageValueStatus.Estimated"/> otherwise.
+    /// </summary>
+    public EstimatedUsd EstUsdValue { get; init; }
+}
 
 /// <summary>
 /// Friendly names for model ids, read from <see cref="ModelCatalog"/> — the one table that

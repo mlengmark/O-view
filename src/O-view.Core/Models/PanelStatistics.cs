@@ -50,6 +50,48 @@ public sealed record PanelStatistics(
     decimal? EstOffPlanUsd = null)
 {
     /// <summary>
+    /// <see cref="TokensToday"/>, paired with its <see cref="UsageValueStatus"/>. Token counts
+    /// in this app are always read from recorded transcripts, never modelled, so this is
+    /// <see cref="UsageValueStatus.Real"/> whenever <see cref="Build"/> sets it — an unpriced
+    /// model changes what can be said about the money beside it, never about the count itself.
+    /// </summary>
+    public TokenCount TokensTodayCount { get; init; }
+
+    /// <summary>
+    /// <see cref="EstTodayUsd"/>, paired with its <see cref="UsageValueStatus"/>:
+    /// <see cref="UsageValueStatus.Unavailable"/> when nothing in the window could be priced,
+    /// <see cref="UsageValueStatus.Estimated"/> otherwise — the same split
+    /// <see cref="EstimateTotal"/> already returns, carried onto the typed figure rather than
+    /// re-derived from it later.
+    /// </summary>
+    public EstimatedUsd EstTodayValue { get; init; }
+
+    /// <inheritdoc cref="TokensTodayCount"/>
+    public TokenCount Tokens31DaysCount { get; init; }
+
+    /// <inheritdoc cref="EstTodayValue"/>
+    public EstimatedUsd Est31DaysValue { get; init; }
+
+    /// <inheritdoc cref="TokensTodayCount"/>
+    public TokenCount CreditTokens31DaysCount { get; init; }
+
+    /// <inheritdoc cref="EstTodayValue"/>
+    public EstimatedUsd EstCredit31DaysValue { get; init; }
+
+    /// <summary>
+    /// <see cref="EstOffPlanUsd"/>, paired with its <see cref="UsageValueStatus"/>.
+    /// <see cref="UsageValueStatus.Unavailable"/> both when the window turned out not to be
+    /// off-plan (nothing was priced, by design — see <see cref="WithDivergence"/>) and when it
+    /// is off-plan but nothing in it could be priced; a reader of this figure already has to
+    /// check <see cref="IsOffPlan"/> before it means anything, so the two cases need no further
+    /// distinction here.
+    /// </summary>
+    public EstimatedUsd EstOffPlanValue { get; init; }
+
+    /// <inheritdoc cref="TokensTodayCount"/>
+    public TokenCount TtlUnrecordedCacheWritesCount { get; init; }
+
+    /// <summary>
     /// Model IDs seen in the window that have no published rate, so their tokens are
     /// excluded from the Est. figures. Surfaced in the UI rather than silently dropped —
     /// and, crucially, they no longer void the whole total: a single unrecognised model
@@ -160,10 +202,13 @@ public sealed record PanelStatistics(
 
         // Only price the window when it is actually off-plan: otherwise this figure
         // would read as money spent when it is plan usage costing nothing marginal.
+        var estOffPlan = result.IsOffPlan ? EstimateTotal(windowUsage) : null;
+
         return this with
         {
             Divergence = result,
-            EstOffPlanUsd = result.IsOffPlan ? EstimateTotal(windowUsage) : null,
+            EstOffPlanUsd = estOffPlan,
+            EstOffPlanValue = Priced(estOffPlan),
         };
     }
 
@@ -222,20 +267,30 @@ public sealed record PanelStatistics(
 
         var est31 = EstimateTotal(rollups, out var unpriced);
 
+        // Each figure is computed once here, and both the plain member above and its typed
+        // companion below are built from that one value — never two separate computations of
+        // the same thing, which is exactly the trap a second, independent typed path would be.
+        var tokensToday = todayRollups.Sum(r => r.Tokens.Output);
+        var estToday = EstimateTotal(todayRollups);
+        var tokens31Days = rollups.Sum(r => r.Tokens.Output);
+        var creditTokens31Days = creditRollups.Sum(r => r.Tokens.Output);
+        var estCredit31Days = EstimateTotal(creditRollups);
+        var ttlUnrecordedCacheWrites = rollups.Sum(r => r.Tokens.CacheWriteTtlUnrecorded);
+
         // Output tokens throughout (issue #253). The Est. figures beside them are unchanged
         // and still price ALL four kinds — the token tile answers "what did I produce", the
         // value tile answers "what would this have cost", and they are allowed to be built
         // from different inputs precisely because each one names what it is.
         return new PanelStatistics(
-            todayRollups.Sum(r => r.Tokens.Output),
-            EstimateTotal(todayRollups),
-            rollups.Sum(r => r.Tokens.Output),
+            tokensToday,
+            estToday,
+            tokens31Days,
             est31,
             recordedDays,
             windowDays,
             series,
-            creditRollups.Sum(r => r.Tokens.Output),
-            EstimateTotal(creditRollups))
+            creditTokens31Days,
+            estCredit31Days)
         {
             UnpricedModels = unpriced,
             // The card is carried on the result rather than looked up again at render time:
@@ -243,7 +298,7 @@ public sealed record PanelStatistics(
             // bundled card" is only the same answer for as long as there is one source.
             Rates = ModelCatalog.Bundled,
             RatesAreStale = ModelCatalog.Bundled.IsStaleOn(today),
-            TtlUnrecordedCacheWrites = rollups.Sum(r => r.Tokens.CacheWriteTtlUnrecorded),
+            TtlUnrecordedCacheWrites = ttlUnrecordedCacheWrites,
             ModelsToday = SliceByModel(todayRollups),
             Models31Days = SliceByModel(rollups),
             ModelColourOrder = ModelBreakdown.ColourOrder(SliceByModel(rollups)),
@@ -251,6 +306,13 @@ public sealed record PanelStatistics(
             // than by model — so the composition cannot disagree with the figure it explains.
             CompositionToday = TokenComposition.From(todayRollups),
             Composition31Days = TokenComposition.From(rollups),
+            TokensTodayCount = Measured(tokensToday),
+            EstTodayValue = Priced(estToday),
+            Tokens31DaysCount = Measured(tokens31Days),
+            Est31DaysValue = Priced(est31),
+            CreditTokens31DaysCount = Measured(creditTokens31Days),
+            EstCredit31DaysValue = Priced(estCredit31Days),
+            TtlUnrecordedCacheWritesCount = Measured(ttlUnrecordedCacheWrites),
         };
     }
 
@@ -267,11 +329,16 @@ public sealed record PanelStatistics(
     private static IReadOnlyList<ModelSlice> SliceByModel(IReadOnlyList<DailyRollup> rollups) =>
         rollups
             .GroupBy(r => r.Model, StringComparer.OrdinalIgnoreCase)
-            .Select(g => new ModelSlice(
-                g.Key,
-                ModelDisplayName.For(g.Key),
-                g.Sum(r => r.Tokens.Output),
-                EstimateTotal(g.ToList())))
+            .Select(g =>
+            {
+                var tokens = g.Sum(r => r.Tokens.Output);
+                var estUsd = EstimateTotal(g.ToList());
+                return new ModelSlice(g.Key, ModelDisplayName.For(g.Key), tokens, estUsd)
+                {
+                    TokensCount = Measured(tokens),
+                    EstUsdValue = Priced(estUsd),
+                };
+            })
             .OrderByDescending(s => s.Tokens)
             .ToList();
 
@@ -309,4 +376,19 @@ public sealed record PanelStatistics(
     /// <summary>Overload for callers that don't surface the excluded-model list.</summary>
     private static decimal? EstimateTotal(IReadOnlyList<DailyRollup> rollups) =>
         EstimateTotal(rollups, out _);
+
+    /// <summary>
+    /// Wraps a token count as <see cref="UsageValueStatus.Real"/> — every count on this type
+    /// is read directly from recorded transcripts, never modelled, so none of them can carry
+    /// any other status.
+    /// </summary>
+    private static TokenCount Measured(long value) => new(value, UsageValueStatus.Real);
+
+    /// <summary>
+    /// Wraps a priced figure as <see cref="UsageValueStatus.Unavailable"/> when
+    /// <paramref name="value"/> is null, or <see cref="UsageValueStatus.Estimated"/> otherwise
+    /// — the same null/non-null split <see cref="EstimateTotal"/> already returns.
+    /// </summary>
+    private static EstimatedUsd Priced(decimal? value) =>
+        new(value, value is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated);
 }
