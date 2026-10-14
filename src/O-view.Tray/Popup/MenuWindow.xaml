@@ -1,6 +1,7 @@
 <Window x:Class="OView.Tray.Popup.MenuWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:text="clr-namespace:OView.Presentation.Text;assembly=O-view.Presentation"
         Width="272" SizeToContent="Height"
         WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False"
         Topmost="True" AllowsTransparency="True" Background="Transparent"
@@ -151,7 +152,7 @@
                         <Ellipse Width="5" Height="5" Fill="{StaticResource BrandArc}"
                                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Grid>
-                    <TextBlock Text="O-view" FontSize="12" FontWeight="SemiBold" Margin="8,0,0,0"
+                    <TextBlock Text="{x:Static text:MenuText.AppName}" FontSize="12" FontWeight="SemiBold" Margin="8,0,0,0"
                                VerticalAlignment="Center" Foreground="{DynamicResource TextPrimary}"/>
                 </StackPanel>
                 <TextBlock x:Name="VersionText" FontSize="10" HorizontalAlignment="Right"
@@ -165,7 +166,8 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <Path x:Name="StartupCheck" Grid.Column="0" Style="{StaticResource RowCheck}"/>
-                    <TextBlock Grid.Column="1" Text="Run at startup" Style="{StaticResource RowLabel}"/>
+                    <TextBlock Grid.Column="1" Text="{x:Static text:MenuText.RunAtStartupRow}"
+                               Style="{StaticResource RowLabel}"/>
                 </Grid>
             </Button>
 
@@ -180,7 +182,8 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <Path x:Name="UpdateAutoCheck" Grid.Column="0" Style="{StaticResource RowCheck}"/>
-                    <TextBlock Grid.Column="1" Text="Update automatically" Style="{StaticResource RowLabel}"/>
+                    <TextBlock Grid.Column="1" Text="{x:Static text:MenuText.UpdateAutomaticallyRow}"
+                               Style="{StaticResource RowLabel}"/>
                 </Grid>
             </Button>
 
@@ -193,7 +196,7 @@
                         <ColumnDefinition Width="*"/>
                     </Grid.ColumnDefinitions>
                     <Path x:Name="NotifyCheck" Grid.Column="0" Style="{StaticResource RowCheck}"/>
-                    <TextBlock x:Name="NotifyLabel" Grid.Column="1" Text="Notify at"
+                    <TextBlock x:Name="NotifyLabel" Grid.Column="1" Text="{x:Static text:MenuText.NotifyPrefix}"
                                Style="{StaticResource RowLabel}"/>
 
                     <!-- Nested inside the row Button on purpose: the whole row still toggles
@@ -234,7 +237,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Ellipse x:Name="Mark70" Grid.Column="0" Style="{StaticResource OptionMark}"/>
-                        <TextBlock Grid.Column="1" Text="70%" Style="{StaticResource RowLabel}"/>
+                        <TextBlock x:Name="Label70" Grid.Column="1" Style="{StaticResource RowLabel}"/>
                     </Grid>
                 </Button>
                 <Button x:Name="Threshold80" Style="{StaticResource OptionRow}" Tag="80">
@@ -244,7 +247,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Ellipse x:Name="Mark80" Grid.Column="0" Style="{StaticResource OptionMark}"/>
-                        <TextBlock Grid.Column="1" Text="80%" Style="{StaticResource RowLabel}"/>
+                        <TextBlock x:Name="Label80" Grid.Column="1" Style="{StaticResource RowLabel}"/>
                     </Grid>
                 </Button>
                 <Button x:Name="Threshold90" Style="{StaticResource OptionRow}" Tag="90">
@@ -254,7 +257,7 @@
                             <ColumnDefinition Width="*"/>
                         </Grid.ColumnDefinitions>
                         <Ellipse x:Name="Mark90" Grid.Column="0" Style="{StaticResource OptionMark}"/>
-                        <TextBlock Grid.Column="1" Text="90%" Style="{StaticResource RowLabel}"/>
+                        <TextBlock x:Name="Label90" Grid.Column="1" Style="{StaticResource RowLabel}"/>
                     </Grid>
                 </Button>
             </StackPanel>
@@ -275,7 +278,8 @@
                         <ColumnDefinition Width="*"/>
                         <ColumnDefinition Width="Auto"/>
                     </Grid.ColumnDefinitions>
-                    <TextBlock Grid.Column="0" Text="Weekly reset…" Style="{StaticResource RowLabel}"
+                    <TextBlock Grid.Column="0" Text="{x:Static text:MenuText.WeeklyResetRow}"
+                               Style="{StaticResource RowLabel}"
                                Margin="22,0,8,0" TextTrimming="CharacterEllipsis"/>
                     <TextBlock x:Name="WeeklyResetValue" Grid.Column="1" Margin="0,0,4,0"
                                VerticalAlignment="Center" FontSize="11"
@@ -288,15 +292,18 @@
             </Button>
 
             <Button x:Name="DiagnosticsRow" Style="{StaticResource MenuRow}">
-                <TextBlock Text="Copy diagnostics" Style="{StaticResource RowLabel}" Margin="22,0,0,0"/>
+                <TextBlock Text="{x:Static text:MenuText.CopyDiagnosticsRow}"
+                           Style="{StaticResource RowLabel}" Margin="22,0,0,0"/>
             </Button>
 
             <Button x:Name="UpdatesRow" Style="{StaticResource MenuRow}">
-                <TextBlock Text="Check for updates…" Style="{StaticResource RowLabel}" Margin="22,0,0,0"/>
+                <TextBlock Text="{x:Static text:MenuText.CheckForUpdatesRow}"
+                           Style="{StaticResource RowLabel}" Margin="22,0,0,0"/>
             </Button>
 
             <Button x:Name="ExitRow" Style="{StaticResource MenuRow}">
-                <TextBlock Text="Exit O-view" Style="{StaticResource RowLabel}" Margin="22,0,0,0"/>
+                <TextBlock Text="{x:Static text:MenuText.ExitRow}"
+                           Style="{StaticResource RowLabel}" Margin="22,0,0,0"/>
             </Button>
 
         </StackPanel>

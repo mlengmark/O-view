@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using OView.App.Platform;
 using OView.Linux.Platform;
 using OView.Linux.Tray;
+using OView.Presentation.Text;
 
 namespace OView.Linux.Tests;
 
@@ -159,6 +160,46 @@ public class LinuxHeadWiringTests
             Assert.NotEmpty(handlers);
             Assert.All(handlers, h => Assert.Equal(typeof(BusCallback), h.Method.DeclaringType));
         }
+    }
+
+    /// <summary>
+    /// Every row this head builds takes its label from Presentation, so the two rows it
+    /// shares with the Windows menu cannot drift apart from it.
+    ///
+    /// <para>They had their own copies, and nothing would have failed if one had become
+    /// "Quit" — the only other check on these strings is the runtime D-Bus sweep, which asks
+    /// a real desktop for the rows and so cannot run on a machine without one.</para>
+    /// </summary>
+    [Fact]
+    public void EveryMenuRowTakesItsLabelFromPresentation()
+    {
+        var menu = (NativeMenu)typeof(LinuxApp)
+            .GetMethod("BuildMenu", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(Head, [null])!;
+
+        var headers = menu.Items.OfType<NativeMenuItem>().Select(i => i.Header ?? "").ToArray();
+
+        Assert.Equal(
+            [MenuText.RunAtStartupRow, PanelText.UsageRefreshBlockedRow, MenuText.ExitRow],
+            headers);
+    }
+
+    /// <summary>
+    /// The sentences the no-host notice sends are Presentation's; what stays in the probe is
+    /// the mapping, because <see cref="TrayHostState"/> is a D-Bus observation Presentation
+    /// cannot see (docs/architecture.md).
+    ///
+    /// <para>Asserted per case, including the one no notice currently shows: the point is
+    /// that a state cannot fall through to a sentence written for a different one. "I could
+    /// not ask" and "I asked and nothing was there" are different facts, and only one of them
+    /// justifies telling the user to install an extension.</para>
+    /// </summary>
+    [Fact]
+    public void EveryTrayHostStateExplainsItselfFromPresentation()
+    {
+        Assert.Equal(NoticeText.TrayHostPresent, SniHostProbe.Explain(TrayHostState.Present));
+        Assert.Equal(NoticeText.TrayHostAbsent, SniHostProbe.Explain(TrayHostState.Absent));
+        Assert.Equal(NoticeText.TrayHostUnknown, SniHostProbe.Explain(TrayHostState.Unknown));
     }
 
     /// <summary>

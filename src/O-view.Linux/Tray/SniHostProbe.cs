@@ -1,3 +1,4 @@
+using OView.Presentation.Text;
 using Tmds.DBus.Protocol;
 
 namespace OView.Linux.Tray;
@@ -106,15 +107,15 @@ public sealed class SniHostProbe
     /// What to tell the user, stating what was observed rather than asserting anything
     /// about their machine (CLAUDE.md rule 6). "No host on the bus" is a fact; "GNOME is
     /// missing an extension" is a guess about why.
+    ///
+    /// <para>The sentences themselves are in <see cref="NoticeText"/>; what stays here is
+    /// only the mapping, because <see cref="TrayHostState"/> is a D-Bus observation and
+    /// Presentation cannot see this project (docs/architecture.md).</para>
     /// </summary>
     public static string Explain(TrayHostState state) => state switch
     {
-        TrayHostState.Present => "A notification-area host is running.",
-        TrayHostState.Absent =>
-            "O-view found no notification-area host on the session bus, so its icon has "
-            + "nowhere to appear. GNOME does not provide one by default — installing an "
-            + "AppIndicator/KStatusNotifierItem extension adds it, and O-view will pick it "
-            + "up without needing a restart.",
-        _ => "O-view could not reach the session bus to check for a notification-area host.",
+        TrayHostState.Present => NoticeText.TrayHostPresent,
+        TrayHostState.Absent => NoticeText.TrayHostAbsent,
+        _ => NoticeText.TrayHostUnknown,
     };
 }

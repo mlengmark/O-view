@@ -143,8 +143,7 @@ public sealed class LinuxApp : Application
         if (_hostState is not TrayHostState.Present)
         {
             _log?.Write($"no tray host: {_hostState}");
-            _ = _notifier.ShowAsync("O-view is running, but has nowhere to show its icon",
-                SniHostProbe.Explain(_hostState));
+            _ = _notifier.ShowAsync(NoticeText.NoTrayHostTitle, SniHostProbe.Explain(_hostState));
             WatchForHostArriving();
         }
     }
@@ -292,7 +291,7 @@ public sealed class LinuxApp : Application
 
     private NativeMenu BuildMenu(UsageEngine engine)
     {
-        var startup = new NativeMenuItem("Run at startup")
+        var startup = new NativeMenuItem(MenuText.RunAtStartupRow)
         {
             ToggleType = MenuItemToggleType.CheckBox,
             IsChecked = _startup.IsEnabled(),
@@ -314,7 +313,7 @@ public sealed class LinuxApp : Application
             _log?.Write($"run at startup -> {actual} ({XdgAutostartRegistration.DefaultDirectory})");
         }, _log);
 
-        var exit = new NativeMenuItem("Exit O-view");
+        var exit = new NativeMenuItem(MenuText.ExitRow);
 
         // The third. Shutdown() tears down the dispatcher, so calling it from the bus thread
         // races the UI thread it is dismantling.

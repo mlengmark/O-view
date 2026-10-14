@@ -1011,6 +1011,11 @@ public partial class PopupWindow : Window, IFlyout
         }
 
         // ── standing 31-day off-plan spend (issue #3) ────────────────────────────
+        // The heading counts the window the figure beside it covers, exactly as the chart
+        // heading above does. It read "last 31 days" as a literal, so the heading and the
+        // total under it were only in step as long as nothing moved the window.
+        CreditsHeading.Text = OffPlanText.OffPlanHeading(stats.WindowDays);
+
         if (stats.HasCreditUsage)
         {
             CreditsBadgeText.Text = "credit-billed";
