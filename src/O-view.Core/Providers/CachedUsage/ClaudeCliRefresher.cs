@@ -204,11 +204,20 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     /// Reproduces how Claude Code turns a working directory into a project folder name, by
     /// replacing path separators and colons with <c>-</c>
     /// (<c>C:\Users\X</c> → <c>C--Users-X</c>, docs/findings/jsonl-schema.md). Both forward
-    /// slash and backslash are handled so the result is meaningful on either platform, even
-    /// though only the Windows form has been observed.
+    /// slash and backslash are handled so the result is meaningful on either platform.
+    ///
+    /// <para><b>That finding is incomplete: Claude Code also maps <c>.</c> and <c>_</c> to
+    /// <c>-</c>.</b> Observed against this machine's own real project folder —
+    /// <c>C:\Users\Maximilian\.paperclip\...\_default</c> is filed as
+    /// <c>C--Users-Maximilian--paperclip-...--default</c>, where the <c>.</c> and the <c>_</c>
+    /// each became a second <c>-</c>. Missing either one leaves <c>~/.local/share/O-view</c> —
+    /// Linux's <see cref="WorkingDirectory"/> — mangled to <c>-home-user-.local-share-O-view</c>
+    /// while Claude Code itself writes <c>-home-user--local-share-O-view</c>, so
+    /// <see cref="OwnProjectFolder"/> never matches on Linux at all, and the same silent miss
+    /// hits Windows whenever the user name holds a <c>.</c> or <c>_</c> (issue #313).</para>
     /// </summary>
-    private static string MangleCwd(string cwd) =>
-        cwd.Replace('\\', '-').Replace('/', '-').Replace(':', '-');
+    public static string MangleCwd(string cwd) =>
+        cwd.Replace('\\', '-').Replace('/', '-').Replace(':', '-').Replace('.', '-').Replace('_', '-');
 
     private readonly Func<CachedUtilization?> _read;
     private readonly Func<TimeSpan, ProcessRun> _run;

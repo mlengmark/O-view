@@ -1,3 +1,4 @@
+using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 
 namespace OView.Core.Tests;
@@ -200,5 +201,29 @@ public class TranscriptScopeReportTests : IDisposable
         var report = TranscriptScopeReport.Inspect(Projects, [Cowork], ownFolder);
 
         Assert.Equal(1, report.TotalFiles);
+    }
+
+    [Theory]
+    // Windows, this machine's own layout — matches, which is why the exclusion worked here.
+    [InlineData(
+        @"C:\Users\Maximilian\AppData\Local\O-view",
+        "C--Users-Maximilian-AppData-Local-O-view")]
+    // Windows, a user name holding a dot or an underscore — "." and "_" are each a separate
+    // character Claude Code also maps to "-", missed before and silently breaking the
+    // exclusion for exactly this population.
+    [InlineData(@"C:\Users\john_doe\AppData\Local\O-view", "C--Users-john-doe-AppData-Local-O-view")]
+    [InlineData(
+        @"C:\Users\Maximilian\.paperclip\instances\default\_default",
+        "C--Users-Maximilian--paperclip-instances-default--default")]
+    // Linux — WorkingDirectory resolves to this shape, and the leading "/" plus the "."
+    // immediately after it must both become "-", producing a double dash.
+    [InlineData("/home/user/.local/share/O-view", "-home-user--local-share-O-view")]
+    public void MangleCwd_MatchesHowClaudeCodeNamesTheProjectFolder(string cwd, string expected)
+    {
+        // issue #313: a folder name derived with only separators and colons replaced never
+        // matches Claude Code's own folder on Linux, and silently misses on Windows whenever
+        // the user name holds a "." or "_" — so the exclusion this whole report depends on
+        // quietly does nothing.
+        Assert.Equal(expected, ClaudeCliRefresher.MangleCwd(cwd));
     }
 }
