@@ -13,6 +13,11 @@ namespace OView.Core.Models;
 /// <para><b>Run-at-startup is deliberately NOT here.</b> The registry Run key is its single
 /// source of truth, so the two can never disagree about whether O-view starts with Windows,
 /// and Task Manager's startup page — which edits that key directly — stays authoritative.</para>
+///
+/// <para><b>Audited for display text and found to hold none.</b> Every field here is
+/// either a flag, a percentage, a weekday/time pair the user typed, or a tag the update
+/// checker compares against — values a skin reads and formats, never a sentence this type
+/// composes itself.</para>
 /// </summary>
 /// <param name="LastUpdateNoticeTag">
 /// The release tag the user has already been told about, so a build that cannot update

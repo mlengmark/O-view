@@ -117,23 +117,22 @@ public sealed record PanelStatistics(
     /// </summary>
     public long TtlUnrecordedCacheWrites { get; init; }
 
-    public bool HasPartialHistory => RecordedDays < WindowDays;
-
     /// <summary>
-    /// The coverage caveat, or empty when the window is fully covered.
+    /// Whether the window is only partially covered by recorded history.
     ///
-    /// <para>ADR-0006 makes this text a requirement rather than a nicety: a small 31-day
-    /// figure without it reads as low usage rather than as short history. That makes it
-    /// exactly the kind of string that should have one definition — it was built by hand
-    /// in two separate places in the panel, which is two places to forget it.</para>
+    /// <para>ADR-0006 makes the panel state this: a small 31-day figure with no caveat
+    /// reads as low usage rather than as short history. The sentence itself — "3 of 31
+    /// days recorded" — is built from <see cref="RecordedDays"/> and <see cref="WindowDays"/>
+    /// in Presentation's TokenText.CoverageNote, which is panel copy and not this type's
+    /// concern; this property only reports the fact the sentence is about.</para>
     ///
     /// <para><b><see cref="RecordedDays"/> counts days O-view has data <i>for</i>, not days
     /// with usage on them</b> (GitHub issue #142). Counting the latter inverted the caveat's
     /// whole purpose: a user who took a week off was told "18 of 31 days recorded" — their
     /// history read as short when it was complete and their usage was simply low, which is
     /// precisely the misreading ADR-0006 wrote this label to prevent.</para>
-    public string CoverageNote =>
-        HasPartialHistory ? $"{RecordedDays} of {WindowDays} days recorded" : "";
+    /// </summary>
+    public bool HasPartialHistory => RecordedDays < WindowDays;
 
     /// <summary>True when work in the current session window is not drawing from the plan.</summary>
     public bool IsOffPlan => Divergence?.IsOffPlan == true;

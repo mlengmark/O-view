@@ -90,50 +90,6 @@ public class ModelCatalogTests
         }
     }
 
-    /// <summary>
-    /// The caption joins names with non-breaking spaces so a model never splits across a
-    /// line; compare against ordinary spaces so these assertions read as the sentence a
-    /// user sees rather than as its encoding.
-    /// </summary>
-    private const char Nbsp = '\u00A0';
-
-    private static string Caption => CreditBilledModels.DisplayList.Replace(Nbsp, ' ');
-
-    [Fact]
-    public void CreditDisplayList_NamesEveryModelItCounts()
-    {
-        // The regression this issue was filed for: the caption said "Fable" while the
-        // classifier matched Fable AND Mythos, so credit spend was summed for a model
-        // the note told the user was not included.
-        var credit = ModelCatalog.InClass(BillingClass.Credit);
-
-        Assert.NotEmpty(credit);
-        foreach (var entry in credit)
-        {
-            Assert.True(CreditBilledModels.IsCreditBilled(entry.Prefix),
-                $"{entry.Prefix} is classified Credit but IsCreditBilled says otherwise");
-            Assert.Contains(entry.DisplayName, Caption, StringComparison.Ordinal);
-        }
-    }
-
-    [Fact]
-    public void CreditDisplayList_NamesNothingItDoesNotCount()
-    {
-        // The mirror of the above: the caption must not claim coverage the classifier
-        // does not provide either.
-        foreach (var entry in ModelCatalog.InClass(BillingClass.Plan))
-        {
-            Assert.False(CreditBilledModels.IsCreditBilled(entry.Prefix));
-            Assert.DoesNotContain(entry.DisplayName, Caption, StringComparison.Ordinal);
-        }
-    }
-
-    [Fact]
-    public void CreditDisplayList_KeepsEachModelOnOneLine()
-    {
-        // Non-breaking spaces inside the names, ordinary spaces only after the commas
-        // that separate them.
-        Assert.DoesNotContain(" 5", CreditBilledModels.DisplayList, StringComparison.Ordinal);
-        Assert.Contains(Nbsp, CreditBilledModels.DisplayList);
-    }
+    // CreditDisplayList_* moved to PanelTextTests.cs — the caption they check is built in
+    // Presentation now, from CreditBilledModels.Models.
 }

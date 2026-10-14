@@ -25,6 +25,24 @@ public static class TokenText
         "$" + usd.ToString("0.00", CultureInfo.InvariantCulture);
 
     /// <summary>
+    /// The coverage caveat: how much of the 31-day window is actually recorded, or empty
+    /// when the window is fully covered.
+    ///
+    /// <para>ADR-0006 makes this text a requirement rather than a nicety: a small 31-day
+    /// figure without it reads as low usage rather than as short history. That makes it
+    /// exactly the kind of string that should have one definition — it was built by hand
+    /// in two separate places in the panel, which is two places to forget it.</para>
+    ///
+    /// <para>Built from <see cref="PanelStatistics.RecordedDays"/> and
+    /// <see cref="PanelStatistics.WindowDays"/> rather than read off the model, because the
+    /// sentence is panel copy and Core's job stops at reporting the two numbers (GitHub issue
+    /// #142 — <see cref="PanelStatistics.HasPartialHistory"/> carries the reasoning on why
+    /// those numbers, not this one, are the ones that must stay exact).</para>
+    /// </summary>
+    public static string CoverageNote(PanelStatistics stats) =>
+        stats.HasPartialHistory ? $"{stats.RecordedDays} of {stats.WindowDays} days recorded" : "";
+
+    /// <summary>
     /// The caveat under the 31-day tiles: how much of the window is actually recorded, which
     /// models were left out of the money figures, what O-view assumed about cache writes it
     /// could not attribute, and how old the rates behind the figures are.
@@ -44,7 +62,7 @@ public static class TokenText
     {
         var parts = new List<string>(4);
 
-        if (stats.CoverageNote is { Length: > 0 } coverage)
+        if (CoverageNote(stats) is { Length: > 0 } coverage)
         {
             parts.Add(coverage);
         }
@@ -263,6 +281,22 @@ public static class TokenText
 
     /// <inheritdoc cref="TokenBreakdownKindHeader"/>
     public const string TokenBreakdownTotalLabel = "Total";
+
+    /// <summary>
+    /// Legend and hover-card label for a breakdown's folded remainder segment.
+    ///
+    /// <para><see cref="ModelBreakdown.Segments"/> marks that segment with a non-null
+    /// <see cref="ModelSlice.FoldedCount"/> rather than writing this word into
+    /// <see cref="ModelSlice.DisplayName"/>; a caller shows this label for any slice
+    /// where that count is set.</para>
+    /// </summary>
+    public const string OtherSegmentLabel = "Other";
+
+    /// <summary>
+    /// The folded remainder's identifying line, under <see cref="OtherSegmentLabel"/> in a
+    /// hover card: <c>3 more models</c>.
+    /// </summary>
+    public static string FoldedModelsLabel(int foldedCount) => $"{foldedCount} more models";
 
     /// <summary>Labels for the two views of the composition.</summary>
     public const string TokenViewBarsLabel = "Bars";

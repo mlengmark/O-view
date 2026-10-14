@@ -13,6 +13,10 @@ namespace OView.Core.Models;
 /// <param name="DisplayName">
 /// The friendly name, or the raw id when the model is not recognised. Never invented:
 /// an unknown id is shown as-is rather than guessed at (CLAUDE.md rule 6).
+///
+/// <para><b>Stays in Core, unlike most panel-facing text.</b> This is the model's own
+/// published name — <see cref="ModelCatalog"/>'s data, carried alongside the id it
+/// names rather than invented at render time — not prose composed about the model.</para>
 /// </param>
 /// <param name="EstUsd">
 /// Null when the model has no published rate. Distinct from zero — zero is a real,
@@ -20,7 +24,17 @@ namespace OView.Core.Models;
 /// O-view cannot price it and must say so rather than dropping the model from the
 /// picture.
 /// </param>
-public sealed record ModelSlice(string Model, string DisplayName, long Tokens, decimal? EstUsd);
+/// <param name="FoldedCount">
+/// Null for an ordinary model slice. <see cref="ModelBreakdown.Segments"/> sets it to the
+/// number of models folded into its remainder segment — a non-null count is what marks a
+/// slice as that remainder, rather than any word in <see cref="Model"/> or
+/// <see cref="DisplayName"/>. What to call it — "Other", "<c>&lt;n&gt;</c> more
+/// models" — is panel copy, built in Presentation from this count; Core does not write
+/// those words. A trailing parameter with a default so slices built before this field
+/// existed keep compiling.
+/// </param>
+public sealed record ModelSlice(
+    string Model, string DisplayName, long Tokens, decimal? EstUsd, int? FoldedCount = null);
 
 /// <summary>
 /// Friendly names for model ids, read from <see cref="ModelCatalog"/> — the one table that
@@ -32,9 +46,6 @@ public sealed record ModelSlice(string Model, string DisplayName, long Tokens, d
 /// </summary>
 public static class ModelDisplayName
 {
-    /// <summary>Label for the aggregated remainder when there are more models than slots.</summary>
-    public const string Other = "Other";
-
     // No <synthetic> branch: Claude Code's marker for locally generated messages is
     // dropped at parse time by TranscriptReader, so it never reaches a ModelSlice. The
     // "Local" case that used to live here was unreachable (issue #57).

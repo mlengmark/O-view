@@ -545,11 +545,76 @@ public class PanelTextTests
         foreach (var hasUsage in new[] { true, false })
         {
             Assert.Contains(
-                CreditBilledModels.DisplayList,
+                OffPlanText.CreditModelsCaption,
                 OffPlanText.OffPlanHint(hasUsage),
                 StringComparison.Ordinal);
         }
     }
+
+    /// <summary>
+    /// The caption joins names with non-breaking spaces so a model never splits across a
+    /// line; compare against ordinary spaces so these assertions read as the sentence a
+    /// user sees rather than as its encoding.
+    /// </summary>
+    private const char Nbsp = '\u00A0';
+
+    private static string CreditCaption => OffPlanText.CreditModelsCaption.Replace(Nbsp, ' ');
+
+    /// <summary>
+    /// The caption lives in Presentation, built from <see cref="CreditBilledModels.Models"/>,
+    /// but what it must still prove is unchanged: the caption names exactly the set
+    /// <see cref="CreditBilledModels.IsCreditBilled"/> matches. The regression this issue
+    /// was filed for: the caption said "Fable" while the
+    /// classifier matched Fable AND Mythos, so credit spend was summed for a model the note
+    /// told the user was not included (GitHub issue #56).
+    /// </summary>
+    [Fact]
+    public void CreditDisplayList_NamesEveryModelItCounts()
+    {
+        var credit = ModelCatalog.InClass(BillingClass.Credit);
+
+        Assert.NotEmpty(credit);
+        foreach (var entry in credit)
+        {
+            Assert.True(CreditBilledModels.IsCreditBilled(entry.Prefix),
+                $"{entry.Prefix} is classified Credit but IsCreditBilled says otherwise");
+            Assert.Contains(entry.DisplayName, CreditCaption, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void CreditDisplayList_NamesNothingItDoesNotCount()
+    {
+        // The mirror of the above: the caption must not claim coverage the classifier
+        // does not provide either.
+        foreach (var entry in ModelCatalog.InClass(BillingClass.Plan))
+        {
+            Assert.False(CreditBilledModels.IsCreditBilled(entry.Prefix));
+            Assert.DoesNotContain(entry.DisplayName, CreditCaption, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void CreditDisplayList_KeepsEachModelOnOneLine()
+    {
+        // Non-breaking spaces inside the names, ordinary spaces only after the commas
+        // that separate them.
+        Assert.DoesNotContain(" 5", OffPlanText.CreditModelsCaption, StringComparison.Ordinal);
+        Assert.Contains(Nbsp, OffPlanText.CreditModelsCaption);
+    }
+
+    /// <summary>
+    /// The breakdown's folded remainder is pinned nowhere else: the golden images cover
+    /// <see cref="TokenText.OtherSegmentLabel"/>, but no golden names a model count, so a
+    /// typo in <see cref="TokenText.FoldedModelsLabel"/> would ship silently.
+    /// </summary>
+    [Fact]
+    public void TheFoldedModelsLabelNamesTheCount() =>
+        Assert.Equal("3 more models", TokenText.FoldedModelsLabel(3));
+
+    [Fact]
+    public void TheOtherSegmentLabelIsOther() =>
+        Assert.Equal("Other", TokenText.OtherSegmentLabel);
 
     /// <summary>
     /// The resume row is an action, not a status line. Both heads read this one string, so the
