@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Logging;
 using OView.App;
 using OView.App.Diagnostics;
@@ -30,6 +31,24 @@ namespace OView.Linux;
 /// </summary>
 internal static class Program
 {
+    /// <summary>
+    /// When this process is allowed to end: only when something asks it to.
+    ///
+    /// <para><b>Why not the lifetime's default.</b> <c>OnLastWindowClose</c> is wrong for a tray
+    /// app, and it took the app down the second time anyone looked at the panel. A panel
+    /// dismissed with Esc or a click away is hidden, not closed, so it is still one of the
+    /// application's windows; the next open closes it before building its replacement; that was
+    /// the last window, so the shutdown ran while the new panel was coming up. The panel flashed,
+    /// the icon disappeared, and because nothing had failed the log simply ended — no shutdown
+    /// line, no exception, no core dump (issue #312).</para>
+    ///
+    /// <para>Nothing depended on the default. Both ways this process is meant to end ask for it:
+    /// Exit O-view calls <c>Shutdown()</c>, and so does the <c>--panel-samples</c> render once it
+    /// has written its PNGs. <see cref="LinuxApp"/> logs the mode the lifetime actually ends up
+    /// with, because what this file asked for and what is in force are different facts.</para>
+    /// </summary>
+    private const ShutdownMode EndsOnlyWhenAsked = ShutdownMode.OnExplicitShutdown;
+
     [STAThread]
     public static int Main(string[] args)
     {
@@ -52,7 +71,7 @@ internal static class Program
         if (parsed.TryGetValue("--panel-samples", out var panelDir))
         {
             LinuxApp.SampleDirectory = panelDir ?? "panel-samples";
-            return BuildAvaloniaApp().StartWithClassicDesktopLifetime([]);
+            return BuildAvaloniaApp().StartWithClassicDesktopLifetime([], EndsOnlyWhenAsked);
         }
 
         if (parsed.ContainsKey("--probe"))
@@ -216,7 +235,7 @@ internal static class Program
                     host = new ShellHost(shellOptions, app.UiDispatcher, _ => app);
                     app.Attach(host, hostState, log);
                 })
-                .StartWithClassicDesktopLifetime(args);
+                .StartWithClassicDesktopLifetime(args, EndsOnlyWhenAsked);
         }
         catch (Exception ex)
         {

@@ -113,6 +113,39 @@ public class PanelDismissalTests
     }
 
     /// <summary>
+    /// What a dismissal must never cost. Hiding the panel leaves a hidden window behind, the next
+    /// open closes it before building its replacement, and on the lifetime's default shutdown mode
+    /// — <c>OnLastWindowClose</c> — that close was the end of the process: the panel flashed up and
+    /// the tray icon was gone, with nothing in the log to say why (issue #312).
+    ///
+    /// <para>Structural, like the guard above, and for the same reason: the mode is an argument to
+    /// a call made once per entry path, so an edit dropping it would pass every other test here.
+    /// What is in force at run time is a different fact, and the <c>linux-runtime</c> job asserts
+    /// that one off the live lifetime.</para>
+    /// </summary>
+    [Fact]
+    public void TheHeadStartsEveryLifetimeWithAnExplicitShutdownMode()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "O-view.Linux", "Program.cs"));
+
+        var starts = Regex.Matches(source, @"StartWithClassicDesktopLifetime\((?<arguments>[^)]*)\)");
+        Assert.NotEmpty(starts);
+
+        foreach (Match start in starts)
+        {
+            var arguments = start.Groups["arguments"].Value;
+            Assert.True(
+                arguments.Contains(',', StringComparison.Ordinal),
+                "the Linux head starts a desktop lifetime without saying when the process may end, "
+                + "so it takes Avalonia's default — OnLastWindowClose, which ends a tray app the "
+                + $"moment a dismissed panel is closed and rebuilt: {start.Value}");
+        }
+
+        Assert.Contains("ShutdownMode.OnExplicitShutdown", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// Walks up from the test binary to the directory holding the solution file — the same
     /// approach <c>PortalThemeSourceTests</c> takes, and for the same reason: the depth below
     /// <c>bin/</c> differs by configuration, so the marker is searched for rather than counted.
