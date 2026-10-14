@@ -24,8 +24,11 @@ namespace OView.App;
 /// <para>What it does <b>not</b> do: draw anything, decide how a notification looks, or
 /// touch the network. It says <em>what</em> happened and lets a head decide what that looks
 /// like.</para>
+///
+/// <para>Also the shell's implementation of <see cref="ISkinToShell"/> — a skin may depend
+/// on that interface instead of this concrete class, with no change in behaviour.</para>
 /// </summary>
-public sealed class UsageEngine : IDisposable
+public sealed class UsageEngine : IDisposable, ISkinToShell
 {
     private readonly RollupStore _store;
     private readonly IUsageProvider _provider;
