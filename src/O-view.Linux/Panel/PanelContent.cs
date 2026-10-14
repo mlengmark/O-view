@@ -227,7 +227,8 @@ public sealed class PanelContent : Border
         }
 
         header.Children.Add(left);
-        var value = Text(percent is { } p ? $"{p}% used" : placeholder, 14, _theme["TextSecondary"]);
+        var value = Text(
+            percent is { } p ? PanelText.BarPercentUsed(p) : placeholder, 14, _theme["TextSecondary"]);
         value.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetColumn(value, 1);
         header.Children.Add(value);

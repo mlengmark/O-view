@@ -1,3 +1,4 @@
+using System.Globalization;
 using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.PlanHistory;
@@ -735,10 +736,10 @@ public class PanelTextTests
     // ── the copy the Windows panel used to write itself ─────────────────────────────
 
     /// <summary>
-    /// The meter figure, character for character as both panels already showed it. <b>Asserted
-    /// whole rather than by looking for "used"</b>: a panel that went back to building
-    /// <c>"{p}% used"</c> beside this one would pass a keyword check while being exactly the
-    /// duplicate this member exists to remove.
+    /// The meter figure, character for character as both panels already showed it, and now the
+    /// one member both of them read. <b>Asserted whole rather than by looking for "used"</b>: a
+    /// panel that went back to building <c>"{p}% used"</c> beside this one would pass a keyword
+    /// check while being exactly the duplicate this member exists to remove.
     /// </summary>
     [Fact]
     public void TheMeterFigureNamesTheDirectionItRuns()
@@ -746,6 +747,32 @@ public class PanelTextTests
         Assert.Equal("47% used", PanelText.BarPercentUsed(47));
         Assert.Equal("0% used", PanelText.BarPercentUsed(0));
         Assert.Equal("100% used", PanelText.BarPercentUsed(100));
+    }
+
+    /// <summary>
+    /// The digits are the app's, not the desktop's.
+    ///
+    /// <para>The literal this member replaced in the Linux panel interpolated the percentage
+    /// under the ambient culture, which renders Arabic-Indic digits under <c>ar-EG</c> — a panel
+    /// whose figure beside the gauge does not match the one in its own tray tooltip. The member
+    /// pins <see cref="CultureInfo.InvariantCulture"/>, so this is the behaviour that moving the
+    /// Linux figure here bought, and the one a future tidy-up of the <c>string.Create</c> call
+    /// would quietly give back.</para>
+    /// </summary>
+    [Fact]
+    public void TheMeterFigureUsesTheAppsDigitsNotTheMachineCultures()
+    {
+        var original = Thread.CurrentThread.CurrentCulture;
+        try
+        {
+            Thread.CurrentThread.CurrentCulture = new CultureInfo("ar-EG");
+
+            Assert.Equal("47% used", PanelText.BarPercentUsed(47));
+        }
+        finally
+        {
+            Thread.CurrentThread.CurrentCulture = original;
+        }
     }
 
     /// <summary>
