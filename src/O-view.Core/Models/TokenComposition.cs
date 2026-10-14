@@ -61,7 +61,19 @@ public sealed record TokenKindSlice(TokenKind Kind, long Tokens, double Share, d
 /// </summary>
 public sealed record TokenComposition(long Input, long CacheCreation, long CacheRead, long Output)
 {
-    public static readonly TokenComposition Empty = new(0, 0, 0, 0);
+    // Zero tokens is a known fact (Real); nothing to price is the "unknown" EstimateUsd(an
+    // empty rollup set) would also return, per From's own rule below — not a known zero.
+    public static readonly TokenComposition Empty = new(0, 0, 0, 0)
+    {
+        InputCount = Measured(0),
+        CacheCreationCount = Measured(0),
+        CacheReadCount = Measured(0),
+        OutputCount = Measured(0),
+        InputValue = Priced(null),
+        CacheCreationValue = Priced(null),
+        CacheReadValue = Priced(null),
+        OutputValue = Priced(null),
+    };
 
     /// <summary>Estimated value of the input tokens alone. See <see cref="TokenKindSlice.EstUsd"/>.</summary>
     public decimal? InputUsd { get; init; }
@@ -74,6 +86,38 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
 
     /// <inheritdoc cref="InputUsd"/>
     public decimal? OutputUsd { get; init; }
+
+    /// <summary>
+    /// <see cref="Input"/>, paired with its <see cref="UsageValueStatus"/>. Always
+    /// <see cref="UsageValueStatus.Real"/> — every kind here is read directly from the
+    /// rollups, never modelled, so only the Est. figures beside them can go unavailable.
+    /// </summary>
+    public TokenCount InputCount { get; init; }
+
+    /// <inheritdoc cref="InputCount"/>
+    public TokenCount CacheCreationCount { get; init; }
+
+    /// <inheritdoc cref="InputCount"/>
+    public TokenCount CacheReadCount { get; init; }
+
+    /// <inheritdoc cref="InputCount"/>
+    public TokenCount OutputCount { get; init; }
+
+    /// <summary>
+    /// <see cref="InputUsd"/>, paired with its <see cref="UsageValueStatus"/>:
+    /// <see cref="UsageValueStatus.Unavailable"/> when nothing in the window could be priced,
+    /// <see cref="UsageValueStatus.Estimated"/> otherwise.
+    /// </summary>
+    public EstimatedUsd InputValue { get; init; }
+
+    /// <inheritdoc cref="InputValue"/>
+    public EstimatedUsd CacheCreationValue { get; init; }
+
+    /// <inheritdoc cref="InputValue"/>
+    public EstimatedUsd CacheReadValue { get; init; }
+
+    /// <inheritdoc cref="InputValue"/>
+    public EstimatedUsd OutputValue { get; init; }
 
     /// <summary>
     /// Everything billed in this window. No longer the tiles' headline (issue #253), and
@@ -175,8 +219,29 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
             CacheCreationUsd = unknown ? null : cacheCreationUsd,
             CacheReadUsd = unknown ? null : cacheReadUsd,
             OutputUsd = unknown ? null : outputUsd,
+            InputCount = Measured(total.Input),
+            CacheCreationCount = Measured(total.CacheWrite),
+            CacheReadCount = Measured(total.CacheRead),
+            OutputCount = Measured(total.Output),
+            InputValue = Priced(unknown ? null : inputUsd),
+            CacheCreationValue = Priced(unknown ? null : cacheCreationUsd),
+            CacheReadValue = Priced(unknown ? null : cacheReadUsd),
+            OutputValue = Priced(unknown ? null : outputUsd),
         };
     }
+
+    /// <summary>
+    /// Wraps a token count as <see cref="UsageValueStatus.Real"/> — every kind here is read
+    /// directly from the rollups, never modelled, so none of them can carry any other status.
+    /// </summary>
+    private static TokenCount Measured(long value) => new(value, UsageValueStatus.Real);
+
+    /// <summary>
+    /// Wraps a priced figure as <see cref="UsageValueStatus.Unavailable"/> when
+    /// <paramref name="value"/> is null, or <see cref="UsageValueStatus.Estimated"/> otherwise.
+    /// </summary>
+    private static EstimatedUsd Priced(decimal? value) =>
+        new(value, value is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated);
 
     /// <summary>
     /// The cache-write buckets alone, each keeping its own TTL so the segment's value is priced
