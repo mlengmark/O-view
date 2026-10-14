@@ -372,17 +372,18 @@ public partial class PopupWindow : Window, IFlyout
     /// render of the panel — a <c>ToolTip</c> throws if given a parent, so it can neither be
     /// laid out inside one nor screenshotted with it — and hover is the only way to reach
     /// them in the running app, so without this they are unverifiable.
+    ///
+    /// <para>The wording comes from the same place the live cards read it from, or the render
+    /// would be proof of copy that does not ship. Only the figures are stand-ins.</para>
     /// </summary>
     internal IReadOnlyList<ToolTip> BuildSampleHoverCards(bool light)
     {
         PanelTheme.Apply(Resources, light);
         return
         [
-            HoverCard.Figure(this, "234.8M tokens", "Tuesday 21 July"),
-            HoverCard.Figure(this, "Tue 28 Jul · 06:28", "Weekly limit reset"),
-            HoverCard.Text(this,
-                "Start of the calendar week (Monday). O-view hasn't observed a weekly reset "
-                + "yet, so this is a calendar reference, not your plan's boundary."),
+            HoverCard.Figure(this, TokenText.DayBarTokens(234_800_000), "Tuesday 21 July"),
+            HoverCard.Figure(this, "Tue 28 Jul · 06:28", PanelText.WeeklyResetMarker),
+            HoverCard.Text(this, PanelText.CalendarWeekMarker),
         ];
     }
 
@@ -1018,15 +1019,15 @@ public partial class PopupWindow : Window, IFlyout
 
         if (stats.HasCreditUsage)
         {
-            CreditsBadgeText.Text = "credit-billed";
-            CreditsSpendLabel.Text = "Est. credit spend";
+            CreditsBadgeText.Text = PanelText.CreditBadgeRecorded;
+            CreditsSpendLabel.Text = PanelText.CreditSpendLabel;
             CreditsSpendValue.Text = FormatUsd(stats.EstCredit31DaysUsd);
             CreditsCoverage.Text = TokenText.CoverageNote(stats);
         }
         else
         {
-            CreditsBadgeText.Text = "none recorded";
-            CreditsSpendLabel.Text = "Est. credit spend";
+            CreditsBadgeText.Text = PanelText.CreditBadgeNoneRecorded;
+            CreditsSpendLabel.Text = PanelText.CreditSpendLabel;
             CreditsSpendValue.Text = "$0.00";
             CreditsCoverage.Text = "";
         }
@@ -1045,7 +1046,7 @@ public partial class PopupWindow : Window, IFlyout
 
         if (percent is { } p)
         {
-            pctText.Text = string.Create(CultureInfo.InvariantCulture, $"{p}% used");
+            pctText.Text = PanelText.BarPercentUsed(p);
             // Shared colour bands (UsageLevels) so the popup and tray icon agree.
             fill.Background = new SolidColorBrush(UsageLevels.Classify(p) switch
             {
@@ -1145,7 +1146,7 @@ public partial class PopupWindow : Window, IFlyout
                     // otherwise entirely rounded cards on one palette.
                     ToolTip = HoverCard.Figure(
                         this,
-                        $"{FormatTokens(day.OutputTokens)} tokens",
+                        TokenText.DayBarTokens(day.OutputTokens),
                         day.Date.ToString("dddd d MMMM", CultureInfo.InvariantCulture)),
                 };
                 HoverCard.ApplyTiming(bar);
@@ -1240,11 +1241,8 @@ public partial class PopupWindow : Window, IFlyout
                         this,
                         TimeZoneInfo.ConvertTime(boundary.AtUtc, LocalZone)
                             .ToString("ddd d MMM · HH:mm", CultureInfo.InvariantCulture),
-                        "Weekly limit reset")
-                    : HoverCard.Text(
-                        this,
-                        "Start of the calendar week (Monday). O-view hasn't observed a weekly "
-                        + "reset yet, so this is a calendar reference, not your plan's boundary."),
+                        PanelText.WeeklyResetMarker)
+                    : HoverCard.Text(this, PanelText.CalendarWeekMarker),
             };
             HoverCard.ApplyTiming(line);
             GraphHost.Children.Add(line);

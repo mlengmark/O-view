@@ -298,6 +298,49 @@ public static class TokenText
     /// </summary>
     public static string FoldedModelsLabel(int foldedCount) => $"{foldedCount} more models";
 
+    /// <summary>
+    /// The figure on a usage-chart column's hover card: <c>234.8M tokens</c>.
+    ///
+    /// <para><b>The unit is named because the column does not name it.</b> A bar chart with no
+    /// axis labels — which is what fits in the panel — leaves the hover card as the only place
+    /// the reader learns what the height measures, and <c>234.8M</c> alone could as easily be
+    /// money. The figure counts output tokens, the same quantity
+    /// <see cref="TokensTodayLabel"/> headlines, so the two can be read against each other.</para>
+    ///
+    /// <para>The Windows panel built this suffix twice — once for the live chart and once for
+    /// the hover cards rendered as proof — which is two chances for the proof to describe a
+    /// card that is not the shipped one.</para>
+    /// </summary>
+    public static string DayBarTokens(long tokens) => $"{FormatTokens(tokens)} tokens";
+
+    /// <summary>
+    /// The caption under a model-breakdown chart: <c>by model</c>, or <c>excl. 2 unpriced</c>
+    /// when models had to be left out of a value chart.
+    ///
+    /// <para><b>Counted, not listed.</b> A raw model id is longer than the caption's room and
+    /// would either overflow the tile or crowd out the total; the count carries the part rule 6
+    /// requires — that something is missing from a figure the chart would otherwise imply is
+    /// complete — and <see cref="UnpricedModelsHint"/> names them exactly.</para>
+    ///
+    /// <para>One member rather than two constants and a branch in each panel. The branch is the
+    /// copy: which of the two captions a chart shows is the same decision as what it says, and a
+    /// panel that got the condition right while wording it differently would still be wrong.</para>
+    /// </summary>
+    public static string ModelBreakdownCaption(int unpricedCount) =>
+        unpricedCount > 0 ? $"excl. {unpricedCount} unpriced" : "by model";
+
+    /// <summary>
+    /// The hover card behind that caption, naming the models and why they are absent.
+    ///
+    /// <para>It says what the total <i>is</i> rather than only what is missing from it: an
+    /// unpriced model's worth is unknown, not zero, so the honest reading of the chart is that
+    /// it shows the priced part — and a reader told only "2 excluded" will still take the
+    /// total for the whole.</para>
+    /// </summary>
+    public static string UnpricedModelsHint(IReadOnlyList<string> models) =>
+        $"No published rate for {string.Join(", ", models)} — excluded from this "
+        + "chart, so the total shown is only the part O-view can price.";
+
     /// <summary>Labels for the two views of the composition.</summary>
     public const string TokenViewBarsLabel = "Bars";
 

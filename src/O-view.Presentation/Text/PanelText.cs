@@ -17,7 +17,7 @@ namespace OView.Presentation.Text;
 ///
 /// <para>Layout, colour and interaction stay with each platform's panel. Only the sentences
 /// live here. This class keeps the panel's rows — the section labels, freshness, countdowns,
-/// resets and hints.
+/// resets, hints, the chart's week markers and the off-plan badge.
 /// The boost chip and card live in <see cref="BoostText"/>, the token labels and captions in
 /// <see cref="TokenText"/>, and the off-plan headings and details in
 /// <see cref="OffPlanText"/>.</para>
@@ -32,6 +32,23 @@ public static class PanelText
 
     /// <summary>The name of the weekly meter, above the second bar.</summary>
     public const string WeeklyBarLabel = "Weekly";
+
+    /// <summary>
+    /// The figure beside a meter: <c>47% used</c>.
+    ///
+    /// <para><b>"used", never the bare percentage.</b> A plan meter reading <c>47%</c> says
+    /// nothing about which direction it runs — a reader who takes it for headroom has the
+    /// number exactly backwards, and the one that matters most is the one nearest 100. Both
+    /// panels already spelled the suffix out themselves, in the one place where dropping it
+    /// would not look like a mistake.</para>
+    ///
+    /// <para>Invariant, because the panel states its own figures rather than inheriting the
+    /// desktop's digits. When there is no percentage to show the row carries
+    /// <see cref="PanelBanner"/>'s placeholder instead, which is a statement about why rather
+    /// than a number.</para>
+    /// </summary>
+    public static string BarPercentUsed(int percent) =>
+        string.Create(CultureInfo.InvariantCulture, $"{percent}% used");
 
     /// <summary>
     /// Stood in for the account name when the plan file has not been read yet, or carries no
@@ -51,6 +68,58 @@ public static class PanelText
     /// reading 31 the day the window changes.
     /// </summary>
     public static string UsageWindowHeading(int days) => $"Usage · last {days} days";
+
+    /// <summary>
+    /// What a week-boundary gridline on that chart marks when the boundary is the plan's own:
+    /// the caption under the reset's time.
+    /// </summary>
+    public const string WeeklyResetMarker = "Weekly limit reset";
+
+    /// <summary>
+    /// What the same gridline marks when no weekly reset has been observed, in place of
+    /// <see cref="WeeklyResetMarker"/>.
+    ///
+    /// <para><b>It disclaims the line it is attached to.</b> A dashed boundary drawn across a
+    /// usage chart reads as the plan's week whatever its origin, so the fallback has to say
+    /// outright that it is a calendar reference — otherwise the chart asserts a boundary O-view
+    /// has no evidence for, which is a fabricated number wearing a gridline (rule 6).</para>
+    ///
+    /// <para>The Windows panel carried this sentence twice, once for the live chart and once
+    /// for the hover cards built for verification, so the rendered proof could have agreed
+    /// with itself while disagreeing with what ships.</para>
+    /// </summary>
+    public const string CalendarWeekMarker =
+        "Start of the calendar week (Monday). O-view hasn't observed a weekly reset "
+        + "yet, so this is a calendar reference, not your plan's boundary.";
+
+    /// <summary>
+    /// The badge on the off-plan section when credit-billed usage was recorded in the window,
+    /// beside <see cref="OffPlanText.OffPlanHeading"/>.
+    ///
+    /// <para>The section's heading and hint already live in <see cref="OffPlanText"/>, which is
+    /// where this pair reads as a neighbour; they are here because the slice that moved them out
+    /// of the Windows panel was scoped to this class. Worth consolidating, not worth a second
+    /// copy in the meantime.</para>
+    /// </summary>
+    public const string CreditBadgeRecorded = "credit-billed";
+
+    /// <summary>
+    /// The same badge when none was. <b>Lower case, like the unknown-account stand-ins</b>
+    /// (<see cref="AccountUnknown"/>): it reports an absence in the slot a billing state goes
+    /// in, and a capitalised "None recorded" reads as the name of one.
+    ///
+    /// <para>The row is shown either way rather than hidden when empty. A section that vanishes
+    /// leaves the reader unable to tell "no off-plan usage" from "O-view did not look".</para>
+    /// </summary>
+    public const string CreditBadgeNoneRecorded = "none recorded";
+
+    /// <summary>
+    /// The label on the credit figure. <b>"Est." stays on both branches</b> — O-view prices
+    /// credit usage from the same public rates as everything else, so it is a valuation of what
+    /// was billed rather than the charge itself, and the zero case is no less an estimate for
+    /// being zero.
+    /// </summary>
+    public const string CreditSpendLabel = "Est. credit spend";
 
     /// <summary>
     /// The header's freshness line: <c>As of now</c>, <c>As of 11:34</c>,
