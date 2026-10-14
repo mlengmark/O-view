@@ -16,13 +16,13 @@ namespace OView.Tray;
 ///
 /// <para>Shutting the app down after handing off to the installer arrives as a callback, so
 /// the flow drives the app's lifetime without owning it — the WPF <c>Application</c> stays
-/// the shell's.</para>
+/// the skin's.</para>
 /// </summary>
 public sealed class UpdateFlow
 {
     private readonly UpdateService _updates;
     private readonly ITrayHost _trayHost;
-    private readonly UsageEngine _engine;
+    private readonly ISkinToShell _shell;
     private readonly Action _shutdown;
 
     private bool _flowActive;
@@ -34,11 +34,11 @@ public sealed class UpdateFlow
     private bool _checkActive;
     private string? _notifiedUpdateTag;
 
-    public UpdateFlow(UpdateService updates, ITrayHost trayHost, UsageEngine engine, Action shutdown)
+    public UpdateFlow(UpdateService updates, ITrayHost trayHost, ISkinToShell shell, Action shutdown)
     {
         _updates = updates;
         _trayHost = trayHost;
-        _engine = engine;
+        _shell = shell;
         _shutdown = shutdown;
     }
 
@@ -67,7 +67,7 @@ public sealed class UpdateFlow
         // the permission, and it stays the only thing deciding whether anything is fetched or
         // executed (ADR-0009's amendment). A settings.json copied from a Windows machine onto a
         // tarball install holds the preference true and must still install nothing.
-        if (_engine.Settings.UpdateAutomatically
+        if (_shell.Settings.UpdateAutomatically
             && UpdatePolicy.MayDownloadAndRun(UpdateService.CurrentInstallKind))
         {
             await InstallAutomaticallyAsync(update);

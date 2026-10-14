@@ -1,6 +1,7 @@
 using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.PlanHistory;
+using OView.Core.Storage;
 
 namespace OView.App;
 
@@ -15,8 +16,10 @@ namespace OView.App;
 /// every member is a one-way command, with the answer arriving later through
 /// <c>IShellToSkin</c>. Here a skin still reads state straight back — <see cref="Latest"/>,
 /// <see cref="Settings"/> and the rest are queries, not commands — because that is what
-/// both skins actually do today; this interface only names the shape already in use, and no
-/// skin is wired to it yet.</para>
+/// both skins actually do today; this interface only names the shape already in use.</para>
+///
+/// <para>The Windows skin holds nothing but this; the Linux skin still holds the engine
+/// itself.</para>
 /// </summary>
 public interface ISkinToShell
 {
@@ -31,6 +34,15 @@ public interface ISkinToShell
 
     /// <summary>The panel's figures: 31-day rollups plus off-plan divergence for the current window.</summary>
     PanelStatistics BuildStatistics();
+
+    /// <summary>
+    /// The rollup store as the running shell sees it, for the support bundle.
+    ///
+    /// <para>Asked of the shell rather than read beside it so a bundle reports the store
+    /// through the connection the app is actually using, rather than through one opened for the
+    /// occasion. Those two should agree; when they do not, that is the finding.</para>
+    /// </summary>
+    RollupStoreReport InspectStore();
 
     /// <summary>One poll, start to finish on the calling thread.</summary>
     void Refresh();

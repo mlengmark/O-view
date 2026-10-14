@@ -16,12 +16,12 @@ namespace OView.Tray.Diagnostics;
 public sealed class DiagnosticsClipboard
 {
     private readonly ITrayHost _trayHost;
-    private readonly UsageEngine _engine;
+    private readonly ISkinToShell _shell;
 
-    public DiagnosticsClipboard(ITrayHost trayHost, UsageEngine engine)
+    public DiagnosticsClipboard(ITrayHost trayHost, ISkinToShell shell)
     {
         _trayHost = trayHost;
-        _engine = engine;
+        _shell = shell;
     }
 
     /// <summary>
@@ -37,7 +37,7 @@ public sealed class DiagnosticsClipboard
     {
         try
         {
-            System.Windows.Clipboard.SetText(Build(_engine));
+            System.Windows.Clipboard.SetText(Build(_shell));
             _trayHost.ShowNotification(
                 NoticeText.DiagnosticsCopiedTitle, NoticeText.DiagnosticsCopiedBody,
                 NotificationKind.Information);
@@ -57,10 +57,10 @@ public sealed class DiagnosticsClipboard
         var target = path is { Length: > 0 } p ? p : "oview-diagnostics.txt";
         try
         {
-            // No engine: the hook runs before the app is assembled, which is also what makes
+            // No shell: the hook runs before the app is assembled, which is also what makes
             // the deep audit affordable — a deliberate command-line run has no UI to freeze
-            // and no engine to interrupt (issue #218).
-            File.WriteAllText(target, Build(engine: null, deepAudit: true));
+            // and nothing polling to interrupt (issue #218).
+            File.WriteAllText(target, Build(shell: null, deepAudit: true));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -76,18 +76,18 @@ public sealed class DiagnosticsClipboard
     /// the shell and cannot be absent — so those fields are omitted rather than padded with
     /// "n/a".
     /// </summary>
-    private static string Build(UsageEngine? engine, bool deepAudit = false)
+    private static string Build(ISkinToShell? shell, bool deepAudit = false)
     {
         var environment = new DiagnosticsEnvironment(
             Version: UpdateService.CurrentVersion,
             InstallKind: UpdateService.CurrentInstallKind.ToString());
 
-        // When there is a running engine, the store is read through the connection that engine
-        // is actually using — so the bundle reports what the app believes rather than what a
-        // reader opened for the occasion finds. The --diagnose hook has no engine and takes the
+        // When there is a running shell, the store is read through the connection that shell is
+        // actually using — so the bundle reports what the app believes rather than what a
+        // reader opened for the occasion finds. The --diagnose hook has no shell and takes the
         // other path, and the two label themselves differently on purpose.
-        return engine is null
+        return shell is null
             ? DiagnosticsBundle.Build(environment, deepAudit)
-            : DiagnosticsBundle.Build(environment, engine.InspectStore());
+            : DiagnosticsBundle.Build(environment, shell.InspectStore());
     }
 }

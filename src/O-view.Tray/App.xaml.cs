@@ -33,7 +33,11 @@ public partial class App : System.Windows.Application
     private ISingleInstanceGuard? _instance;
     private readonly IStartupRegistration _startup = new RegistryStartupRegistration();
     private readonly IThemeSource _theme = new RegistryThemeSource();
-    private UsageEngine? _engine;
+    private ShellHost? _host;
+
+    /// <summary>The only thing this skin may ask of the shell; the host owns the rest.</summary>
+    private ISkinToShell? _shell;
+
     private NotifyIconTrayHost? _trayHost;
     private TrayController? _controller;
     private PopupWindow? _popup;
@@ -153,9 +157,10 @@ public partial class App : System.Windows.Application
 
         // Everything about *what the numbers mean* — provider composition, the poll loop and
         // its cadence, the rollup store and weekly-reset log lifecycle, threshold and
-        // off-plan decisions, settings, and the update schedule — lives in the engine, which
-        // is platform-neutral and tested (ADR-0012). What stays here is the Windows face.
-        _engine = new UsageEngine(new UsageEngineOptions
+        // off-plan decisions, settings, and the update schedule — lives on the other side of
+        // the seam, which is platform-neutral and tested (ADR-0012). What stays here is the
+        // Windows face, and these options are all it says about the rest.
+        var shellOptions = new UsageEngineOptions
         {
             PollInterval = interval,
             Log = log,
@@ -174,44 +179,54 @@ public partial class App : System.Windows.Application
             // No credential is involved — Claude Code authenticates itself and O-view reads the
             // file it already reads (ADR-0015).
             UsageCacheRefresher = new ClaudeCliRefresher(),
-        });
+        };
 
         _trayHost = new NotifyIconTrayHost();
-        _controller = new TrayController(_trayHost, _engine, _theme, log);
-
-        _trayHost.IconClicked += (_, _) => OpenFromTray(ShowPopup);
-        _trayHost.IconRightClicked += (_, _) => OpenFromTray(ShowMenu);
-
-        // Auto-update (ADR-0009): a quiet background check surfaces a newer release as a
-        // balloon; the actual download-and-install is only ever done from the menu, with
-        // the user's confirmation. The engine owns the *when*; the HTTP and the UI are here.
-        _updates = new UpdateService(log);
-        _updateFlow = new UpdateFlow(_updates, _trayHost, _engine, Shutdown);
-        _engine.UpdateCheckDue += () => _ = _updateFlow.BackgroundCheckAsync();
-
-        // The menu's rows and their actions, and the support bundle behind one of them.
-        // Built here because everything it drives — the engine, the tray host, the update
-        // flow — exists by this point; what stays on the shell is showing the flyout.
-        _menuBuilder = new TrayMenuBuilder(
-            _startup, _engine, _trayHost, _updateFlow,
-            new DiagnosticsClipboard(_trayHost, _engine), Shutdown);
 
         // The rate-card drift check (ADR-0016). It writes a log line and nothing else — it
         // never installs a rate, and a difference is a maintainer's cue rather than a user's
         // problem, so there is no balloon and no UI. The line reaches a bug report through the
         // diagnostics bundle's log tail.
         var rates = new RateCardFeed(log);
-        _engine.RateCheckDue += () => _ = rates.CheckAsync(ModelCatalog.Bundled);
 
-        // A conflict is discovered while resolving the weekly reset, which happens on every
-        // poll — so this rides the same signal rather than needing its own schedule. The
-        // notice itself fires once per conflicting observation (issue #186).
-        _engine.SnapshotUpdated += _ => _menuBuilder.NotifyWeeklyResetConflict();
+        // The seam (docs/architecture.md): the shell builds and owns everything behind it, and
+        // this file names none of it beyond the options above. The controller is the skin — the
+        // shell pushes at it, always on this thread, and it asks back through the one interface
+        // it is handed here.
+        //
+        // The three pushes the controller does not draw itself arrive as plain callbacks, so it
+        // holds neither the update flow nor the menu: the quiet background update check
+        // (ADR-0009, whose HTTP and UI stay on this side), the rate-card check, and the
+        // weekly-reset conflict notice, which rides the snapshot because that is when the
+        // conflict is discovered rather than needing a schedule of its own (issue #186).
+        _host = new ShellHost(shellOptions, new WpfUiDispatcher(), shell =>
+            _controller = new TrayController(
+                _trayHost, shell, _theme, log,
+                afterSnapshot: () => _menuBuilder?.NotifyWeeklyResetConflict(),
+                updateCheckDue: () => _ = _updateFlow?.BackgroundCheckAsync(),
+                rateCheckDue: () => _ = rates.CheckAsync(ModelCatalog.Bundled)));
+        _shell = _host.Shell;
+
+        _trayHost.IconClicked += (_, _) => OpenFromTray(ShowPopup);
+        _trayHost.IconRightClicked += (_, _) => OpenFromTray(ShowMenu);
+
+        // Auto-update (ADR-0009): a quiet background check surfaces a newer release as a
+        // balloon; the actual download-and-install is only ever done from the menu, with
+        // the user's confirmation. The shell owns the *when*; the HTTP and the UI are here.
+        _updates = new UpdateService(log);
+        _updateFlow = new UpdateFlow(_updates, _trayHost, _shell, Shutdown);
+
+        // The menu's rows and their actions, and the support bundle behind one of them.
+        // Built here because everything it drives — the shell, the tray host, the update
+        // flow — exists by this point; what stays on this file is showing the flyout.
+        _menuBuilder = new TrayMenuBuilder(
+            _startup, _shell, _trayHost, _updateFlow,
+            new DiagnosticsClipboard(_trayHost, _shell), Shutdown);
 
         // Ticks arrive on the UI thread; the reading happens off it and comes back through
         // the dispatcher, so a first ingest over a large transcript history cannot hold the
         // message pump (issue #125).
-        _engine.Start(new DispatcherTimerFactory(), new WpfUiDispatcher());
+        _host.Start(new DispatcherTimerFactory());
 
         if (args.ContainsKey(RestartedForNativeLibraryFlag))
         {
@@ -244,7 +259,7 @@ public partial class App : System.Windows.Application
         if (args.TryGetValue("--stress", out var stress) &&
             int.TryParse(stress, NumberStyles.Integer, CultureInfo.InvariantCulture, out var iterations))
         {
-            _controller.StressTest(iterations);
+            _controller!.StressTest(iterations);
         }
 
         // The tray click, driven on the real desktop over ~5 s. Not beside --menu-check and
@@ -345,7 +360,7 @@ public partial class App : System.Windows.Application
 
     private void ShowPopup()
     {
-        if (_engine is null)
+        if (_shell is null)
         {
             return;
         }
@@ -356,7 +371,7 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        _engine.Refresh();  // fresh data on open; local reads are cheap
+        _shell.Refresh();  // fresh data on open; local reads are cheap
 
         // Opening the panel is the moment freshness is observable, so it is what drives the
         // usage-cache refresh rather than a timer (issue #234). Forced, because a person
@@ -366,13 +381,13 @@ public partial class App : System.Windows.Application
         // the UI thread and publishes back when it lands, so the panel opens immediately on the
         // current snapshot and updates underneath if the figures moved. Doing it synchronously
         // here would put a process spawn in front of the user's click — issue #125's lesson.
-        _engine.RefreshUsageCache(force: true);
+        _shell.RefreshUsageCache(force: true);
         // Both inspected on open (not cached) so the banners reflect the machine as it is
         // now. The scope report is what the token-scope note is built from — resolved
         // roots and real file counts, never a hard-coded path (issue #58).
         popup.DataReport = PlanHistoryDiagnostics.Inspect();
         popup.ScopeReport = TranscriptScopeReport.Inspect();
-        popup.SettingsForDisplay = _engine.Settings;
+        popup.SettingsForDisplay = _shell.Settings;
         // Read on open like the two reports above. The flag cache refreshes when Claude Code
         // starts, not when /usage runs, so it is often fresher than the percentages and must
         // be read on its own rather than folded into the poll (issue #254).
@@ -381,10 +396,10 @@ public partial class App : System.Windows.Application
         // Taken from the engine rather than read again here: it is the same block the poll
         // above just refreshed, and the engine's reader is the one that honours the
         // injected-provider guard.
-        popup.CachedUsage = _engine.CachedUsage;
+        popup.CachedUsage = _shell.CachedUsage;
         popup.ShowNearTrayIcon(
-            _engine.Latest,
-            _engine.BuildStatistics(),
+            _shell.Latest,
+            _shell.BuildStatistics(),
             ClaudeAccount.TryRead());
     }
 
@@ -428,13 +443,13 @@ public partial class App : System.Windows.Application
     private void RunPopupCheck(string path)
     {
         var report = new System.Text.StringBuilder();
-        var refreshesBefore = _engine!.UsageRefreshAttempts;
+        var refreshesBefore = _shell!.UsageRefreshAttempts;
 
         void Record(string label) =>
             report.AppendLine(
                 $"{label,-34} visible={_popup?.IsVisible.ToString() ?? "<none>",-5} " +
                 $"clickAway={_popup?.ClosedByClickAway.ToString() ?? "<none>",-5} " +
-                $"refreshAttempts={_engine!.UsageRefreshAttempts}");
+                $"refreshAttempts={_shell!.UsageRefreshAttempts}");
 
         var opened = new bool[2];
 
@@ -450,7 +465,7 @@ public partial class App : System.Windows.Application
 
         var step = 0;
         report.AppendLine($"popup check · {UpdateService.CurrentVersion}");
-        report.AppendLine($"refresher available: {_engine.CanRefreshUsageCache}");
+        report.AppendLine($"refresher available: {_shell.CanRefreshUsageCache}");
         report.AppendLine();
 
         // Comfortably longer than both the close transition and the toggle's grace window, so a
@@ -467,16 +482,16 @@ public partial class App : System.Windows.Application
             {
                 timer.Stop();
 
-                var refreshed = _engine!.UsageRefreshAttempts > refreshesBefore;
+                var refreshed = _shell!.UsageRefreshAttempts > refreshesBefore;
                 report.AppendLine();
                 report.AppendLine($"first click opened the panel   : {opened[0]}");
                 report.AppendLine($"reopen after dismiss opened it : {opened[1]}");
                 report.AppendLine($"panel open triggered a refresh : {refreshed}" +
-                                  (_engine.CanRefreshUsageCache ? "" : "  (no refresher — not required)"));
+                                  (_shell.CanRefreshUsageCache ? "" : "  (no refresher — not required)"));
 
                 // The refresh is only required of a build that has a refresher at all; the other
                 // two are required of every build, because they are the click working.
-                var pass = opened[0] && opened[1] && (refreshed || !_engine.CanRefreshUsageCache);
+                var pass = opened[0] && opened[1] && (refreshed || !_shell.CanRefreshUsageCache);
                 report.AppendLine($"RESULT: {(pass ? "PASS" : "FAIL")}");
 
                 File.WriteAllText(path, report.ToString());
@@ -569,9 +584,9 @@ public partial class App : System.Windows.Application
         // startup page).
         _menu.ShowDocked(new MenuWindow.MenuState(
             RunAtStartup: _startup.IsEnabled(),
-            NotifyOnThreshold: _engine!.Settings.NotifyOnThreshold,
-            ThresholdPercent: _engine.Settings.ThresholdPercent,
-            UpdateAutomatically: _engine.Settings.UpdateAutomatically,
+            NotifyOnThreshold: _shell!.Settings.NotifyOnThreshold,
+            ThresholdPercent: _shell.Settings.ThresholdPercent,
+            UpdateAutomatically: _shell.Settings.UpdateAutomatically,
             // Asked on every open rather than cached at startup, for the same reason the
             // rest of this is: it is a fact about how this build was installed, and the
             // policy is the single place that decides it (ADR-0009).
@@ -580,14 +595,15 @@ public partial class App : System.Windows.Application
             WeeklyReset: _menuBuilder!.WeeklyResetRowLabel(),
             // Empty on every ordinary open; the row only appears once the refresh has stopped
             // itself, which is the only state there is anything to undo (issue #234).
-            UsageRefreshBlocked: _engine.UsageRefreshBlocked ?? ""));
+            UsageRefreshBlocked: _shell.UsageRefreshBlocked ?? ""));
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _controller?.Dispose();
+        // The shell first: it stops every timer and closes the rollup store, so nothing can
+        // still be pushed at the controller once the tray host below is gone.
+        _host?.Dispose();
         _trayHost?.Dispose();
-        _engine?.Dispose();   // stops every timer and closes the rollup store
         _instance?.Dispose();
         base.OnExit(e);
     }

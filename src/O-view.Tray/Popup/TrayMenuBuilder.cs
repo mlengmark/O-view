@@ -11,16 +11,16 @@ namespace OView.Tray.Popup;
 /// the threshold, the weekly-reset entry, the refresh-resume undo, the support bundle, the
 /// interactive update check and Exit. <see cref="MenuWindow"/> draws the rows and
 /// <see cref="MenuText"/> owns every word; this class is the wiring between them and the
-/// engine, the startup registration and the update flow.
+/// shell, the startup registration and the update flow.
 ///
-/// <para>Showing the menu stays with the shell, because placing a docked flyout is the
-/// shell's job and the app's lifetime is its own — Exit arrives here as a callback for the
+/// <para>Showing the menu stays with <c>App</c>, because placing a docked flyout is the
+/// skin's own job and the app's lifetime is its own — Exit arrives here as a callback for the
 /// same reason it does in <see cref="UpdateFlow"/>.</para>
 /// </summary>
 public sealed class TrayMenuBuilder
 {
     private readonly IStartupRegistration _startup;
-    private readonly UsageEngine _engine;
+    private readonly ISkinToShell _shell;
     private readonly ITrayHost _trayHost;
     private readonly UpdateFlow _updateFlow;
     private readonly DiagnosticsClipboard _diagnostics;
@@ -28,14 +28,14 @@ public sealed class TrayMenuBuilder
 
     public TrayMenuBuilder(
         IStartupRegistration startup,
-        UsageEngine engine,
+        ISkinToShell shell,
         ITrayHost trayHost,
         UpdateFlow updateFlow,
         DiagnosticsClipboard diagnostics,
         Action shutdown)
     {
         _startup = startup;
-        _engine = engine;
+        _shell = shell;
         _trayHost = trayHost;
         _updateFlow = updateFlow;
         _diagnostics = diagnostics;
@@ -51,11 +51,11 @@ public sealed class TrayMenuBuilder
             // claims otherwise would be a fabricated fact about the machine. That rule
             // now lives once, on IStartupRegistration.Apply, so both heads share it.
             SetRunAtStartup = _startup.Apply,
-            SetNotifyOnThreshold = enable => _engine.SetNotifyOnThreshold(enable),
-            // Same contract as the two above: the row renders what the engine returns, so a
+            SetNotifyOnThreshold = enable => _shell.SetNotifyOnThreshold(enable),
+            // Same contract as the two above: the row renders what the shell returns, so a
             // value that could not be applied is not drawn as though it had been.
-            SetThresholdPercent = percent => _engine.SetThresholdPercent(percent),
-            SetUpdateAutomatically = enable => _engine.SetUpdateAutomatically(enable),
+            SetThresholdPercent = percent => _shell.SetThresholdPercent(percent),
+            SetUpdateAutomatically = enable => _shell.SetUpdateAutomatically(enable),
         };
 
         menu.WeeklyResetRequested += (_, _) => EditWeeklyReset();
@@ -63,9 +63,9 @@ public sealed class TrayMenuBuilder
         // re-enabled this is asking for it now, not at the next background beat (issue #234).
         menu.ResumeUsageRefreshRequested += (_, _) =>
         {
-            if (_engine.ResumeUsageRefresh())
+            if (_shell.ResumeUsageRefresh())
             {
-                _engine.RefreshUsageCache(force: true);
+                _shell.RefreshUsageCache(force: true);
             }
         };
 
@@ -83,11 +83,11 @@ public sealed class TrayMenuBuilder
 
     /// <summary>
     /// What the menu row shows on its right: the entered reset, or empty when O-view is
-    /// deriving one. Reads the engine on every open rather than caching — the same rule the
+    /// deriving one. Reads the shell on every open rather than caching — the same rule the
     /// rest of the menu state follows.
     /// </summary>
     public string WeeklyResetRowLabel() =>
-        _engine.Settings.WeeklyReset is { } reset
+        _shell.Settings.WeeklyReset is { } reset
             ? MenuText.WeeklyResetValue(reset.DayText, reset.TimeText)
             : "";
 
@@ -104,13 +104,13 @@ public sealed class TrayMenuBuilder
     /// </summary>
     public void NotifyWeeklyResetConflict()
     {
-        if (_engine.WeeklyResetConflict is not { } conflict
-            || !_engine.IsWeeklyResetConflictUnseen(conflict))
+        if (_shell.WeeklyResetConflict is not { } conflict
+            || !_shell.IsWeeklyResetConflictUnseen(conflict))
         {
             return;
         }
 
-        _engine.MarkWeeklyResetConflictNoticed(conflict);
+        _shell.MarkWeeklyResetConflictNoticed(conflict);
         _trayHost.ShowNotification(
             NoticeText.WeeklyResetConflictTitle,
             PanelText.WeeklyResetConflict(conflict, TimeZoneInfo.Local),
@@ -124,13 +124,13 @@ public sealed class TrayMenuBuilder
     /// </summary>
     private void EditWeeklyReset()
     {
-        var (entry, changed) = WeeklyResetDialog.Show(_engine.Settings.WeeklyReset);
+        var (entry, changed) = WeeklyResetDialog.Show(_shell.Settings.WeeklyReset);
         if (!changed)
         {
             return;
         }
 
-        _engine.SetWeeklyReset(entry);
-        _engine.Refresh();
+        _shell.SetWeeklyReset(entry);
+        _shell.Refresh();
     }
 }
