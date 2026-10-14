@@ -8,6 +8,7 @@ using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
+using OView.Presentation.Panel;
 using OView.Presentation.Text;
 
 namespace OView.Linux.Panel;
@@ -81,9 +82,9 @@ public sealed class PanelContent : Border
         // A pinned zone is for verification renders, so a UTC CI runner and a CET desktop
         // draw the same reset times; the live panel always follows the machine.
         var local = zone ?? TimeZoneInfo.Local;
-        var authoritative = snapshot.Source is DataSource.Live or DataSource.Stale;
+        var authoritative = PanelSections.IsAuthoritative(snapshot);
 
-        AddHeader(snapshot, account, local, utcNow);
+        AddHeader(PanelSections.Header(snapshot, account, utcNow, local));
 
         // Explain a blank panel rather than leaving the user to guess (rule 6). Only shown
         // when the figures are genuinely unavailable, and worded from both reports together
@@ -95,14 +96,12 @@ public sealed class PanelContent : Border
             AddBanner(banner.Title, banner.Detail);
         }
 
-        var placeholder = banner?.GaugePlaceholder ?? PanelBanner.UnknownGauge;
+        AddBar(PanelSections.SessionMeter(snapshot, banner, utcNow, local));
 
-        AddBar(PanelText.SessionBarLabel, authoritative ? snapshot.SessionPercent : null,
-            PanelText.SessionReset(snapshot.SessionResetAtUtc, utcNow, local, snapshot.SessionResetUncertainty), placeholder);
-
-        AddBar(PanelText.WeeklyBarLabel, authoritative ? snapshot.WeeklyPercent : null,
-            WeeklyResetLine(snapshot, authoritative, utcNow, local), placeholder,
-            BoostChipText(boostNotices, utcNow, local));
+        // No settings: this head does not receive them, which reads the same as not having
+        // entered a weekly reset — so the "you set this" label the Windows panel can show
+        // never appears here. Plumbing them through is a change to this head's shell.
+        AddBar(PanelSections.WeeklyMeter(snapshot, banner, null, boostNotices, utcNow, local));
 
         AddTiles(stats, scopeReport);
         AddGraph(stats);
@@ -122,63 +121,28 @@ public sealed class PanelContent : Border
         }
     }
 
-    private static string? WeeklyResetLine(
-        UsageSnapshot snapshot, bool authoritative, DateTimeOffset utcNow, TimeZoneInfo local)
-    {
-        if (snapshot.WeeklyResetAtUtc is { } reset)
-        {
-            return PanelText.WeeklyReset(reset, utcNow, local);
-        }
-
-        // Nothing has ever reported one and nothing was entered. Rendering nothing here is
-        // indistinguishable from a bug, so it names the state — and, unlike the copy this
-        // replaced, does not promise a derivation that ADR-0014 deleted.
-        //
-        // The hint the Windows panel puts in a hover card has nowhere to go here: this head's
-        // bar rows carry one line of text. The line itself is what differs, so the two heads
-        // still say the same thing about the same state, which is what PanelText is for.
-        return authoritative
-            ? $"{PanelText.WeeklyResetUnknown} · {PanelText.WeeklyResetUnknownAction}"
-            : null;
-    }
-
-    /// <summary>
-    /// The boost chip's text, or null when there is no live promo for the weekly meter
-    /// (issue #254). Null is the ordinary state — most of the time no promo is running.
-    /// </summary>
-    private static string? BoostChipText(
-        BoostNotices? notices, DateTimeOffset utcNow, TimeZoneInfo local)
-    {
-        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(utcNow, local).DateTime);
-        return notices?.For(BoostNotice.WeeklyBar, today, utcNow) is { } notice
-            ? BoostText.BoostChip(notice, utcNow, local)
-            : null;
-    }
-
     // ── sections ────────────────────────────────────────────────────────────────────
 
-    private void AddHeader(UsageSnapshot snapshot, ClaudeAccount? account, TimeZoneInfo local, DateTimeOffset utcNow)
+    private void AddHeader(PanelHeaderView header)
     {
         var left = new StackPanel { Spacing = 2 };
-        left.Children.Add(Text("O-view", 20, _theme["TextPrimary"], FontWeight.SemiBold));
-        left.Children.Add(Text(
-            PanelText.Freshness(snapshot, utcNow, local), 12, _theme["TextSecondary"]));
+        left.Children.Add(Text(header.Title, 20, _theme["TextPrimary"], FontWeight.SemiBold));
+        left.Children.Add(Text(header.Freshness, 12, _theme["TextSecondary"]));
 
         var right = new StackPanel { Spacing = 2, HorizontalAlignment = HorizontalAlignment.Right };
-        right.Children.Add(Text(account?.DisplayName ?? PanelText.AccountUnknown, 13, _theme["TextPrimary"]));
-        if (account?.Email is { Length: > 0 } email)
+        right.Children.Add(Text(header.AccountName, 13, _theme["TextPrimary"]));
+        if (header.Email is { } email)
         {
             right.Children.Add(Text(email, 11, _theme["TextSecondary"]));
         }
 
-        // Tier from organizationType — seatTier is empty and would render blank (rule 8).
         right.Children.Add(new Border
         {
             Background = _theme["BadgeBg"],
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(6, 2),
             HorizontalAlignment = HorizontalAlignment.Right,
-            Child = Text(account?.Tier ?? PanelText.TierUnknown, 11, _theme["BadgeText"]),
+            Child = Text(header.Tier, 11, _theme["BadgeText"]),
         });
 
         var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
@@ -189,11 +153,15 @@ public sealed class PanelContent : Border
     }
 
     /// <summary>
-    /// A usage bar. A null percentage draws the track alone — never a fabricated fill, and
+    /// A usage bar. No fill percentage draws the track alone — never a fabricated fill, and
     /// never a zero that would read as "no usage" when the truth is "not known" (rule 6).
+    ///
+    /// <para>The reset line is the one with the action spliced in: this head's rows carry a
+    /// single line of text and a compositor may never deliver hover at all, so the step that
+    /// ends an unknown weekly reset rides on the row or never appears
+    /// (<see cref="PanelMeterView.ResetLineWithAction"/>).</para>
     /// </summary>
-    private void AddBar(
-        string label, int? percent, string? resetLine, string placeholder, string? chip = null)
+    private void AddBar(PanelMeterView meter)
     {
         // Clipped, so a chip wider than its cell is cut off at the boundary rather than drawn
         // over the figure on the right. The Windows head's first render of this row did exactly
@@ -213,8 +181,8 @@ public sealed class PanelContent : Border
             Spacing = 8,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        left.Children.Add(Text(label, 14, _theme["TextPrimary"], FontWeight.SemiBold));
-        if (chip is { Length: > 0 })
+        left.Children.Add(Text(meter.Label, 14, _theme["TextPrimary"], FontWeight.SemiBold));
+        if (meter.Chip is { } chip)
         {
             left.Children.Add(new Border
             {
@@ -222,24 +190,26 @@ public sealed class PanelContent : Border
                 CornerRadius = new CornerRadius(4),
                 Padding = new Thickness(6, 1),
                 VerticalAlignment = VerticalAlignment.Center,
-                Child = Text(chip, 11, _theme["BadgeText"]),
+                Child = Text(chip.Text, 11, _theme["BadgeText"]),
             });
         }
 
         header.Children.Add(left);
-        var value = Text(
-            percent is { } p ? PanelText.BarPercentUsed(p) : placeholder, 14, _theme["TextSecondary"]);
+        var value = Text(meter.Value, 14, _theme["TextSecondary"]);
         value.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetColumn(value, 1);
         header.Children.Add(value);
 
         var fill = new Border
         {
-            Background = _theme.Level(percent),
+            // Keyed on the percentage rather than the band, because LinuxPanelTheme is where
+            // this head shares the band classification with the tray icon — the same colours,
+            // light or dark, that the ring gauge uses.
+            Background = _theme.Level(meter.Percent),
             CornerRadius = new CornerRadius(3),
             Height = 6,
             HorizontalAlignment = HorizontalAlignment.Left,
-            Width = percent is { } pct ? PanelWidth * 0.92 * Math.Clamp(pct, 0, 100) / 100.0 : 0,
+            Width = meter.FillPercent is { } pct ? PanelWidth * 0.92 * pct / 100.0 : 0,
         };
 
         var track = new Border
@@ -253,7 +223,7 @@ public sealed class PanelContent : Border
         var block = new StackPanel { Spacing = 4 };
         block.Children.Add(header);
         block.Children.Add(track);
-        if (resetLine is { Length: > 0 })
+        if (meter.ResetLineWithAction is { Length: > 0 } resetLine)
         {
             block.Children.Add(Text(resetLine, 12, _theme["TextSecondary"]));
         }
