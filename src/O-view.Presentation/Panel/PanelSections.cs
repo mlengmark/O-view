@@ -1,0 +1,173 @@
+using OView.Core.Models;
+using OView.Core.Providers.CachedUsage;
+using OView.Presentation.Text;
+
+namespace OView.Presentation.Panel;
+
+/// <summary>
+/// Builds the panel's header and its two meters, once, for both heads.
+///
+/// <para><b>Why this exists above <see cref="PanelText"/>.</b> That class already held every
+/// sentence, and the heads still disagreed — not about wording but about which sentence a
+/// state calls for. Each one decided for itself when a figure counted as authoritative, when
+/// a reset row was worth showing, which placeholder stood in for a missing percentage, and
+/// what day it was for the purpose of a promo. Those are the same class of decision as the
+/// wording (issues #55, #56): a statement about the user's usage, made twice.</para>
+///
+/// <para>What stays with each head is everything a toolkit has an opinion about — fonts,
+/// spacing, how few pixels a fill may shrink to, whether a hover card can exist at all. A
+/// view model here carries the band a figure falls in, never the colour it is painted.</para>
+/// </summary>
+public static class PanelSections
+{
+    /// <summary>
+    /// Whether the snapshot's percentages are the account's own figures rather than a local
+    /// estimate or nothing at all.
+    ///
+    /// <para>It gates more than the meters — the no-data banner and the token-scope note ask
+    /// it too — so it is stated once here rather than spelled out beside each use. Both heads
+    /// had their own copy of this expression, which is one edit away from two panels
+    /// disagreeing about whether a reading may be shown as fact.</para>
+    /// </summary>
+    public static bool IsAuthoritative(UsageSnapshot snapshot) =>
+        snapshot.Source is DataSource.Live or DataSource.Stale;
+
+    /// <summary>The header: app name, freshness, and the account block.</summary>
+    public static PanelHeaderView Header(
+        UsageSnapshot snapshot, ClaudeAccount? account, DateTimeOffset utcNow, TimeZoneInfo local) =>
+        new(
+            PanelHeaderView.AppName,
+            PanelText.Freshness(snapshot, utcNow, local),
+            account?.DisplayName ?? PanelText.AccountUnknown,
+            // Null means "no row", and an empty string means the same thing. The two heads
+            // tested it differently — one for null, one for length — and agreed only because
+            // ClaudeAccount.ReadString already maps an empty property to null. This states the
+            // rule rather than resting on that.
+            account?.Email is { Length: > 0 } email ? email : null,
+            // Tier from organizationType — seatTier is empty and would render blank (rule 8).
+            account?.Tier ?? PanelText.TierUnknown);
+
+    /// <summary>
+    /// The rolling five-hour meter. Its reset line is unknown until a window start has been
+    /// observed, and carries a <c>~</c> when the start was only bracketed (ADR-0011, issue
+    /// #180) — both of which <see cref="PanelText.SessionReset"/> decides.
+    /// </summary>
+    public static PanelMeterView SessionMeter(
+        UsageSnapshot snapshot, PanelBanner? banner, DateTimeOffset utcNow, TimeZoneInfo local)
+    {
+        var line = PanelText.SessionReset(
+            snapshot.SessionResetAtUtc, utcNow, local, snapshot.SessionResetUncertainty);
+
+        return Meter(PanelText.SessionBarLabel, snapshot.SessionPercent, snapshot, banner) with
+        {
+            ResetLine = line,
+            ResetLineWithAction = line,
+        };
+    }
+
+    /// <summary>
+    /// The weekly meter, with the reset line and the boost chip that only this one carries.
+    ///
+    /// <para>The reset line has three states, and the middle one is the point of the feature
+    /// (ADR-0014):</para>
+    /// <list type="bullet">
+    /// <item><b>Known</b> — the session line's shape plus the weekday, and labelled when the
+    /// user entered it, so an unexpectedly precise time is explained rather than mysterious
+    /// (issue #186). Never marked <c>~</c>: both remaining sources report the instant.</item>
+    /// <item><b>Not known</b> — nothing has reported one and nothing was entered. The row says
+    /// so and carries the one step that ends it, in the hint or inline.</item>
+    /// <item><b>No plan data</b> — nothing to act on, and the banner above already explains
+    /// why, so there is no line at all.</item>
+    /// </list>
+    /// </summary>
+    /// <param name="settings">
+    /// The user's settings, for the manually entered reset alone — null from a head that does
+    /// not receive them, which reads the same as not having entered one.
+    /// </param>
+    public static PanelMeterView WeeklyMeter(
+        UsageSnapshot snapshot,
+        PanelBanner? banner,
+        TraySettings? settings,
+        BoostNotices? boost,
+        DateTimeOffset utcNow,
+        TimeZoneInfo local)
+    {
+        var meter = Meter(PanelText.WeeklyBarLabel, snapshot.WeeklyPercent, snapshot, banner) with
+        {
+            Chip = Chip(boost, utcNow, local),
+        };
+
+        if (snapshot.WeeklyResetAtUtc is { } reset)
+        {
+            // A user-supplied reset is labelled. This used to also require a zero bracket, to
+            // exclude a derived reset on a machine that happened to have an entered one; that
+            // distinction died with the derivation (ADR-0014), so the term was always true.
+            var line = PanelText.WeeklyReset(reset, utcNow, local)
+                + (settings?.WeeklyReset is not null ? $" · {PanelText.WeeklyResetUserSupplied}" : "");
+
+            return meter with
+            {
+                ResetLine = line,
+                ResetLineWithAction = line,
+                ResetHint = settings?.WeeklyReset is not null
+                    ? PanelText.WeeklyResetUserSuppliedHint
+                    : null,
+            };
+        }
+
+        if (!IsAuthoritative(snapshot))
+        {
+            return meter;
+        }
+
+        return meter with
+        {
+            ResetLine = PanelText.WeeklyResetUnknown,
+            // The hint names two routes and will not fit on a row. A head that cannot hover
+            // gets the short one spliced in instead, because the state is only worth naming if
+            // the reader is told what ends it.
+            ResetLineWithAction =
+                $"{PanelText.WeeklyResetUnknown} · {PanelText.WeeklyResetUnknownAction}",
+            ResetHint = PanelText.WeeklyResetUnknownHint,
+        };
+    }
+
+    /// <summary>
+    /// What both meters share: the figure, the band and the fill, or the placeholder that
+    /// stands in for all three. A percentage is shown only when the snapshot is authoritative
+    /// — an estimate has no meter to fill (ADR-0002).
+    /// </summary>
+    private static PanelMeterView Meter(
+        string label, int? reported, UsageSnapshot snapshot, PanelBanner? banner)
+    {
+        var percent = IsAuthoritative(snapshot) ? reported : null;
+
+        return new PanelMeterView(
+            label,
+            percent,
+            percent is { } p ? PanelText.BarPercentUsed(p) : banner?.GaugePlaceholder ?? PanelBanner.UnknownGauge,
+            percent is { } band ? UsageLevels.Classify(band) : null,
+            percent is { } fill ? Math.Clamp(fill, 0, 100) : null,
+            ResetLine: null,
+            ResetLineWithAction: null,
+            ResetHint: null,
+            Chip: null);
+    }
+
+    /// <summary>
+    /// The chip, when Claude Code has cached a promo for the weekly meter and it has not
+    /// ended. The reader's own day decides that, which is why the zone is a parameter rather
+    /// than the machine's.
+    /// </summary>
+    private static PanelBoostChipView? Chip(
+        BoostNotices? notices, DateTimeOffset utcNow, TimeZoneInfo local)
+    {
+        var today = DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(utcNow, local).DateTime);
+
+        return notices?.For(BoostNotice.WeeklyBar, today, utcNow) is { } notice
+            ? new PanelBoostChipView(
+                BoostText.BoostChip(notice, utcNow, local),
+                BoostText.BoostCard(notice, notices.FetchedAtUtc, local))
+            : null;
+    }
+}
