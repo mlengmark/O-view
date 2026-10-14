@@ -45,8 +45,8 @@ public partial class App : System.Windows.Application
     private PopupWindow? _popup;
     private MenuWindow? _menu;
     private UpdateService? _updates;
+    private UpdateFlow? _updateFlow;
     private IAppLog? _log;
-    private bool _updateFlowActive;
 
     /// <summary>
     /// Passed to the instance started by <see cref="RestartForMissingNativeLibrary"/>, so it
@@ -54,13 +54,6 @@ public partial class App : System.Windows.Application
     /// a crash.
     /// </summary>
     private const string RestartedForNativeLibraryFlag = "--restarted-native";
-
-    /// <summary>
-    /// An interactive update check is running, including its modal confirmation. Distinct
-    /// from <see cref="_updateFlowActive"/>, which only spans the download that may follow.
-    /// </summary>
-    private bool _updateCheckActive;
-    private string? _notifiedUpdateTag;
 
     /// <summary>
     /// Verification hooks that render and exit. A table rather than seven near-identical
@@ -198,7 +191,8 @@ public partial class App : System.Windows.Application
         // balloon; the actual download-and-install is only ever done from the menu, with
         // the user's confirmation. The engine owns the *when*; the HTTP and the UI are here.
         _updates = new UpdateService(log);
-        _engine.UpdateCheckDue += () => _ = BackgroundCheckAsync();
+        _updateFlow = new UpdateFlow(_updates, _trayHost, _engine, Shutdown);
+        _engine.UpdateCheckDue += () => _ = _updateFlow.BackgroundCheckAsync();
 
         // The rate-card drift check (ADR-0016). It writes a log line and nothing else — it
         // never installs a rate, and a difference is a maintainer's cue rather than a user's
@@ -232,7 +226,7 @@ public partial class App : System.Windows.Application
         // Verification hook: force an interactive update check (as if from the menu).
         if (args.ContainsKey("--check-updates"))
         {
-            _ = CheckForUpdatesInteractiveAsync();
+            _ = _updateFlow.CheckForUpdatesInteractiveAsync();
         }
 
         // Verification hooks for the startup-registration round trip.
@@ -677,7 +671,13 @@ public partial class App : System.Windows.Application
 
         menu.CopyDiagnosticsRequested += (_, _) => CopyDiagnostics();
         // "Check for updates" sits directly above Exit, as requested in issue #18.
-        menu.CheckForUpdatesRequested += async (_, _) => await CheckForUpdatesInteractiveAsync();
+        menu.CheckForUpdatesRequested += async (_, _) =>
+        {
+            if (_updateFlow is not null)
+            {
+                await _updateFlow.CheckForUpdatesInteractiveAsync();
+            }
+        };
         menu.ExitRequested += (_, _) => Shutdown();
 
         return menu;
@@ -750,243 +750,6 @@ public partial class App : System.Windows.Application
             ? DiagnosticsBundle.Build(environment, deepAudit)
             : DiagnosticsBundle.Build(environment, engine.InspectStore());
     }
-
-    /// <summary>
-    /// Quiet check: only *notifies* when a newer release exists, and only once per version
-    /// (re-notifying every day would be nagging). It never downloads or installs anything —
-    /// that stays behind the explicit menu action and its confirmation.
-    /// </summary>
-    private async Task BackgroundCheckAsync()
-    {
-        if (_updates is null || _trayHost is null || _updateFlowActive)
-        {
-            return;
-        }
-
-        var result = await _updates.CheckAsync();
-        if (result is not { Outcome: UpdateOutcome.UpdateAvailable, Available: { } update }
-            || _notifiedUpdateTag == update.Tag)
-        {
-            return;
-        }
-
-        _notifiedUpdateTag = update.Tag;
-
-        // Both conditions, every time. The setting alone is a preference; MayDownloadAndRun is
-        // the permission, and it stays the only thing deciding whether anything is fetched or
-        // executed (ADR-0009's amendment). A settings.json copied from a Windows machine onto a
-        // tarball install holds the preference true and must still install nothing.
-        if (_engine!.Settings.UpdateAutomatically
-            && UpdatePolicy.MayDownloadAndRun(UpdateService.CurrentInstallKind))
-        {
-            await InstallAutomaticallyAsync(update);
-            return;
-        }
-
-        _trayHost.ShowNotification(
-            UpdateText.AvailableTitle,
-            UpdateText.AvailableBody(update.Version, UpdateService.CurrentVersion),
-            NotificationKind.Information);
-    }
-
-    /// <summary>
-    /// The automatic path: install without the per-release confirmation, because the user
-    /// already gave it once by turning the setting on (ADR-0009 as amended, issue #140).
-    ///
-    /// <para><b>Automatic is not silent.</b> The balloon goes out <i>before</i> anything is
-    /// downloaded, naming the version and warning that O-view will close and reopen.
-    /// Invisibility was the worst property of the alternative ADR-0009 rejected, and it stays
-    /// rejected — what this removes is the per-release click, not the user's knowledge.</para>
-    ///
-    /// <para>Every failure path is the confirmed flow's, unchanged — including the deliberate
-    /// refusal to open the releases page after a checksum mismatch, which would hand the user
-    /// exactly the file the check just rejected.</para>
-    /// </summary>
-    private async Task InstallAutomaticallyAsync(AvailableUpdate update)
-    {
-        if (_updates is null || _trayHost is null || _updateFlowActive)
-        {
-            return;
-        }
-
-        _trayHost.ShowNotification(
-            UpdateText.InstallingTitle(update.Version),
-            UpdateText.InstallingBody(UpdateService.CurrentVersion),
-            NotificationKind.Information);
-
-        _updateFlowActive = true;
-        try
-        {
-            var installer = await _updates.DownloadInstallerAsync(update);
-            _updates.LaunchInstaller(installer);
-            Shutdown();  // release the exe lock so the installer can replace it and relaunch
-        }
-        catch (UpdateVerificationException)
-        {
-            _updateFlowActive = false;
-            // The one case that earns Error. A checksum mismatch means the bytes that arrived
-            // were not the bytes the release published, and O-view refused to run them.
-            _trayHost.ShowNotification(
-                UpdateText.ChecksumMismatchTitle, UpdateText.ChecksumMismatchBody,
-                NotificationKind.Error);
-        }
-        catch (Exception)
-        {
-            // No releases page here. The confirmed flow opens it because a human is already
-            // in the loop and can decide; nobody is watching this one, so a browser window
-            // appearing unbidden is not a useful answer. It retries on the next daily check.
-            _updateFlowActive = false;
-            _trayHost.ShowNotification(
-                UpdateText.AutomaticFailedTitle, UpdateText.AutomaticFailedBody(update.Version),
-                NotificationKind.Warning);
-        }
-    }
-
-    /// <summary>
-    /// The menu action: always reports an outcome (up to date, available, or unreachable),
-    /// and offers to install when a newer release exists.
-    /// </summary>
-    private async Task CheckForUpdatesInteractiveAsync()
-    {
-        if (_updates is null || _trayHost is null || _updateFlowActive || _updateCheckActive)
-        {
-            // _updateCheckActive covers the whole interactive flow, including the modal
-            // confirmation; _updateFlowActive only covers the download that follows it. A
-            // second click while the first check is still awaiting the network — or sitting
-            // on the confirm dialog — would otherwise start an independent flow and stack a
-            // second modal behind the first.
-            return;
-        }
-
-        _updateCheckActive = true;
-        try
-        {
-            await RunUpdateCheckAsync();
-        }
-        finally
-        {
-            _updateCheckActive = false;
-        }
-    }
-
-    private async Task RunUpdateCheckAsync()
-    {
-        var result = await _updates!.CheckAsync();
-        switch (result.Outcome)
-        {
-            case UpdateOutcome.UpToDate:
-                _trayHost!.ShowNotification(
-                    UpdateText.UpToDateTitle,
-                    UpdateText.UpToDateBody(UpdateService.CurrentVersion),
-                    NotificationKind.Information);
-                break;
-
-            case UpdateOutcome.UpdateAvailable when result.Available is { } update:
-                await OfferUpdateAsync(update);
-                break;
-
-            case UpdateOutcome.RateLimited:
-                // Named separately because the remedy is different and the cause is usually
-                // not this machine: GitHub's limit is 60/hour per IP address, so a shared
-                // network can exhaust it without this user making a request. Telling them
-                // their connection failed sent them to debug the wrong thing (issue #176).
-                _trayHost!.ShowNotification(
-                    UpdateText.RateLimitedTitle,
-                    PanelText.RateLimitedNotice(result.RetryAfterUtc, TimeZoneInfo.Local),
-                    NotificationKind.Warning);
-                break;
-
-            default:
-                // Warning, not Error: GitHub being briefly unreachable is a retryable
-                // condition on the user's own network, and nothing on the machine is wrong.
-                _trayHost!.ShowNotification(
-                    UpdateText.CheckFailedTitle, UpdateText.CheckFailedBody,
-                    NotificationKind.Warning);
-                break;
-        }
-    }
-
-    /// <summary>
-    /// Confirms with the user, then acts according to how this build was installed
-    /// (<see cref="UpdatePolicy"/>): an installer build downloads and hands off, exiting so
-    /// the installer can replace the exe and relaunch it; anything the user or a package
-    /// manager owns is sent to the release page instead.
-    /// </summary>
-    private async Task OfferUpdateAsync(AvailableUpdate update)
-    {
-        if (_updates is null || _trayHost is null)
-        {
-            return;
-        }
-
-        var action = UpdatePolicy.ActionFor(UpdateService.CurrentInstallKind);
-
-        if (action is not UpdateAction.InstallInPlace)
-        {
-            // A running single-file exe cannot overwrite itself, and the installer would
-            // create a parallel install rather than update the loose one. On Linux this
-            // branch also covers an apt build, which must never overwrite dpkg's files —
-            // but that head has its own copy and never reaches this method.
-            if (ConfirmUpdate(update, UpdateText.OpenPageQuestion, UpdateText.OpenPageConfirm))
-            {
-                _updates.OpenInBrowser(UpdateService.ReleasePageUrl(update));
-            }
-            return;
-        }
-
-        if (!ConfirmUpdate(update, UpdateText.InstallQuestion, UpdateText.InstallConfirm,
-            UpdateText.InstallDetail))
-        {
-            return;
-        }
-
-        _updateFlowActive = true;
-        try
-        {
-            var installer = await _updates.DownloadInstallerAsync(update);
-            _updates.LaunchInstaller(installer);
-            Shutdown();  // release the exe lock so the installer can replace it and relaunch
-        }
-        catch (UpdateVerificationException)
-        {
-            // Deliberately does NOT open the releases page. Every other failure here means
-            // "try again by hand", but this one means the file that arrived was not the file
-            // the release published — sending the user to download it manually would hand
-            // them the thing the check just rejected. Say what was observed and stop
-            // (CLAUDE.md rule 6); the installer has already been deleted, and nothing on the
-            // machine has changed.
-            _updateFlowActive = false;
-            // The one case that earns Error. A checksum mismatch means the bytes that arrived
-            // were not the bytes the release published, and O-view refused to run them.
-            _trayHost.ShowNotification(
-                UpdateText.ChecksumMismatchTitle, UpdateText.ChecksumMismatchBody,
-                NotificationKind.Error);
-        }
-        catch (Exception)
-        {
-            _updateFlowActive = false;
-            // Warning rather than Error: the download failed, but the user is being handed a
-            // working way to finish the job on the next line.
-            _trayHost.ShowNotification(
-                UpdateText.FailedTitle, UpdateText.FailedBody, NotificationKind.Warning);
-            _updates.OpenInBrowser(UpdateService.ReleasePageUrl(update));
-        }
-    }
-
-    /// <summary>
-    /// The update prompt, on the app's own dialog rather than a system MessageBox — that
-    /// box was raw Win32 chrome with a stock glyph and nothing identifying which app was
-    /// asking. The primary button names the action ("Update now") instead of answering
-    /// "Yes" to a question the user has to re-read to be sure of.
-    /// </summary>
-    private static bool ConfirmUpdate(
-        AvailableUpdate update, string question, string confirmLabel, string detail = "") =>
-        DialogWindow.Confirm(
-            title: UpdateText.DialogTitle,
-            message: UpdateText.DialogMessage(update.Version, UpdateService.CurrentVersion, question),
-            confirmLabel: confirmLabel,
-            cancelLabel: UpdateText.DialogCancel,
-            detail: detail);
 
     protected override void OnExit(ExitEventArgs e)
     {
