@@ -13,7 +13,7 @@ namespace OView.Presentation.Text;
 public static class OffPlanText
 {
     /// <summary>U+00A0, as an escape — the literal character is invisible in source.</summary>
-    private const char NonBreakingSpace = ' ';
+    private const char NonBreakingSpace = '\u00A0';
 
     /// <summary>
     /// Human-readable list of the credit-billed models, for <see cref="OffPlanHint"/>'s

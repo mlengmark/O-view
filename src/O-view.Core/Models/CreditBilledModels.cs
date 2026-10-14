@@ -23,11 +23,10 @@ public static class CreditBilledModels
     /// so a caption built from them can never name a different set than the one being
     /// summed.
     ///
-    /// <para><b>The caption itself is Presentation's job (OVIAA-39).</b> This class used to
+    /// <para><b>The caption itself is Presentation's job.</b> This class used to
     /// also join the names into a UI string, non-breaking spaces and all; that join is
-    /// panel formatting and now lives at
-    /// <see cref="OView.Presentation.Text.OffPlanText.CreditModelsCaption"/>, built from the
-    /// entries exposed here.</para>
+    /// panel formatting and now lives at Presentation's OffPlanText.CreditModelsCaption,
+    /// built from the entries exposed here.</para>
     /// </summary>
     public static IReadOnlyList<ModelEntry> Models { get; } =
         ModelCatalog.InClass(BillingClass.Credit);

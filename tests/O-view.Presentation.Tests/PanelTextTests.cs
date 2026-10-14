@@ -556,7 +556,7 @@ public class PanelTextTests
     /// line; compare against ordinary spaces so these assertions read as the sentence a
     /// user sees rather than as its encoding.
     /// </summary>
-    private const char Nbsp = ' ';
+    private const char Nbsp = '\u00A0';
 
     private static string CreditCaption => OffPlanText.CreditModelsCaption.Replace(Nbsp, ' ');
 
@@ -602,6 +602,19 @@ public class PanelTextTests
         Assert.DoesNotContain(" 5", OffPlanText.CreditModelsCaption, StringComparison.Ordinal);
         Assert.Contains(Nbsp, OffPlanText.CreditModelsCaption);
     }
+
+    /// <summary>
+    /// The breakdown's folded remainder is pinned nowhere else: the golden images cover
+    /// <see cref="TokenText.OtherSegmentLabel"/>, but no golden names a model count, so a
+    /// typo in <see cref="TokenText.FoldedModelsLabel"/> would ship silently.
+    /// </summary>
+    [Fact]
+    public void TheFoldedModelsLabelNamesTheCount() =>
+        Assert.Equal("3 more models", TokenText.FoldedModelsLabel(3));
+
+    [Fact]
+    public void TheOtherSegmentLabelIsOther() =>
+        Assert.Equal("Other", TokenText.OtherSegmentLabel);
 
     /// <summary>
     /// The resume row is an action, not a status line. Both heads read this one string, so the

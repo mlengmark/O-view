@@ -90,6 +90,6 @@ public class ModelCatalogTests
         }
     }
 
-    // CreditDisplayList_* moved to PanelTextTests.cs (OVIAA-39) \u2014 the caption they check
-    // is built in Presentation now, from CreditBilledModels.Models.
+    // CreditDisplayList_* moved to PanelTextTests.cs — the caption they check is built in
+    // Presentation now, from CreditBilledModels.Models.
 }

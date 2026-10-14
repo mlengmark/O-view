@@ -123,8 +123,8 @@ public sealed record PanelStatistics(
     /// <para>ADR-0006 makes the panel state this: a small 31-day figure with no caveat
     /// reads as low usage rather than as short history. The sentence itself — "3 of 31
     /// days recorded" — is built from <see cref="RecordedDays"/> and <see cref="WindowDays"/>
-    /// in <see cref="OView.Presentation.Text.TokenText.Caveat"/>, which is panel copy and not
-    /// this type's concern; this property only reports the fact the sentence is about.</para>
+    /// in Presentation's TokenText.CoverageNote, which is panel copy and not this type's
+    /// concern; this property only reports the fact the sentence is about.</para>
     ///
     /// <para><b><see cref="RecordedDays"/> counts days O-view has data <i>for</i>, not days
     /// with usage on them</b> (GitHub issue #142). Counting the latter inverted the caveat's
