@@ -6,7 +6,6 @@ using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Core.Storage;
-using OView.Presentation.Text;
 
 namespace OView.App;
 
@@ -37,12 +36,6 @@ public sealed class UsageEngine : IDisposable
     /// <see cref="WithReportedResets"/> for why the chain alone is not enough.
     /// </summary>
     private readonly IUsageProvider _cachedUtilization;
-    /// <summary>
-    /// Not readonly: the threshold is user-settable from the menu (issue #141), and the
-    /// watcher carries the edge-trigger state that has to be rebuilt with it. See
-    /// <see cref="SetThresholdPercent"/>.
-    /// </summary>
-    private ThresholdWatcher _watcher;
     private readonly UsageEngineOptions _options;
     private readonly IClock _clock;
     private readonly IAppLog? _log;
@@ -58,7 +51,6 @@ public sealed class UsageEngine : IDisposable
     private IAppTimer? _planTimer;
 
     private DateTimeOffset _startedAt;
-    private bool _offPlanNotified;
 
     /// <summary>Where a scheduled poll publishes back to. Null means "publish inline".</summary>
     private IUiDispatcher? _dispatcher;
@@ -95,6 +87,12 @@ public sealed class UsageEngine : IDisposable
     /// file shorter. See <see cref="PlanHistoryPoll"/>.
     /// </summary>
     private readonly PlanHistoryPoll _planHistoryPoll;
+
+    /// <summary>
+    /// The threshold and off-plan notification decisions — its own class purely to keep this
+    /// file shorter. See <see cref="UsageAlerts"/>.
+    /// </summary>
+    private readonly UsageAlerts _alerts;
 
     /// <summary>Raw reader for Claude Code's cached figures, used only to harvest the anchor.</summary>
     private readonly Func<CachedUtilization?> _cachedUtilizationSource;
@@ -212,7 +210,7 @@ public sealed class UsageEngine : IDisposable
         //
         // The default used to be PlanHistoryFile.DefaultPath in that case, and the guard
         // against it — PlanHistoryPoll's own addressed flag — covered only *publishing*.
-        // ReadOffPlan() →
+        // UsageAlerts.ReadOffPlan() →
         // BuildStatistics() went through this provider regardless, so the off-plan comparison
         // read the developer's own Claude Desktop usage on every poll in every test that did
         // not name a file. Replayed against that file afterwards: six instants where a test
@@ -273,7 +271,6 @@ public sealed class UsageEngine : IDisposable
             || _options.PlanHistoryPath is not null;
 
         Settings = TraySettings.Load(_options.SettingsPath);
-        _watcher = new ThresholdWatcher(Settings.ThresholdPercent);
 
         _weeklyReset = new WeeklyResetCoordinator(
             _options.WeeklyResetAnchorPath,
@@ -288,6 +285,19 @@ public sealed class UsageEngine : IDisposable
                 Settings.Save(_options.SettingsPath);
             });
         _weeklyReset.ApplyWeeklyResetSetting();
+
+        _alerts = new UsageAlerts(
+            _planHistory is not null,
+            BuildStatistics,
+            () => CachedUsage?.ExtraUsage.State ?? ExtraUsageState.Unknown,
+            _log,
+            () => Settings,
+            settings =>
+            {
+                Settings = settings;
+                Settings.Save(_options.SettingsPath);
+            },
+            notification => NotificationRequested?.Invoke(notification));
 
         _planHistoryPoll = new PlanHistoryPoll(
             _planHistory,
@@ -304,7 +314,7 @@ public sealed class UsageEngine : IDisposable
             {
                 Latest = snapshot;
                 SnapshotUpdated?.Invoke(snapshot);
-                NotifyOnThreshold(snapshot);
+                _alerts.NotifyOnThreshold(snapshot);
             },
             (read, publish) => RunOffThread(_planGate, "plan poll", read, publish));
     }
@@ -600,7 +610,7 @@ public sealed class UsageEngine : IDisposable
             // whatever is there, entry included — see WithReportedResets.
             var snapshot = _weeklyReset.WithWeeklyReset(_provider.GetSnapshot(utcNow), utcNow);
             snapshot = _weeklyReset.WithReportedResets(snapshot, utcNow);
-            return new PollResult(snapshot, ReadOffPlan(), utcNow, Failed: false);
+            return new PollResult(snapshot, _alerts.ReadOffPlan(), utcNow, Failed: false);
         }
         catch (Exception ex)
         {
@@ -631,34 +641,6 @@ public sealed class UsageEngine : IDisposable
             {
                 return null;
             }
-        }
-    }
-
-    /// <summary>
-    /// Whether extra usage is switched on for this account, per Claude Code's cache.
-    /// <see cref="ExtraUsageState.Unknown"/> when nothing said — never a guess (issue #259).
-    /// </summary>
-    private ExtraUsageStatus SafeExtraUsage() => CachedUsage?.ExtraUsage ?? ExtraUsageStatus.Unknown;
-
-    /// <summary>
-    /// The divergence figures, or null when there is no plan history to compare against or
-    /// the build failed. A failure here is not a failed poll — the snapshot is still good.
-    /// </summary>
-    private PanelStatistics? ReadOffPlan()
-    {
-        if (_planHistory is null)
-        {
-            return null;
-        }
-
-        try
-        {
-            return BuildStatistics();
-        }
-        catch (Exception ex)
-        {
-            _log?.Write($"off-plan check FAILED {ex.GetType().Name}: {ex.Message}");
-            return null;
         }
     }
 
@@ -694,7 +676,7 @@ public sealed class UsageEngine : IDisposable
                         $"session={result.Snapshot.SessionPercent?.ToString() ?? "null"}");
             SnapshotUpdated?.Invoke(result.Snapshot);
 
-            NotifyOnThreshold(result.Snapshot);
+            _alerts.NotifyOnThreshold(result.Snapshot);
         }
         else
         {
@@ -702,7 +684,7 @@ public sealed class UsageEngine : IDisposable
                         $"({result.Snapshot.CapturedAtUtc:u} < {Latest.CapturedAtUtc:u})");
         }
 
-        CheckOffPlan(result.OffPlan);
+        _alerts.CheckOffPlan(result.OffPlan);
 
         AdjustCadence(result.Snapshot.Source, result.UtcNow);
 
@@ -730,153 +712,19 @@ public sealed class UsageEngine : IDisposable
     /// actually stands afterwards — a failed write must not be reported as success
     /// (CLAUDE.md rule 6).
     /// </summary>
-    public bool SetNotifyOnThreshold(bool enable)
-    {
-        var wasEnabled = Settings.NotifyOnThreshold;
-
-        Settings = Settings with { NotifyOnThreshold = enable };
-        Settings.Save(_options.SettingsPath);
-
-        // Re-armed on the off→on edge, for the same reason SetThresholdPercent rebuilds the
-        // watcher: it is edge-triggered, and while notifications are off it is never
-        // consulted — `Settings.NotifyOnThreshold && _watcher.ShouldNotify(...)` short-circuits
-        // — so its "we are currently above" flag freezes at whatever it held when they were
-        // switched off.
-        //
-        // Left stale, that silently swallows the next crossing. Notify at 95%, switch
-        // notifications off, let the window reset, switch them back on, climb past the
-        // threshold again: the watcher still believes it is above, returns false, and the user
-        // is never told. It stays stuck until usage happens to fall below the threshold during
-        // a period when notifications are on.
-        if (enable && !wasEnabled)
-        {
-            _watcher = new ThresholdWatcher(Settings.ThresholdPercent);
-        }
-
-        return Settings.NotifyOnThreshold;
-    }
+    public bool SetNotifyOnThreshold(bool enable) => _alerts.SetNotifyOnThreshold(enable);
 
     /// <summary>
     /// Applies and persists the automatic-update preference, returning the state now in
     /// effect (ADR-0009 as amended, issue #140).
-    ///
-    /// <para>The engine stores it and nothing more. <b>Whether a build may act on it is not
-    /// this class's decision</b> — <c>UpdatePolicy.MayDownloadAndRun</c> owns that, and the
-    /// head consults it before every install. Keeping the two apart is what stops a
-    /// preference read as permission: a tarball build can hold this setting true in a
-    /// settings file copied from a Windows machine and must still install nothing.</para>
     /// </summary>
-    public bool SetUpdateAutomatically(bool enable)
-    {
-        Settings = Settings with { UpdateAutomatically = enable };
-        Settings.Save(_options.SettingsPath);
-        return Settings.UpdateAutomatically;
-    }
+    public bool SetUpdateAutomatically(bool enable) => _alerts.SetUpdateAutomatically(enable);
 
     /// <summary>
     /// Applies and persists the notification threshold, returning the percentage now in
     /// effect (issue #141).
-    ///
-    /// <para><b>The watcher is rebuilt, not just re-read.</b> It is edge-triggered — it fires
-    /// once per upward crossing and re-arms on a drop below — so it holds "we are currently
-    /// above" state that was decided against the OLD threshold. Rebuilding clears that, which
-    /// makes lowering the threshold behave the way a user asking for it means: someone sitting
-    /// at 75% who moves the threshold from 80 to 70 is notified on the next poll, rather than
-    /// waiting for a window reset to re-arm a watcher that never saw them cross.</para>
-    ///
-    /// <para>Raising it does the right thing for the same reason: from 70 to 90 at 75% usage,
-    /// the fresh watcher sees 75 &lt; 90 and stays silent.</para>
-    ///
-    /// <para>Clamped to the same 1–100 range <see cref="TraySettings.Load"/> enforces, so a
-    /// caller cannot install a threshold the settings file would refuse to load back.</para>
     /// </summary>
-    public int SetThresholdPercent(int percent)
-    {
-        Settings = Settings with { ThresholdPercent = Math.Clamp(percent, 1, 100) };
-        Settings.Save(_options.SettingsPath);
-        _watcher = new ThresholdWatcher(Settings.ThresholdPercent);
-        return Settings.ThresholdPercent;
-    }
-
-    private void NotifyOnThreshold(UsageSnapshot snapshot)
-    {
-        if (Settings.NotifyOnThreshold && _watcher.ShouldNotify(snapshot.SessionPercent))
-        {
-            NotificationRequested?.Invoke(new AppNotification("Claude usage",
-                $"Session usage is at {snapshot.SessionPercent}% of the 5-hour limit.",
-                NotificationKind.Warning));
-        }
-    }
-
-    /// <summary>
-    /// Notifies once when usage starts bypassing the plan. Edge-triggered like the
-    /// threshold watcher, and re-armed when it stops — the point is to catch the
-    /// silent-and-expensive case the plan bars cannot show, not to nag.
-    /// </summary>
-    private void CheckOffPlan(PanelStatistics? stats)
-    {
-        // No plan history, or the figures could not be built — either way there is nothing
-        // to decide on, and a failed build must not re-arm the edge trigger.
-        if (stats is null)
-        {
-            return;
-        }
-
-        if (!stats.IsOffPlan)
-        {
-            _offPlanNotified = false;
-            return;
-        }
-
-        _log?.Write($"off-plan detected state={stats.Divergence?.State} " +
-                    $"tokens={stats.Divergence?.OutputTokensInWindow} rise={stats.Divergence?.PlanRisePoints}");
-
-        if (_offPlanNotified || !Settings.NotifyOnThreshold)
-        {
-            return;
-        }
-
-        _offPlanNotified = true;
-
-        // What Claude Code says about extra usage on this account (issue #259). Read through
-        // the same source the reset anchor uses, so a test that supplied its own Provider gets
-        // Unknown rather than the developer's real ~/.claude.json — the hazard PlanHistoryPoll's
-        // addressed-flag doc is about, pointed at this field.
-        var extraUsage = SafeExtraUsage();
-
-        // The panel's formatter, not a pinned-culture "C" lookup. This balloon sends
-        // the user to the Est. tile, so the two must write the same amount the same
-        // way — and ICU's currency pattern is not the same instruction as composing
-        // "$" + a fixed decimal format, even where they agree today (issue #55).
-        //
-        // Withheld where extra usage is known to be off. The figure is the API-rate VALUE of
-        // the work, not a charge, and the panel has the room to label it as such; a balloon
-        // line reading "Est. $92.75 so far this window" beside "extra usage is switched off"
-        // just contradicts itself, and the half a reader carries away is the money.
-        var spend = stats.EstOffPlanUsd is { } usd && extraUsage.State != ExtraUsageState.Disabled
-            ? $" Est. {UsageFormatter.Usd(usd)} so far this window."
-            : "";
-
-        // The claim is made only where the setting supports it. Asserting a charge at an
-        // account that cannot be charged is issue #259, and it is worse in a balloon than in
-        // the panel: there is nothing beside it to qualify it.
-        var (title, setting) = extraUsage.State switch
-        {
-            ExtraUsageState.Enabled => ("Usage is billing beyond your plan",
-                " Extra usage is switched on for this account."),
-            ExtraUsageState.Disabled => ("Usage is not drawing from your plan",
-                " Extra usage is switched off, so this should not be billing beyond your plan."),
-            _ => ("Usage is not drawing from your plan", ""),
-        };
-
-        // The two the engine raises are both genuine warnings, and they are the reason the
-        // kind exists: these are what the yellow triangle is FOR, and it meant nothing while
-        // every "up to date" balloon wore the same one.
-        NotificationRequested?.Invoke(new AppNotification(title,
-            $"Work this session isn't drawing from your plan allowance.{spend}{setting} " +
-            "Open O-view for detail.",
-            NotificationKind.Warning));
-    }
+    public int SetThresholdPercent(int percent) => _alerts.SetThresholdPercent(percent);
 
     /// <summary>
     /// Re-times the poll timer for the current data state: fast while still waiting for

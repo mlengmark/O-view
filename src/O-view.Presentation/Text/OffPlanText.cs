@@ -170,6 +170,54 @@ public static class OffPlanText
             : string.Create(CultureInfo.InvariantCulture, $"reported by Claude Code, read {read:d MMM HH:mm}");
     }
 
+    /// <summary>
+    /// The off-plan balloon's title — distinct from <see cref="OffPlanTitle"/>, which is the
+    /// panel banner's heading for the same divergence. The balloon fires once per crossing
+    /// (issue #259), so unlike the banner it has no limit-reached state of its own: it covers
+    /// what Claude Code says about extra usage on the account, full stop.
+    ///
+    /// <para>The claim is made only where the account setting supports it — an account with
+    /// extra usage switched off cannot be billed anything, and saying otherwise was not a
+    /// hedge but a false statement about the reader's money. Unknown gets the same safe
+    /// title as Disabled, for the same reason <see cref="OffPlanTitle"/> gives both one
+    /// heading: there is nothing to claim either way.</para>
+    /// </summary>
+    public static string NotificationTitle(ExtraUsageState extraUsage) => extraUsage switch
+    {
+        ExtraUsageState.Enabled => "Usage is billing beyond your plan",
+        ExtraUsageState.Disabled => "Usage is not drawing from your plan",
+        _ => "Usage is not drawing from your plan",
+    };
+
+    /// <summary>
+    /// The off-plan balloon's body: the observation, then the estimated spend where the
+    /// account can be billed anything, then what Claude Code says about the setting, then
+    /// where to look for more.
+    ///
+    /// <para><b>The estimate is withheld wherever extra usage is known to be off.</b> The
+    /// figure is the API-rate VALUE of the work, not a charge, and the panel has the room to
+    /// label it as such; a balloon line reading "Est. $92.75 so far this window" beside "extra
+    /// usage is switched off" just contradicts itself, and the half a reader carries away from
+    /// a contradiction is the money.</para>
+    /// </summary>
+    public static string NotificationBody(decimal? estOffPlanUsd, ExtraUsageState extraUsage)
+    {
+        var spend = estOffPlanUsd is { } usd && extraUsage != ExtraUsageState.Disabled
+            ? $" Est. {UsageFormatter.Usd(usd)} so far this window."
+            : "";
+
+        var setting = extraUsage switch
+        {
+            ExtraUsageState.Enabled => " Extra usage is switched on for this account.",
+            ExtraUsageState.Disabled =>
+                " Extra usage is switched off, so this should not be billing beyond your plan.",
+            _ => "",
+        };
+
+        return $"Work this session isn't drawing from your plan allowance.{spend}{setting} " +
+            "Open O-view for detail.";
+    }
+
     /// <summary>Sub-label noting that an off-plan figure includes work billed outside the plan.</summary>
     public static string OffPlanNote(bool offPlan) => offPlan ? "incl. off-plan usage" : "";
 

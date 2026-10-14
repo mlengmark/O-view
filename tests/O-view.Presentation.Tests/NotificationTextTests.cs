@@ -1,3 +1,4 @@
+using OView.Core.Providers.CachedUsage;
 using OView.Core.Updates;
 using OView.Presentation.Text;
 
@@ -61,6 +62,18 @@ public class NotificationTextTests
     public void TheWeeklyResetConflictTitleNamesWhatDisagrees() =>
         Assert.Equal("Weekly reset time doesn't match", NoticeText.WeeklyResetConflictTitle);
 
+    /// <summary>
+    /// The threshold balloon's title is generic — the crossing itself is in the body — because
+    /// one title is reused for every percentage a user may set (issue #141).
+    /// </summary>
+    [Fact]
+    public void TheThresholdNoticeNamesTheCrossingInTheBody()
+    {
+        Assert.Equal("Claude usage", NoticeText.ThresholdTitle);
+        Assert.Equal(
+            "Session usage is at 95% of the 5-hour limit.", NoticeText.ThresholdBody(95));
+    }
+
     // ── the missing tray host (ADR-0013 decision 2) ─────────────────────────────────
 
     /// <summary>
@@ -114,6 +127,69 @@ public class NotificationTextTests
     [Fact]
     public void ThePresentHostSentenceSaysSo() =>
         Assert.Equal("A notification-area host is running.", NoticeText.TrayHostPresent);
+
+    // ── the off-plan balloon (issue #259) ───────────────────────────────────────────
+
+    /// <summary>
+    /// An account with extra usage off is not billing beyond its plan, and saying otherwise
+    /// was not a hedge but a false statement about the reader's money — so only the enabled
+    /// state keeps the billing claim.
+    /// </summary>
+    [Fact]
+    public void OnlyTheEnabledStateClaimsBillingBeyondThePlan()
+    {
+        Assert.Equal(
+            "Usage is billing beyond your plan", OffPlanText.NotificationTitle(ExtraUsageState.Enabled));
+        Assert.Equal(
+            "Usage is not drawing from your plan", OffPlanText.NotificationTitle(ExtraUsageState.Disabled));
+        Assert.Equal(
+            "Usage is not drawing from your plan", OffPlanText.NotificationTitle(ExtraUsageState.Unknown));
+    }
+
+    /// <summary>
+    /// The estimate is the API-rate VALUE of the work, not a charge — withheld beside "extra
+    /// usage is switched off" because a balloon has no room to qualify the two against each
+    /// other, unlike the panel.
+    /// </summary>
+    [Fact]
+    public void TheEstimateIsWithheldOnlyWhereNothingCanBeBilled()
+    {
+        Assert.Equal(
+            "Work this session isn't drawing from your plan allowance. Est. $92.75 so far this "
+            + "window. Extra usage is switched on for this account. Open O-view for detail.",
+            OffPlanText.NotificationBody(92.75m, ExtraUsageState.Enabled));
+
+        Assert.Equal(
+            "Work this session isn't drawing from your plan allowance. Extra usage is switched "
+            + "off, so this should not be billing beyond your plan. Open O-view for detail.",
+            OffPlanText.NotificationBody(92.75m, ExtraUsageState.Disabled));
+
+        Assert.DoesNotContain(
+            "Est.", OffPlanText.NotificationBody(92.75m, ExtraUsageState.Disabled), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Unknown withholds the setting sentence, same as Disabled would, but <b>not</b> the
+    /// estimate — the two are read from different sources, and a figure already built from
+    /// the plan-history window does not become less true because the cached block was
+    /// absent. Only Disabled, which states the figure cannot be billed, withholds it.
+    /// </summary>
+    [Fact]
+    public void UnknownWithholdsTheSettingButNotAnAlreadyBuiltEstimate() =>
+        Assert.Equal(
+            "Work this session isn't drawing from your plan allowance. Est. $92.75 so far this "
+            + "window. Open O-view for detail.",
+            OffPlanText.NotificationBody(92.75m, ExtraUsageState.Unknown));
+
+    /// <summary>
+    /// Nothing read and nothing to report (rule 6): no estimate and an unread setting states
+    /// the observation and stops there.
+    /// </summary>
+    [Fact]
+    public void WithNoEstimateAndNothingReadOnlyTheObservationIsStated() =>
+        Assert.Equal(
+            "Work this session isn't drawing from your plan allowance. Open O-view for detail.",
+            OffPlanText.NotificationBody(null, ExtraUsageState.Unknown));
 
     // ── the update notifications ────────────────────────────────────────────────────
 
