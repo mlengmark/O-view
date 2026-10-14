@@ -272,4 +272,63 @@ public class NotificationTextTests
         Assert.DoesNotContain("close", UpdateText.OpenPageQuestion, StringComparison.OrdinalIgnoreCase);
     }
 
+    // ── the notice-only heads (ADR-0009 as amended for Linux) ───────────────────────
+
+    [Fact]
+    public void TheNoticeTitleCarriesTheVersion() =>
+        Assert.Equal("O-view 0.7.1 is available", UpdateText.NoticeTitle(Next));
+
+    /// <summary>
+    /// The .deb notice deliberately does not say "run apt upgrade". There is no O-view apt
+    /// repository, so that command would report nothing to do and the user would reasonably
+    /// conclude the notification was wrong (rule 6). It names the real step, and says whose
+    /// files these are — which is why O-view is not doing it for them.
+    /// </summary>
+    [Fact]
+    public void ThePackageNoticeNamesTheRealStepAndNotAptUpgrade()
+    {
+        var body = UpdateText.PackageNoticeBody("https://example.invalid/releases/v0.7.1");
+
+        Assert.Equal(
+            "Download the new .deb from https://example.invalid/releases/v0.7.1 and install "
+            + "it with sudo apt install. O-view will not update itself: these files belong to "
+            + "your package manager.",
+            body);
+
+        Assert.DoesNotContain("apt upgrade", body, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// The tarball has no package manager to defer to, so the step is unpacking over what is
+    /// there — and the two notices must not be interchangeable, because following the wrong
+    /// one does nothing.
+    /// </summary>
+    [Fact]
+    public void TheTarballNoticeNamesUnpackingAndDiffersFromThePackageOne()
+    {
+        var url = "https://example.invalid/releases/v0.7.1";
+
+        Assert.Equal(
+            $"Download the new tarball from {url} and extract it over your existing copy. "
+            + "O-view will not update itself.",
+            UpdateText.TarballNoticeBody(url));
+
+        Assert.NotEqual(UpdateText.TarballNoticeBody(url), UpdateText.PackageNoticeBody(url));
+    }
+
+    /// <summary>
+    /// Every one of these says O-view will not install anything, on both install kinds. It is
+    /// the sentence that keeps the notice from reading as a promise the head cannot keep.
+    /// </summary>
+    [Fact]
+    public void BothNoticesSayOViewWillNotUpdateItself()
+    {
+        var url = "https://example.invalid/releases/v0.7.1";
+
+        foreach (var body in new[] { UpdateText.PackageNoticeBody(url), UpdateText.TarballNoticeBody(url) })
+        {
+            Assert.Contains("will not update itself", body, StringComparison.Ordinal);
+            Assert.Contains(url, body, StringComparison.Ordinal);
+        }
+    }
 }
