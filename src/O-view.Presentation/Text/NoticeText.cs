@@ -27,6 +27,17 @@ public static class NoticeText
     /// </summary>
     public const string WeeklyResetConflictTitle = "Weekly reset time doesn't match";
 
+    /// <summary>
+    /// Said when session usage crosses the user's notification threshold (issue #141). The
+    /// title names the feature rather than the crossing — <see cref="ThresholdBody"/> carries
+    /// the number — because it is reused for every threshold a user may set.
+    /// </summary>
+    public const string ThresholdTitle = "Claude usage";
+
+    /// <inheritdoc cref="ThresholdTitle"/>
+    public static string ThresholdBody(int sessionPercent) =>
+        $"Session usage is at {sessionPercent}% of the 5-hour limit.";
+
     public const string DiagnosticsCopiedTitle = "Diagnostics copied";
 
     /// <summary>

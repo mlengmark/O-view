@@ -1,5 +1,6 @@
 using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
+using OView.Presentation.Text;
 
 namespace OView.App.Tests;
 
@@ -66,8 +67,9 @@ public class OffPlanNotificationTests
         using var dir = new TempDir();
         var balloon = OffPlanBalloon(dir, ExtraUsageState.Disabled);
 
-        Assert.Equal("Usage is not drawing from your plan", balloon.Title);
-        Assert.Contains("Extra usage is switched off", balloon.Message, StringComparison.Ordinal);
+        Assert.Equal(OffPlanText.NotificationTitle(ExtraUsageState.Disabled), balloon.Title);
+        Assert.Equal(
+            OffPlanText.NotificationBody(92.75m, ExtraUsageState.Disabled), balloon.Message);
 
         // The negated form, not the absence of the phrase: the sentence has to reach the
         // reader, and "should not be billing beyond your plan" contains "billing beyond".
@@ -98,9 +100,9 @@ public class OffPlanNotificationTests
         using var dir = new TempDir();
         var balloon = OffPlanBalloon(dir, ExtraUsageState.Enabled);
 
-        Assert.Equal("Usage is billing beyond your plan", balloon.Title);
-        Assert.Contains("Extra usage is switched on", balloon.Message, StringComparison.Ordinal);
-        Assert.Contains("Est. $92.75", balloon.Message, StringComparison.Ordinal);
+        Assert.Equal(OffPlanText.NotificationTitle(ExtraUsageState.Enabled), balloon.Title);
+        Assert.Equal(
+            OffPlanText.NotificationBody(92.75m, ExtraUsageState.Enabled), balloon.Message);
     }
 
     /// <summary>
@@ -116,7 +118,9 @@ public class OffPlanNotificationTests
         using var dir = new TempDir();
         var balloon = OffPlanBalloon(dir, state);
 
-        Assert.Equal("Usage is not drawing from your plan", balloon.Title);
+        Assert.Equal(OffPlanText.NotificationTitle(ExtraUsageState.Unknown), balloon.Title);
+        Assert.Equal(
+            OffPlanText.NotificationBody(92.75m, ExtraUsageState.Unknown), balloon.Message);
         Assert.DoesNotContain("Extra usage", balloon.Message, StringComparison.Ordinal);
         Assert.DoesNotContain("billing beyond", balloon.Message, StringComparison.OrdinalIgnoreCase);
     }
