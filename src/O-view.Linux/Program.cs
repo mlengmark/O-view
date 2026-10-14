@@ -175,23 +175,47 @@ internal static class Program
             ? TimeSpan.FromMilliseconds(parsedMs)
             : TimeSpan.FromSeconds(60);
 
-        using var engine = new UsageEngine(new UsageEngineOptions
+        // Everything about *what the numbers mean* — provider composition, the poll loop and
+        // its cadence, the rollup store and weekly-reset log lifecycle, threshold and off-plan
+        // decisions, settings, and the update schedule — lives on the other side of the seam,
+        // which is platform-neutral and tested (ADR-0012). What stays on this head is the Linux
+        // face, and these options are all it says about the rest.
+        var shellOptions = new UsageEngineOptions
         {
             PollInterval = interval,
             Log = log,
 
-            // Lets the engine ask Claude Code to refresh its own usage cache (issue #234).
+            // Lets the shell ask Claude Code to refresh its own usage cache (issue #234).
             // Without it, a machine with no Claude Desktop shows "unknown" indefinitely: Claude
             // Code refreshes that block only when /usage runs, and a running session does not
             // maintain it. No credential is involved — Claude Code authenticates itself and
             // O-view reads the file it already reads (ADR-0015).
             UsageCacheRefresher = new ClaudeCliRefresher(),
-        });
+        };
+
+        // Built below rather than here, and so held in a variable the finally can reach: the
+        // shell has to be closed around the skin it pushes at, and on this head Avalonia
+        // constructs that object itself. Disposing on every exit path is what the engine's
+        // `using` used to do, and the catch below is one of those paths.
+        ShellHost? host = null;
 
         try
         {
             return BuildAvaloniaApp()
-                .AfterSetup(_ => LinuxApp.Configure(engine, hostState, log))
+                .AfterSetup(builder =>
+                {
+                    // The first moment the application object exists. The Windows head builds
+                    // its skin inside this factory; here the skin is the object Avalonia has
+                    // just made, so the factory hands that one back.
+                    var app = (LinuxApp)builder.Instance!;
+
+                    // The seam (docs/architecture.md): the shell builds and owns everything
+                    // behind it, and this file names none of it beyond the options above. It
+                    // pushes through the skin's own hop onto the UI thread, which is the same
+                    // object the tray and menu callbacks use (issue #143, issue #125).
+                    host = new ShellHost(shellOptions, app.UiDispatcher, _ => app);
+                    app.Attach(host, hostState, log);
+                })
                 .StartWithClassicDesktopLifetime(args);
         }
         catch (Exception ex)
@@ -201,6 +225,7 @@ internal static class Program
         }
         finally
         {
+            host?.Dispose();
             guard.Dispose();
         }
     }

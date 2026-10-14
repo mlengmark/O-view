@@ -1,6 +1,9 @@
 using System.Reflection;
 using Avalonia.Controls;
+using Avalonia.Threading;
+using OView.App;
 using OView.App.Platform;
+using OView.Core.Models;
 using OView.Linux.Platform;
 using OView.Linux.Tray;
 using OView.Presentation.Text;
@@ -125,7 +128,7 @@ public class LinuxHeadWiringTests
     [Fact]
     public void TheTrayClickHandlerIsMarshalledOntoTheUiThread()
     {
-        // The engine argument is only dereferenced when the work runs, and nothing here runs
+        // The shell argument is only dereferenced when the work runs, and nothing here runs
         // it — so no store is opened and no path on this machine is touched.
         var handler = (EventHandler)typeof(LinuxApp)
             .GetMethod("TrayClickHandler", BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -141,7 +144,7 @@ public class LinuxHeadWiringTests
     [Fact]
     public void EveryMenuItemsClickHandlerIsMarshalledOntoTheUiThread()
     {
-        // Null engine, for the reason TheTrayClickHandlerIsMarshalledOntoTheUiThread gives: it is
+        // Null shell, for the reason TheTrayClickHandlerIsMarshalledOntoTheUiThread gives: it is
         // captured in closures and only dereferenced when a click runs, and nothing here runs one.
         var menu = (NativeMenu)typeof(LinuxApp)
             .GetMethod("BuildMenu", BindingFlags.Instance | BindingFlags.NonPublic)!
@@ -159,6 +162,96 @@ public class LinuxHeadWiringTests
 
             Assert.NotEmpty(handlers);
             Assert.All(handlers, h => Assert.Equal(typeof(BusCallback), h.Method.DeclaringType));
+        }
+    }
+
+    // ── the shell reaches this skin on the UI thread, and only through it ────────────
+    //
+    // The head is the shell's skin now rather than a subscriber to its events, and what makes
+    // that safe is the one hop it hands over: the shell posts every push through the
+    // dispatcher it was given (O-view.App.Tests' ShellToSkinDispatchTests), and the two tests
+    // below are the Linux halves of the same claim — that this head IS the skin being pushed
+    // at, and that the dispatcher it hands over really lands work on Avalonia's UI thread
+    // rather than running it where it was raised.
+    //
+    // What neither can add, on a machine with no Linux desktop, is a real click arriving from
+    // the session bus. The linux-runtime job does that.
+
+    [Fact]
+    public void TheHeadIsTheSkinTheShellPushesAt()
+    {
+        Assert.IsAssignableFrom<IShellToSkin>(Head);
+
+        // And holds the other half to ask back through. It is null until Program attaches the
+        // shell, so the field itself is what there is to assert here.
+        Assert.Contains(
+            typeof(LinuxApp).GetFields(BindingFlags.Instance | BindingFlags.NonPublic),
+            f => f.FieldType == typeof(ISkinToShell));
+    }
+
+    [Fact]
+    public void EveryShellToSkinCallReachesTheSkinOnTheUiThread()
+    {
+        var dispatcher = Assert.IsType<AvaloniaUiDispatcher>(SeamValue(typeof(IUiDispatcher)));
+        var skin = new ThreadRecordingSkin();
+
+        (string Name, Action Push)[] pushes =
+        [
+            ("snapshot", () => skin.ShowSnapshot(UsageSnapshot.None)),
+            ("notification", () => skin.ShowNotification(new AppNotification("title", "message"))),
+            ("update check", skin.UpdateCheckDue),
+            ("rate check", skin.RateCheckDue),
+        ];
+
+        // A fifth push added to the interface is then uncovered here until someone adds it,
+        // which this says out loud rather than leaving to be noticed.
+        Assert.Equal(typeof(IShellToSkin).GetMethods().Length, pushes.Length);
+
+        foreach (var (_, push) in pushes)
+        {
+            dispatcher.Post(push);
+        }
+
+        // Nothing has run yet: the hop is a real queue, not a call that happens to be made on
+        // the right thread. A dispatcher that invoked inline would pass the thread check below
+        // while leaving a bus-raised push exactly where it started.
+        Assert.Empty(skin.Calls);
+
+        Dispatcher.UIThread.RunJobs();
+
+        Assert.Equal(pushes.Select(p => p.Name), skin.Calls);
+        Assert.True(skin.ArrivedOffTheUiThread.Count == 0,
+            "these pushes reached the skin off Avalonia's UI thread, where touching the tray "
+            + $"icon or a window is a SIGSEGV rather than an exception (issue #143): "
+            + string.Join(", ", skin.ArrivedOffTheUiThread));
+    }
+
+    /// <summary>
+    /// Records what it was told and whether the UI thread told it. Deliberately not the head
+    /// itself: a push into the real one draws into a tray icon that does not exist on this
+    /// machine and says nothing either way, whereas this can report the thread it arrived on.
+    /// </summary>
+    private sealed class ThreadRecordingSkin : IShellToSkin
+    {
+        public List<string> Calls { get; } = [];
+
+        public List<string> ArrivedOffTheUiThread { get; } = [];
+
+        public void ShowSnapshot(UsageSnapshot snapshot) => Record("snapshot");
+
+        public void ShowNotification(AppNotification notification) => Record("notification");
+
+        public void UpdateCheckDue() => Record("update check");
+
+        public void RateCheckDue() => Record("rate check");
+
+        private void Record(string call)
+        {
+            Calls.Add(call);
+            if (!Dispatcher.UIThread.CheckAccess())
+            {
+                ArrivedOffTheUiThread.Add(call);
+            }
         }
     }
 
