@@ -13,8 +13,8 @@ namespace OView.Core.Tests;
 /// <para><b>Two independent checks, because a member can fail either way.</b> A member whose
 /// name ends in one of <see cref="DisplayTextSuffixes"/> is named like copy regardless of what
 /// it holds today — <c>PanelText.TokensUsedTodayLabel</c>, <c>TokenText.CoverageNote</c> and
-/// <c>OffPlanText.CreditModelsCaption</c> all carried one of these endings before OVIAA-34
-/// through OVIAA-39 moved them to Presentation. Separately, a public <c>const string</c> whose
+/// <c>OffPlanText.CreditModelsCaption</c> all carried one of these endings until the display
+/// text moved to Presentation. Separately, a public <c>const string</c> whose
 /// literal value itself reads as a sentence is copy no matter what its name is.</para>
 ///
 /// <para><b>What this test does not reach.</b> Core's own provider reports (the "excludes
@@ -47,6 +47,10 @@ public class CoreModelsHoldNoDisplayTextTests
     [
         // The model's own published name (ModelCatalog's data, carried alongside the id it
         // names rather than invented at render time) — not prose composed about the model.
+        // Neither check reaches it today ("DisplayName" matches no suffix above, and it is a
+        // record property rather than a const), so this entry is pre-emptive: it keeps the
+        // property's status settled if it is ever renamed to something that would match, such
+        // as DisplayLabel.
         (typeof(ModelSlice), "DisplayName"),
 
         // An affordance phrase each head supplies once at startup ("Right-click the tray icon
@@ -77,7 +81,7 @@ public class CoreModelsHoldNoDisplayTextTests
 
         foreach (var type in typeof(ModelSlice).Assembly.GetTypes())
         {
-            if (!type.IsPublic || type.Namespace != "OView.Core.Models" || IsExemptType(type))
+            if ((!type.IsPublic && !type.IsNestedPublic) || type.Namespace != "OView.Core.Models" || IsExemptType(type))
             {
                 continue;
             }
