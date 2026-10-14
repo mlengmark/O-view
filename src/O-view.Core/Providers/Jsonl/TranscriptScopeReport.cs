@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using OView.Core.Models;
+using OView.Core.Providers.CachedUsage;
 
 namespace OView.Core.Providers.Jsonl;
 
@@ -185,12 +186,38 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
     /// layout. Mirrors <see cref="JsonlUsageProvider"/>'s own constructor: a null projects
     /// root and an empty Cowork list each skip that source outright, and neither falls back
     /// to a machine default.
+    ///
+    /// <para>Defaults the exclusion to <see cref="ClaudeCliRefresher.OwnProjectFolder"/> —
+    /// the real machine's answer — so every existing caller gets it for free; tests pass the
+    /// three-argument overload to pin the exclusion against a synthetic folder instead.</para>
     /// </summary>
-    public static TranscriptScopeReport Inspect(string? projectsRoot, IReadOnlyList<string> coworkRoots)
+    public static TranscriptScopeReport Inspect(string? projectsRoot, IReadOnlyList<string> coworkRoots) =>
+        Inspect(projectsRoot, coworkRoots, ClaudeCliRefresher.OwnProjectFolder);
+
+    /// <summary>
+    /// As above, but with the refresher's own project folder named explicitly rather than
+    /// resolved from the live machine — the seam <see cref="TranscriptScopeReportTests"/>
+    /// uses to pin the exclusion without touching the real Claude Code configuration
+    /// directory. Pass null to count everything, as if no refresher had ever run.
+    /// </summary>
+    public static TranscriptScopeReport Inspect(
+        string? projectsRoot, IReadOnlyList<string> coworkRoots, string? ownRefresherFolder)
     {
+        // Trimmed once so a trailing separator on either side can't make an exact match miss,
+        // then compared with a separator appended — a file under "...C--Users-X-2" must not be
+        // treated as sitting inside "...C--Users-X".
+        var ownPrefix = ownRefresherFolder is null
+            ? null
+            : Path.TrimEndingDirectorySeparator(ownRefresherFolder) + Path.DirectorySeparatorChar;
+
         var projectFiles = projectsRoot is null
             ? []
-            : ClaudeProjectsLocator.FindTranscripts(projectsRoot);
+            : ClaudeProjectsLocator.FindTranscripts(projectsRoot)
+                // Left out of the report only — ingestion reads this folder like any other, so
+                // a machine whose only transcripts are the ones O-view's own usage refresh
+                // created is not told that is unexpected (issue #313).
+                .Where(f => ownPrefix is null || !f.StartsWith(ownPrefix, PathIdentity.Comparison))
+                .ToList();
 
         // Distinct by path, exactly as ingestion does: MSIX redirection can expose the same
         // session through two roots, and counting it twice would overstate the evidence.

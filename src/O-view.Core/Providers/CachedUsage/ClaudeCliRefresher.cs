@@ -186,6 +186,30 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     public static string ResolveWorkingDirectory(string preferred, string fallback) =>
         Directory.Exists(preferred) ? preferred : fallback;
 
+    /// <summary>
+    /// The project folder Claude Code files this refresher's own transcript under — the one
+    /// place this is worked out, from the <see cref="WorkingDirectory"/> this class actually
+    /// spawns with.
+    ///
+    /// <para><see cref="TranscriptScopeReport"/> uses this to leave those files out of both
+    /// its file count and its byte count, so a machine whose only transcripts are the ones
+    /// this refresher created reports "no transcripts" rather than "that is unexpected".
+    /// Ingestion is untouched: it still reads this folder like any other, so nothing is
+    /// excluded from the store — only from that one report.</para>
+    /// </summary>
+    public static string OwnProjectFolder =>
+        Path.Combine(ClaudeProjectsLocator.DefaultRoot, MangleCwd(WorkingDirectory));
+
+    /// <summary>
+    /// Reproduces how Claude Code turns a working directory into a project folder name, by
+    /// replacing path separators and colons with <c>-</c>
+    /// (<c>C:\Users\X</c> → <c>C--Users-X</c>, docs/findings/jsonl-schema.md). Both forward
+    /// slash and backslash are handled so the result is meaningful on either platform, even
+    /// though only the Windows form has been observed.
+    /// </summary>
+    private static string MangleCwd(string cwd) =>
+        cwd.Replace('\\', '-').Replace('/', '-').Replace(':', '-');
+
     private readonly Func<CachedUtilization?> _read;
     private readonly Func<TimeSpan, ProcessRun> _run;
     private readonly IBilledTranscriptGuard _guard;

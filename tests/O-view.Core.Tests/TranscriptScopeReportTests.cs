@@ -156,4 +156,49 @@ public class TranscriptScopeReportTests : IDisposable
         Assert.Null(report.NewestWriteUtc);
         Assert.Equal(TranscriptScopeStatus.NoTranscripts, report.Status);
     }
+
+    [Fact]
+    public void ExcludesTheRefreshersOwnProjectFolder_FromCountAndBytes()
+    {
+        // A session the refresher itself produced sits beside genuine ones. It must not
+        // inflate either figure, because neither is evidence of the user's own usage.
+        WriteTranscript(Path.Combine(Projects, "proj-a"), "session.jsonl", "{}\n");
+        var ownFolder = Path.Combine(Projects, "own-refresher-folder");
+        WriteTranscript(ownFolder, "refresh-session.jsonl", new string('x', 4096));
+
+        var report = TranscriptScopeReport.Inspect(Projects, [Cowork], ownFolder);
+
+        Assert.Equal(1, report.TotalFiles);
+        Assert.Equal(1, report.Sources.Single(s => s.Label == "Claude Code").FileCount);
+        Assert.Equal(3, report.TotalBytes); // "{}\n" from the one file left after exclusion
+    }
+
+    [Fact]
+    public void OnlyTheRefreshersOwnTranscripts_ReportNoTranscripts_NeverUnexpected()
+    {
+        // The whole point of the exclusion: a machine whose only transcripts are the ones
+        // O-view's own usage refresh created must not be told that is unexpected and to
+        // report a bug (issue #313).
+        var ownFolder = Path.Combine(Projects, "own-refresher-folder");
+        WriteTranscript(ownFolder, "refresh-session.jsonl", "{}\n");
+
+        var report = TranscriptScopeReport.Inspect(Projects, [Cowork], ownFolder);
+
+        Assert.Equal(0, report.TotalFiles);
+        Assert.Equal(TranscriptScopeStatus.NoTranscripts, report.Status);
+        Assert.DoesNotContain("unexpected", report.Explain(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ASiblingFolderWithASimilarName_IsNotExcludedByPrefix()
+    {
+        // "...own-refresher-folder-2" must not be treated as sitting inside
+        // "...own-refresher-folder" — a plain string prefix check would get this wrong.
+        var ownFolder = Path.Combine(Projects, "own-refresher-folder");
+        WriteTranscript(ownFolder + "-2", "session.jsonl", "{}\n");
+
+        var report = TranscriptScopeReport.Inspect(Projects, [Cowork], ownFolder);
+
+        Assert.Equal(1, report.TotalFiles);
+    }
 }
