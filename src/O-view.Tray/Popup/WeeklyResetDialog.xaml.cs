@@ -1,8 +1,8 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
 using OView.Core.Providers.PlanHistory;
+using OView.Presentation.Text;
 using OView.Tray.Tray;
 
 namespace OView.Tray.Popup;
@@ -96,9 +96,8 @@ public partial class WeeklyResetDialog : Window
         TimeBox.Text = current?.TimeText ?? "";
 
         HintText.Text = current is null
-            ? "Local time, 24-hour, e.g. 22:59. Left empty, O-view keeps deriving the reset "
-              + "by watching your weekly percentage fall."
-            : "Local time, 24-hour. Clearing this returns to the derived reset.";
+            ? WeeklyResetText.FirstEntryHint
+            : WeeklyResetText.ExistingEntryHint;
 
         ClearButton.Visibility = current is null ? Visibility.Collapsed : Visibility.Visible;
     }
@@ -118,7 +117,7 @@ public partial class WeeklyResetDialog : Window
 
         if (ManualWeeklyReset.Parse(day, time) is not { } parsed)
         {
-            ErrorText.Text = $"'{time}' is not a 24-hour time. Enter it as HH:mm — 22:59, not 10:59 PM.";
+            ErrorText.Text = WeeklyResetText.TimeError(time);
             ErrorText.Visibility = Visibility.Visible;
             TimeBox.Focus();
             TimeBox.SelectAll();

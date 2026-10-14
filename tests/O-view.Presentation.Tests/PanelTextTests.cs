@@ -718,4 +718,17 @@ public class PanelTextTests
         Assert.Equal("Usage · last 31 days", PanelText.UsageWindowHeading(31));
         Assert.Equal("Usage · last 7 days", PanelText.UsageWindowHeading(7));
     }
+
+    /// <summary>
+    /// The off-plan spend heading had the same defect the chart heading did, one section
+    /// lower: "last 31 days" was typed into the markup beside a total built from
+    /// <see cref="PanelStatistics.WindowDays"/>. It counts now, so the heading and the
+    /// figure under it cannot describe different spans.
+    /// </summary>
+    [Fact]
+    public void TheOffPlanHeadingCountsTheWindowItDescribes()
+    {
+        Assert.Equal("Off-plan usage · last 31 days", OffPlanText.OffPlanHeading(31));
+        Assert.Equal("Off-plan usage · last 7 days", OffPlanText.OffPlanHeading(7));
+    }
 }

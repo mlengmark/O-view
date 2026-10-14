@@ -174,6 +174,15 @@ public static class OffPlanText
     public static string OffPlanNote(bool offPlan) => offPlan ? "incl. off-plan usage" : "";
 
     /// <summary>
+    /// The standing off-plan spend section's heading. <b>The day count is the window the
+    /// figure actually covers</b> (<see cref="PanelStatistics.WindowDays"/>), for the same
+    /// reason <see cref="PanelText.UsageWindowHeading"/> takes one: this heading and the total
+    /// under it have to describe the same span, and the literal it replaces would have kept
+    /// reading 31 the day the window changed.
+    /// </summary>
+    public static string OffPlanHeading(int days) => $"Off-plan usage · last {days} days";
+
+    /// <summary>
     /// What the off-plan section means, shown on hover rather than as standing text
     /// (GitHub issue #181).
     ///

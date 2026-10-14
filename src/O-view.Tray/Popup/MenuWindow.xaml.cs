@@ -87,19 +87,6 @@ public partial class MenuWindow : Window, IFlyout
     /// <summary>What the pill currently reads — the value the option marks are drawn from.</summary>
     private int _thresholdPercent = UsageLevels.CriticalPercent;
 
-    /// <summary>
-    /// The words after the pill, giving the row its full reading: "Notify at [70% ⌄] usage".
-    ///
-    /// <para>The shorter wording is a deliberate choice (@mlengmark on issue #141), taken over
-    /// "session usage". The watcher reads <see cref="UsageSnapshot.SessionPercent"/> only, so
-    /// the row is silent about which of the panel's two meters it watches; what closes that gap
-    /// is the notification itself, which names the window explicitly — "Session usage is at N%
-    /// of the 5-hour limit". <b>If that balloon's copy is ever shortened, this row becomes the
-    /// only place the distinction could have been made, and it no longer makes it.</b>
-    /// </para>
-    /// </summary>
-    internal const string NotifySuffixText = "usage";
-
     /// <summary>The user asked to set or clear the weekly reset time (issue #186).</summary>
     public event EventHandler? WeeklyResetRequested;
 
@@ -152,8 +139,12 @@ public partial class MenuWindow : Window, IFlyout
             SetOptionsExpanded(ThresholdOptions.Visibility != Visibility.Visible);
         };
 
-        foreach (var option in OptionRows)
+        foreach (var (option, label) in OptionRows.Zip(OptionLabels))
         {
+            // Labelled from the row's own Tag rather than from XAML, so a choice cannot read
+            // one percentage and apply another — ChoiceOf is what the click uses too.
+            label.Text = MenuText.ThresholdPercent(ChoiceOf(option));
+
             option.Click += (sender, e) =>
             {
                 e.Handled = true;
@@ -220,11 +211,13 @@ public partial class MenuWindow : Window, IFlyout
     {
         PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
 
-        VersionText.Text = $"v{state.Version}";
+        VersionText.Text = MenuText.VersionLabel(state.Version);
         // States the answer in effect, not just the affordance: "derived" tells a user who
         // has never opened this dialog what O-view is currently doing.
-        WeeklyResetValue.Text = state.WeeklyReset.Length > 0 ? state.WeeklyReset : "derived";
-        NotifySuffix.Text = NotifySuffixText;
+        WeeklyResetValue.Text = state.WeeklyReset.Length > 0
+            ? state.WeeklyReset
+            : MenuText.WeeklyResetDerived;
+        NotifySuffix.Text = MenuText.NotifySuffix;
         SetChecked(StartupCheck, state.RunAtStartup);
         SetChecked(NotifyCheck, state.NotifyOnThreshold);
         ShowThreshold(state.ThresholdPercent);
@@ -258,7 +251,7 @@ public partial class MenuWindow : Window, IFlyout
     private void ShowThreshold(int percent)
     {
         _thresholdPercent = percent;
-        ThresholdText.Text = $"{percent}%";
+        ThresholdText.Text = MenuText.ThresholdPercent(percent);
 
         foreach (var (row, mark) in OptionRows.Zip(OptionMarks))
         {
@@ -276,6 +269,8 @@ public partial class MenuWindow : Window, IFlyout
         int.Parse((string)row.Tag, System.Globalization.CultureInfo.InvariantCulture);
 
     private System.Windows.Shapes.Ellipse[] OptionMarks => [Mark70, Mark80, Mark90];
+
+    private System.Windows.Controls.TextBlock[] OptionLabels => [Label70, Label80, Label90];
 
     /// <summary>
     /// Applies a chosen percentage and closes the list. Renders what the setter

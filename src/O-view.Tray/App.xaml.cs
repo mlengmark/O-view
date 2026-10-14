@@ -219,10 +219,8 @@ public partial class App : System.Windows.Application
 
         if (args.ContainsKey(RestartedForNativeLibraryFlag))
         {
-            _trayHost.ShowNotification("O-view restarted",
-                "A cleanup tool removed some of O-view's display files from your temp folder, " +
-                "so O-view restarted to restore them. Click the icon again to open it.",
-                NotificationKind.Warning);
+            _trayHost.ShowNotification(
+                NoticeText.RestartedTitle, NoticeText.RestartedBody, NotificationKind.Warning);
         }
 
         if (args.ContainsKey("--test-notify"))
@@ -595,7 +593,9 @@ public partial class App : System.Windows.Application
     /// rest of the menu state follows.
     /// </summary>
     private string WeeklyResetRowLabel() =>
-        _engine?.Settings.WeeklyReset is { } reset ? $"{reset.DayText[..3]} {reset.TimeText}" : "";
+        _engine?.Settings.WeeklyReset is { } reset
+            ? MenuText.WeeklyResetValue(reset.DayText, reset.TimeText)
+            : "";
 
     /// <summary>
     /// Opens the weekly-reset entry (issue #186), applies whatever comes back, and refreshes
@@ -640,7 +640,7 @@ public partial class App : System.Windows.Application
 
         _engine.MarkWeeklyResetConflictNoticed(conflict);
         _trayHost?.ShowNotification(
-            "Weekly reset time doesn't match",
+            NoticeText.WeeklyResetConflictTitle,
             PanelText.WeeklyResetConflict(conflict, TimeZoneInfo.Local),
             NotificationKind.Warning);
     }
@@ -697,15 +697,15 @@ public partial class App : System.Windows.Application
         try
         {
             System.Windows.Clipboard.SetText(BuildDiagnostics());
-            _trayHost?.ShowNotification("Diagnostics copied",
-                "Paste them into your bug report. No tokens or conversation content are included.",
+            _trayHost?.ShowNotification(
+                NoticeText.DiagnosticsCopiedTitle, NoticeText.DiagnosticsCopiedBody,
                 NotificationKind.Information);
         }
         catch (Exception)
         {
             // The clipboard can be locked by another process; failing to copy must not crash.
-            _trayHost?.ShowNotification("Couldn't copy diagnostics",
-                "The clipboard was unavailable. Please try again.",
+            _trayHost?.ShowNotification(
+                NoticeText.DiagnosticsCopyFailedTitle, NoticeText.DiagnosticsCopyFailedBody,
                 NotificationKind.Warning);
         }
     }
@@ -783,9 +783,9 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        _trayHost.ShowNotification("O-view update available",
-            $"Version {update.Version} is available (you have {UpdateService.CurrentVersion}). " +
-            "Right-click the icon → Check for updates to install.",
+        _trayHost.ShowNotification(
+            UpdateText.AvailableTitle,
+            UpdateText.AvailableBody(update.Version, UpdateService.CurrentVersion),
             NotificationKind.Information);
     }
 
@@ -809,9 +809,9 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        _trayHost.ShowNotification("Installing O-view " + update.Version,
-            $"You have {UpdateService.CurrentVersion}. O-view will close briefly and reopen. "
-            + "Turn this off with Update automatically in the tray menu.",
+        _trayHost.ShowNotification(
+            UpdateText.InstallingTitle(update.Version),
+            UpdateText.InstallingBody(UpdateService.CurrentVersion),
             NotificationKind.Information);
 
         _updateFlowActive = true;
@@ -826,9 +826,8 @@ public partial class App : System.Windows.Application
             _updateFlowActive = false;
             // The one case that earns Error. A checksum mismatch means the bytes that arrived
             // were not the bytes the release published, and O-view refused to run them.
-            _trayHost.ShowNotification("Update not installed",
-                "The download didn't match the checksum published with this release, so O-view "
-                + "didn't run it. Your current version is untouched.",
+            _trayHost.ShowNotification(
+                UpdateText.ChecksumMismatchTitle, UpdateText.ChecksumMismatchBody,
                 NotificationKind.Error);
         }
         catch (Exception)
@@ -837,9 +836,8 @@ public partial class App : System.Windows.Application
             // in the loop and can decide; nobody is watching this one, so a browser window
             // appearing unbidden is not a useful answer. It retries on the next daily check.
             _updateFlowActive = false;
-            _trayHost.ShowNotification("Update didn't install",
-                $"O-view couldn't download version {update.Version}. It will try again later, "
-                + "or use Check for updates to install it now.",
+            _trayHost.ShowNotification(
+                UpdateText.AutomaticFailedTitle, UpdateText.AutomaticFailedBody(update.Version),
                 NotificationKind.Warning);
         }
     }
@@ -877,8 +875,9 @@ public partial class App : System.Windows.Application
         switch (result.Outcome)
         {
             case UpdateOutcome.UpToDate:
-                _trayHost!.ShowNotification("O-view is up to date",
-                    $"You have the latest version ({UpdateService.CurrentVersion}).",
+                _trayHost!.ShowNotification(
+                    UpdateText.UpToDateTitle,
+                    UpdateText.UpToDateBody(UpdateService.CurrentVersion),
                     NotificationKind.Information);
                 break;
 
@@ -891,7 +890,8 @@ public partial class App : System.Windows.Application
                 // not this machine: GitHub's limit is 60/hour per IP address, so a shared
                 // network can exhaust it without this user making a request. Telling them
                 // their connection failed sent them to debug the wrong thing (issue #176).
-                _trayHost!.ShowNotification("Update check rate limited",
+                _trayHost!.ShowNotification(
+                    UpdateText.RateLimitedTitle,
                     PanelText.RateLimitedNotice(result.RetryAfterUtc, TimeZoneInfo.Local),
                     NotificationKind.Warning);
                 break;
@@ -899,8 +899,8 @@ public partial class App : System.Windows.Application
             default:
                 // Warning, not Error: GitHub being briefly unreachable is a retryable
                 // condition on the user's own network, and nothing on the machine is wrong.
-                _trayHost!.ShowNotification("Couldn't check for updates",
-                    "O-view couldn't reach GitHub to check for a newer version. Please try again later.",
+                _trayHost!.ShowNotification(
+                    UpdateText.CheckFailedTitle, UpdateText.CheckFailedBody,
                     NotificationKind.Warning);
                 break;
         }
@@ -927,15 +927,15 @@ public partial class App : System.Windows.Application
             // create a parallel install rather than update the loose one. On Linux this
             // branch also covers an apt build, which must never overwrite dpkg's files —
             // but that head has its own copy and never reaches this method.
-            if (ConfirmUpdate(update, "Open the download page for the new version?", "Open page"))
+            if (ConfirmUpdate(update, UpdateText.OpenPageQuestion, UpdateText.OpenPageConfirm))
             {
                 _updates.OpenInBrowser(UpdateService.ReleasePageUrl(update));
             }
             return;
         }
 
-        if (!ConfirmUpdate(update, "Download and install it now?", "Update now",
-            "O-view will close briefly and reopen automatically."))
+        if (!ConfirmUpdate(update, UpdateText.InstallQuestion, UpdateText.InstallConfirm,
+            UpdateText.InstallDetail))
         {
             return;
         }
@@ -958,9 +958,8 @@ public partial class App : System.Windows.Application
             _updateFlowActive = false;
             // The one case that earns Error. A checksum mismatch means the bytes that arrived
             // were not the bytes the release published, and O-view refused to run them.
-            _trayHost.ShowNotification("Update not installed",
-                "The download didn't match the checksum published with this release, so O-view "
-                + "didn't run it. Your current version is untouched.",
+            _trayHost.ShowNotification(
+                UpdateText.ChecksumMismatchTitle, UpdateText.ChecksumMismatchBody,
                 NotificationKind.Error);
         }
         catch (Exception)
@@ -968,9 +967,8 @@ public partial class App : System.Windows.Application
             _updateFlowActive = false;
             // Warning rather than Error: the download failed, but the user is being handed a
             // working way to finish the job on the next line.
-            _trayHost.ShowNotification("Update failed",
-                "O-view couldn't download the update. Opening the releases page so you can download it manually.",
-                NotificationKind.Warning);
+            _trayHost.ShowNotification(
+                UpdateText.FailedTitle, UpdateText.FailedBody, NotificationKind.Warning);
             _updates.OpenInBrowser(UpdateService.ReleasePageUrl(update));
         }
     }
@@ -984,10 +982,10 @@ public partial class App : System.Windows.Application
     private static bool ConfirmUpdate(
         AvailableUpdate update, string question, string confirmLabel, string detail = "") =>
         DialogWindow.Confirm(
-            title: "Update available",
-            message: $"O-view {update.Version} is available — you have {UpdateService.CurrentVersion}. {question}",
+            title: UpdateText.DialogTitle,
+            message: UpdateText.DialogMessage(update.Version, UpdateService.CurrentVersion, question),
             confirmLabel: confirmLabel,
-            cancelLabel: "Not now",
+            cancelLabel: UpdateText.DialogCancel,
             detail: detail);
 
     protected override void OnExit(ExitEventArgs e)
