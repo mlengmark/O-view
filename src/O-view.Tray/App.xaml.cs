@@ -11,17 +11,11 @@ using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
-using OView.Core.Storage;
-using OView.Core.Updates;
 using OView.Presentation.Text;
 using OView.Tray.Diagnostics;
 using OView.Tray.Popup;
 using OView.Tray.Tray;
 using OView.Tray.Updates;
-using Border = System.Windows.Controls.Border;
-using Size = System.Windows.Size;
-using StackPanel = System.Windows.Controls.StackPanel;
-using TextBlock = System.Windows.Controls.TextBlock;
 
 namespace OView.Tray;
 
@@ -46,6 +40,7 @@ public partial class App : System.Windows.Application
     private MenuWindow? _menu;
     private UpdateService? _updates;
     private UpdateFlow? _updateFlow;
+    private TrayMenuBuilder? _menuBuilder;
     private IAppLog? _log;
 
     /// <summary>
@@ -68,7 +63,7 @@ public partial class App : System.Windows.Application
         ("--tile-samples", dir => SampleRenderer.RenderTileSamples(dir!)),
         ("--dialog-samples", dir => SampleRenderer.RenderDialogSamples(dir!)),
         ("--popup-samples", dir => SampleRenderer.RenderPopupSamples(dir!)),
-        ("--diagnose", WriteDiagnostics),
+        ("--diagnose", DiagnosticsClipboard.WriteToFile),
     ];
 
     protected override void OnStartup(StartupEventArgs e)
@@ -194,6 +189,13 @@ public partial class App : System.Windows.Application
         _updateFlow = new UpdateFlow(_updates, _trayHost, _engine, Shutdown);
         _engine.UpdateCheckDue += () => _ = _updateFlow.BackgroundCheckAsync();
 
+        // The menu's rows and their actions, and the support bundle behind one of them.
+        // Built here because everything it drives — the engine, the tray host, the update
+        // flow — exists by this point; what stays on the shell is showing the flyout.
+        _menuBuilder = new TrayMenuBuilder(
+            _startup, _engine, _trayHost, _updateFlow,
+            new DiagnosticsClipboard(_trayHost, _engine), Shutdown);
+
         // The rate-card drift check (ADR-0016). It writes a log line and nothing else — it
         // never installs a rate, and a difference is a maintainer's cue rather than a user's
         // problem, so there is no balloon and no UI. The line reaches a bug report through the
@@ -204,7 +206,7 @@ public partial class App : System.Windows.Application
         // A conflict is discovered while resolving the weekly reset, which happens on every
         // poll — so this rides the same signal rather than needing its own schedule. The
         // notice itself fires once per conflicting observation (issue #186).
-        _engine.SnapshotUpdated += _ => NotifyWeeklyResetConflict();
+        _engine.SnapshotUpdated += _ => _menuBuilder.NotifyWeeklyResetConflict();
 
         // Ticks arrive on the UI thread; the reading happens off it and comes back through
         // the dispatcher, so a first ingest over a large transcript history cannot hold the
@@ -280,7 +282,7 @@ public partial class App : System.Windows.Application
         // way to verify the docked placement against a live taskbar and work area.
         if (args.ContainsKey("--show-menu"))
         {
-            _menu = CreateMenu();
+            _menu = _menuBuilder.CreateMenu();
             _menu.PinForVerification = args.ContainsKey("--menu-pin");
             _menu.ThemeOverride = args.TryGetValue("--menu-theme", out var menuTheme)
                 ? menuTheme == "light"
@@ -556,7 +558,7 @@ public partial class App : System.Windows.Application
     /// </summary>
     private void ShowMenu()
     {
-        _menu ??= CreateMenu();
+        _menu ??= _menuBuilder!.CreateMenu();
         if (CompletedToggle(_menu))
         {
             return;
@@ -575,180 +577,10 @@ public partial class App : System.Windows.Application
             // policy is the single place that decides it (ADR-0009).
             CanUpdateAutomatically: UpdatePolicy.MayDownloadAndRun(UpdateService.CurrentInstallKind),
             Version: UpdateService.CurrentVersion,
-            WeeklyReset: WeeklyResetRowLabel(),
+            WeeklyReset: _menuBuilder!.WeeklyResetRowLabel(),
             // Empty on every ordinary open; the row only appears once the refresh has stopped
             // itself, which is the only state there is anything to undo (issue #234).
             UsageRefreshBlocked: _engine.UsageRefreshBlocked ?? ""));
-    }
-
-    /// <summary>
-    /// What the menu row shows on its right: the entered reset, or empty when O-view is
-    /// deriving one. Reads the engine on every open rather than caching — the same rule the
-    /// rest of the menu state follows.
-    /// </summary>
-    private string WeeklyResetRowLabel() =>
-        _engine?.Settings.WeeklyReset is { } reset
-            ? MenuText.WeeklyResetValue(reset.DayText, reset.TimeText)
-            : "";
-
-    /// <summary>
-    /// Opens the weekly-reset entry (issue #186), applies whatever comes back, and refreshes
-    /// so the panel and the graph's week gridlines move with it — the gridlines read the
-    /// snapshot's weekly reset, so they follow without separate wiring.
-    /// </summary>
-    private void EditWeeklyReset()
-    {
-        if (_engine is null)
-        {
-            return;
-        }
-
-        var (entry, changed) = WeeklyResetDialog.Show(_engine.Settings.WeeklyReset);
-        if (!changed)
-        {
-            return;
-        }
-
-        _engine.SetWeeklyReset(entry);
-        _engine.Refresh();
-    }
-
-    /// <summary>
-    /// Tells the user once when an observed reset disproves what they entered (issue #186).
-    ///
-    /// <para>The provider has already set the entry aside in favour of the observation — a
-    /// number O-view has evidence against must not stay on screen — so this explains a change
-    /// that has already happened. Silence would leave them believing the time they typed.</para>
-    ///
-    /// <para>Once per conflicting observation, not once per poll: the check runs every
-    /// refresh, and a warning that reappears every 20 seconds is one people learn to
-    /// dismiss.</para>
-    /// </summary>
-    private void NotifyWeeklyResetConflict()
-    {
-        if (_engine?.WeeklyResetConflict is not { } conflict
-            || !_engine.IsWeeklyResetConflictUnseen(conflict))
-        {
-            return;
-        }
-
-        _engine.MarkWeeklyResetConflictNoticed(conflict);
-        _trayHost?.ShowNotification(
-            NoticeText.WeeklyResetConflictTitle,
-            PanelText.WeeklyResetConflict(conflict, TimeZoneInfo.Local),
-            NotificationKind.Warning);
-    }
-
-    private MenuWindow CreateMenu()
-    {
-        var menu = new MenuWindow
-        {
-            // Both setters return the state as it actually stands afterwards, not the
-            // state that was requested — a registry write can fail, and a tick that
-            // claims otherwise would be a fabricated fact about the machine. That rule
-            // now lives once, on IStartupRegistration.Apply, so both heads share it.
-            SetRunAtStartup = _startup.Apply,
-            SetNotifyOnThreshold = enable => _engine!.SetNotifyOnThreshold(enable),
-            // Same contract as the two above: the row renders what the engine returns, so a
-            // value that could not be applied is not drawn as though it had been.
-            SetThresholdPercent = percent => _engine!.SetThresholdPercent(percent),
-            SetUpdateAutomatically = enable => _engine!.SetUpdateAutomatically(enable),
-        };
-
-        // One-click support bundle: a blank panel is otherwise indistinguishable from
-        // "Desktop missing", "unexpected file format", or "file unreadable", and asking
-        // users to run PowerShell by hand is not a diagnosis path.
-        menu.WeeklyResetRequested += (_, _) => EditWeeklyReset();
-        // Undoes a self-imposed refresh block, then tries once immediately: someone who just
-        // re-enabled this is asking for it now, not at the next background beat (issue #234).
-        menu.ResumeUsageRefreshRequested += (_, _) =>
-        {
-            if (_engine?.ResumeUsageRefresh() == true)
-            {
-                _engine.RefreshUsageCache(force: true);
-            }
-        };
-
-        menu.CopyDiagnosticsRequested += (_, _) => CopyDiagnostics();
-        // "Check for updates" sits directly above Exit, as requested in issue #18.
-        menu.CheckForUpdatesRequested += async (_, _) =>
-        {
-            if (_updateFlow is not null)
-            {
-                await _updateFlow.CheckForUpdatesInteractiveAsync();
-            }
-        };
-        menu.ExitRequested += (_, _) => Shutdown();
-
-        return menu;
-    }
-
-    /// <summary>
-    /// Puts a support bundle on the clipboard: what the app reads, from where, and what it
-    /// found. Covers both usage sources — the plan-history file (session/weekly %) and the
-    /// JSONL transcripts (token tiles) — plus whether account info resolved, because which
-    /// of those are blank narrows the cause immediately. Contains no token and no
-    /// conversation content, and is redacted before it leaves — the account name is replaced
-    /// in every path and org UUIDs are truncated to eight characters, because this goes on
-    /// the clipboard on its way to a public issue (see <c>Redact</c>).
-    /// </summary>
-    private void CopyDiagnostics()
-    {
-        try
-        {
-            System.Windows.Clipboard.SetText(BuildDiagnostics());
-            _trayHost?.ShowNotification(
-                NoticeText.DiagnosticsCopiedTitle, NoticeText.DiagnosticsCopiedBody,
-                NotificationKind.Information);
-        }
-        catch (Exception)
-        {
-            // The clipboard can be locked by another process; failing to copy must not crash.
-            _trayHost?.ShowNotification(
-                NoticeText.DiagnosticsCopyFailedTitle, NoticeText.DiagnosticsCopyFailedBody,
-                NotificationKind.Warning);
-        }
-    }
-
-    /// <summary>Writes the diagnostics report to a file (the --diagnose hook).</summary>
-    private static void WriteDiagnostics(string? path)
-    {
-        var target = path is { Length: > 0 } p ? p : "oview-diagnostics.txt";
-        try
-        {
-            // deepAudit: this hook is a deliberate command-line run with no UI to freeze and no
-            // engine to interrupt, which makes it the one place the transcript reconciliation
-            // can afford to run (issue #218).
-            File.WriteAllText(target, BuildDiagnostics(deepAudit: true));
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            // Diagnostic hook — a failure here must not surface as a crash dialog.
-        }
-    }
-
-    /// <summary>
-    /// The bundle itself is shared with the Linux head (<see cref="DiagnosticsBundle"/>) so
-    /// a report reads the same on either platform and cannot drift. What is supplied here
-    /// is only what this head knows: its version and how it was installed. Windows has no
-    /// desktop-environment or session-type question, and its notification area is part of
-    /// the shell and cannot be absent — so those fields are omitted rather than padded with
-    /// "n/a".
-    /// </summary>
-    private static string BuildDiagnostics(bool deepAudit = false)
-    {
-        var environment = new DiagnosticsEnvironment(
-            Version: UpdateService.CurrentVersion,
-            InstallKind: UpdateService.CurrentInstallKind.ToString());
-
-        // When there is a running engine, the store is read through the connection that engine
-        // is actually using — so the bundle reports what the app believes rather than what a
-        // reader opened for the occasion finds. The --diagnose hook runs before the engine
-        // exists and takes the other path, and the two label themselves differently on purpose.
-        var engine = ((App?)Current)?._engine;
-        return engine is null
-            ? DiagnosticsBundle.Build(environment, deepAudit)
-            : DiagnosticsBundle.Build(environment, engine.InspectStore());
     }
 
     protected override void OnExit(ExitEventArgs e)
