@@ -90,33 +90,14 @@ public sealed class UsageEngine : IDisposable
     /// </summary>
     private readonly WeeklyResetCoordinator _weeklyReset;
 
+    /// <summary>
+    /// The plan-history cadence and the panel's statistics — its own class purely to keep this
+    /// file shorter. See <see cref="PlanHistoryPoll"/>.
+    /// </summary>
+    private readonly PlanHistoryPoll _planHistoryPoll;
+
     /// <summary>Raw reader for Claude Code's cached figures, used only to harvest the anchor.</summary>
     private readonly Func<CachedUtilization?> _cachedUtilizationSource;
-
-    /// <summary>
-    /// Whether the plan-history provider this engine holds is one the caller actually asked
-    /// for, and so may be published from directly.
-    ///
-    /// <para>False in exactly one case: a caller injected a whole
-    /// <see cref="UsageEngineOptions.Provider"/> and said nothing about plan history. The
-    /// engine still builds a provider then, because the off-plan arithmetic needs one — but it
-    /// defaults to the <b>real machine's</b> <c>plan-usage-history.json</c>, and it is not part
-    /// of the injected chain. Publishing from it would put the developer's own Claude Desktop
-    /// usage over the caller's resolution, which in the test suite means results that depend
-    /// on whose machine is running them.</para>
-    ///
-    /// <para>Naming either <see cref="UsageEngineOptions.PlanHistory"/> or
-    /// <see cref="UsageEngineOptions.PlanHistoryPath"/> is enough — both say which file is
-    /// meant, which is the whole question.</para>
-    ///
-    /// <para><b>Kept after issue #212, and it is no longer the only defence.</b> The provider
-    /// built in that case now reads <see cref="PlanHistoryFile.NoFile"/> rather than the real
-    /// machine's file, which is what fixes the off-plan path this flag never covered. This
-    /// still guards <i>publishing</i>, which is a different question: an inert provider would
-    /// publish empty snapshots over a caller's own chain rather than the developer's usage,
-    /// which is better and still wrong.</para>
-    /// </summary>
-    private readonly bool _planHistoryIsAddressed;
 
     /// <summary>Most recent snapshot — what the panel opens with.</summary>
     public UsageSnapshot Latest { get; private set; } = UsageSnapshot.None;
@@ -150,8 +131,7 @@ public sealed class UsageEngine : IDisposable
     /// was read from <i>this file</i>, so folding the other source in would blunt the
     /// isolation check it is here for.</para>
     /// </summary>
-    public int PlanWindowSampleCount =>
-        _planHistory?.GetCurrentWindow(_clock.UtcNow).Percents.Count ?? 0;
+    public int PlanWindowSampleCount => _planHistoryPoll.WindowSampleCount;
 
     /// <summary>Current persisted settings. Mutated only through <see cref="SetNotifyOnThreshold"/>.</summary>
     public TraySettings Settings { get; private set; }
@@ -231,7 +211,8 @@ public sealed class UsageEngine : IDisposable
         // unnamed plan history reads NOTHING rather than the real machine's file (issue #212).
         //
         // The default used to be PlanHistoryFile.DefaultPath in that case, and the guard
-        // against it — _planHistoryIsAddressed — covered only *publishing*. ReadOffPlan() →
+        // against it — PlanHistoryPoll's own addressed flag — covered only *publishing*.
+        // ReadOffPlan() →
         // BuildStatistics() went through this provider regardless, so the off-plan comparison
         // read the developer's own Claude Desktop usage on every poll in every test that did
         // not name a file. Replayed against that file afterwards: six instants where a test
@@ -283,7 +264,11 @@ public sealed class UsageEngine : IDisposable
             Log = logLine,
         };
 
-        _planHistoryIsAddressed = _options.Provider is null
+        // Whether the plan-history provider just built is one the caller actually asked for,
+        // and so may be published from directly — see PlanHistoryPoll's own doc for why this
+        // matters. False in exactly one case: a caller injected a whole Provider and said
+        // nothing about plan history.
+        var planHistoryIsAddressed = _options.Provider is null
             || _options.PlanHistory is not null
             || _options.PlanHistoryPath is not null;
 
@@ -303,6 +288,25 @@ public sealed class UsageEngine : IDisposable
                 Settings.Save(_options.SettingsPath);
             });
         _weeklyReset.ApplyWeeklyResetSetting();
+
+        _planHistoryPoll = new PlanHistoryPoll(
+            _planHistory,
+            planHistoryIsAddressed,
+            _store,
+            _cachedUtilization,
+            _weeklyReset,
+            _clock,
+            _log,
+            _options.DisplayZone,
+            _options.SimulateDivergence,
+            () => Latest,
+            snapshot =>
+            {
+                Latest = snapshot;
+                SnapshotUpdated?.Invoke(snapshot);
+                NotifyOnThreshold(snapshot);
+            },
+            (read, publish) => RunOffThread(_planGate, "plan poll", read, publish));
     }
 
     /// <summary>
@@ -351,7 +355,7 @@ public sealed class UsageEngine : IDisposable
         // Not re-timed by AdjustCadence: the warm-up exists to fill the bars quickly before
         // Desktop has written anything, and at 3 s it is already faster than this. Leaving
         // this one fixed keeps two independently-tuned cadences from fighting over one timer.
-        _planTimer = Track(timers.Create(_planInterval, PollPlanHistory));
+        _planTimer = Track(timers.Create(_planInterval, _planHistoryPoll.PollPlanHistory));
         _planTimer.Start();
         _log?.Write($"plan-history interval={_planInterval.TotalSeconds}s");
 
@@ -463,35 +467,6 @@ public sealed class UsageEngine : IDisposable
     public void RefreshUsageCache(bool force = false) => _cacheRefresh.RefreshUsageCache(force);
 
     /// <summary>
-    /// The cheap half, on its own faster cadence: read the plan-history file and nothing else.
-    ///
-    /// <para><b>Why this is separate.</b> The two things a poll reads have costs three orders
-    /// of magnitude apart. Measured on a real machine: the plan-history read, parse and
-    /// reset-scan is <b>3.3 ms</b>; the transcript walk behind the token tiles is <b>32 files
-    /// and 92 MB</b>. They were on one 60-second timer, so the percentages — the thing the
-    /// icon and the bars actually show — waited on the ingest that froze the app on a large
-    /// history (issue #125).</para>
-    ///
-    /// <para>What this does <i>not</i> do is make the data fresher than its source. Claude
-    /// Desktop writes that file every ~5 minutes (measured median 5.00 min over 1,828 gaps),
-    /// and nothing here can beat it. What it removes is O-view's own contribution: up to a
-    /// full 60 s of extra lag on top, now at most <see cref="UsageEngineOptions.PlanPollInterval"/>.
-    /// Polling faster than Desktop writes would re-read an unchanged file for nothing.</para>
-    /// </summary>
-    private void PollPlanHistory()
-    {
-        // Nothing to publish from when the caller injected a provider chain and never said
-        // which plan-history file it stands for — see _planHistoryIsAddressed. Production
-        // always passes this; it is only reachable from a test.
-        if (!_planHistoryIsAddressed)
-        {
-            return;
-        }
-
-        RunOffThread(_planGate, "plan poll", ReadPlanHistory, PublishPlanHistory);
-    }
-
-    /// <summary>
     /// Reads off the UI thread and publishes back onto it, under a gate so a slow read cannot
     /// stack another behind it.
     ///
@@ -590,88 +565,6 @@ public sealed class UsageEngine : IDisposable
             }
         });
     }
-
-    /// <summary>Never throws: a bad read must not kill the cadence.</summary>
-    private UsageSnapshot ReadPlanHistory()
-    {
-        try
-        {
-            var utcNow = _clock.UtcNow;
-            var snapshot = _planHistory?.GetSnapshot(utcNow) ?? UsageSnapshot.None;
-
-            // The same two folds the full poll applies, in the same order, because both
-            // cadences publish to the same display.
-            //
-            // Plan history stopped producing a weekly reset of its own under ADR-0014, so
-            // without this the 20-second cadence publishes a snapshot with no weekly time and
-            // the 60-second one puts it back: the reset blinks out and returns, twice a
-            // minute. Measured in the field on v0.6.24 — "7d: 13%" alternating with
-            // "7d: 13% · resets Mon 22:59" in consecutive tooltips.
-            //
-            // This is exactly the flicker PublishPlanHistory's own remarks warn about for the
-            // percentages, arriving through the reset instead. Two cadences that decorate a
-            // snapshot differently will always show the difference as a blink.
-            return _weeklyReset.WithReportedResets(_weeklyReset.WithWeeklyReset(snapshot, utcNow), utcNow);
-        }
-        catch (Exception ex)
-        {
-            _log?.Write($"plan read FAILED {ex.GetType().Name}: {ex.Message}");
-            return UsageSnapshot.None;
-        }
-    }
-
-    /// <summary>
-    /// Publishes a plan-history-only snapshot, and declines to in the two cases where it would
-    /// make the display worse than leaving it alone.
-    ///
-    /// <para><b>Non-authoritative results are dropped, not published.</b> This path skips the
-    /// composite provider, so it cannot see the JSONL estimate that would otherwise win when
-    /// plan history has nothing. Publishing its <c>None</c> would blank a panel that the full
-    /// poll had correctly filled with an estimate, and the display would flicker between the
-    /// two cadences.</para>
-    ///
-    /// <para><b>An older sample never replaces a newer one.</b> Two cadences now publish, and
-    /// a first-run full poll can spend seconds ingesting before posting a snapshot it read
-    /// before the plan tick did. Without this the bars would visibly jump backwards.</para>
-    ///
-    /// <para>Threshold notification runs here, which is a genuine gain rather than a side
-    /// effect: crossing 70% is now noticed within <see cref="UsageEngineOptions.PlanPollInterval"/>
-    /// rather than up to a minute later. Off-plan detection deliberately does not — it needs
-    /// the 31-day SQLite aggregate, which is the expensive half this path exists to avoid.</para>
-    /// </summary>
-    private void PublishPlanHistory(UsageSnapshot snapshot)
-    {
-        if (!PollingCadence.IsAuthoritative(snapshot.Source) || IsOlderThanLatest(snapshot))
-        {
-            return;
-        }
-
-        Latest = snapshot;
-        SnapshotUpdated?.Invoke(snapshot);
-        NotifyOnThreshold(snapshot);
-    }
-
-    /// <summary>
-    /// Whether this snapshot describes an older sample than the one already published.
-    ///
-    /// <para><b>Only ever compares two authoritative readings.</b> Both halves of that are
-    /// load-bearing. The incoming side has to be checked as well as the current one, because a
-    /// JSONL estimate <i>does</i> carry a capture time — the newest transcript activity — so a
-    /// live plan reading would otherwise block the fallback the composite resolved to, and
-    /// block it permanently: <c>Latest</c> stays Live, so every later estimate is compared
-    /// against the same frozen sample and dropped in turn. The panel would sit on a reading
-    /// that had stopped being true and never fall back.</para>
-    ///
-    /// <para>Comparing capture times rather than read times is deliberate. These stamps come
-    /// from Claude Desktop's own samples, so the ordering is the data's, not this process's —
-    /// which keeps it right across a wall-clock correction that would reorder read times.</para>
-    /// </summary>
-    private bool IsOlderThanLatest(UsageSnapshot snapshot) =>
-        PollingCadence.IsAuthoritative(snapshot.Source)
-        && PollingCadence.IsAuthoritative(Latest.Source)
-        && snapshot.CapturedAtUtc is { } incoming
-        && Latest.CapturedAtUtc is { } current
-        && incoming < current;
 
     /// <summary>
     /// One cadence's "a read is already in flight" flag. A type rather than an <c>int</c>
@@ -793,7 +686,7 @@ public sealed class UsageEngine : IDisposable
             return;
         }
 
-        if (!IsOlderThanLatest(result.Snapshot))
+        if (!_planHistoryPoll.IsOlderThanLatest(result.Snapshot))
         {
             Latest = result.Snapshot;
 
@@ -830,69 +723,7 @@ public sealed class UsageEngine : IDisposable
     /// <summary>
     /// The panel's figures: 31-day rollups plus off-plan divergence for the current window.
     /// </summary>
-    public PanelStatistics BuildStatistics()
-    {
-        var utcNow = _clock.UtcNow;
-        var stats = PanelStatistics.Build(_store, utcNow, _options.DisplayZone);
-        if (_planHistory is null)
-        {
-            return stats;
-        }
-
-        var (windowStart, percents, meterAge) = _planHistory.GetCurrentWindow(utcNow);
-
-        if (_options.SimulateDivergence is { } mode)
-        {
-            // Feed the real detector synthetic inputs rather than faking its output,
-            // so the simulation exercises the same code path the real case would. The meter is
-            // stated as current, because a simulation of divergence against a stopped meter
-            // would now correctly render nothing at all.
-            var fake = mode == "limit" ? new[] { 99, 100 } : [6, 6, 6];
-            return stats.WithDivergence(_store, windowStart, fake, TimeSpan.Zero) with
-            {
-                EstOffPlanUsd = 92.75m,
-                Divergence = DivergenceDetector.Evaluate(fake, 69_091, TimeSpan.Zero),
-            };
-        }
-
-        // The meter as O-view actually knows it, not merely as Desktop last wrote it. Plan
-        // history alone leaves the comparison up to 15 minutes behind a reading already on
-        // screen — the gap issue #268 was reported through.
-        var reported = ReadReportedMeter(utcNow);
-        var (series, seriesAge) = MeterSeries.WithReportedReading(
-            percents, meterAge, reported.SessionPercent, reported.Age);
-
-        return stats.WithDivergence(_store, windowStart, series, seriesAge);
-    }
-
-    /// <summary>
-    /// Claude Code's cached five-hour reading and how old it is, or nulls when there is none.
-    ///
-    /// <para>Read through <see cref="_cachedUtilization"/> rather than the raw file so it
-    /// arrives with that provider's two rules already applied — a percentage whose window has
-    /// rolled over, and an aged zero, both come back null. It is also the seam a caller who
-    /// supplied its own <c>Provider</c> has already blanked, which is what keeps the off-plan
-    /// comparison from reaching into the developer's own <c>~/.claude.json</c> during tests
-    /// (issue #212, and the reasoning at the field's construction).</para>
-    ///
-    /// <para>A reader that throws yields nulls, not an exception: this refines a comparison
-    /// that was already correct without it.</para>
-    /// </summary>
-    private (int? SessionPercent, TimeSpan? Age) ReadReportedMeter(DateTimeOffset utcNow)
-    {
-        try
-        {
-            var reported = _cachedUtilization.GetSnapshot(utcNow);
-            return reported.SessionPercent is { } percent
-                ? (percent, utcNow - reported.CapturedAtUtc)
-                : (null, null);
-        }
-        catch (Exception ex)
-        {
-            _log?.Write($"reported meter skipped: {ex.GetType().Name}: {ex.Message}");
-            return (null, null);
-        }
-    }
+    public PanelStatistics BuildStatistics() => _planHistoryPoll.BuildStatistics();
 
     /// <summary>
     /// Applies and persists the threshold-notification preference, returning the state as it
@@ -1009,8 +840,8 @@ public sealed class UsageEngine : IDisposable
 
         // What Claude Code says about extra usage on this account (issue #259). Read through
         // the same source the reset anchor uses, so a test that supplied its own Provider gets
-        // Unknown rather than the developer's real ~/.claude.json — the hazard the comment on
-        // _planHistory above is about, pointed at this field.
+        // Unknown rather than the developer's real ~/.claude.json — the hazard PlanHistoryPoll's
+        // addressed-flag doc is about, pointed at this field.
         var extraUsage = SafeExtraUsage();
 
         // The panel's formatter, not a pinned-culture "C" lookup. This balloon sends
