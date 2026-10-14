@@ -226,4 +226,36 @@ public class TranscriptScopeReportTests : IDisposable
         // quietly does nothing.
         Assert.Equal(expected, ClaudeCliRefresher.MangleCwd(cwd));
     }
+
+    [Fact]
+    public void ResolveOwnProjectFolder_MangledPreferredDirectory_WhenItExists()
+    {
+        var preferred = Directory.CreateTempSubdirectory("oview-own-").FullName;
+        try
+        {
+            var expected = Path.Combine(
+                ClaudeProjectsLocator.DefaultRoot, ClaudeCliRefresher.MangleCwd(preferred));
+
+            Assert.Equal(expected, ClaudeCliRefresher.ResolveOwnProjectFolder(preferred));
+        }
+        finally
+        {
+            Directory.Delete(preferred);
+        }
+    }
+
+    [Fact]
+    public void ResolveOwnProjectFolder_Null_WhenThePreferredDirectoryIsMissing()
+    {
+        // O-view's data directory does not exist yet — first run, a fresh install, or a
+        // cleared folder — so the refresher actually spawns out of the user-profile fallback
+        // instead (ClaudeCliRefresher.WorkingDirectory). That fallback is the same home
+        // directory the user's real sessions already use, so excluding its mangled form would
+        // drop every genuine transcript they have — issue #313 the other way round. Null means
+        // "exclude nothing", which is the only safe answer once the refresher and the user
+        // share one folder.
+        var absent = Path.Combine(Path.GetTempPath(), $"oview-own-absent-{Guid.NewGuid():N}");
+
+        Assert.Null(ClaudeCliRefresher.ResolveOwnProjectFolder(absent));
+    }
 }
