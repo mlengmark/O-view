@@ -6,9 +6,11 @@ namespace OView.Core.Models;
 /// <see cref="Status"/> can only ever be <see cref="UsageValueStatus.Estimated"/> or
 /// <see cref="UsageValueStatus.Unavailable"/> — constructing one with
 /// <see cref="UsageValueStatus.Real"/> throws, independently of whether a value is present.
-/// <see cref="Value"/> is null exactly when <see cref="Status"/> is
-/// <see cref="UsageValueStatus.Unavailable"/> — never a fabricated "$0.00" standing in for "no
-/// source produced this".
+/// A value flagged <see cref="UsageValueStatus.Unavailable"/> never carries a figure — never a
+/// fabricated "$0.00" standing in for "no source produced this". The converse is not guaranteed:
+/// <see cref="Value"/> can still be null while <see cref="Status"/> is
+/// <see cref="UsageValueStatus.Estimated"/>, a value that happens to be unknown right now rather
+/// than one nothing can ever produce.
 /// <para>
 /// Both properties are get-only, so the pair can be set only through the constructor, which
 /// checks both rules; no <c>with</c> expression or object initializer can bypass them.
