@@ -731,4 +731,49 @@ public class PanelTextTests
         Assert.Equal("Off-plan usage · last 31 days", OffPlanText.OffPlanHeading(31));
         Assert.Equal("Off-plan usage · last 7 days", OffPlanText.OffPlanHeading(7));
     }
+
+    // ── the copy the Windows panel used to write itself ─────────────────────────────
+
+    /// <summary>
+    /// The meter figure, character for character as both panels already showed it. <b>Asserted
+    /// whole rather than by looking for "used"</b>: a panel that went back to building
+    /// <c>"{p}% used"</c> beside this one would pass a keyword check while being exactly the
+    /// duplicate this member exists to remove.
+    /// </summary>
+    [Fact]
+    public void TheMeterFigureNamesTheDirectionItRuns()
+    {
+        Assert.Equal("47% used", PanelText.BarPercentUsed(47));
+        Assert.Equal("0% used", PanelText.BarPercentUsed(0));
+        Assert.Equal("100% used", PanelText.BarPercentUsed(100));
+    }
+
+    /// <summary>
+    /// The two captions a week-boundary gridline carries. The fallback is asserted as the whole
+    /// sentence because every clause in it is load-bearing: that the line is Monday, that no
+    /// reset has been seen, and that it is therefore not the plan's boundary. A shortened
+    /// version would still read as a disclaimer while disclaiming less.
+    /// </summary>
+    [Fact]
+    public void TheWeekMarkersSayWhetherTheyAreThePlansBoundary()
+    {
+        Assert.Equal("Weekly limit reset", PanelText.WeeklyResetMarker);
+        Assert.Equal(
+            "Start of the calendar week (Monday). O-view hasn't observed a weekly reset "
+            + "yet, so this is a calendar reference, not your plan's boundary.",
+            PanelText.CalendarWeekMarker);
+    }
+
+    /// <summary>
+    /// The off-plan badge and the label beside its figure, as the Windows panel showed them.
+    /// Both branches of the badge are pinned: the Windows panel wrote the spend label twice,
+    /// once per branch, which is the shape a drift takes.
+    /// </summary>
+    [Fact]
+    public void TheOffPlanBadgeReportsBothStatesAndKeepsTheEstPrefix()
+    {
+        Assert.Equal("credit-billed", PanelText.CreditBadgeRecorded);
+        Assert.Equal("none recorded", PanelText.CreditBadgeNoneRecorded);
+        Assert.Equal("Est. credit spend", PanelText.CreditSpendLabel);
+    }
 }

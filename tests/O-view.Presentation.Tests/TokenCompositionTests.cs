@@ -258,6 +258,49 @@ public class TokenCompositionTests
         Assert.DoesNotContain("$0.00", caption, StringComparison.Ordinal);
     }
 
+    // ── the chart copy the Windows panel used to write itself ───────────────────────
+
+    /// <summary>
+    /// A usage-chart column's hover figure names its unit, because the chart has no axis to.
+    /// <b>Asserted whole rather than for the suffix</b>: a panel that went back to building
+    /// <c>$"{tokens} tokens"</c> beside this member would satisfy a keyword check while being
+    /// the duplicate it exists to remove.
+    /// </summary>
+    [Fact]
+    public void TheColumnFigureNamesWhatTheHeightMeasures()
+    {
+        Assert.Equal("234.8M tokens", TokenText.DayBarTokens(234_800_000));
+        Assert.Equal("14.6K tokens", TokenText.DayBarTokens(14_600));
+        Assert.Equal("0 tokens", TokenText.DayBarTokens(0));
+    }
+
+    /// <summary>
+    /// The breakdown caption, both ways round. The count is the whole disclosure — a chart that
+    /// said "by model" while two models were missing from its total would imply a completeness
+    /// it does not have (rule 6) — so which caption appears is asserted here rather than left
+    /// to each panel to decide.
+    /// </summary>
+    [Fact]
+    public void TheBreakdownCaptionCountsWhatTheChartLeftOut()
+    {
+        Assert.Equal("by model", TokenText.ModelBreakdownCaption(0));
+        Assert.Equal("excl. 1 unpriced", TokenText.ModelBreakdownCaption(1));
+        Assert.Equal("excl. 3 unpriced", TokenText.ModelBreakdownCaption(3));
+    }
+
+    /// <summary>
+    /// The hover card behind it names the models and says what the total is, not only what is
+    /// absent from it. A reader told just "2 excluded" still takes the figure for the whole.
+    /// </summary>
+    [Fact]
+    public void TheUnpricedHintNamesTheModelsAndWhatTheTotalCovers()
+    {
+        Assert.Equal(
+            "No published rate for claude-opus-5, claude-fable-5-1 — excluded from this "
+            + "chart, so the total shown is only the part O-view can price.",
+            TokenText.UnpricedModelsHint(["claude-opus-5", "claude-fable-5-1"]));
+    }
+
     // ── the sum is not changed ──────────────────────────────────────────────────────
 
     /// <summary>

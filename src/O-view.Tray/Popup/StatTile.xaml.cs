@@ -243,13 +243,11 @@ public partial class StatTile : UserControl
             : [];
         // Counted, not listed: a raw model id is longer than the space and would either
         // overflow the tile or crowd out the total. The count says something is missing
-        // — which is the part rule 6 requires — and the tooltip names it exactly.
-        BreakdownCaption.Text = unpriced.Count > 0
-            ? $"excl. {unpriced.Count} unpriced"
-            : "by model";
+        // — which is the part rule 6 requires — and the tooltip names it exactly. Both
+        // wordings, and the choice between them, come from TokenText.
+        BreakdownCaption.Text = TokenText.ModelBreakdownCaption(unpriced.Count);
         BreakdownCaption.ToolTip = unpriced.Count > 0
-            ? TextTooltip($"No published rate for {string.Join(", ", unpriced)} — excluded from this "
-                          + "chart, so the total shown is only the part O-view can price.")
+            ? TextTooltip(TokenText.UnpricedModelsHint(unpriced))
             : null;
         ApplyHoverTiming(BreakdownCaption);
     }
