@@ -3,7 +3,6 @@ using OView.App.Updates;
 using OView.Core.Models;
 using OView.Core.Providers;
 using OView.Core.Providers.CachedUsage;
-using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Core.Storage;
 
@@ -55,22 +54,25 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
 
     private DateTimeOffset _startedAt;
 
-    /// <summary>Where a scheduled poll publishes back to. Null means "publish inline".</summary>
-    private IUiDispatcher? _dispatcher;
+    /// <summary>
+    /// The off-thread read-and-publish mechanics, shared by every cadence below. Its
+    /// dispatcher is attached in <see cref="Start"/>, since it is not known until then.
+    /// </summary>
+    private readonly PollRunner _pollRunner;
 
     /// <summary>
     /// One gate per cadence, so a read already in flight cannot stack another behind it.
     /// They are deliberately separate — see <see cref="RunOffThread{T}"/>.
     /// </summary>
-    private readonly PollGate _fullGate = new();
-    private readonly PollGate _planGate = new();
+    private readonly PollRunner.Gate _fullGate = new();
+    private readonly PollRunner.Gate _planGate = new();
 
     /// <summary>
     /// Its own gate, for the same reason the other two have theirs: this one spawns a process
     /// and can take seconds, and sharing a gate would let it swallow the ticks of whichever
     /// cadence it borrowed.
     /// </summary>
-    private readonly PollGate _refreshGate = new();
+    private readonly PollRunner.Gate _refreshGate = new();
 
     /// <summary>
     /// The floor, the freshness gate and the latch behind <see cref="RefreshUsageCache"/>
@@ -179,25 +181,16 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
             _log?.Write($"rollup journal: {_store.JournalGuard.Describe()}");
         }
 
-        // Observed weekly resets accrue in their own durable file, not in the rollup store
-        // (ADR-0011): the store is a rebuildable cache that wipes itself on corruption,
-        // whereas a missed reset costs a week. Older builds kept them in the store, so any
-        // rows it still holds are carried across on the way past — idempotent, so this is
-        // safe to run on every launch.
-        var data = _options.ClaudeData;
-        var account = ClaudeAccount.TryRead(data?.AccountFile);
+        _pollRunner = new PollRunner(_log);
 
-        // Every Core seam below takes the log as a delegate rather than an interface, so the
-        // accounting layer keeps knowing nothing about how this app logs. What they all now
-        // share is that their failures are recorded instead of merely survived.
-        var logLine = _log is null ? (Action<string>?)null : _log.Write;
-
-        // Deliberately not the CachedUtilization provider: that one drops a resets_at once it
-        // has passed, and a passed instant is precisely what the anchor is made of.
-        _cachedUtilizationSource = _options.CachedUtilizationSource
-            ?? (_options.Provider is null
-                ? () => CachedUtilization.TryRead(data?.CachedUsageFile)
-                : () => null);
+        // The provider chain and the account/Core-seam wiring behind it — split out to
+        // UsageProviders purely to shorten this file. See its own doc for why each source is
+        // built the way it is.
+        var providers = new UsageProviders(_options, _store, _log);
+        _provider = providers.Provider;
+        _planHistory = providers.PlanHistory;
+        _cachedUtilization = providers.CachedUtilization;
+        _cachedUtilizationSource = providers.CachedUtilizationSource;
 
         _cacheRefresh = new UsageCacheRefresh(
             _options.UsageCacheRefresher,
@@ -208,78 +201,13 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
             (read, publish) => RunOffThread(_refreshGate, "usage refresh", read, publish));
         _cacheRefresh.Succeeded += Poll;
 
-        // A caller that supplied its own Provider has described the whole world, so an
-        // unnamed plan history reads NOTHING rather than the real machine's file (issue #212).
-        //
-        // The default used to be PlanHistoryFile.DefaultPath in that case, and the guard
-        // against it — PlanHistoryPoll's own addressed flag — covered only *publishing*.
-        // UsageAlerts.ReadOffPlan() →
-        // BuildStatistics() went through this provider regardless, so the off-plan comparison
-        // read the developer's own Claude Desktop usage on every poll in every test that did
-        // not name a file. Replayed against that file afterwards: six instants where a test
-        // with an empty rollup store would have seen the plan meter pinned at 99% and reported
-        // usage billing beyond the plan, all within two hours on 2026-08-25 — which is when
-        // eight of them did.
-        //
-        // Same fix, and the same reasoning, as CachedUtilization gets a few lines below.
-        _planHistory = _options.PlanHistory ?? new PlanHistoryProvider(
-            path: data?.PlanHistoryFile
-                ?? _options.PlanHistoryPath
-                ?? (_options.Provider is null ? null : PlanHistoryFile.NoFile),
-            orgUuid: account?.OrganizationUuid,
-            // Local request times tighten the five-hour window's start bracket (issue #185).
-            // The engine owns both halves, so the wiring lives here rather than teaching the
-            // plan-history provider about the rollup store.
-            earliestActivity: _store.EarliestRequestBetween)
-        {
-            Log = logLine,
-        };
-
-        // Claude Code's own cached figures — real percentages where the JSONL estimate has
-        // none, and on a machine without Desktop the only source of the top two bars at all.
-        //
-        // Position here is a tie-break, not a precedence: the composite picks whichever
-        // snapshot reports the most meters, most recently. Desktop samples every ~5 minutes
-        // while this refreshes on use, so neither is reliably the fresher one and neither
-        // deserves a standing preference.
-        //
-        // A caller that supplies its own Provider has described the whole world, so the real
-        // file is left alone unless it also supplies this. Without that, WithReportedResets
-        // would read the developer's own ~/.claude.json during tests and fold live reset times
-        // onto fixtures — passing on a CI runner, which has no such file, and failing on the
-        // machine of whoever last used Claude Code. Reaching past an injected provider to real
-        // user data is the bug, not the test that caught it.
-        _cachedUtilization = _options.CachedUtilization ?? (_options.Provider is null
-            ? new CachedUtilizationProvider(data?.CachedUsageFile)
-            : new CachedUtilizationProvider(() => null));
-
-        var transcripts = data is null
-            ? new JsonlUsageProvider(_store) { Log = logLine }
-            : new JsonlUsageProvider(_store, data.ProjectsRoot, data.CoworkRoots, data.SessionRegistryRoots) { Log = logLine };
-
-        _provider = _options.Provider ?? new CompositeUsageProvider(
-            _planHistory,
-            _cachedUtilization,
-            transcripts)
-        {
-            Log = logLine,
-        };
-
-        // Whether the plan-history provider just built is one the caller actually asked for,
-        // and so may be published from directly — see PlanHistoryPoll's own doc for why this
-        // matters. False in exactly one case: a caller injected a whole Provider and said
-        // nothing about plan history.
-        var planHistoryIsAddressed = _options.Provider is null
-            || _options.PlanHistory is not null
-            || _options.PlanHistoryPath is not null;
-
         Settings = TraySettings.Load(_options.SettingsPath);
 
         _weeklyReset = new WeeklyResetCoordinator(
             _options.WeeklyResetAnchorPath,
             _cachedUtilizationSource,
             _cachedUtilization,
-            account?.OrganizationUuid,
+            providers.OrganizationUuid,
             _log,
             () => Settings,
             settings =>
@@ -304,7 +232,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
 
         _planHistoryPoll = new PlanHistoryPoll(
             _planHistory,
-            planHistoryIsAddressed,
+            providers.PlanHistoryIsAddressed,
             _store,
             _cachedUtilization,
             _weeklyReset,
@@ -353,7 +281,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
     public void Start(ITimerFactory timers, IUiDispatcher? dispatcher = null)
     {
         _startedAt = _clock.UtcNow;
-        _dispatcher = dispatcher;
+        _pollRunner.AttachDispatcher(dispatcher);
 
         _pollTimer = Track(timers.Create(_normalInterval, Poll));
         _log?.Write($"startup interval={_normalInterval.TotalSeconds}s");
@@ -481,117 +409,14 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
 
     /// <summary>
     /// Reads off the UI thread and publishes back onto it, under a gate so a slow read cannot
-    /// stack another behind it.
-    ///
-    /// <para>Shared by both cadences rather than written twice. The full poll and the
-    /// plan-only poll differ in <i>what</i> they read and publish; the threading, the
-    /// drop-don't-queue rule and the shutdown handling are identical, and this file's history
-    /// is one of behaviour written twice and fixed once.</para>
-    ///
-    /// <para>Each cadence carries its OWN gate. Sharing one would let a first-run ingest —
-    /// seconds long — swallow every plan-history tick underneath it, which is precisely the
-    /// coupling being removed.</para>
-    ///
-    /// <para><b>The gate is released on every path out of the read, including a throw.</b>
-    /// It has to be: nothing else on this path releases it, so one escaped exception left
-    /// <c>_busy</c> set for the life of the process and every later tick was dropped by
-    /// <see cref="PollGate.TryEnter"/>. That failure is silent and total — the panel goes on
-    /// drawing its last snapshot, no transcript is ingested, no observed weekly reset is
-    /// written, and because <c>_log</c> is null unless <c>--log</c> was passed there is
-    /// nothing on disk to say why. Observed in the field: a tray up for 35 minutes with a
-    /// 60 s cadence, 409 KB of unread transcript, and a rollup store whose newest row was
-    /// five days old while the store itself passed every health check.</para>
+    /// stack another behind it. The mechanics live in <see cref="PollRunner"/>, shared by all
+    /// three of this engine's cadences; this call site, and the two beside the constructor's
+    /// <see cref="UsageCacheRefresh"/> and <see cref="PlanHistoryPoll"/> wiring, are what keep
+    /// each cadence's own gate separate — see <see cref="PollRunner.Run{T}"/> for why that
+    /// separation matters.
     /// </summary>
-    private void RunOffThread<T>(PollGate gate, string what, Func<T> read, Action<T> publish)
-    {
-        if (_dispatcher is not { } dispatcher)
-        {
-            // No separate UI thread to protect — run inline, which is what the tests rely on.
-            publish(read());
-            return;
-        }
-
-        // A poll slower than the interval must not stack another behind it. Dropping the
-        // tick is right rather than queueing it: the next one reads the same files and
-        // reports the same state, so a queue would only replay stale work.
-        if (!gate.TryEnter())
-        {
-            _log?.Write($"{what} skipped — previous still running");
-            return;
-        }
-
-        // Three lines per poll, and the gaps between them are the diagnosis. A tick that
-        // never logs "read begin" means the timer is not firing; "read begin" with no "read
-        // done" means the read is hung or threw; "read done" with no "published" means the
-        // dispatcher is not running the callback — and each of those is a different bug in a
-        // different layer. Without them a stalled poll and a healthy idle one are the same
-        // silence, which is how five days of no ingestion went unnoticed.
-        var startedAt = Environment.TickCount64;
-        _log?.Write($"{what} read begin");
-
-        _ = Task.Run(() =>
-        {
-            T result;
-            try
-            {
-                result = read();
-                _log?.Write($"{what} read done in {Environment.TickCount64 - startedAt} ms");
-            }
-            catch (Exception ex)
-            {
-                // Both reads already guard themselves and return a failure result rather
-                // than throwing — but each only guards what sits inside its own try, and
-                // neither covers what it touches before entering one. This is the backstop
-                // for that gap, and for whatever a future read reaches for first.
-                //
-                // It is not defensive padding: the gate is released nowhere else on this
-                // path, so without this the cadence is dead for the life of the process
-                // after a single throw, and Task.Run discards the exception so nothing can
-                // even report it. Releasing here costs one dropped tick instead.
-                gate.Exit();
-                _log?.Write($"{what} read FAILED {ex.GetType().Name}: {ex.Message}");
-                return;
-            }
-
-            try
-            {
-                dispatcher.Post(() =>
-                {
-                    try
-                    {
-                        publish(result);
-                        _log?.Write($"{what} published after {Environment.TickCount64 - startedAt} ms");
-                    }
-                    finally
-                    {
-                        gate.Exit();
-                    }
-                });
-            }
-            catch (Exception ex)
-            {
-                // The dispatcher is gone — the app is shutting down. Release the gate so
-                // nothing is wedged, and drop the result: there is no longer anything to
-                // draw it on.
-                gate.Exit();
-                _log?.Write($"{what} publish skipped {ex.GetType().Name}: {ex.Message}");
-            }
-        });
-    }
-
-    /// <summary>
-    /// One cadence's "a read is already in flight" flag. A type rather than an <c>int</c>
-    /// field because there are now two of them and <c>Interlocked</c> on a field cannot be
-    /// passed to the shared runner.
-    /// </summary>
-    private sealed class PollGate
-    {
-        private int _busy;
-
-        public bool TryEnter() => Interlocked.Exchange(ref _busy, 1) == 0;
-
-        public void Exit() => Volatile.Write(ref _busy, 0);
-    }
+    private void RunOffThread<T>(PollRunner.Gate gate, string what, Func<T> read, Action<T> publish) =>
+        _pollRunner.Run(gate, what, read, publish);
 
     /// <summary>
     /// Everything a poll needs from disk, gathered on whatever thread is doing the reading.
