@@ -120,6 +120,15 @@ public sealed class LinuxApp : Application, IShellToSkin
 
     private void StartTray(ShellHost host)
     {
+        // The mode the lifetime actually has, not the one Program asked for — the two are
+        // different facts, and the wrong one here used to end the app the second time anyone
+        // opened the panel without writing a word about it (issue #312). A line naming it is the
+        // only way a log that stops mid-session can be told from one that was shut down.
+        _log?.Write(
+            "shutdown mode="
+            + ((ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.ShutdownMode.ToString()
+               ?? "(no desktop lifetime)"));
+
         _tray = new TrayIcon
         {
             Icon = ToWindowIcon(UsageSnapshot.None),

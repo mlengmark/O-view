@@ -88,7 +88,7 @@ public sealed class PanelWindow : Window
         {
             if (e.Key == Key.Escape)
             {
-                Hide();
+                Dismiss("escape");
             }
         };
         Activated += (_, _) => _dismissal.Activated();
@@ -96,7 +96,7 @@ public sealed class PanelWindow : Window
         {
             if (_dismissal.ShouldHideOnDeactivated())
             {
-                Hide();
+                Dismiss("clicked away");
                 return;
             }
 
@@ -139,6 +139,23 @@ public sealed class PanelWindow : Window
         }
 
         Activate();
+    }
+
+    /// <summary>
+    /// Hides the panel and says which gesture did it.
+    ///
+    /// <para>Hidden rather than closed, as the Windows panel is: the window survives to be shown
+    /// again. What that leaves behind — one hidden window, still the application's — is what
+    /// made the <i>next</i> open end the process on the lifetime's default shutdown mode (issue
+    /// #312, and <see cref="Program"/> for the mode this head starts with).</para>
+    ///
+    /// <para>Logged because a dismissal is otherwise invisible: nothing else in a report
+    /// distinguishes a panel the user put away from one that never came up.</para>
+    /// </summary>
+    private void Dismiss(string how)
+    {
+        Hide();
+        _log?.Write($"panel hidden ({how})");
     }
 
     /// <summary>
