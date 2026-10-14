@@ -84,17 +84,14 @@ public sealed class UsageEngine : IDisposable
     /// </summary>
     private readonly UsageCacheRefresh _cacheRefresh;
 
-    /// <summary>The stored weekly reset instant (ADR-0014). See <see cref="WithWeeklyReset"/>.</summary>
-    private readonly WeeklyResetAnchor _weeklyAnchor;
+    /// <summary>
+    /// The manual override, the reported instant and the conflict between them (ADR-0014) —
+    /// its own class purely to keep this file shorter. See <see cref="WeeklyResetCoordinator"/>.
+    /// </summary>
+    private readonly WeeklyResetCoordinator _weeklyReset;
 
     /// <summary>Raw reader for Claude Code's cached figures, used only to harvest the anchor.</summary>
     private readonly Func<CachedUtilization?> _cachedUtilizationSource;
-
-    /// <summary>The organization the anchor is scoped to; windows are per-account.</summary>
-    private readonly string? _orgUuid;
-
-    /// <summary>Set when a stored anchor disagrees with what the user typed.</summary>
-    private DateTimeOffset? _weeklyResetConflict;
 
     /// <summary>
     /// Whether the plan-history provider this engine holds is one the caller actually asked
@@ -214,14 +211,6 @@ public sealed class UsageEngine : IDisposable
         // share is that their failures are recorded instead of merely survived.
         var logLine = _log is null ? (Action<string>?)null : _log.Write;
 
-        _orgUuid = account?.OrganizationUuid;
-
-        // The weekly reset, since ADR-0014: one instant Claude reported, stored once and
-        // projected forward by whole weeks forever. There is no observation log any more and
-        // nothing to import from the rollup store — the derivation those existed to feed was
-        // removed for producing an answer 11.5 hours wrong while the exact one sat unread.
-        _weeklyAnchor = new WeeklyResetAnchor(_options.WeeklyResetAnchorPath) { Log = logLine };
-
         // Deliberately not the CachedUtilization provider: that one drops a resets_at once it
         // has passed, and a passed instant is precisely what the anchor is made of.
         _cachedUtilizationSource = _options.CachedUtilizationSource
@@ -300,65 +289,45 @@ public sealed class UsageEngine : IDisposable
 
         Settings = TraySettings.Load(_options.SettingsPath);
         _watcher = new ThresholdWatcher(Settings.ThresholdPercent);
-        ApplyWeeklyResetSetting();
-    }
 
-    /// <summary>
-    /// Pushes the user's entered weekly reset into the provider (GitHub issue #186). Called
-    /// on construction and after every change, so the two can never disagree about what is
-    /// set — the shape of bug where a preference is saved and does not take effect until a
-    /// restart.
-    /// </summary>
-    private void ApplyWeeklyResetSetting()
-    {
-        // The entry is read straight from Settings on every poll now (see WithWeeklyReset), so
-        // there is no provider-side copy left to keep in step — the class of bug this method
-        // existed to prevent is removed rather than maintained. Clearing the recorded conflict
-        // stays: a new entry is a fresh claim and deserves a fresh verdict.
-        _weeklyResetConflict = null;
+        _weeklyReset = new WeeklyResetCoordinator(
+            _options.WeeklyResetAnchorPath,
+            _cachedUtilizationSource,
+            _cachedUtilization,
+            account?.OrganizationUuid,
+            _log,
+            () => Settings,
+            settings =>
+            {
+                Settings = settings;
+                Settings.Save(_options.SettingsPath);
+            });
+        _weeklyReset.ApplyWeeklyResetSetting();
     }
 
     /// <summary>
     /// Applies and persists the user's weekly reset time, returning what is now in effect.
     /// Null clears it and returns to deriving.
     /// </summary>
-    public ManualWeeklyReset? SetWeeklyReset(ManualWeeklyReset? reset)
-    {
-        Settings = Settings with
-        {
-            WeeklyResetDay = reset?.DayText ?? "",
-            WeeklyResetTime = reset?.TimeText ?? "",
-            // A new entry is a fresh claim: any conflict already reported was about the old
-            // one, so re-arm the notice rather than staying silent about the new value.
-            WeeklyResetConflictNoticed = "",
-        };
-        Settings.Save(_options.SettingsPath);
-        ApplyWeeklyResetSetting();
-
-        _log?.Write($"weekly reset {(reset is null ? "cleared — deriving" : $"set to {reset.DayText} {reset.TimeText} local")}");
-        return Settings.WeeklyReset;
-    }
+    public ManualWeeklyReset? SetWeeklyReset(ManualWeeklyReset? reset) => _weeklyReset.SetWeeklyReset(reset);
 
     /// <summary>
     /// The reset instant Claude reported that disproves the entered weekly reset, or null.
     /// Surfaced so the head can tell the user once — silently overriding a wrong entry leaves
     /// them believing the number they typed.
     /// </summary>
-    public DateTimeOffset? WeeklyResetConflict => _weeklyResetConflict;
+    public DateTimeOffset? WeeklyResetConflict => _weeklyReset.WeeklyResetConflict;
 
     /// <summary>
     /// Records that the user has been told about <paramref name="conflict"/>, so the notice
     /// fires once per conflicting instant rather than on every poll.
     /// </summary>
-    public void MarkWeeklyResetConflictNoticed(DateTimeOffset conflict)
-    {
-        Settings = Settings with { WeeklyResetConflictNoticed = conflict.ToString("o") };
-        Settings.Save(_options.SettingsPath);
-    }
+    public void MarkWeeklyResetConflictNoticed(DateTimeOffset conflict) =>
+        _weeklyReset.MarkWeeklyResetConflictNoticed(conflict);
 
     /// <summary>Whether this conflict is new to the user.</summary>
     public bool IsWeeklyResetConflictUnseen(DateTimeOffset conflict) =>
-        Settings.WeeklyResetConflictNoticed != conflict.ToString("o");
+        _weeklyReset.IsWeeklyResetConflictUnseen(conflict);
 
     /// <summary>
     /// Starts polling. Refreshes once immediately so the first result sets the cadence,
@@ -642,7 +611,7 @@ public sealed class UsageEngine : IDisposable
             // This is exactly the flicker PublishPlanHistory's own remarks warn about for the
             // percentages, arriving through the reset instead. Two cadences that decorate a
             // snapshot differently will always show the difference as a blink.
-            return WithReportedResets(WithWeeklyReset(snapshot, utcNow), utcNow);
+            return _weeklyReset.WithReportedResets(_weeklyReset.WithWeeklyReset(snapshot, utcNow), utcNow);
         }
         catch (Exception ex)
         {
@@ -736,8 +705,8 @@ public sealed class UsageEngine : IDisposable
         {
             // Order matters. The entry fills a gap; the reported timestamps then override
             // whatever is there, entry included — see WithReportedResets.
-            var snapshot = WithWeeklyReset(_provider.GetSnapshot(utcNow), utcNow);
-            snapshot = WithReportedResets(snapshot, utcNow);
+            var snapshot = _weeklyReset.WithWeeklyReset(_provider.GetSnapshot(utcNow), utcNow);
+            snapshot = _weeklyReset.WithReportedResets(snapshot, utcNow);
             return new PollResult(snapshot, ReadOffPlan(), utcNow, Failed: false);
         }
         catch (Exception ex)
@@ -745,79 +714,6 @@ public sealed class UsageEngine : IDisposable
             _log?.Write($"refresh FAILED {ex.GetType().Name}: {ex.Message}");
             return new PollResult(UsageSnapshot.None, null, utcNow, Failed: true);
         }
-    }
-
-    /// <summary>
-    /// Carries the user's entered weekly reset onto a snapshot that has none.
-    ///
-    /// <para><b>The case this exists for is the one the feature was built for.</b>
-    /// <c>PlanHistoryProvider</c> resolves the entry itself — including checking it against
-    /// observed resets — but it returns <c>None</c> before reaching that code when there is
-    /// no plan-history file at all, and the composite then falls through to the JSONL
-    /// estimate, whose weekly reset is null. So a user with no Claude Desktop entered their
-    /// reset time and saw nothing change: exactly the population issue #186 was written for,
-    /// and the only one that cannot derive the value instead.</para>
-    ///
-    /// <para>Applied here rather than by widening the provider, because the entry is a user
-    /// setting rather than a reading of the plan-history file, and it should survive whichever
-    /// provider ends up winning the composite's tier resolution.</para>
-    ///
-    /// <para><b>Only fills a gap; never overrides.</b> A snapshot that already carries a
-    /// weekly reset has been through the provider's entry-versus-evidence rule, which is the
-    /// one place allowed to decide between them. Overwriting it here would reinstate an entry
-    /// that an observation had just disproved.</para>
-    /// </summary>
-    private UsageSnapshot WithWeeklyReset(UsageSnapshot snapshot, DateTimeOffset utcNow)
-    {
-        // Nothing to attach a reset to: a panel with no data at all should stay blank rather
-        // than grow one lonely populated line.
-        if (snapshot.Source == DataSource.None)
-        {
-            return snapshot;
-        }
-
-        // Harvest first. Whenever Claude Code has reported an instant, store it — including
-        // one already in the past, which is the case that matters: the cache refreshes only
-        // when Claude Code fetches usage, measured at 43 hours stale on a machine whose file
-        // was being rewritten every few minutes. Read once, it is correct forever after.
-        var reported = ReportedWeeklyResetInstant();
-        if (reported is { } instant)
-        {
-            _weeklyAnchor.Save(instant, _orgUuid);
-        }
-
-        var anchor = _weeklyAnchor.Read(_orgUuid);
-        _weeklyResetConflict = null;
-
-        // A discovered anchor outranks a typed entry, because it comes from the source rather
-        // than from transcription — but it must never silently replace one. Disagreement is
-        // recorded so the head can say so once; a wrong entry quietly overridden leaves the
-        // user believing the number they typed.
-        if (anchor is { } stored && Settings.WeeklyReset is { } entered &&
-            entered.IsContradictedBy(stored, TimeZoneInfo.Local))
-        {
-            _weeklyResetConflict = stored;
-        }
-
-        var next = anchor is { } a
-            ? WeeklyWindow.NextAfter(a, utcNow)
-            : Settings.WeeklyReset?.NextAfter(utcNow, TimeZoneInfo.Local);
-
-        // Genuinely unknown: no reported instant has ever been seen and nothing was entered.
-        // The panel says so and points at the entry dialog rather than showing a guess — which
-        // is what the derivation used to do, wrongly and without saying so (rule 6).
-        if (next is null)
-        {
-            return snapshot;
-        }
-
-        return snapshot with
-        {
-            WeeklyResetAtUtc = next,
-            // No uncertainty field to set: both remaining sources are exact, so the weekly row
-            // never wore the "~" and the field carrying it was removed (ADR-0014, issue #248).
-            WeeklyResetPeriod = WeeklyWindow.Length,
-        };
     }
 
     /// <summary>
@@ -850,89 +746,6 @@ public sealed class UsageEngine : IDisposable
     /// <see cref="ExtraUsageState.Unknown"/> when nothing said — never a guess (issue #259).
     /// </summary>
     private ExtraUsageStatus SafeExtraUsage() => CachedUsage?.ExtraUsage ?? ExtraUsageStatus.Unknown;
-
-    /// <summary>
-    /// The weekly reset instant Claude Code last reported, past or future, or null.
-    /// Never throws: a failure to harvest must not disturb the reading it decorates.
-    /// </summary>
-    private DateTimeOffset? ReportedWeeklyResetInstant()
-    {
-        try
-        {
-            return _cachedUtilizationSource()?.SevenDay?.ResetsAtUtc;
-        }
-        catch (Exception ex)
-        {
-            _log?.Write($"weekly anchor read FAILED {ex.GetType().Name}: {ex.Message}");
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// Replaces derived reset times with the ones Claude actually reported, wherever Claude
-    /// Code has cached them (<see cref="CachedUtilization"/>).
-    ///
-    /// <para><b>These are the only exact reset times O-view has.</b> Every other one is inferred
-    /// from a drop in a sampled series, so its precision is bounded by the gap between samples:
-    /// about half an interval for the five-hour window even after local transcripts narrow the
-    /// bracket (issue #185), and roughly ten hours for the weekly one, whose resets land
-    /// overnight while Desktop is closed (ADR-0011) — the imprecision that made the manual entry
-    /// of issue #186 worth building in the first place. A reported timestamp needs none of that
-    /// machinery. It is simply correct.</para>
-    ///
-    /// <para><b>So this overrides rather than fills a gap</b> — the opposite of
-    /// <see cref="WithEnteredWeeklyReset"/>, and the difference is the point. A derived bracket
-    /// and a typed-in time are both attempts to recover a number that this source states
-    /// outright; leaving either in place ahead of it would be preferring a guess to the
-    /// answer.</para>
-    ///
-    /// <para>Applied to the winning snapshot rather than left to the provider chain, because
-    /// the chain resolves on <em>percentages</em>: a machine running Claude Desktop takes its
-    /// percentages from plan history and would otherwise keep plan history's derived reset
-    /// times too, discarding exact ones that were sitting on disk the whole time. The two
-    /// questions have different best answers, so they are answered separately.</para>
-    ///
-    /// <para>Silent when there is nothing to say: no cache, a window that has already rolled
-    /// past its cached boundary, or a reader that throws all leave the snapshot untouched
-    /// (<see cref="CachedUtilizationProvider"/> returns those as nulls). This only ever
-    /// replaces an approximation with a fact, so it must never be able to remove one.</para>
-    /// </summary>
-    private UsageSnapshot WithReportedResets(UsageSnapshot snapshot, DateTimeOffset utcNow)
-    {
-        // Nothing to attach a reset to: a panel with no data at all should stay blank rather
-        // than grow one lonely populated line (same rule as the entered reset).
-        if (snapshot.Source == DataSource.None)
-        {
-            return snapshot;
-        }
-
-        UsageSnapshot reported;
-        try
-        {
-            reported = _cachedUtilization.GetSnapshot(utcNow);
-        }
-        catch (Exception ex)
-        {
-            // A precision refinement must never take down the reading it refines.
-            _log?.Write($"reported resets skipped: {ex.GetType().Name}: {ex.Message}");
-            return snapshot;
-        }
-
-        if (reported.SessionResetAtUtc is { } sessionReset)
-        {
-            snapshot = snapshot with
-            {
-                SessionResetAtUtc = sessionReset,
-                // Exact, so it renders without the "~" that marks a derived bracket.
-                SessionResetUncertainty = TimeSpan.Zero,
-            };
-        }
-
-        // The weekly reset is deliberately not touched here. WithWeeklyReset owns it end to
-        // end now, working from the stored anchor rather than from this snapshot — which
-        // drops a resets_at the moment it passes, the exact case the anchor exists to survive.
-        return snapshot;
-    }
 
     /// <summary>
     /// The divergence figures, or null when there is no plan history to compare against or
