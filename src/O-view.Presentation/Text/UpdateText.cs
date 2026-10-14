@@ -3,7 +3,8 @@ using OView.Core.Updates;
 namespace OView.Presentation.Text;
 
 /// <summary>
-/// What the update flow says: the notifications and the confirmation dialog.
+/// Everything the update flow says: the notifications, the confirmation dialog, and the
+/// notices a build that cannot replace itself sends instead.
 ///
 /// <para><b>Why all of it belongs together.</b> ADR-0009 gives the same release three endings
 /// depending on how O-view was installed — install it, open the download page, or name the
@@ -137,8 +138,29 @@ public static class UpdateText
 
     public const string DialogCancel = "Not now";
 
-    // The notice-only heads — the two bodies a build that checks but never installs sends
-    // instead (ADR-0009 as amended for Linux) — belong here beside the rest of the flow, and
-    // are the one part of this move still waiting: LinuxUpdateNotice lives under a guarded
-    // path, which this slice was not cleared to change.
+    // ── the notice-only heads ───────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Heads the notice sent by a build that checks but will never install (ADR-0009 as
+    /// amended for Linux). Shorter than <see cref="AvailableTitle"/> and carrying the
+    /// version, because the body here is a set of manual steps rather than a menu path.
+    /// </summary>
+    public static string NoticeTitle(ReleaseVersion newVersion) =>
+        $"O-view {newVersion} is available";
+
+    /// <summary>
+    /// It deliberately does not say "run apt upgrade": there is no O-view apt repository, so
+    /// that command would report nothing to do and the user would reasonably conclude the
+    /// notification was wrong (rule 6). Saying whose files these are is why O-view is not
+    /// doing it for them.
+    /// </summary>
+    public static string PackageNoticeBody(string releasePageUrl) =>
+        $"Download the new .deb from {releasePageUrl} and install it with sudo apt install. "
+        + "O-view will not update itself: these files belong to your package manager.";
+
+    /// <summary>The same for a tarball, where there is no package manager to defer to and
+    /// the step is unpacking over what is there.</summary>
+    public static string TarballNoticeBody(string releasePageUrl) =>
+        $"Download the new tarball from {releasePageUrl} and extract it over your existing "
+        + "copy. O-view will not update itself.";
 }
