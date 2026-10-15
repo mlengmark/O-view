@@ -130,39 +130,89 @@ public class LinuxHeadWiringTests
     {
         // The shell argument is only dereferenced when the work runs, and nothing here runs
         // it — so no store is opened and no path on this machine is touched.
-        var handler = (EventHandler)typeof(LinuxApp)
-            .GetMethod("TrayClickHandler", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(Head, [null])!;
-
-        Assert.Equal(typeof(BusCallback), handler.Method.DeclaringType);
+        Assert.Equal(typeof(BusCallback), OpenPanelHandler().Method.DeclaringType);
     }
 
     /// <summary>
-    /// Every menu item too. A sweep rather than one test each, so a fourth row added without
+    /// Every menu item too. A sweep rather than one test each, so a fifth row added without
     /// the marshalling fails here instead of waiting for a hardware report.
     /// </summary>
     [Fact]
     public void EveryMenuItemsClickHandlerIsMarshalledOntoTheUiThread()
     {
-        // Null shell, for the reason TheTrayClickHandlerIsMarshalledOntoTheUiThread gives: it is
-        // captured in closures and only dereferenced when a click runs, and nothing here runs one.
-        var menu = (NativeMenu)typeof(LinuxApp)
-            .GetMethod("BuildMenu", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(Head, [null])!;
-
-        var items = menu.Items.OfType<NativeMenuItem>().ToArray();
+        var items = Menu().Items.OfType<NativeMenuItem>().ToArray();
         Assert.NotEmpty(items);
-
-        var clickField = typeof(NativeMenuItem).GetField("Click", BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(clickField);   // the toolkit moved the event; the check below is blind without it
 
         foreach (var item in items)
         {
-            var handlers = ((Delegate?)clickField!.GetValue(item))?.GetInvocationList() ?? [];
+            var handlers = ClickHandlersOf(item);
 
             Assert.NotEmpty(handlers);
             Assert.All(handlers, h => Assert.Equal(typeof(BusCallback), h.Method.DeclaringType));
         }
+    }
+
+    /// <summary>
+    /// The row that opens the panel does it through the <i>same</i> handler the icon's click
+    /// does (issue #315), rather than through a second call to the same private method.
+    ///
+    /// <para>Asserted as the work the two <see cref="BusCallback"/>s wrap, which is the only
+    /// part a copy would differ in: both delegates declare <c>BusCallback</c> whatever they
+    /// were built from, so the sweep above would be just as green if the row opened a panel of
+    /// its own — with its own marshalling to get wrong, and its own "panel opened" line to
+    /// mislead whoever read the log after the next report.</para>
+    /// </summary>
+    [Fact]
+    public void TheRowThatOpensThePanelRunsTheIconClicksOwnHandler()
+    {
+        var row = Assert.IsType<NativeMenuItem>(Menu().Items[0]);
+        Assert.Equal(MenuText.ShowUsageRow, row.Header);
+
+        Assert.Equal(
+            WorkBehind(OpenPanelHandler()),
+            WorkBehind(Assert.Single(ClickHandlersOf(row))));
+    }
+
+    /// <summary>The handler the head attaches to the tray icon, built with no shell (see above).</summary>
+    private static EventHandler OpenPanelHandler() =>
+        (EventHandler)typeof(LinuxApp)
+            .GetMethod("OpenPanelHandler", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(Head, [null])!;
+
+    /// <summary>
+    /// The real menu the head builds. Null shell, for the reason
+    /// <see cref="TheTrayClickHandlerIsMarshalledOntoTheUiThread"/> gives: it is captured in
+    /// closures and only dereferenced when a click runs, and nothing here runs one.
+    /// </summary>
+    private static NativeMenu Menu() =>
+        (NativeMenu)typeof(LinuxApp)
+            .GetMethod("BuildMenu", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(Head, [null])!;
+
+    private static Delegate[] ClickHandlersOf(NativeMenuItem item)
+    {
+        var clickField = typeof(NativeMenuItem).GetField("Click", BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(clickField);   // the toolkit moved the event; every check on it is blind without it
+
+        return ((Delegate?)clickField!.GetValue(item))?.GetInvocationList() ?? [];
+    }
+
+    /// <summary>
+    /// What a marshalled handler will actually run, as a method rather than as a closure: two
+    /// handlers built from one factory capture different objects but share this, and two built
+    /// from separate lambdas cannot.
+    /// </summary>
+    private static MethodInfo WorkBehind(Delegate handler)
+    {
+        var callback = Assert.IsType<BusCallback>(handler.Target);
+
+        var work = (Action?)callback.GetType()
+            .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
+            .Single(f => f.FieldType == typeof(Action))
+            .GetValue(callback);
+
+        Assert.NotNull(work);
+        return work!.Method;
     }
 
     // ── the shell reaches this skin on the UI thread, and only through it ────────────
@@ -256,24 +306,32 @@ public class LinuxHeadWiringTests
     }
 
     /// <summary>
-    /// Every row this head builds takes its label from Presentation, so the two rows it
-    /// shares with the Windows menu cannot drift apart from it.
+    /// Every row this head builds takes its label from Presentation, so the rows it shares
+    /// with the Windows menu cannot drift apart from it.
     ///
-    /// <para>They had their own copies, and nothing would have failed if one had become
+    /// <para>Two of them had their own copies, and nothing would have failed if one had become
     /// "Quit" — the only other check on these strings is the runtime D-Bus sweep, which asks
     /// a real desktop for the rows and so cannot run on a machine without one.</para>
+    ///
+    /// <para>Asserted in order, because the order is itself the point of the first row: the
+    /// panel is what a person came to the menu for (issue #315), and a row for it below the
+    /// two that were already there would be the thing they read last.</para>
     /// </summary>
     [Fact]
-    public void EveryMenuRowTakesItsLabelFromPresentation()
+    public void EveryMenuRowTakesItsLabelFromPresentationInTheOrderTheyAreDrawn()
     {
-        var menu = (NativeMenu)typeof(LinuxApp)
-            .GetMethod("BuildMenu", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(Head, [null])!;
-
-        var headers = menu.Items.OfType<NativeMenuItem>().Select(i => i.Header ?? "").ToArray();
+        var headers = Menu().Items.OfType<NativeMenuItem>().Select(i => i.Header ?? "").ToArray();
 
         Assert.Equal(
-            [MenuText.RunAtStartupRow, PanelText.UsageRefreshBlockedRow, MenuText.ExitRow],
+            [
+                MenuText.ShowUsageRow,
+                MenuText.RunAtStartupRow,
+
+                // Between the two it has something to say about and the one that ends the app,
+                // and hidden until the refresh has blocked itself — so a person sees three rows.
+                PanelText.UsageRefreshBlockedRow,
+                MenuText.ExitRow,
+            ],
             headers);
     }
 

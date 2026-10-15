@@ -8,9 +8,9 @@ namespace OView.Presentation.Text;
 ///
 /// <para>Both heads draw this menu, with entirely different machinery — a WPF flyout of
 /// templated Buttons, a DBusMenu the desktop renders — which is the shape in which two
-/// surfaces drift. The Linux menu carries two of these rows and had its own copy of both
-/// labels, so "Exit O-view" existed twice and nothing would have failed if one of them had
-/// become "Quit". The resume row is the exception that proves the rule: it already read
+/// surfaces drift. The Linux menu carries three of these rows and once had its own copy of
+/// two of them, so "Exit O-view" existed twice and nothing would have failed if one of them
+/// had become "Quit". The resume row is the exception that proves the rule: it already read
 /// <see cref="PanelText.UsageRefreshBlockedRow"/> on both heads.</para>
 /// </summary>
 public static class MenuText
@@ -18,6 +18,18 @@ public static class MenuText
     public const string AppName = "O-view";
 
     public static string VersionLabel(string version) => $"v{version}";
+
+    /// <summary>
+    /// The row that opens the panel. Linux only in practice, and not because the wording is
+    /// platform-specific: on Windows the icon's own left click opens the panel, so a row saying
+    /// the same thing would be a second way to do what the obvious gesture already does.
+    ///
+    /// <para>Ubuntu's AppIndicators extension gives the panel no gesture at all — a single click
+    /// opens the menu and only a double click opens the panel, which nothing tells the user to
+    /// try (issue #315). A row works on every SNI host whatever its click handling, which is why
+    /// it is the fix rather than asking each desktop for different behaviour.</para>
+    /// </summary>
+    public const string ShowUsageRow = "Show usage";
 
     /// <summary>On both heads' menus.</summary>
     public const string RunAtStartupRow = "Run at startup";
