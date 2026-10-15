@@ -51,8 +51,9 @@ public class ClaudeCliRefresherTests
     private static ClaudeCliRefresher Refresher(
         Func<CachedUtilization?> read,
         ClaudeCliRefresher.ProcessRun run,
-        IBilledTranscriptGuard? guard = null) =>
-        new(read, _ => run, guard ?? new FakeGuard());
+        IBilledTranscriptGuard? guard = null,
+        Func<string?>? continuedTranscript = null) =>
+        new(read, _ => run, guard ?? new FakeGuard(), continuedTranscript ?? (() => null));
 
     // ── the refresh itself ──────────────────────────────────────────────────
 
@@ -183,7 +184,8 @@ public class ClaudeCliRefresherTests
         var refresher = new ClaudeCliRefresher(
             Block(Now),
             _ => { spawned = true; return Ok; },
-            new ThrowingGuard(onSnapshot: true));
+            new ThrowingGuard(onSnapshot: true),
+            continuedTranscript: () => null);
 
         var result = refresher.Refresh();
 
@@ -206,6 +208,127 @@ public class ClaudeCliRefresherTests
 
         Assert.Equal(RefreshOutcome.NotFound, refresher.Refresh().Outcome);
         Assert.False(guard.Asked);
+    }
+
+    // ── the continued-session half of the cost guard ────────────────────────
+
+    /// <summary>
+    /// <see cref="IBilledTranscriptGuard"/> only ever sees a transcript that did not exist before
+    /// the invocation — <see cref="ContinueArgumentIsExactlyContinue"/> below is why one can now
+    /// exist beforehand on purpose. This is the other half: a request id appended to the one file
+    /// this invocation could have continued.
+    /// </summary>
+    [Fact]
+    public void AChargeAppendedToAContinuedSessionStopsTheFeature()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"oview-continued-{Guid.NewGuid():N}.jsonl");
+        File.WriteAllText(path, "{\"type\":\"user\"}\n");
+        try
+        {
+            var refresher = new ClaudeCliRefresher(
+                Block(Now),
+                _ =>
+                {
+                    File.AppendAllText(path, "{\"requestId\":\"req_1\"}\n");
+                    return Ok;
+                },
+                new FakeGuard(),
+                () => path);
+
+            var result = refresher.Refresh();
+
+            Assert.Equal(RefreshOutcome.Billed, result.Outcome);
+            Assert.True(result.IsFatal);
+            Assert.Contains(Path.GetFileName(path), result.Detail);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
+    /// A request id already in the continued file from a charge the user has since resumed past
+    /// must not be re-reported on every later refresh — only one that was not there a moment ago
+    /// is evidence of anything happening <i>this</i> call.
+    /// </summary>
+    [Fact]
+    public void AnAlreadyBilledContinuedFileIsNotReReported()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"oview-continued-{Guid.NewGuid():N}.jsonl");
+        File.WriteAllText(path, "{\"requestId\":\"req_old\"}\n");
+        try
+        {
+            var reads = new Queue<DateTimeOffset?>([Now.AddDays(-4), Now]);
+            var refresher = new ClaudeCliRefresher(
+                () => Block(reads.Dequeue())(), _ => Ok, new FakeGuard(), () => path);
+
+            Assert.Equal(RefreshOutcome.Refreshed, refresher.Refresh().Outcome);
+        }
+        finally
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>No continued file exists yet (this refresher has never run) — nothing to check.</summary>
+    [Fact]
+    public void NoContinuedFileIsNoEvidenceOfAnything()
+    {
+        var reads = new Queue<DateTimeOffset?>([Now.AddDays(-4), Now]);
+        var refresher = new ClaudeCliRefresher(
+            () => Block(reads.Dequeue())(), _ => Ok, new FakeGuard(), () => null);
+
+        Assert.Equal(RefreshOutcome.Refreshed, refresher.Refresh().Outcome);
+    }
+
+    /// <summary>
+    /// Mirrors <see cref="AGuardThatCannotTakeABaselineStopsBeforeSpawning"/> for the other half:
+    /// a continued file this check cannot even establish a baseline for must abandon the refresh
+    /// rather than spawn unguarded.
+    /// </summary>
+    [Fact]
+    public void AnUnreadableContinuedFileAbandonsTheRefreshBeforeSpawning()
+    {
+        var missing = Path.Combine(Path.GetTempPath(), $"oview-missing-{Guid.NewGuid():N}.jsonl");
+        var spawned = false;
+        var refresher = new ClaudeCliRefresher(
+            Block(Now), _ => { spawned = true; return Ok; }, new FakeGuard(), () => missing);
+
+        var result = refresher.Refresh();
+
+        Assert.Equal(RefreshOutcome.Failed, result.Outcome);
+        Assert.Contains("continued-session baseline", result.Detail);
+        Assert.False(spawned);
+    }
+
+    /// <summary>
+    /// Mirrors <see cref="AThrowingCostGuardIsTreatedAsACharge"/> for the other half: a continued
+    /// file that reads fine beforehand and cannot be read afterwards is not read as "nothing was
+    /// billed" either.
+    /// </summary>
+    [Fact]
+    public void AContinuedFileThatBecomesUnreadableDuringTheRunIsTreatedAsACharge()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"oview-continued-{Guid.NewGuid():N}.jsonl");
+        File.WriteAllText(path, "{\"type\":\"user\"}\n");
+        try
+        {
+            var refresher = new ClaudeCliRefresher(
+                Block(Now), _ => { File.Delete(path); return Ok; }, new FakeGuard(), () => path);
+
+            var result = refresher.Refresh();
+
+            Assert.Equal(RefreshOutcome.Billed, result.Outcome);
+            Assert.Contains("continued transcript unreadable", result.Detail);
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
     }
 
     // ── failure is an outcome, never an exception ───────────────────────────
@@ -254,7 +377,8 @@ public class ClaudeCliRefresherTests
         var refresher = new ClaudeCliRefresher(
             Block(Now),
             _ => throw new InvalidOperationException("boom"),
-            new FakeGuard());
+            new FakeGuard(),
+            continuedTranscript: () => null);
 
         var result = refresher.Refresh();
 
@@ -272,7 +396,7 @@ public class ClaudeCliRefresherTests
     public void AThrowingReaderDoesNotEscape()
     {
         var refresher = new ClaudeCliRefresher(
-            () => throw new IOException("locked"), _ => Ok, new FakeGuard());
+            () => throw new IOException("locked"), _ => Ok, new FakeGuard(), () => null);
 
         Assert.Equal(RefreshOutcome.Unchanged, refresher.Refresh().Outcome);
     }
@@ -292,6 +416,17 @@ public class ClaudeCliRefresherTests
     {
         Assert.Equal("/usage", ClaudeCliRefresher.UsageArgument);
         Assert.Equal("claude", ClaudeCliRefresher.ExecutableName);
+    }
+
+    /// <summary>
+    /// Pinned for the same reason as <see cref="TheArgumentIsExactlyTheSlashCommand"/>: this is a
+    /// documented Claude Code flag, not a string this project invented, and a future edit that
+    /// drifts from it would be a silent behaviour change rather than a compile error.
+    /// </summary>
+    [Fact]
+    public void ContinueArgumentIsExactlyContinue()
+    {
+        Assert.Equal("--continue", ClaudeCliRefresher.ContinueArgument);
     }
 
     /// <summary>

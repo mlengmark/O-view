@@ -117,6 +117,13 @@ public sealed class UsageCacheRefresh
     /// to be right when someone looks at it. <paramref name="force"/> bypasses the floor for
     /// exactly that case: a person opening the panel is not a poll.</para>
     ///
+    /// <para><b>Ten panel opens in quick succession are still ten attempts here</b> — nothing in
+    /// this cadence collapses them, and nothing should: that is what lets a person who opens the
+    /// panel ten times in a row get ten honest looks at Claude Code's own freshness window rather
+    /// than nine silently skipped. They stop piling up ten separate session files one layer
+    /// down instead, where <c>ClaudeCliRefresher</c> continues one Claude Code session across
+    /// repeat invocations rather than starting a new one each time.</para>
+    ///
     /// <para>Silently does nothing when no refresher was supplied, when a suspected charge has
     /// blocked it, when the floor has not elapsed, or when one is already running. All four are
     /// ordinary, and none is an error worth surfacing.</para>
