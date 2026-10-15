@@ -30,6 +30,27 @@ References run one way: **skins → App → Presentation → Core**. A project m
 
 A skin only lays the view model it is given out — it computes no figure, no band and no word. Windows does this in `src/O-view.Tray/Popup/` (`PopupWindow.xaml.cs`, plus `PopupMeter.cs`, `PopupTiles.cs`, `PopupGraph.cs`, `PopupDivergence.cs` and `PopupWeeklyRow.cs`); Linux does it in `src/O-view.Linux/Panel/` (`PanelContent.cs`, plus `PanelGraph.cs`, `PanelOffPlan.cs`, `PanelStatTiles.cs` and `PanelTokenBars.cs`). Both files that assemble a whole panel, `PopupWindow.xaml.cs` and `PanelContent.cs`, stay under 600 lines by design — a skin that grows past that is usually a skin that has started computing content again.
 
+## The panel's height
+
+One rule answers how tall the flyout window may be, and whether its content has to scroll:
+`PanelFit.Resolve` (`src/O-view.App/Rendering/PanelFit.cs`) takes the content's own measured
+height and the space the display's work area leaves, and caps the window at whichever is
+smaller — the content's height if it fits, the available space if it doesn't, with
+`MustScroll` true exactly in the second case. It lives in App so both faces ask the one rule
+the same question, rather than each picking its own answer.
+
+- **Both faces measure the content, never the window.** A flyout is sized to its own content,
+  so its frame is already capped by whatever the display granted before `PanelFit` is ever
+  asked — reading the frame back would describe the screen, not what the content wants. Each
+  face has its own `NaturalHeightDip()` that measures the tree directly instead
+  (`PanelContent.NaturalHeightDip` on Linux, `PopupWindow.NaturalHeightDip` on Windows).
+- **A display too short even for the compact layout (`PanelDensity`) gets a scroll viewport,**
+  built only once `PanelFit` says the content overflows — a panel with room keeps exactly the
+  tree it always had, so no existing render moves. Windows: `PopupScroll`. Linux:
+  `PanelContent.ScrollContent`.
+- **Neither face decides the cap or the scroll choice itself.** Both call `PanelFit.Resolve`
+  and act on what it returns; the rule never duplicates into a skin.
+
 ## How data flows
 
     Claude's files ──▶ Core (providers ▶ snapshot + statistics)
