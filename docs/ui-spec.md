@@ -309,16 +309,38 @@ The right-click surface. Rebuilt as a **docked flyout window** ([GitHub issue #3
 > O-view: the host renders it in its own style, at a position O-view cannot know, and the
 > custom flyout below has no equivalent.
 >
-> The Linux menu carries **Run at startup** and **Exit**. The startup row is a checkable
-> `NativeMenuItem` and follows the same rule as its Windows counterpart — the tick shows the
+> The Linux menu carries three rows, in this order:
+>
+> | Row | Kind | Notes |
+> |---|---|---|
+> | Show usage | action | Opens the panel ([issue #315](https://github.com/mlengmark/O-view/issues/315)) |
+> | Run at startup | toggle | Re-read from the autostart `.desktop` file whenever the panel opens |
+> | Exit O-view | action | |
+>
+> **Show usage is first because on Ubuntu the panel otherwise has no gesture.** The
+> AppIndicators extension GNOME ships opens this menu on a single left click and sends
+> `Activate` only on a double click, so on O-view's main Linux target the panel was reachable
+> only by a gesture nothing on screen suggests. A row reaches it on every SNI host whatever
+> that host does with clicks, which is why this is the fix rather than asking each desktop for
+> different click handling. It runs the icon click's own handler, so the row and the click open
+> the same panel by the same route and cannot drift apart.
+>
+> **The startup row** follows the same rule as its Windows counterpart — the tick shows the
 > state as it stands *after* the write, never the state requested, because writing the
 > autostart file can fail (rule 6). It is re-read from disk whenever the panel opens, since
 > the file is the source of truth and the desktop's own settings may have changed it.
 >
+> A fourth row, **Resume usage refresh**, is built but kept hidden until the refresh has
+> stopped itself; a person sees three rows until there is something to undo.
+>
 > The notification, diagnostics and update rows are **not** on the Linux menu. Each has a
 > command-line equivalent instead (`--diagnose`, `--probe`, `--startup-status`), which is
 > also the only route that works on GNOME without an AppIndicator extension, where there is
-> no menu at all. The README's matrix records this as a ⚠️ rather than a tick.
+> no menu at all. The README's matrix records this as a ⚠️ rather than a tick. The update row
+> is absent for a second reason that is not about room: **Linux updates are notify-only**
+> (ADR-0009 as amended) — O-view says a newer version exists and the package manager installs
+> it, so no row here downloads or runs anything, and adding one would be a change to that
+> decision rather than to this menu.
 
 **Why the cursor placement had to go.** The menu opened wherever the pointer was when the tray icon was hit — and the tray icon sits *inside* the taskbar, so that is reliably the one place a menu cannot fully fit. It clipped into the taskbar and off the screen edge, leaving items unclickable, and every item added made it worse.
 
