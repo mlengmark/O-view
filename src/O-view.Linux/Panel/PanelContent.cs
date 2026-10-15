@@ -63,14 +63,19 @@ public sealed class PanelContent : Border
     private readonly List<TileFlip> _tileFlips = [];
 
     /// <summary>
-    /// The tiles that can flip, for tests.
+    /// The tiles that can flip, in the order the panel places them.
     ///
-    /// <para>Avalonia raises no pointer events without a windowing subsystem, and CI has none,
-    /// so a test cannot click a tile. This exposes the state a click drives instead — the same
-    /// reason <see cref="PanelDismissal"/> exists as its own class rather than living inline in
-    /// an event handler. What is left untested either way is the three event subscriptions.</para>
+    /// <para>Avalonia raises no pointer events without a windowing subsystem and CI has none,
+    /// so a test cannot click a tile. This is the state a click drives, exposed so the flip can
+    /// be asserted — the same reason <see cref="PanelDismissal"/> is its own class rather than
+    /// logic inline in an event handler, and it matters more here because no golden image shows
+    /// a tile's second face. What no test reaches either way is the three subscriptions in
+    /// <see cref="Tile"/>.</para>
+    ///
+    /// <para>Public rather than internal only because this head's tests are a separate assembly
+    /// and nothing in this repo grants one access to another's internals yet.</para>
     /// </summary>
-    internal IReadOnlyList<TileFlip> TileFlips => _tileFlips;
+    public IReadOnlyList<TileFlip> TileFlips => _tileFlips;
 
     public PanelContent(LinuxPanelTheme theme)
     {
@@ -93,14 +98,14 @@ public sealed class PanelContent : Border
     /// clearest while the breakdown is open. The affordance should be findable and never louder
     /// than the number it sits beside.</para>
     /// </summary>
-    internal sealed class TileFlip
+    public sealed class TileFlip
     {
         private readonly Control _summary;
         private readonly Control _breakdown;
         private readonly Control _glyph;
         private bool _pointerOver;
 
-        internal TileFlip(Control summary, Control breakdown, Control glyph)
+        public TileFlip(Control summary, Control breakdown, Control glyph)
         {
             _summary = summary;
             _breakdown = breakdown;
@@ -111,15 +116,24 @@ public sealed class PanelContent : Border
         /// <summary>Whether the per-model face is the one showing. False on every open: the
         /// panel is a transient view rather than a setting, which is why the Windows tile
         /// resets its own expansion too.</summary>
-        internal bool IsExpanded { get; private set; }
+        public bool IsExpanded { get; private set; }
 
-        internal void Toggle()
+        /// <summary>The total's face, as the panel built it — for tests.</summary>
+        public Control Summary => _summary;
+
+        /// <summary>The per-model face, as the panel built it — for tests.</summary>
+        public Control Breakdown => _breakdown;
+
+        /// <summary>The affordance, as the panel built it — for tests.</summary>
+        public Control Glyph => _glyph;
+
+        public void Toggle()
         {
             IsExpanded = !IsExpanded;
             Apply();
         }
 
-        internal void PointerOver(bool over)
+        public void PointerOver(bool over)
         {
             _pointerOver = over;
             Apply();
@@ -311,12 +325,20 @@ public sealed class PanelContent : Border
 
     private void AddTiles(PanelStatistics stats, TranscriptScopeReport? scopeReport)
     {
-        // Both faces of all four tiles, including which caveat each carries. The off-plan note
-        // used to ride on this head's tokens-today tile and never on the Windows one; the
-        // mixture is what the value tiles are about, and Presentation now says so once.
+        // Both faces of all four tiles, including the coverage and unpriced caveats.
         var tiles = PanelSections.Tiles(stats);
 
-        _root.Children.Add(TileRow(Tile(tiles.TokensToday), Tile(tiles.EstToday)));
+        // The one caveat still decided here, and the only thing on these tiles that is: this
+        // head prints the off-plan note on today's TOKEN tile and the Windows panel never has.
+        // Presentation builds the Windows reading, so taking it as handed over would drop the
+        // line from six shipped Linux renders — a visual change this slice is explicitly not
+        // allowed to make. Which head is right is a question about what the user should see, so
+        // it is asked rather than settled here, and this goes when it is answered.
+        var tokensToday = stats.IsOffPlan
+            ? tiles.TokensToday with { Note = OffPlanText.OffPlanNote(true) }
+            : tiles.TokensToday;
+
+        _root.Children.Add(TileRow(Tile(tokensToday), Tile(tiles.EstToday)));
 
         // A muted line naming the UTC day's boundary stood here for one release, because the
         // tiles were a UTC day and this head has no hover to put the caveat behind (issue
