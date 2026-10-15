@@ -185,7 +185,8 @@ public sealed class PanelContent : Border
         TranscriptScopeReport? scopeReport,
         DateTimeOffset utcNow,
         BoostNotices? boostNotices = null,
-        TimeZoneInfo? zone = null)
+        TimeZoneInfo? zone = null,
+        CachedUtilization? cachedUsage = null)
     {
         _root.Children.Clear();
         _tileFlips.Clear();
@@ -207,6 +208,20 @@ public sealed class PanelContent : Border
         // when the figures are genuinely unavailable, and worded from both reports together
         // — a missing plan file beside working transcripts is a CLI-only user, not a fault
         // (issue #170).
+        // Both off-plan registers at once: the live banner below, and the standing 31-day
+        // section at the foot of the panel. Built here rather than at each use so the two
+        // halves of one claim are read from one object.
+        var offPlan = PanelSections.OffPlan(stats, cachedUsage, utcNow, local);
+
+        // What the plan meters cannot show: work running past a meter that is not moving, or
+        // past the window entirely. Above the no-data banner, as on the Windows panel — this
+        // one describes live work, that one describes figures that are missing, and the live
+        // signal is the more urgent of the two.
+        if (offPlan.Banner is { } offPlanBanner)
+        {
+            AddOffPlanBanner(offPlanBanner);
+        }
+
         var banner = PanelBanner.Resolve(authoritative, dataReport, scopeReport, stats.Tokens31Days);
         if (banner is not null)
         {
@@ -222,6 +237,7 @@ public sealed class PanelContent : Border
 
         AddTiles(stats, scopeReport);
         AddGraph(PanelSections.Graph(stats, snapshot, local));
+        AddOffPlanSection(offPlan);
 
         // Nothing recorded at all while the plan meters show real usage: the tiles are
         // measuring a source this user does not feed, not measuring zero. Say which source,
@@ -1065,6 +1081,80 @@ public sealed class PanelContent : Border
             Padding = new Thickness(NaturalTilePadding * Density.SpacingScale),
             Child = stack,
         });
+    }
+
+    /// <summary>
+    /// The off-plan banner: the heading, the line underneath, and the address the line sends
+    /// the reader to.
+    ///
+    /// <para><b>The address is printed, not labelled.</b> The Windows banner makes the link's
+    /// label the thing you click; nothing in this head opens a URL — no part of the Linux
+    /// panel does — so a bare "Open usage settings in Claude" here would be an instruction
+    /// with no way to follow it. The label still introduces it, because the sentence above
+    /// ends by sending the reader somewhere and the address alone does not say where.</para>
+    /// </summary>
+    private void AddOffPlanBanner(PanelOffPlanBannerView banner)
+    {
+        var stack = new StackPanel { Spacing = 2 };
+        stack.Children.Add(Text(banner.Title, 13, _theme["WarnText"], FontWeight.SemiBold));
+        stack.Children.Add(Text(banner.Detail, 11, _theme["WarnText"]));
+        stack.Children.Add(Text(
+            $"{banner.LinkLabel}: {banner.LinkUrl}", 11, _theme["WarnText"]));
+
+        _root.Children.Add(new Border
+        {
+            Background = _theme["WarnBg"],
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(NaturalTilePadding * Density.SpacingScale),
+            Child = stack,
+        });
+    }
+
+    /// <summary>
+    /// The standing 31-day off-plan spend section (<see cref="PanelOffPlanView"/>): heading and
+    /// badge, the figure, the coverage caveat, and what the figure is.
+    ///
+    /// <para><b>The explanation stands rather than hovering.</b> The Windows panel moved it to
+    /// a hover card to save three permanent lines (issue #181), which is the right trade where
+    /// hover exists; a compositor may never deliver it here, and what would be lost is the
+    /// rule-6 caveat that this is an estimate and not the charge — the one sentence the
+    /// section cannot ship without. The same reasoning puts the weekly reset's action on its
+    /// row rather than behind a card (<see cref="PanelMeterView.ResetLineWithAction"/>).</para>
+    /// </summary>
+    private void AddOffPlanSection(PanelOffPlanView offPlan)
+    {
+        var heading = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        heading.Children.Add(Text(offPlan.Heading, 13, _theme["TextPrimary"], FontWeight.SemiBold));
+
+        var badge = new Border
+        {
+            Background = _theme["WarnBg"],
+            CornerRadius = new CornerRadius(4),
+            Padding = new Thickness(6, 2),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+            Child = Text(offPlan.Badge, 11, _theme["WarnText"]),
+        };
+        Grid.SetColumn(badge, 1);
+        heading.Children.Add(badge);
+
+        var figure = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        figure.Children.Add(Text(offPlan.SpendLabel, 12, _theme["TextSecondary"]));
+        var value = Text(offPlan.SpendValue, 18, _theme["TextPrimary"], FontWeight.SemiBold);
+        value.HorizontalAlignment = HorizontalAlignment.Right;
+        Grid.SetColumn(value, 1);
+        figure.Children.Add(value);
+
+        var block = new StackPanel { Spacing = 4 };
+        block.Children.Add(heading);
+        block.Children.Add(figure);
+        if (offPlan.Coverage is { Length: > 0 } coverage)
+        {
+            block.Children.Add(Text(coverage, 11, _theme["WarnText"]));
+        }
+
+        block.Children.Add(Muted(offPlan.Hint));
+        _root.Children.Add(block);
     }
 
     // ── primitives ──────────────────────────────────────────────────────────────────
