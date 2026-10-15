@@ -24,10 +24,16 @@ public sealed class FreedesktopNotifier
     private const string IconName = "o-view";
 
     /// <summary>
-    /// Shows a notification. Never throws — a desktop with no notification daemon is a
-    /// working desktop, and failing to tell the user something must not take the app down.
+    /// Shows a notification and returns the id the desktop gave it, or null if it was not
+    /// shown. Never throws — a desktop with no notification daemon is a working desktop, and
+    /// failing to tell the user something must not take the app down.
+    ///
+    /// <para>The id is kept rather than dropped because of one notice that can be overtaken
+    /// by events: O-view saying it has nowhere to show its icon, on a desktop whose
+    /// notification area then turns up. <see cref="CloseAsync"/> is what takes it back off
+    /// the screen, and the id is the only handle the spec offers for that.</para>
     /// </summary>
-    public async Task<bool> ShowAsync(string title, string body, CancellationToken cancellation = default)
+    public async Task<uint?> ShowAsync(string title, string body, CancellationToken cancellation = default)
     {
         try
         {
@@ -58,7 +64,47 @@ public sealed class FreedesktopNotifier
             writer.WriteInt32(-1);               // expire_timeout — let the desktop decide
 
             var message = writer.CreateMessage();
-            await connection.CallMethodAsync(message);
+
+            // Notify answers with the id it filed the notification under.
+            return await connection.CallMethodAsync(
+                message,
+                static (m, _) => m.GetBodyReader().ReadUInt32());
+        }
+        catch (Exception ex) when (ex is DBusExceptionBase or IOException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Takes a notification back off the screen, by the id <see cref="ShowAsync"/> returned.
+    /// Returns whether the desktop accepted the call.
+    ///
+    /// <para>Never throws, for the same reason: a notice that cannot be withdrawn is a
+    /// cosmetic problem, not a reason to end the app. An id the desktop has already forgotten
+    /// — the usual case, since these expire on their own — is answered with an error by the
+    /// spec rather than ignored, and that lands here as false. The notification is gone
+    /// either way, which is the thing wanted.</para>
+    /// </summary>
+    public async Task<bool> CloseAsync(uint id, CancellationToken cancellation = default)
+    {
+        try
+        {
+            var connection = DBusConnection.Session;
+            await connection.ConnectAsync();
+
+            var writer = connection.GetMessageWriter();
+            writer.WriteMethodCallHeader(
+                destination: Service,
+                path: ObjectPath,
+                @interface: Service,
+                member: "CloseNotification",
+                signature: "u",
+                flags: MessageFlags.None);
+
+            writer.WriteUInt32(id);
+
+            await connection.CallMethodAsync(writer.CreateMessage());
             return true;
         }
         catch (Exception ex) when (ex is DBusExceptionBase or IOException or InvalidOperationException)

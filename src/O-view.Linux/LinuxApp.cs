@@ -174,11 +174,15 @@ public sealed class LinuxApp : Application, IShellToSkin
         // missing host has to be discovered from the bus and said out loud. Notifications
         // are a different service from the tray, so this reaches the user even on the one
         // configuration where the icon cannot (ADR-0013 decision 2).
+        //
+        // The reading is logged here and the notice is decided later: the probe runs before
+        // the toolkit does, which on a stock GNOME login is before the session has registered
+        // its own watcher, so what it read at startup is worth a log line and is not yet worth
+        // saying to anyone (see TrayHostNotice).
         if (_hostState is not TrayHostState.Present)
         {
             _log?.Write($"no tray host: {_hostState}");
-            _ = _notifier.ShowAsync(NoticeText.NoTrayHostTitle, SniHostProbe.Explain(_hostState));
-            WatchForHostArriving();
+            StartHostNotice(_hostState);
         }
     }
 
@@ -291,34 +295,53 @@ public sealed class LinuxApp : Application, IShellToSkin
     }
 
     /// <summary>
-    /// A user can install an AppIndicator extension while O-view is running. Re-showing the
-    /// icon when a host appears is the Linux <c>TaskbarCreated</c> (ADR-0003 item 5) — and
-    /// without it they would have to know to restart, which nothing tells them.
+    /// Starts the notice about a missing notification area, and the icon's recovery, which are
+    /// one decision rather than two: the notice is only true while no host has appeared, and
+    /// the icon only needs re-showing once one has. Two independent watches could disagree,
+    /// and a pair that disagreed would leave the notice on screen beside a working icon.
+    ///
+    /// <para>Off the UI thread, because everything it waits on is a D-Bus round trip and
+    /// blocking the dispatcher on one deadlocks the app (issue #124).</para>
     /// </summary>
-    private void WatchForHostArriving()
+    private void StartHostNotice(TrayHostState state)
     {
         _hostWatch = new CancellationTokenSource();
         var token = _hostWatch.Token;
+        var notice = BuildHostNotice();
 
-        _ = Task.Run(async () =>
-        {
-            if (!await SniHostProbe.WaitForHostAsync(token) || token.IsCancellationRequested)
-            {
-                return;
-            }
-
-            Dispatcher.UIThread.Post(() =>
-            {
-                _log?.Write("tray host appeared — re-showing icon");
-                if (_tray is not null && _shell is not null)
-                {
-                    _tray.IsVisible = false;
-                    _tray.IsVisible = true;
-                    Render(_shell.Latest);
-                }
-            });
-        }, token);
+        _ = Task.Run(() => notice.RunAsync(state, token), token);
     }
+
+    /// <summary>
+    /// The notice as this head wires it, built but not started — its own method so the wiring
+    /// is inspectable without a session bus, the way <see cref="OpenPanelHandler"/> is.
+    /// </summary>
+    internal TrayHostNotice BuildHostNotice() =>
+        new(
+            (title, body) => _notifier.ShowAsync(title, body),
+            id => _notifier.CloseAsync(id),
+            ReShowIcon,
+            _log);
+
+    /// <summary>
+    /// A user can install an AppIndicator extension while O-view is running. Re-showing the
+    /// icon when a host appears is the Linux <c>TaskbarCreated</c> (ADR-0003 item 5) — and
+    /// without it they would have to know to restart, which nothing tells them.
+    ///
+    /// <para>Posted, because the host turns up on a bus thread and everything below touches
+    /// the toolkit — the SIGSEGV of issue #143, not an exception any catch could reach.</para>
+    /// </summary>
+    private void ReShowIcon() =>
+        Dispatcher.UIThread.Post(() =>
+        {
+            _log?.Write("tray host appeared — re-showing icon");
+            if (_tray is not null && _shell is not null)
+            {
+                _tray.IsVisible = false;
+                _tray.IsVisible = true;
+                Render(_shell.Latest);
+            }
+        });
 
     private void Render(UsageSnapshot snapshot)
     {
@@ -487,4 +510,140 @@ public sealed class LinuxApp : Application, IShellToSkin
             _startupItem.IsChecked = _startup.IsEnabled();
         }
     }
+}
+
+/// <summary>
+/// Holds the "nowhere to show its icon" notice back until the desktop has had a moment to
+/// finish starting, and withdraws it if a notification area turns up after all.
+///
+/// <para><b>Why it waits.</b> The probe has to run before the toolkit starts (a D-Bus round
+/// trip on the dispatcher deadlocks the app — issue #124), and at a stock GNOME login that is
+/// before the session's own watcher has registered. The reading is honest and the notice was
+/// true when it was written; then the icon appeared, and every login opened with a sentence
+/// the desktop contradicted a moment later. Waiting costs a user who really has no
+/// notification area ten seconds, and costs everyone else nothing.</para>
+///
+/// <para><b>Why it is also what brings the icon back.</b> The wait and the icon's recovery
+/// (ADR-0003 item 5) watch for the same thing — the watcher name being owned — so they are one
+/// watch. Kept apart they could disagree, and the way they would disagree is a notice left on
+/// screen beside an icon that works.</para>
+///
+/// <para>Everything it waits on is injectable, so the tests for it neither sleep nor need a
+/// bus; what is not injectable is <see cref="NoticeText.NoTrayHostTitle"/> and the sentence
+/// under it, which stay exactly the ones a desktop with no notification area was always
+/// told.</para>
+/// </summary>
+public sealed class TrayHostNotice
+{
+    /// <summary>
+    /// How long a missing host is given to turn up. Measured against the gap this exists for —
+    /// tens of milliseconds at a GNOME login — with room to spare for a slower machine, and
+    /// short enough that someone who genuinely has no notification area is told while they are
+    /// still wondering where the icon went.
+    /// </summary>
+    public static readonly TimeSpan DefaultGrace = TimeSpan.FromSeconds(10);
+
+    private readonly Func<string, string, Task<uint?>> _show;
+    private readonly Func<uint, Task> _close;
+    private readonly Action _onHostArrived;
+    private readonly IAppLog? _log;
+    private readonly Func<TimeSpan, CancellationToken, Task> _delay;
+    private readonly Func<CancellationToken, Task<bool>> _hostArrives;
+
+    public TrayHostNotice(
+        Func<string, string, Task<uint?>> show,
+        Func<uint, Task> close,
+        Action onHostArrived,
+        IAppLog? log = null,
+        TimeSpan? grace = null,
+        Func<TimeSpan, CancellationToken, Task>? delay = null,
+        Func<CancellationToken, Task<bool>>? hostArrives = null)
+    {
+        _show = show;
+        _close = close;
+        _onHostArrived = onHostArrived;
+        _log = log;
+        Grace = grace ?? DefaultGrace;
+        _delay = delay ?? (static (wait, token) => Task.Delay(wait, token));
+        _hostArrives = hostArrives ?? SniHostProbe.WaitForHostAsync;
+    }
+
+    /// <summary>How long this one holds the notice back. Readable so the head's wiring can be
+    /// asserted to be the real wait rather than a test's.</summary>
+    public TimeSpan Grace { get; }
+
+    /// <summary>
+    /// Runs the whole of it: wait, then speak if nothing turned up, then — whenever a host
+    /// does turn up — withdraw whatever was said and bring the icon back.
+    ///
+    /// <para>Never throws, and returns on cancellation: the exit row cancels this, and an app
+    /// on its way out has nobody to tell.</para>
+    /// </summary>
+    public async Task RunAsync(TrayHostState state, CancellationToken cancellation = default)
+    {
+        var arrived = _hostArrives(cancellation);
+        var waited = _delay(Grace, cancellation);
+        uint? shown = null;
+
+        try
+        {
+            await Task.WhenAny(arrived, waited).ConfigureAwait(false);
+
+            if (HostIsThere(arrived))
+            {
+                _log?.Write("tray host appeared during the notice wait — notice not shown");
+            }
+            else
+            {
+                // The watch finishing is not the same as a host existing: it also completes
+                // false the moment the bus cannot be watched at all, and "I could not ask" is
+                // not evidence of a notification area (CLAUDE.md rule 6). So the notice waits
+                // its full turn either way before it says anything.
+                await waited.ConfigureAwait(false);
+
+                shown = await _show(NoticeText.NoTrayHostTitle, SniHostProbe.Explain(state))
+                    .ConfigureAwait(false);
+                _log?.Write($"no tray host notice shown after {Grace.TotalSeconds:0}s: id={Describe(shown)}");
+            }
+
+            if (!await arrived.ConfigureAwait(false))
+            {
+                // No host, and nothing left that would tell us one arrived. The icon cannot
+                // recover on its own from here; the notice is what the user has.
+                return;
+            }
+
+            if (shown is { } id)
+            {
+                _log?.Write($"tray host appeared — closing notice {id}");
+                await _close(id).ConfigureAwait(false);
+            }
+
+            if (cancellation.IsCancellationRequested)
+            {
+                return;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+
+        _onHostArrived();
+    }
+
+    /// <summary>
+    /// Whether the watch has already reported a host. Completion alone will not do: it also
+    /// completes false when the bus cannot be watched, which says nothing about whether a
+    /// notification area is there.
+    /// </summary>
+    private static bool HostIsThere(Task<bool> arrived) =>
+        arrived is { IsCompletedSuccessfully: true, Result: true };
+
+    /// <summary>
+    /// A notification the desktop refused and one it filed under an id print differently in
+    /// the log — the first is why a later "closing notice" line is missing, and the log is the
+    /// only account of this anyone reporting it can send.
+    /// </summary>
+    private static string Describe(uint? id) => id?.ToString() ?? "(not shown)";
 }
