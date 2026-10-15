@@ -41,11 +41,11 @@ public static class PanelPalette
         // panel behind it, since the thumb is the only part that has to read as clickable:
         //
         //   light #848484 thumb : track #ECECEC 3.17:1 · panel #F9F9F9 3.55:1
-        //   dark  #787878 thumb : track #2B2B2B 3.21:1 · panel #202020 3.69:1
+        //   dark  #787878 thumb : track #2E2E2E 3.08:1 · panel #202020 3.69:1
         //
         // The track itself carries no contrast requirement — it is a backdrop, not a
         // control — so it sits one step off the panel, the same step RowHover uses.
-        ["ScrollTrack"] = light ? "#ECECEC" : "#2B2B2B",
+        ["ScrollTrack"] = light ? "#ECECEC" : "#2E2E2E",
         ["ScrollThumb"] = light ? "#848484" : "#787878",
         ["BadgeBg"] = light ? "#E4DCF5" : "#3A3355",
         ["BadgeText"] = light ? "#4A3A85" : "#C7BDEB",
