@@ -109,6 +109,8 @@ Do not "simplify" either back out.
 
 If data is unavailable, show a neutral icon and explain in the popup. If data is estimated (JSONL-derived), label it **"local estimate"**. A monitoring tool that confidently displays a wrong number is worse than one that admits uncertainty.
 
+**This is enforced in the types, not just in prose.** A session percentage, a reset time, a token count and a modelled USD figure are each one of Core's status-paired types (`UsagePercent`, `UsageInstant`, `TokenCount`, `EstimatedUsd` — `src/O-view.Core/Models/`), carrying a `UsageValueStatus` of `Real`, `Estimated` or `Unavailable` beside the figure itself, instead of a bare nullable a reader has to guess the meaning of. `CoreModelsHoldNoBareNullablesTests` fails if a public member of `OView.Core.Models` reintroduces one.
+
 Five specific applications of this rule:
 
 - **"Est. value" tiles are not money charged.** Within plan limits the marginal cost is £0; these figures price tokens at public API rates. Always prefix `Est.`
