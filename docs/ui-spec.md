@@ -80,6 +80,16 @@ inset (handles all four dock positions and auto-hide).
 > bands, the tiles, the graph's rules about absent days — is the shared contract and holds
 > identically.
 
+**The window never grows past the display's work area.** Whatever the content's own height,
+the flyout stops at the space the work area leaves; the part that does not fit is not
+clipped — it is reached by scrolling, in a viewport built only once the content is actually
+taller than the cap. A panel with room shows no bar and has no viewport at all, laid out
+exactly as it always was.
+
+The scroll bar itself is thin — 6 px — and painted in O-view's own colours, from the shared
+palette, in both the light and dark themes, so it reads as part of this panel rather than a
+borrowed system control.
+
 ### Header
 
 | Position | Content | Source |

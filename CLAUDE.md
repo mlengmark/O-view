@@ -236,10 +236,17 @@ O-view.slnx
 │   │                         #                PollRunner and UsageProviders, each owning one of
 │   │                         #                its former pieces. ShellHost builds and owns the
 │   │                         #                engine, and posts every IShellToSkin push (what the
-│   │                         #                shell tells a skin) through IUiDispatcher.
-│   ├── O-view.Tray/          # net10.0-windows  WPF + WinForms NotifyIcon, icon rendering, popup
+│   │                         #                shell tells a skin) through IUiDispatcher. PanelFit
+│   │                         #                answers the one question of how tall a panel's
+│   │                         #                window may be and whether its content must scroll,
+│   │                         #                for both heads.
+│   ├── O-view.Tray/          # net10.0-windows  WPF + WinForms NotifyIcon, icon rendering, popup —
+│   │                         #                  PopupScroll puts the sections in a scroll viewport
+│   │                         #                  once PanelFit says the panel has been capped.
 │   └── O-view.Linux/         # net10.0        Avalonia + SkiaSharp, SNI over D-Bus, freedesktop
-│                             #                notifications, XDG autostart, portal theme
+│                             #                notifications, XDG autostart, portal theme —
+│                             #                PanelContent.ScrollContent is the same response to
+│                             #                a PanelFit cap, with its own hand-drawn scroll bar.
 ├── tests/
 │   ├── O-view.Core.Tests/          # xUnit, 626
 │   ├── O-view.Presentation.Tests/  # xUnit, 249
