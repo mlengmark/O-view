@@ -20,12 +20,15 @@ namespace OView.Linux.Tests.Runtime;
 ///
 /// <para><b>What an empty menu does.</b> Fails. A menu with no rows answers <c>GetLayout</c>
 /// instantly, which is the one way a timing test can pass while the thing it is about is
-/// broken, so the rows the head builds — "Run at startup" and "Exit O-view" — have to be in
-/// what came back.</para>
+/// broken, so the rows the head builds — "Show usage", "Run at startup" and "Exit O-view" —
+/// have to be in what came back, in that order.</para>
 ///
 /// <para><b>Clicking a row is not in this.</b> "Exit O-view" ends the app, and the rest of the
-/// menu's rows change this machine's autostart entry or the usage cache. Reading the layout is
-/// what issue #125 was about; driving a row is a separate slice.</para>
+/// menu's rows open a window, change this machine's autostart entry or touch the usage cache.
+/// Reading the layout is what issue #125 was about; driving a row is a separate slice. That
+/// "Show usage" opens the panel by the icon click's own route is held structurally, by
+/// <c>LinuxHeadWiringTests.TheRowThatOpensThePanelRunsTheIconClicksOwnHandler</c>, and the
+/// route itself is driven on a real bus by <see cref="TrayClickRuntimeTests"/>.</para>
 ///
 /// <para>The timed test runs only in the <c>linux-runtime</c> job, which provides the display
 /// (<c>xvfb-run</c>), the bus (<c>dbus-run-session</c>) and <c>OVIEW_LINUX_RUNTIME=1</c>.
@@ -35,11 +38,17 @@ namespace OView.Linux.Tests.Runtime;
 public class TrayMenuRuntimeTests(ITestOutputHelper output)
 {
     /// <summary>
-    /// The rows <c>LinuxApp.BuildMenu</c> builds visible. The third one it builds —
-    /// "resume usage refresh" — starts hidden and is corrected on a later poll, so it is
+    /// The rows <c>LinuxApp.BuildMenu</c> builds visible, <b>in the order it builds them</b>.
+    /// "Resume usage refresh" starts hidden and is corrected on a later poll, so it is
     /// deliberately not expected here.
+    ///
+    /// <para>"Show usage" leads, and that is the row this list was extended for: on Ubuntu's
+    /// AppIndicators tray this menu is all a single click gets you, so until the row existed
+    /// the panel was reachable only by a double click nothing suggests (issue #315). It is the
+    /// one row whose absence a user could not work around, and the only check that it reaches a
+    /// real desktop's menu is the one below.</para>
     /// </summary>
-    private static readonly string[] TheRowsTheHeadBuilds = ["Run at startup", "Exit O-view"];
+    private static readonly string[] TheRowsTheHeadBuilds = ["Show usage", "Run at startup", "Exit O-view"];
 
     /// <summary>
     /// How long the menu has, for all three round trips together. The bound this test exists to
@@ -114,6 +123,17 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
             $"the menu opened, but it is not the menu the head builds: {string.Join("; ", missing)}."
             + $"{Environment.NewLine}{menu.Describe()}");
 
+        // And in the order a person reads them. "Show usage" being present somewhere is not what
+        // issue #315 asks for: the panel is what they opened the menu for, so a row for it under
+        // the two that were already there is the one they would reach last. Read back off the bus
+        // rather than off the head's own list, because the order a desktop is given is the only
+        // one that is the user's.
+        Assert.Equal(
+            TheRowsTheHeadBuilds,
+            menu.Rows
+                .Where(row => row is { Depth: 0, Visible: true, Kind: not "separator" })
+                .Select(row => row.Label));
+
         // The budget is enforced by the client, which times each call against it; this says the
         // same thing about the total, so the duration a reader cares about is asserted and not
         // merely implied by nothing having thrown.
@@ -174,13 +194,16 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
             Revision: 3,
             Rows:
             [
+                new DBusMenuRow(1, 0, "Show usage", Enabled: true, Visible: true, "standard"),
+
                 // As a toolkit that marks up keyboard shortcuts would publish it.
-                new DBusMenuRow(1, 0, DBusMenuRow.Readable("_Run at startup"), Enabled: true, Visible: true, "standard"),
-                new DBusMenuRow(2, 0, "resume usage refresh", Enabled: true, Visible: false, "standard"),
-                new DBusMenuRow(3, 0, "Exit O-view", Enabled: true, Visible: true, "standard"),
+                new DBusMenuRow(2, 0, DBusMenuRow.Readable("_Run at startup"), Enabled: true, Visible: true, "standard"),
+                new DBusMenuRow(3, 0, "resume usage refresh", Enabled: true, Visible: false, "standard"),
+                new DBusMenuRow(4, 0, "Exit O-view", Enabled: true, Visible: true, "standard"),
             ],
             Steps: []);
 
+        Assert.True(menu.HasRow("Show usage"));
         Assert.True(menu.HasRow("Run at startup"));
         Assert.True(menu.HasRow("Exit O-view"));
         Assert.False(menu.HasRow("resume usage refresh"));
@@ -203,6 +226,7 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
         Assert.Equal(
             new[]
             {
+                "\"Show usage\" is not in the menu at all",
                 "\"Run at startup\" is not in the menu at all",
                 "\"Exit O-view\" is not in the menu at all",
             },

@@ -136,7 +136,7 @@ public sealed class LinuxApp : Application, IShellToSkin
             IsVisible = true,
             Menu = BuildMenu(host.Shell),
         };
-        _tray.Clicked += TrayClickHandler(host.Shell);
+        _tray.Clicked += OpenPanelHandler(host.Shell);
 
         // What actually publishes the icon, and the line whose absence meant this head never
         // reached a notification area on any desktop. A constructed TrayIcon has no platform
@@ -212,7 +212,9 @@ public sealed class LinuxApp : Application, IShellToSkin
     public void RateCheckDue() => _ = _rates?.CheckAsync(ModelCatalog.Bundled);
 
     /// <summary>
-    /// The tray icon's click handler, marshalled onto the UI thread (issue #143).
+    /// The one way into the panel, marshalled onto the UI thread (issue #143). Both the tray
+    /// icon's click and the menu's first row are built from this, so there is a single
+    /// marshalling, a single panel path and a single log line behind either gesture.
     ///
     /// <para>Its own method so the wiring is assertable without a session bus: the returned
     /// delegate's <c>Method.DeclaringType</c> is <see cref="BusCallback"/>, and a test can
@@ -220,7 +222,7 @@ public sealed class LinuxApp : Application, IShellToSkin
     /// marshalling is still in place; it cannot prove <see cref="StartTray"/> still uses this
     /// method, and nothing available on a machine with no Linux desktop can.</para>
     /// </summary>
-    internal EventHandler TrayClickHandler(ISkinToShell shell) =>
+    internal EventHandler OpenPanelHandler(ISkinToShell shell) =>
         BusCallback.For(_dispatcher, () => ShowPanel(shell), _log);
 
     /// <summary>
@@ -354,6 +356,17 @@ public sealed class LinuxApp : Application, IShellToSkin
 
     private NativeMenu BuildMenu(ISkinToShell shell)
     {
+        // First, because on Ubuntu's AppIndicators tray this menu is everything a single click
+        // gets you and the panel had no gesture at all: Activate arrives only on a double click,
+        // which nothing on screen suggests (issue #315). A row reaches the panel on every SNI
+        // host whatever that host does with clicks.
+        //
+        // Deliberately the tray click's own handler rather than a second call to ShowPanel: one
+        // marshalling, one panel path, one "panel opened" line in the log, so a row that opens
+        // the panel differently from a click is not a state this file can get into.
+        var showUsage = new NativeMenuItem(MenuText.ShowUsageRow);
+        showUsage.Click += OpenPanelHandler(shell);
+
         var startup = new NativeMenuItem(MenuText.RunAtStartupRow)
         {
             ToggleType = MenuItemToggleType.CheckBox,
@@ -417,7 +430,7 @@ public sealed class LinuxApp : Application, IShellToSkin
         _usageRefreshBlocked = () => shell.UsageRefreshBlocked;
 
         _startupItem = startup;
-        return [startup, resume, exit];
+        return [showUsage, startup, resume, exit];
     }
 
     /// <summary>
