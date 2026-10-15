@@ -1,6 +1,5 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Shapes;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -11,6 +10,7 @@ using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Presentation.Panel;
 using OView.Presentation.Text;
+using static OView.Linux.Panel.PanelPrimitives;
 
 namespace OView.Linux.Panel;
 
@@ -24,6 +24,11 @@ namespace OView.Linux.Panel;
 ///
 /// <para>It is a plain control rather than a window so the same tree can be shown live or
 /// rendered offscreen for verification, exactly as the WPF panel does.</para>
+///
+/// <para>This class owns the panel's frame and the two rows it draws itself — the header and
+/// a usage bar. Each section below them is its own piece, named for what it draws:
+/// <see cref="PanelStatTiles"/>, <see cref="PanelTokenBars"/>, <see cref="PanelGraph"/> and
+/// <see cref="PanelOffPlan"/>.</para>
 /// </summary>
 public sealed class PanelContent : Border
 {
@@ -31,43 +36,6 @@ public sealed class PanelContent : Border
 
     /// <summary>Gap between sections at the natural density — this head's own constant.</summary>
     private const double NaturalRootSpacing = 10;
-
-    /// <summary>Height of the bar strip at the natural density. The Windows chart is 86.</summary>
-    private const double NaturalGraphHeight = 60;
-
-    /// <summary>
-    /// Column-to-column distance in the graph: a bar and its gutter. Fixed rather than the
-    /// panel's width divided by 31, because nothing has a width to divide at build time and a
-    /// chart that waited for one would rebuild on every resize. 31 columns then come to
-    /// 341 px, inside the 400 px panel at either density.
-    /// </summary>
-    private const double GraphColumnPitch = 11;
-
-    /// <summary>Width of one day's bar, centred in its column.</summary>
-    private const double GraphBarWidth = 9;
-
-    /// <summary>Gap between the foot of the bars and the top of the dates.</summary>
-    private const double GraphDateGap = 6;
-
-    /// <summary>
-    /// How solid the least intense day of a week is drawn; its busiest day is fully opaque.
-    ///
-    /// <para>This head carries the within-week intensity as opacity on its one series colour
-    /// rather than as a second hue, so the ramp needs no colour the shared palette does not
-    /// have — and it reads the same way in both themes, which a fixed light-to-dark ramp
-    /// does not. Floored well above nothing: the quietest day of a week is still a day with
-    /// usage, and a bar fading towards invisible would read as a day with none.</para>
-    /// </summary>
-    private const double GraphFaintestDay = 0.45;
-
-    /// <summary>Inset inside a stat tile at the natural density.</summary>
-    private const double NaturalTilePadding = 10;
-
-    /// <summary>Gap between a tile's bar segments, in the surface colour.</summary>
-    private const double SegmentGap = 2;
-
-    /// <summary>Rounding on the bar's data end; the baseline end stays square.</summary>
-    private const double DataEndRadius = 4;
 
     /// <summary>
     /// How tightly to pack, for a display too short for the natural layout
@@ -79,32 +47,31 @@ public sealed class PanelContent : Border
     private readonly LinuxPanelTheme _theme;
     private readonly StackPanel _root;
 
-    /// <summary>
-    /// The flip of every tile that has a second face, in the order the panel places them.
-    ///
-    /// <para>Rebuilt by each <see cref="Populate"/>, like the tiles themselves — a flip left
-    /// over from a previous open would be holding controls no longer on screen.</para>
-    /// </summary>
-    private readonly List<TileFlip> _tileFlips = [];
+    private readonly PanelStatTiles _tiles;
+    private readonly PanelTokenBars _tokenBars;
+    private readonly PanelGraph _graph;
+    private readonly PanelOffPlan _offPlan;
 
     /// <summary>
-    /// The tiles that can flip, in the order the panel places them.
+    /// The flip of every tile that has a second face, in the order the panel places them.
     ///
     /// <para>Avalonia raises no pointer events without a windowing subsystem and CI has none,
     /// so a test cannot click a tile. This is the state a click drives, exposed so the flip can
     /// be asserted — the same reason <see cref="PanelDismissal"/> is its own class rather than
     /// logic inline in an event handler, and it matters more here because no golden image shows
     /// a tile's second face. What no test reaches either way is the three subscriptions in
-    /// <see cref="Tile"/>.</para>
-    ///
-    /// <para>Public rather than internal only because this head's tests are a separate assembly
-    /// and nothing in this repo grants one access to another's internals yet.</para>
+    /// the tile itself.</para>
     /// </summary>
-    public IReadOnlyList<TileFlip> TileFlips => _tileFlips;
+    public IReadOnlyList<PanelStatTiles.TileFlip> TileFlips => _tiles.Flips;
 
     public PanelContent(LinuxPanelTheme theme)
     {
         _theme = theme;
+        _tiles = new PanelStatTiles(theme);
+        _tokenBars = new PanelTokenBars(theme);
+        _graph = new PanelGraph(theme);
+        _offPlan = new PanelOffPlan(theme);
+
         Width = PanelWidth;
         Background = theme["PanelBg"];
         BorderBrush = theme["PanelBorder"];
@@ -114,67 +81,6 @@ public sealed class PanelContent : Border
 
         _root = new StackPanel { Spacing = 10 };
         Child = _root;
-    }
-
-    /// <summary>
-    /// One tile's flip: which face is showing, and how loud the affordance is.
-    ///
-    /// <para>The opacities are the Windows tile's — faint at rest, clearer under the pointer,
-    /// clearest while the breakdown is open. The affordance should be findable and never louder
-    /// than the number it sits beside.</para>
-    /// </summary>
-    public sealed class TileFlip
-    {
-        private readonly Control _summary;
-        private readonly Control _breakdown;
-        private readonly Control _glyph;
-        private bool _pointerOver;
-
-        public TileFlip(Control summary, Control breakdown, Control glyph)
-        {
-            _summary = summary;
-            _breakdown = breakdown;
-            _glyph = glyph;
-            Apply();
-        }
-
-        /// <summary>Whether the per-model face is the one showing. False on every open: the
-        /// panel is a transient view rather than a setting, which is why the Windows tile
-        /// resets its own expansion too.</summary>
-        public bool IsExpanded { get; private set; }
-
-        /// <summary>The total's face, as the panel built it — for tests.</summary>
-        public Control Summary => _summary;
-
-        /// <summary>The per-model face, as the panel built it — for tests.</summary>
-        public Control Breakdown => _breakdown;
-
-        /// <summary>The affordance, as the panel built it — for tests.</summary>
-        public Control Glyph => _glyph;
-
-        public void Toggle()
-        {
-            IsExpanded = !IsExpanded;
-            Apply();
-        }
-
-        public void PointerOver(bool over)
-        {
-            _pointerOver = over;
-            Apply();
-        }
-
-        private void Apply()
-        {
-            // Opacity, not IsVisible: both faces stay in the layout so the tile keeps one
-            // height. The hidden one also stops taking the pointer, so a click always lands on
-            // the face being looked at.
-            _summary.Opacity = IsExpanded ? 0 : 1;
-            _summary.IsHitTestVisible = !IsExpanded;
-            _breakdown.Opacity = IsExpanded ? 1 : 0;
-            _breakdown.IsHitTestVisible = IsExpanded;
-            _glyph.Opacity = IsExpanded ? 0.9 : _pointerOver ? 0.75 : 0.35;
-        }
     }
 
     public void Populate(
@@ -189,7 +95,6 @@ public sealed class PanelContent : Border
         CachedUtilization? cachedUsage = null)
     {
         _root.Children.Clear();
-        _tileFlips.Clear();
 
         // Applied here rather than in the constructor: the density depends on the screen this
         // open lands on, and a multi-monitor desktop can move between them. Normal reproduces
@@ -219,7 +124,7 @@ public sealed class PanelContent : Border
         // signal is the more urgent of the two.
         if (offPlan.Banner is { } offPlanBanner)
         {
-            AddOffPlanBanner(offPlanBanner);
+            _offPlan.AddBannerTo(_root, offPlanBanner, Density);
         }
 
         var banner = PanelBanner.Resolve(authoritative, dataReport, scopeReport, stats.Tokens31Days);
@@ -235,9 +140,10 @@ public sealed class PanelContent : Border
         // never appears here. Plumbing them through is a change to this head's shell.
         AddBar(PanelSections.WeeklyMeter(snapshot, banner, null, boostNotices, utcNow, local));
 
-        AddTiles(stats, scopeReport);
-        AddGraph(PanelSections.Graph(stats, snapshot, local));
-        AddOffPlanSection(offPlan);
+        _tiles.AddTo(_root, stats, Density);
+        _tokenBars.AddTo(_root, stats, scopeReport);
+        _graph.AddTo(_root, PanelSections.Graph(stats, snapshot, local), Density);
+        _offPlan.AddSectionTo(_root, offPlan);
 
         // Nothing recorded at all while the plan meters show real usage: the tiles are
         // measuring a source this user does not feed, not measuring zero. Say which source,
@@ -250,7 +156,7 @@ public sealed class PanelContent : Border
         // zero — the exact case this note is for.
         if (stats.Tokens31Days == 0 && authoritative && snapshot.SessionPercent is > 0)
         {
-            _root.Children.Add(Muted((scopeReport ?? TranscriptScopeReport.Inspect()).Explain()));
+            _root.Children.Add(Muted(_theme, (scopeReport ?? TranscriptScopeReport.Inspect()).Explain()));
         }
     }
 
@@ -364,297 +270,19 @@ public sealed class PanelContent : Border
         _root.Children.Add(block);
     }
 
-    private void AddTiles(PanelStatistics stats, TranscriptScopeReport? scopeReport)
+    private void AddBanner(string title, string detail)
     {
-        // Both faces of all four tiles, including the coverage and unpriced caveats.
-        var tiles = PanelSections.Tiles(stats);
+        var stack = new StackPanel { Spacing = 2 };
+        stack.Children.Add(Text(title, 13, _theme["WarnText"], FontWeight.SemiBold));
+        stack.Children.Add(Text(detail, 11, _theme["WarnText"]));
 
-        // The one caveat still decided here, and the only thing on these tiles that is: this
-        // head prints the off-plan note on today's TOKEN tile and the Windows panel never has.
-        // Presentation builds the Windows reading, so taking it as handed over would drop the
-        // line from six shipped Linux renders — a visual change this slice is explicitly not
-        // allowed to make. Which head is right is a question about what the user should see, so
-        // it is asked rather than settled here, and this goes when it is answered.
-        var tokensToday = stats.IsOffPlan
-            ? tiles.TokensToday with { Note = OffPlanText.OffPlanNote(true) }
-            : tiles.TokensToday;
-
-        _root.Children.Add(TileRow(Tile(tokensToday), Tile(tiles.EstToday)));
-
-        // A muted line naming the UTC day's boundary stood here for one release, because the
-        // tiles were a UTC day and this head has no hover to put the caveat behind (issue
-        // #210). The tiles are the reader's own day now, so the line has nothing to say.
-        _root.Children.Add(TileRow(Tile(tiles.Tokens31Days), Tile(tiles.Est31Days)));
-
-        // What none of the four tiles above cover (issue #235). The plan bars are account-wide;
-        // these are not, because cloud-container Cowork sessions and chat leave no transcript on
-        // this machine. Beneath the whole block rather than on a tile: it is true of all four,
-        // and the per-tile caveat channel would print it twice on the 31-day pair and never on
-        // today's.
-        //
-        // Always shown, unlike that caveat. Partial history and an unpriced model are conditions
-        // that pass; this is the standing shape of the data, and a note appearing only sometimes
-        // would teach a reader that its absence means full coverage.
-        //
-        // Not the line issue #232 removed — that one sat under the session BAR, described the
-        // session window alone, and carried a disclosure.
-        _root.Children.Add(Muted(TokenText.TokenScopeCaveat));
-
-        // What was billed, beside tiles that headline only output (issue #253). Omitted when
-        // there is nothing to break down — a composition of zero explains nothing.
-        var today = stats.CompositionToday;
-        var window31 = stats.Composition31Days;
-        if (!today.HasTokens && !window31.HasTokens)
+        _root.Children.Add(new Border
         {
-            return;
-        }
-
-        var breakdown = BuildBreakdown(today, window31);
-
-        var header = new Grid
-        {
-            Margin = new Thickness(0, 12, 0, 0),
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-        };
-        header.Children.Add(Text(TokenText.TokensUsedHeading, 11, _theme["TextSecondary"]));
-
-        var switcher = ViewSwitch(breakdown);
-        Grid.SetColumn(switcher, 1);
-        header.Children.Add(switcher);
-        _root.Children.Add(header);
-
-        _root.Children.Add(TokenBar(today, TokenText.TokensUsedTodayLabel, TokenText.TokenWindowToday, 6));
-        _root.Children.Add(TokenBar(window31, TokenText.TokensUsed31DaysLabel, TokenText.TokenWindow31Days, 9));
-        _root.Children.Add(breakdown);
-
-        // Which surfaces these figures are made of. Empty when nothing was found at all —
-        // the scope note owns that state and says considerably more (issue #171).
-        if ((scopeReport ?? TranscriptScopeReport.Inspect()).CoverageLine() is { Length: > 0 } coverage)
-        {
-            _root.Children.Add(Muted(coverage));
-        }
-    }
-
-    /// <summary>
-    /// The Bars/Breakdown switch. Two buttons rather than a disclosure, so the Linux panel
-    /// offers the same two views the Windows one does — and, on a head where a compositor may
-    /// never deliver hover at all, the breakdown is the only route to a segment's exact share
-    /// and estimated value that needs no pointer.
-    /// </summary>
-    private Control ViewSwitch(Control breakdown)
-    {
-        var bars = SwitchButton(TokenText.TokenViewBarsLabel, active: true);
-        var table = SwitchButton(TokenText.TokenViewBreakdownLabel, active: false);
-
-        void Select(bool showBreakdown)
-        {
-            breakdown.IsVisible = showBreakdown;
-            bars.Background = showBreakdown ? Brushes.Transparent : _theme["BarTrack"];
-            table.Background = showBreakdown ? _theme["BarTrack"] : Brushes.Transparent;
-        }
-
-        bars.Click += (_, _) => Select(false);
-        table.Click += (_, _) => Select(true);
-
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 2 };
-        row.Children.Add(bars);
-        row.Children.Add(table);
-
-        return new Border
-        {
-            Background = _theme["TileBg"],
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(2),
-            Child = row,
-        };
-    }
-
-    private Button SwitchButton(string label, bool active) => new()
-    {
-        Content = Text(label, 10.5, _theme[active ? "TextPrimary" : "TextMuted"]),
-        Background = active ? _theme["BarTrack"] : Brushes.Transparent,
-        BorderThickness = new Thickness(0),
-        CornerRadius = new CornerRadius(3),
-        Padding = new Thickness(8, 3),
-        Cursor = new Cursor(StandardCursorType.Hand),
-    };
-
-    /// <summary>
-    /// One composition bar: heading and billed total, the segmented track, and the legend
-    /// carrying every exact figure the track's floors do not.
-    ///
-    /// <para>Widths come from <see cref="TokenBarGeometry"/> — shared with the Windows head,
-    /// because the segment order and the minimum width are measured decisions and two copies
-    /// of a measured decision is how they drift.</para>
-    /// </summary>
-    private Control TokenBar(TokenComposition composition, string heading, string window, double topMargin)
-    {
-        var block = new StackPanel { Spacing = 4, Margin = new Thickness(0, topMargin, 0, 0) };
-
-        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        head.Children.Add(Text(heading, 10.5, _theme["TextSecondary"]));
-        var total = Text(UsageFormatter.Tokens(composition.Total), 12, _theme["TextPrimary"], FontWeight.SemiBold);
-        Grid.SetColumn(total, 1);
-        head.Children.Add(total);
-        block.Children.Add(head);
-
-        var slices = composition.InDisplayOrder.Where(s => s.Tokens > 0).ToList();
-
-        // Avalonia gives no laid-out width before the first arrange pass either, so the
-        // widths are applied on size change against the track the bar actually got.
-        var track = new Grid { Height = 12 };
-        var pieces = new List<Border>(slices.Count);
-        for (var i = 0; i < slices.Count; i++)
-        {
-            track.ColumnDefinitions.Add(new ColumnDefinition(new GridLength(0, GridUnitType.Pixel)));
-
-            var slice = slices[i];
-            var brush = KindBrush(slice.Kind);
-            var piece = new Border
-            {
-                Background = brush,
-                // Rounded only at the ends — a Border does not clip children to its corner
-                // radius, so a rounded container over square segments shows through.
-                CornerRadius = new CornerRadius(
-                    i == 0 ? 3 : 0, i == slices.Count - 1 ? 3 : 0,
-                    i == slices.Count - 1 ? 3 : 0, i == 0 ? 3 : 0),
-            };
-            ToolTip.SetTip(piece, SegmentTip(slice, window));
-            Grid.SetColumn(piece, i);
-            track.Children.Add(piece);
-            pieces.Add(piece);
-        }
-
-        track.SizeChanged += (_, _) =>
-        {
-            var segments = TokenBarGeometry.Segments(composition, track.Bounds.Width);
-            if (segments.Count != track.ColumnDefinitions.Count)
-            {
-                return;
-            }
-
-            for (var i = 0; i < segments.Count; i++)
-            {
-                track.ColumnDefinitions[i].Width = new GridLength(segments[i].Width, GridUnitType.Pixel);
-            }
-        };
-        block.Children.Add(track);
-
-        // Every figure the bar cannot draw honestly. Not decoration — see TokenBarGeometry.
-        var legend = new WrapPanel();
-        foreach (var slice in slices)
-        {
-            var entry = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 5,
-                Margin = new Thickness(0, 0, 10, 0),
-            };
-            entry.Children.Add(new Border
-            {
-                Width = 8,
-                Height = 8,
-                CornerRadius = new CornerRadius(2),
-                Background = KindBrush(slice.Kind),
-                VerticalAlignment = VerticalAlignment.Center,
-            });
-            entry.Children.Add(Text(
-                $"{TokenText.TokenKindLabel(slice.Kind)} {UsageFormatter.Tokens(slice.Tokens)}",
-                10.5, _theme["TextSecondary"]));
-            ToolTip.SetTip(entry, SegmentTip(slice, window));
-            legend.Children.Add(entry);
-        }
-
-        block.Children.Add(legend);
-        return block;
-    }
-
-    private string SegmentTip(TokenKindSlice slice, string window) =>
-        $"{UsageFormatter.Tokens(slice.Tokens)} · "
-        + TokenText.TokenCardCaption(slice.Kind, slice.Share, slice.EstUsd, window);
-
-    private IBrush KindBrush(TokenKind kind) => _theme[TokenBarGeometry.PaletteKey(kind)];
-
-    /// <summary>
-    /// The breakdown table, with <b>a share column per window</b> — the two windows have
-    /// measurably different shapes, so one shared column would be read against whichever
-    /// token column it sat nearer.
-    /// </summary>
-    private Control BuildBreakdown(TokenComposition today, TokenComposition window31)
-    {
-        var table = new Grid
-        {
-            IsVisible = false,
-            Margin = new Thickness(0, 6, 0, 0),
-            ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto,Auto"),
-        };
-
-        AddBreakdownRow(table, 0, null,
-            TokenText.TokenBreakdownKindHeader, TokenText.TokenBreakdownTodayHeader,
-            TokenText.TokenBreakdownShareHeader, TokenText.TokenBreakdown31DaysHeader,
-            TokenText.TokenBreakdownShareHeader, _theme["TextMuted"], 9.5);
-
-        var row = 1;
-        foreach (var slice in (today.HasTokens ? today : window31).InDisplayOrder)
-        {
-            var mine = today.InDisplayOrder.First(s => s.Kind == slice.Kind);
-            var other = window31.InDisplayOrder.First(s => s.Kind == slice.Kind);
-
-            AddBreakdownRow(table, row++, KindBrush(slice.Kind),
-                TokenText.TokenKindLabel(slice.Kind),
-                UsageFormatter.Tokens(mine.Tokens), TokenText.TokenShare(mine.Share),
-                UsageFormatter.Tokens(other.Tokens), TokenText.TokenShare(other.Share),
-                _theme["TextSecondary"], 10.5);
-        }
-
-        AddBreakdownRow(table, row, null,
-            TokenText.TokenBreakdownTotalLabel,
-            UsageFormatter.Tokens(today.Total), TokenText.TokenShare(today.HasTokens ? 1 : 0),
-            UsageFormatter.Tokens(window31.Total), TokenText.TokenShare(window31.HasTokens ? 1 : 0),
-            _theme["TextPrimary"], 10.5, FontWeight.SemiBold);
-
-        return table;
-    }
-
-    private void AddBreakdownRow(
-        Grid table, int row, IBrush? chip, string kind, string todayTokens, string todayShare,
-        string windowTokens, string windowShare, IBrush foreground, double size,
-        FontWeight weight = FontWeight.Normal)
-    {
-        table.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-
-        var label = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 6,
-            Margin = new Thickness(0, 2),
-        };
-        if (chip is not null)
-        {
-            label.Children.Add(new Border
-            {
-                Width = 8,
-                Height = 8,
-                CornerRadius = new CornerRadius(2),
-                Background = chip,
-                VerticalAlignment = VerticalAlignment.Center,
-            });
-        }
-
-        label.Children.Add(Text(kind, size, foreground, weight));
-        Grid.SetRow(label, row);
-        table.Children.Add(label);
-
-        var cells = new[] { todayTokens, todayShare, windowTokens, windowShare };
-        for (var i = 0; i < cells.Length; i++)
-        {
-            var cell = Text(cells[i], size, foreground, weight);
-            cell.TextAlignment = TextAlignment.Right;
-            cell.Margin = new Thickness(10, 2, 0, 2);
-            Grid.SetRow(cell, row);
-            Grid.SetColumn(cell, i + 1);
-            table.Children.Add(cell);
-        }
+            Background = _theme["WarnBg"],
+            CornerRadius = new CornerRadius(6),
+            Padding = new Thickness(NaturalTilePadding * Density.SpacingScale),
+            Child = stack,
+        });
     }
 
     /// <summary>
@@ -688,486 +316,4 @@ public sealed class PanelContent : Border
 
         return button;
     }
-
-    private static Grid TileRow(Control left, Control right)
-    {
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,8,*") };
-        Grid.SetColumn(right, 2);
-        grid.Children.Add(left);
-        grid.Children.Add(right);
-        return grid;
-    }
-
-    /// <summary>
-    /// One statistics tile. A tile with something to break down flips in place between its
-    /// total and the per-model chart the Windows panel has always shown (issue #37); one with
-    /// nothing to break down is the plain tile this head has always drawn.
-    /// </summary>
-    private Control Tile(PanelTileView view)
-    {
-        if (!view.CanFlip)
-        {
-            // No second face is built at all, rather than one built and kept out of sight.
-            // Both faces share a cell and are therefore both measured, so an empty breakdown
-            // would still have a say in the tile's height — and a tile that cannot flip has to
-            // stay exactly the tile it was.
-            return TileShell(SummaryFace(view));
-        }
-
-        var summary = SummaryFace(view);
-        var breakdown = BreakdownFace(view);
-        var glyph = FlipGlyph();
-
-        // Both faces in one cell, so the tile measures to the taller of the two and keeps one
-        // height however often it is flipped — the sections below it must not jump (the same
-        // reason the Windows tile uses Hidden rather than Collapsed). Avalonia has no "hidden
-        // but still measured" visibility, so the face that is not showing is held at zero
-        // opacity instead of being collapsed out of the layout.
-        var faces = new Avalonia.Controls.Panel();
-        faces.Children.Add(summary);
-        faces.Children.Add(breakdown);
-        faces.Children.Add(glyph);
-
-        var flip = new TileFlip(summary, breakdown, glyph);
-        _tileFlips.Add(flip);
-
-        var shell = TileShell(faces);
-
-        // PointerPressed rather than a Button: this head's tile is a Border, and wrapping it
-        // in a templated Button to get a click would also inherit that template's own
-        // background and padding, which is the card's. Keyboard activation is what this costs
-        // — noted on the slice, and the Windows tile keeps it.
-        shell.PointerPressed += (_, _) => flip.Toggle();
-        shell.PointerEntered += (_, _) => flip.PointerOver(true);
-        shell.PointerExited += (_, _) => flip.PointerOver(false);
-
-        return shell;
-    }
-
-    /// <summary>The card every tile sits in, whichever faces it has.</summary>
-    private Border TileShell(Control child) => new()
-    {
-        Background = _theme["TileBg"],
-        CornerRadius = new CornerRadius(6),
-        Padding = new Thickness(NaturalTilePadding * Density.SpacingScale),
-        Child = child,
-    };
-
-    /// <summary>The face a reader sees first: the tile's name, its total, and any caveat.</summary>
-    private StackPanel SummaryFace(PanelTileView view)
-    {
-        var stack = new StackPanel { Spacing = 2 };
-        stack.Children.Add(Text(view.Label, 12, _theme["TextSecondary"]));
-        stack.Children.Add(Text(view.Value, 20, _theme["TextPrimary"], FontWeight.SemiBold));
-        if (view.Note.Length > 0)
-        {
-            stack.Children.Add(Text(view.Note, 11, _theme["WarnText"]));
-        }
-
-        return stack;
-    }
-
-    /// <summary>
-    /// The second face: the same total, the per-model bar, its legend, and the caveat again.
-    ///
-    /// <para>The tile's <b>label</b> is dropped here to buy the room for the chart, as the
-    /// issue allows, and the total stays so the tile still answers its own question at a
-    /// glance. The <b>caveat</b> is not expendable in the same way — "465.3M" without "8 of 31
-    /// days recorded" reads as low usage rather than short history, which is the exact
-    /// misreading rule 6 exists to prevent.</para>
-    ///
-    /// <para>The legend is mandatory rather than optional polish: on the light surface two of
-    /// the series sit below 3:1 against the tile, which the colour rules allow only when
-    /// visible labels ship alongside. It is also the colour-vision fallback — identity never
-    /// rests on hue alone, and this head has no hover card to fall back on.</para>
-    /// </summary>
-    private StackPanel BreakdownFace(PanelTileView view)
-    {
-        var stack = new StackPanel { Spacing = 5 };
-
-        // Caption right-aligned beside the total, clear of the glyph at the tile's edge.
-        var head = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        head.Children.Add(Text(view.Value, 13, _theme["TextPrimary"], FontWeight.SemiBold));
-        var caption = Text(view.Caption, 9, _theme["TextMuted"]);
-        caption.Margin = new Thickness(0, 0, 13, 0);
-        caption.VerticalAlignment = VerticalAlignment.Center;
-        caption.TextWrapping = TextWrapping.NoWrap;
-        caption.TextTrimming = TextTrimming.CharacterEllipsis;
-        Grid.SetColumn(caption, 1);
-        head.Children.Add(caption);
-        stack.Children.Add(head);
-
-        stack.Children.Add(SegmentBar(view.Segments));
-        stack.Children.Add(Legend(view.Segments));
-
-        if (view.Note.Length > 0)
-        {
-            stack.Children.Add(Text(view.Note, 10, _theme["WarnText"]));
-        }
-
-        return stack;
-    }
-
-    /// <summary>
-    /// The per-model bar. Star widths proportion the segments from each one's share, so the
-    /// bar is right at any tile width without needing the laid-out pixels.
-    ///
-    /// <para>Thin and textless: this head cannot reveal a figure on hover, so the figures are
-    /// in the legend rather than inside the segments, and the bar needs no height for them.</para>
-    /// </summary>
-    private Control SegmentBar(IReadOnlyList<PanelTileSegmentView> segments)
-    {
-        var bar = new Grid { Height = 10 };
-
-        for (var i = 0; i < segments.Count; i++)
-        {
-            if (i > 0)
-            {
-                bar.ColumnDefinitions.Add(new ColumnDefinition(SegmentGap, GridUnitType.Pixel));
-            }
-            bar.ColumnDefinitions.Add(new ColumnDefinition(segments[i].Share, GridUnitType.Star));
-
-            // Square at the baseline, rounded at the data end — the bar grows from the left,
-            // so only the last segment's right corners are rounded.
-            var segment = new Border
-            {
-                Background = _theme.Series(segments[i].Slot),
-                CornerRadius = i == segments.Count - 1
-                    ? new CornerRadius(0, DataEndRadius, DataEndRadius, 0)
-                    : new CornerRadius(0),
-            };
-            Grid.SetColumn(segment, bar.ColumnDefinitions.Count - 1);
-            bar.Children.Add(segment);
-        }
-
-        return bar;
-    }
-
-    /// <summary>
-    /// The legend: a swatch, the model's name, and its figure.
-    ///
-    /// <para><b>The figure is here, unlike on Windows.</b> That head drops it from the legend
-    /// because its hover card carries it, and a compositor may never deliver hover at all here
-    /// — so a figure only reachable by pointer would be a figure some users cannot read. It is
-    /// the same decision the composition breakdown's table made for this head.</para>
-    /// </summary>
-    private Control Legend(IReadOnlyList<PanelTileSegmentView> segments)
-    {
-        var legend = new WrapPanel { Orientation = Orientation.Horizontal };
-
-        foreach (var segment in segments)
-        {
-            var entry = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 3,
-                Margin = new Thickness(0, 0, 8, 0),
-            };
-
-            entry.Children.Add(new Border
-            {
-                Width = 7,
-                Height = 7,
-                CornerRadius = new CornerRadius(2),
-                Background = _theme.Series(segment.Slot),
-                VerticalAlignment = VerticalAlignment.Center,
-            });
-
-            // Text wears text colours — the swatch beside it carries the identity, and a light
-            // categorical hue is illegible as small text.
-            var label = Text($"{segment.Name} {segment.Figure}", 9, _theme["TextSecondary"]);
-            label.TextWrapping = TextWrapping.NoWrap;
-            label.VerticalAlignment = VerticalAlignment.Center;
-            entry.Children.Add(label);
-
-            legend.Children.Add(entry);
-        }
-
-        return legend;
-    }
-
-    /// <summary>
-    /// The flip affordance: the same mark the Windows tile draws, at the same coordinates.
-    ///
-    /// <para>Two opposed arrows rather than a chart glyph (issue #179): the tile does not draw
-    /// a chart, it swaps between two views of one figure, and a bar-chart icon said the wrong
-    /// thing about what clicking does. Strokes with no fill — a filled or boxed icon reads as a
-    /// button pasted onto the tile, and the tile is the button.</para>
-    ///
-    /// <para>Built from four shapes rather than one parsed path, which is the only difference
-    /// from the Windows glyph. <c>Geometry.Parse</c> needs a rendering platform, and CI has
-    /// none — a tile that could not be constructed in a test could not have its flip proved by
-    /// one, and this head's flip has no golden image to prove it instead.</para>
-    /// </summary>
-    private Control FlipGlyph()
-    {
-        var glyph = new Canvas
-        {
-            Width = 9,
-            Height = 10,
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Top,
-            Margin = new Thickness(0, 1, 0, 0),
-        };
-
-        // Top arrow points right, bottom arrow points left — a shaft and a two-stroke head
-        // each, with the heads left open.
-        glyph.Children.Add(Stroke(new Line { StartPoint = new Point(0, 2.5), EndPoint = new Point(8, 2.5) }));
-        glyph.Children.Add(Stroke(new Polyline
-        {
-            Points = [new Point(5.6, 0.4), new Point(8, 2.5), new Point(5.6, 4.6)],
-        }));
-        glyph.Children.Add(Stroke(new Line { StartPoint = new Point(8, 7.5), EndPoint = new Point(0, 7.5) }));
-        glyph.Children.Add(Stroke(new Polyline
-        {
-            Points = [new Point(2.4, 5.4), new Point(0, 7.5), new Point(2.4, 9.6)],
-        }));
-
-        return glyph;
-    }
-
-    /// <summary>The glyph's shared stroke — rounded, unfilled, in the muted text colour.</summary>
-    private Shape Stroke(Shape shape)
-    {
-        shape.Stroke = _theme["TextMuted"];
-        shape.StrokeThickness = 1.3;
-        shape.StrokeLineCap = PenLineCap.Round;
-        shape.StrokeJoin = PenLineJoin.Round;
-        // Polyline fills the area between its points unless told not to.
-        shape.Fill = null;
-        return shape;
-    }
-
-    /// <summary>
-    /// The 31-day graph (<see cref="PanelGraphView"/>): a bar per day shaded by its intensity
-    /// within its own plan week, the weekly-reset gridlines over them, a date under every
-    /// column, and a hover card on each.
-    ///
-    /// <para><b>A day with no data draws nothing at all</b> — no bar, and no zero-height
-    /// stand-in for one, because a flat bar claims a measured day of no usage on a day that
-    /// was never measured (rule 6). The column stays, so the dates and the gridlines over it
-    /// still line up; it is simply empty.</para>
-    ///
-    /// <para><b>Why a Canvas rather than the strip of bars this was.</b> A gridline sits at
-    /// its true fractional position <em>inside</em> a day column, which no stack of
-    /// fixed-width children can express. The columns are laid out at a fixed pitch instead of
-    /// against the panel's measured width, so every position here is known before layout —
-    /// Avalonia offers no arranged width to divide up at build time, and a chart that waited
-    /// for one would be redrawing itself on every resize.</para>
-    /// </summary>
-    private void AddGraph(PanelGraphView graph)
-    {
-        if (graph.Columns.Count == 0)
-        {
-            return;
-        }
-
-        // Scaled by the density ratio rather than given the Windows chart height: this head
-        // ships a 60 px strip, and a display with room must keep exactly that. The date band
-        // below it is NOT scaled — the labels are text, and text does not shrink with the
-        // spacing.
-        var barArea = NaturalGraphHeight * Density.GraphScale;
-        var dateTop = barArea + GraphDateGap;
-        var chart = new Canvas { Width = graph.Columns.Count * GraphColumnPitch };
-
-        // A Canvas has no desired size of its own, so the dates would hang below the chart
-        // into whatever follows it unless the height counts them. Taken from the labels
-        // themselves rather than a constant: how deep a date reaches on its side is its text's
-        // width, which moves with the font the desktop hands us.
-        var dateDepth = 0.0;
-
-        for (var i = 0; i < graph.Columns.Count; i++)
-        {
-            var column = graph.Columns[i];
-            var centre = (i + 0.5) * GraphColumnPitch;
-
-            if (column.HasBar)
-            {
-                var height = Math.Max(2, barArea * column.Height);
-                var bar = new Border
-                {
-                    Width = GraphBarWidth,
-                    Height = height,
-                    Background = _theme["Series1"],
-                    Opacity = GraphFaintestDay + (1 - GraphFaintestDay) * column.Intensity,
-                    CornerRadius = new CornerRadius(1),
-                };
-                ToolTip.SetTip(bar, GraphTip(column.CardFigure, column.CardCaption));
-                Canvas.SetLeft(bar, centre - GraphBarWidth / 2);
-                Canvas.SetTop(bar, barArea - height);
-                chart.Children.Add(bar);
-            }
-
-            dateDepth = Math.Max(dateDepth, AddGraphDate(chart, column, centre, dateTop));
-        }
-
-        chart.Height = dateTop + dateDepth;
-
-        // Last, so they sit above the bars: a Canvas paints in child order, and a reset line
-        // overdrawn by every bar it crosses is missing exactly where the usage is heaviest.
-        foreach (var boundary in graph.Boundaries)
-        {
-            var x = (boundary.Column + boundary.FractionOfDay) * GraphColumnPitch;
-            var line = new Line
-            {
-                StartPoint = new Point(x, 0),
-                EndPoint = new Point(x, barArea + 3),
-                Stroke = _theme["WarnText"],
-                StrokeThickness = 1,
-                StrokeDashArray = [2, 2],
-            };
-            ToolTip.SetTip(line, GraphTip(boundary.CardFigure, boundary.CardCaption));
-            chart.Children.Add(line);
-        }
-
-        var block = new StackPanel { Spacing = 4 };
-        block.Children.Add(Text(graph.Heading, 13, _theme["TextPrimary"], FontWeight.SemiBold));
-        block.Children.Add(chart);
-        _root.Children.Add(block);
-    }
-
-    /// <summary>
-    /// One column's date, turned on its side so 31 of them fit.
-    ///
-    /// <para>Placed from the measured text rather than from a constant. Avalonia rotates about
-    /// the element's centre, so the label is positioned by its centre and the rotation leaves
-    /// that point where it was: the horizontal centre is the column's own, which is also the
-    /// bar's, so a date cannot drift onto its neighbour. Measuring is what makes the vertical
-    /// placement right — after a quarter turn the box's WIDTH is its height on screen.</para>
-    /// </summary>
-    /// <returns>How far below <paramref name="top"/> the label reaches.</returns>
-    private double AddGraphDate(Canvas chart, PanelGraphColumnView column, double centre, double top)
-    {
-        var label = new TextBlock
-        {
-            Text = column.DateLabel,
-            FontSize = 8,
-            Foreground = _theme["TextMuted"],
-            // A day with no data is dimmed rather than left blank: the column needs its date
-            // for the reader to see WHICH days are missing.
-            Opacity = column.Recorded ? 1.0 : 0.5,
-            RenderTransform = new RotateTransform(90),
-        };
-
-        label.Measure(Size.Infinity);
-        var ink = label.DesiredSize;
-        Canvas.SetLeft(label, centre - ink.Width / 2);
-        Canvas.SetTop(label, top + (ink.Width - ink.Height) / 2);
-        chart.Children.Add(label);
-
-        return ink.Width;
-    }
-
-    /// <summary>
-    /// A graph hover card as this head can show one: a single line, figure first.
-    ///
-    /// <para>An empty figure is the Monday fallback gridline, which has no observed instant to
-    /// state (rule 6) — so the caption stands alone rather than behind a separator with
-    /// nothing in front of it.</para>
-    /// </summary>
-    private static string GraphTip(string figure, string caption) =>
-        figure.Length == 0 ? caption : $"{figure} · {caption}";
-
-    private void AddBanner(string title, string detail)
-    {
-        var stack = new StackPanel { Spacing = 2 };
-        stack.Children.Add(Text(title, 13, _theme["WarnText"], FontWeight.SemiBold));
-        stack.Children.Add(Text(detail, 11, _theme["WarnText"]));
-
-        _root.Children.Add(new Border
-        {
-            Background = _theme["WarnBg"],
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(NaturalTilePadding * Density.SpacingScale),
-            Child = stack,
-        });
-    }
-
-    /// <summary>
-    /// The off-plan banner: the heading, the line underneath, and the address the line sends
-    /// the reader to.
-    ///
-    /// <para><b>The address is printed, not labelled.</b> The Windows banner makes the link's
-    /// label the thing you click; nothing in this head opens a URL — no part of the Linux
-    /// panel does — so a bare "Open usage settings in Claude" here would be an instruction
-    /// with no way to follow it. The label still introduces it, because the sentence above
-    /// ends by sending the reader somewhere and the address alone does not say where.</para>
-    /// </summary>
-    private void AddOffPlanBanner(PanelOffPlanBannerView banner)
-    {
-        var stack = new StackPanel { Spacing = 2 };
-        stack.Children.Add(Text(banner.Title, 13, _theme["WarnText"], FontWeight.SemiBold));
-        stack.Children.Add(Text(banner.Detail, 11, _theme["WarnText"]));
-        stack.Children.Add(Text(
-            $"{banner.LinkLabel}: {banner.LinkUrl}", 11, _theme["WarnText"]));
-
-        _root.Children.Add(new Border
-        {
-            Background = _theme["WarnBg"],
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(NaturalTilePadding * Density.SpacingScale),
-            Child = stack,
-        });
-    }
-
-    /// <summary>
-    /// The standing 31-day off-plan spend section (<see cref="PanelOffPlanView"/>): heading and
-    /// badge, the figure, the coverage caveat, and what the figure is.
-    ///
-    /// <para><b>The explanation stands rather than hovering.</b> The Windows panel moved it to
-    /// a hover card to save three permanent lines (issue #181), which is the right trade where
-    /// hover exists; a compositor may never deliver it here, and what would be lost is the
-    /// rule-6 caveat that this is an estimate and not the charge — the one sentence the
-    /// section cannot ship without. The same reasoning puts the weekly reset's action on its
-    /// row rather than behind a card (<see cref="PanelMeterView.ResetLineWithAction"/>).</para>
-    /// </summary>
-    private void AddOffPlanSection(PanelOffPlanView offPlan)
-    {
-        var heading = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        heading.Children.Add(Text(offPlan.Heading, 13, _theme["TextPrimary"], FontWeight.SemiBold));
-
-        var badge = new Border
-        {
-            Background = _theme["WarnBg"],
-            CornerRadius = new CornerRadius(4),
-            Padding = new Thickness(6, 2),
-            HorizontalAlignment = HorizontalAlignment.Right,
-            VerticalAlignment = VerticalAlignment.Center,
-            Child = Text(offPlan.Badge, 11, _theme["WarnText"]),
-        };
-        Grid.SetColumn(badge, 1);
-        heading.Children.Add(badge);
-
-        var figure = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        figure.Children.Add(Text(offPlan.SpendLabel, 12, _theme["TextSecondary"]));
-        var value = Text(offPlan.SpendValue, 18, _theme["TextPrimary"], FontWeight.SemiBold);
-        value.HorizontalAlignment = HorizontalAlignment.Right;
-        Grid.SetColumn(value, 1);
-        figure.Children.Add(value);
-
-        var block = new StackPanel { Spacing = 4 };
-        block.Children.Add(heading);
-        block.Children.Add(figure);
-        if (offPlan.Coverage is { Length: > 0 } coverage)
-        {
-            block.Children.Add(Text(coverage, 11, _theme["WarnText"]));
-        }
-
-        block.Children.Add(Muted(offPlan.Hint));
-        _root.Children.Add(block);
-    }
-
-    // ── primitives ──────────────────────────────────────────────────────────────────
-
-    private TextBlock Muted(string text) => Text(text, 11, _theme["TextMuted"]);
-
-    private static TextBlock Text(string text, double size, IBrush brush, FontWeight weight = FontWeight.Normal) =>
-        new()
-        {
-            Text = text,
-            FontSize = size,
-            Foreground = brush,
-            FontWeight = weight,
-            TextWrapping = TextWrapping.Wrap,
-        };
 }
