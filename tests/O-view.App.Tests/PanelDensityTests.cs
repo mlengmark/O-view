@@ -168,4 +168,20 @@ public class PanelDensityTests
         Assert.True(PanelDensity.Compact.IsCompact);
         Assert.False(PanelDensity.Normal.IsCompact);
     }
+
+    // ── compacting is not the last word ─────────────────────────────────────────────
+
+    /// <summary>
+    /// Choosing <see cref="PanelDensity.Compact"/> is not a promise that the result fits —
+    /// the measured compact-expanded panel (648 DIP) still overflows a work area shorter than
+    /// that. <see cref="PanelFit"/> is the piece that decides whether what is left scrolls.
+    /// </summary>
+    [Fact]
+    public void CompactingDoesNotGuaranteeTheResultFits()
+    {
+        var fit = PanelFit.Resolve(CompactExpandedDip, availableHeightDip: 600);
+
+        Assert.Equal(600, fit.WindowHeightDip);
+        Assert.True(fit.MustScroll);
+    }
 }

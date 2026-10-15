@@ -12,10 +12,14 @@ namespace OView.App.Rendering;
 /// that 734, about 400 is text and cannot move; ~232 is spacing and 86 is a hard-coded graph
 /// canvas, and those can.</para>
 ///
-/// <para><b>Nothing is hidden and nothing scrolls.</b> Every figure, caveat and section is
-/// present at either density — this only changes how much air sits between them. A panel that
-/// silently dropped a section to fit would be the rule-6 failure this project keeps finding:
-/// a number quietly absent reads as a number that is zero.</para>
+/// <para><b>Nothing is hidden, but the content can now scroll.</b> Every figure, caveat and
+/// section is still present at either density — density only changes how much air sits between
+/// them. Compacting alone cannot be enough on every display: it saves about 94 DIP, and both
+/// panels measure more than 150 DIP too tall against a 768 px screen's work area. Once a panel
+/// is still taller than the work area after choosing its density, <see cref="PanelFit"/> caps
+/// the window there and lets the content scroll inside it. A panel that silently dropped a
+/// section to fit would be the rule-6 failure this project keeps finding: a number quietly
+/// absent reads as a number that is zero — scrolling keeps every section reachable instead.</para>
 ///
 /// <para>Shared because it is a statement about what the panel looks like, which a Windows
 /// user and a Linux user would expect to match — the same reasoning that moved the corner
