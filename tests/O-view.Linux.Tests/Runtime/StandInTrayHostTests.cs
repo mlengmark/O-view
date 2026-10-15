@@ -30,6 +30,16 @@ public class StandInTrayHostTests
     private const int IconSize = 22;
     private static readonly byte[] AmberPixel = [0xFF, 0xD9, 0x8E, 0x00];   // A, R, G, B
 
+    /// <summary>
+    /// What the stand-in item publishes as its <c>Title</c> and in its <c>ToolTip</c>. Shaped
+    /// like a real tooltip and recognisable in a bus capture, and deliberately not the same
+    /// text in both: a reader that confused the two properties would read as correct against
+    /// one string.
+    /// </summary>
+    private const string ItemTitle = "stand-in title";
+    private const string TooltipTitle = "stand-in tooltip";
+    private const string TooltipDescription = "the line a host draws underneath";
+
     [Fact]
     public async Task TheProbeReadsPresentWhileAHostRunsAndAbsentOnceItIsGone()
     {
@@ -83,6 +93,51 @@ public class StandInTrayHostTests
         Assert.Equal(IconSize, pixmap.Height);
         Assert.Equal(IconSize * IconSize * 4, pixmap.Argb32.Length);
         Assert.Equal(AmberPixel, pixmap.Argb32[..4]);
+    }
+
+    /// <summary>
+    /// The two properties a tooltip question turns on, read back off the bus from an item that
+    /// fills both.
+    ///
+    /// <para>Here so that reading them from the real head means something. An empty
+    /// <c>ToolTip</c> coming back from O-view is a finding about O-view only if this reader is
+    /// known to return a filled one when there is one to return — otherwise it is
+    /// indistinguishable from a reader that cannot parse <c>(sa(iiay)ss)</c> at all.</para>
+    /// </summary>
+    [Fact]
+    public async Task TheTitleAndTooltipAnItemPublishedCanBeReadBackThroughTheHost()
+    {
+        if (!InRuntimeJob) return;
+
+        await using var host = await StandInTrayHost.StartAsync();
+        await using var item = await StandInTrayItem.StartAsync();
+
+        var registered = await host.WaitForItemAsync(Patience);
+
+        Assert.Equal(ItemTitle, await host.ReadTitleAsync(registered));
+
+        var tooltip = await host.ReadToolTipAsync(registered);
+        Assert.NotNull(tooltip);
+        Assert.False(tooltip.IsEmpty, "the stand-in item fills its ToolTip, so this one is not empty");
+        Assert.Equal(TooltipTitle, tooltip.Title);
+        Assert.Equal(TooltipDescription, tooltip.Description);
+    }
+
+    /// <summary>
+    /// A property the item does not publish reads as null rather than as a throw, so a reader
+    /// that came back empty-handed can be reported instead of ending the test.
+    /// </summary>
+    [Fact]
+    public async Task APropertyAnItemDoesNotPublishReadsAsNull()
+    {
+        if (!InRuntimeJob) return;
+
+        await using var host = await StandInTrayHost.StartAsync();
+        await using var item = await StandInTrayItem.StartAsync();
+
+        var registered = await host.WaitForItemAsync(Patience);
+
+        Assert.Null(await host.ReadPropertyAsync(registered, "AttentionMovieName"));
     }
 
     [Fact]
@@ -148,8 +203,8 @@ public class StandInTrayHostTests
 
     /// <summary>
     /// Test code standing in for an app with a tray icon: it publishes a
-    /// <c>StatusNotifierItem</c> carrying one pixmap and registers itself with whatever owns
-    /// the watcher name.
+    /// <c>StatusNotifierItem</c> carrying one pixmap, a title and a tooltip, and registers
+    /// itself with whatever owns the watcher name.
     ///
     /// <para>Deliberately not the real head, which is not started here. This exists so the
     /// host can be tested without one, which is the only order that works: a stand-in host
@@ -234,14 +289,44 @@ public class StandInTrayHostTests
 
                 var reader = request.GetBodyReader();
                 reader.ReadString();                       // interface — only one is published here
-                if (reader.ReadString() != "IconPixmap")
+                var property = reader.ReadString();
+
+                // The three a tooltip question needs, and nothing else: an item is free to
+                // publish a subset, and a property this one leaves out has to come back as the
+                // spec's error rather than as something empty.
+                switch (property)
                 {
-                    context.ReplyError(
-                        "org.freedesktop.DBus.Error.UnknownProperty",
-                        $"{ItemInterface} publishes only IconPixmap here");
-                    return ValueTask.CompletedTask;
+                    case "IconPixmap":
+                        ReplyIconPixmap(context);
+                        break;
+
+                    case "Title":
+                        ReplyString(context, ItemTitle);
+                        break;
+
+                    case "ToolTip":
+                        ReplyToolTip(context);
+                        break;
+
+                    default:
+                        context.ReplyError(
+                            "org.freedesktop.DBus.Error.UnknownProperty",
+                            $"{ItemInterface} does not publish {property} here");
+                        break;
                 }
 
+                return ValueTask.CompletedTask;
+            }
+
+            private static void ReplyString(MethodContext context, string value)
+            {
+                var writer = context.CreateReplyWriter("v");
+                writer.WriteVariant(VariantValue.String(value));
+                context.Reply(writer.CreateMessage());
+            }
+
+            private static void ReplyIconPixmap(MethodContext context)
+            {
                 // a(iiay) inside a variant: width, height, and ARGB32 in network byte order.
                 // Written by hand because no VariantValue factory builds an array of structs.
                 var writer = context.CreateReplyWriter("v");
@@ -255,7 +340,30 @@ public class StandInTrayHostTests
                 writer.WriteArrayEnd(array);
 
                 context.Reply(writer.CreateMessage());
-                return ValueTask.CompletedTask;
+            }
+
+            /// <summary>
+            /// <c>(sa(iiay)ss)</c> inside a variant — icon name, icon pixmaps, title,
+            /// description. Written by hand for the reason the pixmap is: the pixmap array
+            /// inside it has no factory, so the whole structure has to be written out.
+            /// </summary>
+            private static void ReplyToolTip(MethodContext context)
+            {
+                var writer = context.CreateReplyWriter("v");
+                writer.WriteSignature("(sa(iiay)ss)");
+
+                writer.WriteStructureStart();
+                writer.WriteString("");                     // no themed icon for the tooltip
+
+                // Empty, like most real items': the pixels belong to the icon, not to the
+                // text beside it.
+                var array = writer.WriteArrayStart(DBusType.Struct);
+                writer.WriteArrayEnd(array);
+
+                writer.WriteString(TooltipTitle);
+                writer.WriteString(TooltipDescription);
+
+                context.Reply(writer.CreateMessage());
             }
 
             private static byte[] Pixels()

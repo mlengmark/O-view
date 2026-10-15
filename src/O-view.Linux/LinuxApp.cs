@@ -330,6 +330,14 @@ public sealed class LinuxApp : Application, IShellToSkin
             }
 
             _tray.Icon = ToWindowIcon(snapshot);
+
+            // Set every poll, and on this platform it does not become a tooltip. Avalonia's
+            // tray backend publishes this text as the item's SNI Title and answers the SNI
+            // ToolTip property with a hard-coded empty structure, so there is nothing here to
+            // set differently; and the desktop the report came from never asks for ToolTip
+            // anyway, having commented it out of its interface (issue #314, proved on the bus
+            // by TrayTooltipRuntimeTests). The exact figures reach a GNOME user through the
+            // panel instead, which is what the README's support matrix says.
             _tray.ToolTipText = TooltipFormatter.Format(snapshot);
 
             // A native menu is drawn by the host and offers no opening hook, so the resume row's

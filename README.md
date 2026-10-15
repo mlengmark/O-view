@@ -70,7 +70,7 @@ run Claude Desktop has nothing for O-view to read. **macOS is out of scope.** Se
 |---|---|---|
 | Reading Claude's data | ✅ | ✅ **seen working** — every path resolved, 5,645 of 5,645 plan-history samples parsed, Cowork logs and account tier read |
 | Tray icon | ✅ | ✅ **seen working** on KDE Plasma / Wayland. **Needs a notification-area host** — GNOME ships none by default, see below |
-| Tooltip | ✅ | ✅ built, *never observed* |
+| Tooltip | ✅ | ⚠️ **not shown on GNOME.** The text reaches the bus, but as the item's `Title`, not as the `ToolTip` a panel draws on hover. **The exact figures are in the detail panel instead** — see below |
 | Detail panel | ✅ docked flyout at the taskbar corner | ⚠️ a **plain window in the work area's corner**, not docked to the icon — see below. *Never observed:* neither report could open it — the left click first deadlocked the app, then crashed it. Three separate causes fixed since, none re-tested, and the corner placement has never been seen either |
 | Right-click menu | ✅ full: startup, automatic updates, notification threshold, diagnostics, update check, exit | ⚠️ **Run at startup and Exit.** Notifications, diagnostics and updates are not on the menu — `--diagnose` and `--probe` cover them from a terminal. *Rendering never observed;* took tens of seconds on the first report (fixed in v0.6.4, not re-tested) |
 | Notifications | ✅ balloon tip | ✅ freedesktop notifications, *never observed* |
@@ -128,6 +128,30 @@ silently invisible is indistinguishable from a broken one.
 
 O-view asks the session bus rather than trusting the toolkit, which reports success either
 way ([findings](docs/findings/linux-tray-spike.md)). `o-view --probe` reports what it found.
+
+### Why there is no tooltip on GNOME
+
+Hovering the icon shows nothing there. **The exact percentages are in the detail panel** —
+left-click the icon, or pick **Show usage** from its menu — and on that desktop the panel is
+the only place they appear. The icon itself carries no digits by design, so this is the
+difference between reading a number at a glance and opening a window for it.
+
+Two separate things would have to be true for a tooltip, and neither is:
+
+- **Nothing publishes one.** StatusNotifierItem carries a `ToolTip` property, and that is what
+  a panel draws on hover. Avalonia's tray backend answers it with an empty structure and
+  offers no way to fill it; the text O-view sets on every poll is published as the item's
+  `Title` instead. `TrayTooltipRuntimeTests` reads both properties off a real session bus in
+  CI, so this is measured rather than assumed — and it is written to go red if a later
+  Avalonia starts filling the property.
+- **Nothing would read one.** The AppIndicator extension GNOME needs before it has a tray at
+  all has `ToolTip` commented out of its D-Bus interface description — *"We disable this as we
+  don't support tooltip, so no need to go through it"* — so it never asks for the property,
+  filled or not.
+
+What KDE Plasma does with an empty `ToolTip` is not known: its tray may fall back to the
+`Title` and show the text anyway, and neither of the two Plasma reports mentioned the tooltip
+either way. See [#314](https://github.com/mlengmark/O-view/issues/314).
 
 ### Why the Linux panel is not docked to the icon
 
