@@ -1018,10 +1018,16 @@ public partial class PopupWindow : Window, IFlyout
 
     /// <summary>
     /// Draws the 31-day usage chart on the Canvas (issues #4, #5): one bar per day,
-    /// coloured light→dark blue by its intensity WITHIN its calendar week, dotted
-    /// gridlines at Monday boundaries, vertical date labels, and a per-bar hover
+    /// coloured light→dark blue by its intensity within its own plan week, dotted
+    /// gridlines at the weekly resets, vertical date labels, and a per-bar hover
     /// tooltip. Pre-install days are blank columns (no bar) — with the date axis, an
     /// empty column reads as "no data" without needing the old caption.
+    ///
+    /// <para>Every one of those is read from <see cref="PanelSections.Graph"/>, which the
+    /// Linux chart draws from too. What is left here is turning fractions into pixels against
+    /// this canvas, and the hover cards' chrome. The week bands, the boundary placement and
+    /// the card wording used to live in this file, where the other head could not reach
+    /// them — so it drew flat bars and no gridlines at all.</para>
     ///
     /// Bar and label are both placed from <see cref="BarCentre"/> (issue #31) so a date
     /// always sits under the bar it describes; with 31 columns in ~344 px a few pixels
@@ -1031,8 +1037,8 @@ public partial class PopupWindow : Window, IFlyout
     {
         GraphHost.Children.Clear();
 
-        var series = stats.DailySeries;
-        if (series.Count == 0)
+        var graph = PanelSections.Graph(stats, snapshot, LocalZone);
+        if (graph.Columns.Count == 0)
         {
             return;
         }
@@ -1047,50 +1053,32 @@ public partial class PopupWindow : Window, IFlyout
         const double labelAreaHeight = 34;
         var barAreaHeight = Math.Max(18, GraphHost.Height - labelAreaHeight);
         var labelTop = barAreaHeight + 6;
-        var col = width / series.Count;
-        var globalMax = Math.Max(1, series.Max(d => d.OutputTokens));
-
-        // The columns are LOCAL days (issue #211), so everything drawn over them has to be
-        // placed in the same frame: a gridline positioned as though every column were 24 UTC
-        // hours drifts against the bar it annotates from the DST change onwards.
-        var weeks = PlanWeeks.ForSeries(series, snapshot, LocalZone);
-
-        // Per-week peak, so colour intensity is normalised within each week. The week is
-        // the PLAN's week wherever it is known, so the shading and the gridlines below
-        // always describe the same bands — they used to be able to disagree.
-        var weekMax = series
-            .Where(d => !d.PreInstall)
-            .GroupBy(weeks.IndexOf)
-            .ToDictionary(g => g.Key, g => Math.Max(1, g.Max(d => d.OutputTokens)));
+        var col = width / graph.Columns.Count;
 
         var labelBrush = (Brush)FindResource("TextMuted");
 
-        for (var i = 0; i < series.Count; i++)
+        for (var i = 0; i < graph.Columns.Count; i++)
         {
-            var day = series[i];
+            var column = graph.Columns[i];
             var x = i * col;
 
             // Bar — height by absolute tokens, colour by within-week intensity.
-            if (!day.PreInstall && day.OutputTokens > 0)
+            if (column.HasBar)
             {
-                var intensity = day.OutputTokens / (double)weekMax[weeks.IndexOf(day)];
-                var height = Math.Max(2, barAreaHeight * day.OutputTokens / globalMax);
+                var height = Math.Max(2, barAreaHeight * column.Height);
                 var barWidth = Math.Max(2, col - 2);
                 var bar = new Rectangle
                 {
                     Width = barWidth,
                     Height = height,
-                    Fill = new SolidColorBrush(Lerp(GraphBlueLo, GraphBlueHi, intensity)),
+                    Fill = new SolidColorBrush(Lerp(GraphBlueLo, GraphBlueHi, column.Intensity)),
                     RadiusX = 1,
                     RadiusY = 1,
                     // Figure first, date beneath — the panel's shared hover card, not the
                     // raw string this used to be. A bare `ToolTip = "…"` renders as system
                     // chrome: a pale rectangle with a hard border, on a panel that is
                     // otherwise entirely rounded cards on one palette.
-                    ToolTip = HoverCard.Figure(
-                        this,
-                        TokenText.DayBarTokens(day.OutputTokens),
-                        day.Date.ToString("dddd d MMMM", CultureInfo.InvariantCulture)),
+                    ToolTip = HoverCard.Figure(this, column.CardFigure, column.CardCaption),
                 };
                 HoverCard.ApplyTiming(bar);
                 // Placed from the column centre, like the label below it, so the two
@@ -1117,11 +1105,11 @@ public partial class PopupWindow : Window, IFlyout
             var rotation = new RotateTransform(90);
             var label = new TextBlock
             {
-                Text = day.Date.ToString("d MMM", CultureInfo.InvariantCulture),
+                Text = column.DateLabel,
                 FontSize = 8,
                 Foreground = labelBrush,
                 RenderTransform = rotation,
-                Opacity = day.PreInstall ? 0.5 : 1.0,
+                Opacity = column.Recorded ? 1.0 : 0.5,
             };
             // Parent first, so the font properties measured are the inherited ones.
             GraphHost.Children.Add(label);
@@ -1131,7 +1119,7 @@ public partial class PopupWindow : Window, IFlyout
             Canvas.SetTop(label, labelTop - ink.Top);
         }
 
-        DrawWeekBoundaries(weeks, series, col, barAreaHeight);
+        DrawWeekBoundaries(graph.Boundaries, col, barAreaHeight);
     }
 
     /// <summary>
@@ -1147,45 +1135,31 @@ public partial class PopupWindow : Window, IFlyout
     /// labels: this is an annotation over the data, not another axis decoration, and grey
     /// on blue at one pixel was not carrying that.</para>
     ///
-    /// <para>Placement is unchanged. A plan reset happens at an instant, not at midnight,
-    /// so the line sits at its true fractional position inside the day it falls in —
-    /// snapping to the nearest column edge would claim a boundary the data does not have.
-    /// The calendar-week fallback lands on a column edge because midnight is one.</para>
+    /// <para>Placement is unchanged, and now decided above this head: a plan reset happens at
+    /// an instant, not at midnight, so the line sits at its true fractional position inside
+    /// the day it falls in — snapping to the nearest column edge would claim a boundary the
+    /// data does not have. The calendar-week fallback lands on a column edge because midnight
+    /// is one.</para>
     /// </summary>
     private void DrawWeekBoundaries(
-        PlanWeeks weeks, IReadOnlyList<DayUsage> series, double col, double barAreaHeight)
+        IReadOnlyList<PanelGraphBoundaryView> boundaries, double col, double barAreaHeight)
     {
         var gridBrush = (Brush)FindResource("WarnText");
-        var columnOf = series
-            .Select((day, index) => (day.Date, index))
-            .ToDictionary(t => t.Date, t => t.index);
 
-        foreach (var boundary in weeks.Boundaries)
+        foreach (var boundary in boundaries)
         {
-            if (!columnOf.TryGetValue(boundary.Day, out var index))
-            {
-                continue;   // outside the plotted range
-            }
-
-            var x = (index + boundary.FractionOfDay) * col;
-            if (x <= 0)
-            {
-                continue;   // exactly on the left edge, where a line reads as a border
-            }
-
+            var x = (boundary.Column + boundary.FractionOfDay) * col;
             var line = new Line
             {
                 X1 = x, X2 = x, Y1 = 0, Y2 = barAreaHeight + 3,
                 Stroke = gridBrush,
                 StrokeThickness = 1,
                 StrokeDashArray = [2, 2],
-                ToolTip = weeks.IsPlanDerived
-                    ? HoverCard.Figure(
-                        this,
-                        TimeZoneInfo.ConvertTime(boundary.AtUtc, LocalZone)
-                            .ToString("ddd d MMM · HH:mm", CultureInfo.InvariantCulture),
-                        PanelText.WeeklyResetMarker)
-                    : HoverCard.Text(this, PanelText.CalendarWeekMarker),
+                // No figure is the Monday fallback, which has no observed instant to state,
+                // so it takes the text-only card rather than a headline standing empty.
+                ToolTip = boundary.CardFigure.Length == 0
+                    ? HoverCard.Text(this, boundary.CardCaption)
+                    : HoverCard.Figure(this, boundary.CardFigure, boundary.CardCaption),
             };
             HoverCard.ApplyTiming(line);
             GraphHost.Children.Add(line);
@@ -1198,99 +1172,6 @@ public partial class PopupWindow : Window, IFlyout
     /// was previously offset by a constant that no longer matched the bar.
     /// </summary>
     private static double BarCentre(double x, double col) => x + col / 2;
-
-    /// <summary>
-    /// Where one week boundary lands on the chart: the day column it falls in, and how far
-    /// through that column, since a plan reset happens at a time of day rather than at
-    /// midnight.
-    ///
-    /// <para>Both answers are taken in the column's own frame — a <b>local</b> day, of
-    /// whatever length the timezone says it was (issue #211). Dividing by a flat 24 hours
-    /// would put the line up to an hour off its true position on the two DST days, and off in
-    /// the same direction for every day after them if the day boundaries were stepped that way
-    /// too.</para>
-    /// </summary>
-    private readonly record struct WeekBoundary(DateTimeOffset AtUtc, TimeZoneInfo Zone)
-    {
-        public DateOnly Day => LocalDays.DateOf(AtUtc, Zone);
-        public double FractionOfDay => LocalDays.FractionThrough(AtUtc, Day, Zone);
-    }
-
-    /// <summary>
-    /// The week bands the 31-day graph is divided into.
-    ///
-    /// <para>Originally these were calendar weeks (Mon–Sun) with a stated reason: the plan's
-    /// true weekly boundary was not derivable, so Monday was an honest visual reference
-    /// rather than a claim about the plan. That premise no longer holds — ADR-0011 derives
-    /// the weekly reset — so the bands now follow the plan's own boundary wherever it is
-    /// known, which is what the graph was always trying to convey. Mondays remain the
-    /// fallback, and say so on hover, because until a reset has been observed the real
-    /// boundary is still genuinely unknown (rule 6).</para>
-    ///
-    /// <para>Boundaries are derived by stepping the cadence back from the predicted next
-    /// reset, so they cover the whole window including days before O-view was installed —
-    /// the log only holds resets it was running for.</para>
-    /// </summary>
-    private sealed class PlanWeeks
-    {
-        private readonly IReadOnlyList<DateTimeOffset> _boundaries;
-        private readonly TimeZoneInfo _zone;
-
-        private PlanWeeks(IReadOnlyList<DateTimeOffset> boundaries, bool isPlanDerived, TimeZoneInfo zone)
-        {
-            _boundaries = boundaries;
-            _zone = zone;
-            IsPlanDerived = isPlanDerived;
-        }
-
-        /// <summary>False when these are calendar weeks standing in for an unknown plan week.</summary>
-        public bool IsPlanDerived { get; }
-
-        public IEnumerable<WeekBoundary> Boundaries => _boundaries.Select(b => new WeekBoundary(b, _zone));
-
-        public static PlanWeeks ForSeries(
-            IReadOnlyList<DayUsage> series, UsageSnapshot snapshot, TimeZoneInfo zone)
-        {
-            // The span the columns actually cover, taken from the timezone. The columns are
-            // local days now (issue #211), so their first and last instants are not local
-            // midnight interpreted as UTC — which is what these two lines used to say, and
-            // what would clip or over-collect boundaries by the offset.
-            var fromUtc = LocalDays.StartUtc(series[0].Date, zone);
-            var toUtc = LocalDays.EndUtc(series[^1].Date, zone);
-
-            if (snapshot.WeeklyResetAtUtc is { } next && snapshot.WeeklyResetPeriod is { } period)
-            {
-                return new PlanWeeks(
-                    WeeklyWindow.BoundariesWithin(next, period, fromUtc, toUtc),
-                    isPlanDerived: true,
-                    zone);
-            }
-
-            // Fallback: the start of each local Monday in range.
-            var mondays = series
-                .Select(d => d.Date)
-                .Where(d => d.DayOfWeek == DayOfWeek.Monday)
-                .Select(d => LocalDays.StartUtc(d, zone))
-                .ToList();
-            return new PlanWeeks(mondays, isPlanDerived: false, zone);
-        }
-
-        /// <summary>
-        /// Which band a day belongs to, for the purpose of normalising its colour.
-        ///
-        /// <para>A day that contains a boundary genuinely belongs to neither band — its
-        /// tokens are split across two weeks and the rollups are daily, so the split is not
-        /// recoverable. It is assigned to whichever band holds the majority of the day,
-        /// which is what testing the MIDPOINT does. That is an approximation, and the only
-        /// one available at this grain; it affects shading alone, never a stated figure.</para>
-        /// </summary>
-        public int IndexOf(DayUsage day)
-        {
-            var start = LocalDays.StartUtc(day.Date, _zone);
-            var midday = start + (LocalDays.EndUtc(day.Date, _zone) - start) / 2;
-            return _boundaries.Count(boundary => boundary <= midday);
-        }
-    }
 
     private static Color Lerp(Color a, Color b, double t)
     {
