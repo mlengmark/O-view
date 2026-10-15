@@ -164,6 +164,54 @@ public class PanelBannerTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// The no-data banner carries <see cref="PlanHistoryReport.Explain"/> verbatim, and that
+    /// sentence told the reader to start Claude Desktop and reopen the panel. A reader with
+    /// no Desktop reaches this banner — no plan file and no transcripts either — so it was
+    /// the same unactionable remedy
+    /// <see cref="ACliOnlyUserIsNotToldToStartAnApplicationTheyDoNotUse"/> removed from the
+    /// scope banner, surviving in the louder of the two.
+    /// </summary>
+    [Fact]
+    public void TheNoDataBannerDoesNotTellTheReaderToStartAnApplicationEither()
+    {
+        var banner = PanelBanner.Resolve(
+            authoritative: false, MissingPlanFile(), TranscriptScopeReport.Inspect(null, []), 0);
+
+        Assert.NotNull(banner);
+        Assert.Equal(PanelBanner.NoDataTitle, banner.Title);
+        Assert.DoesNotContain("start it", banner.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("is not running", banner.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("reopen this panel", banner.Detail, StringComparison.OrdinalIgnoreCase);
+
+        // Still an observation: what was searched, and that nothing was there.
+        Assert.Contains("searched", banner.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("found none", banner.Detail, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Neither banner calls the plan-history file the source of the two percentages. Claude
+    /// Code caches the same two figures, so there are two — the claim
+    /// <see cref="NeitherWordingSaysDesktopIsTheOnlyWriterOfThePercentages"/> pins for the
+    /// scope banner, held to by the no-data banner as well.
+    /// </summary>
+    [Fact]
+    public void NeitherBannerCallsOneFileTheSourceOfThePercentages()
+    {
+        var banners = new[]
+        {
+            PanelBanner.Resolve(false, MissingPlanFile(), TranscriptScopeReport.Inspect(null, []), 0)!,
+            PanelBanner.Resolve(false, MissingPlanFile(), ClaudeCodeOnly(), tokens31Days: 1)!,
+        };
+
+        foreach (var banner in banners)
+        {
+            Assert.DoesNotContain(
+                "the source of session and weekly", banner.Detail, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Claude Code", banner.Detail, StringComparison.Ordinal);
+        }
+    }
+
     /// <summary>A missing scope report is no evidence of anything, so it must not reassure.</summary>
     [Fact]
     public void AMissingScopeReportDoesNotReassure()

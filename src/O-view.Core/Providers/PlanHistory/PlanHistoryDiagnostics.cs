@@ -16,7 +16,11 @@ public enum PlanDataStatus
     /// <summary>Parsed, but no sample matched the expected shape (t / org / u.fh / u.sd) — schema drift.</summary>
     NoValidSamples,
 
-    /// <summary>Valid samples exist, but all are older than the freshness window (Desktop idle/closed).</summary>
+    /// <summary>
+    /// Valid samples exist, but all are older than the freshness window. Whichever writer
+    /// owns the file has not added one recently; that it is idle, closed or absent is a
+    /// conclusion for the reader, not an observation O-view made.
+    /// </summary>
     Stale,
 
     /// <summary>Valid, fresh samples are available.</summary>
@@ -59,6 +63,14 @@ public sealed record PlanHistoryReport(
     /// which was flatly wrong for a user who had it open at the time: a file O-view cannot
     /// read is not evidence that Desktop is absent. Report the observation and the path,
     /// and let the reader draw the conclusion (CLAUDE.md rule 6).
+    ///
+    /// <para><b>Nor does it send anyone to an application.</b> The missing-file sentence
+    /// still said to start Claude Desktop and reopen the panel — the one remedy a Claude
+    /// Code user on a machine with no Desktop cannot act on, and the only sentence they
+    /// would read. Claude Code caches the same two percentages, so that file is one of two
+    /// sources rather than "the source of session and weekly %". Both writers are named,
+    /// neither is said to be absent, and what is left is what was looked for and what was
+    /// found.</para>
     /// </summary>
     public string Explain() => Status switch
     {
@@ -67,18 +79,21 @@ public sealed record PlanHistoryReport(
         // changed, because the advice fitted a different failure. Say what was searched
         // and hand over to diagnostics rather than guessing which case this is.
         PlanDataStatus.FileMissing =>
-            $"O-view searched {SearchedCount} location(s) for Claude Desktop's usage file — the "
-            + $"source of session and weekly % — and found none. Last checked: {Path}. "
-            + "If Claude Desktop is not running, start it and reopen this panel. If it is "
-            + $"running: {DiagnosticsHint.Instruction} — O-view may be looking in the "
-            + "wrong place for how Claude Desktop is installed on this machine.",
+            $"O-view searched {SearchedCount} location(s) for a usage file holding session and "
+            + $"weekly % and found none. Last checked: {Path}. Claude Desktop writes that file, "
+            + $"and Claude Code caches the same two figures. {DiagnosticsHint.Instruction} to "
+            + "see the exact locations — a packaged install can keep the file somewhere O-view "
+            + "did not look.",
         PlanDataStatus.Unreadable =>
             $"O-view could not read {Path}. {DiagnosticsHint.Instruction} to report this.",
         PlanDataStatus.NoValidSamples =>
             $"O-view read {Path} but found no usage entries in the expected format. "
             + $"{DiagnosticsHint.Instruction} to report this.",
+        // Says which file aged rather than which application went quiet: the samples being
+        // old is what was observed, and the reader may be running neither writer.
         PlanDataStatus.Stale =>
-            "Claude Desktop has not recorded usage recently — figures may lag until it records again.",
+            $"The newest usage sample in {Path} is older than O-view's freshness window — "
+            + "session and weekly % may lag until a newer one is written.",
         _ => "",
     };
 
