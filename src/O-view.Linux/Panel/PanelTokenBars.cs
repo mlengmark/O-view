@@ -1,5 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Primitives;
+using Avalonia.Controls.Templates;
+using Avalonia.Data;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -20,7 +23,7 @@ namespace OView.Linux.Panel;
 /// <see cref="TokenText"/>; the segment widths come from the shared
 /// <see cref="TokenBarGeometry"/>.</para>
 /// </summary>
-internal sealed class PanelTokenBars(LinuxPanelTheme theme)
+public sealed class PanelTokenBars(LinuxPanelTheme theme)
 {
     private readonly LinuxPanelTheme _theme = theme;
 
@@ -66,8 +69,12 @@ internal sealed class PanelTokenBars(LinuxPanelTheme theme)
     /// offers the same two views the Windows one does — and, on a head where a compositor may
     /// never deliver hover at all, the breakdown is the only route to a segment's exact share
     /// and estimated value that needs no pointer.
+    ///
+    /// <para>Public so a test can read both halves and what a click leaves on screen: Avalonia
+    /// raises no pointer events without a windowing subsystem, the same reason
+    /// <see cref="PanelStatTiles.TileFlip"/> is reachable from outside.</para>
     /// </summary>
-    private Control ViewSwitch(Control breakdown)
+    public Control ViewSwitch(Control breakdown)
     {
         var bars = SwitchButton(TokenText.TokenViewBarsLabel, active: true);
         var table = SwitchButton(TokenText.TokenViewBreakdownLabel, active: false);
@@ -75,8 +82,8 @@ internal sealed class PanelTokenBars(LinuxPanelTheme theme)
         void Select(bool showBreakdown)
         {
             breakdown.IsVisible = showBreakdown;
-            bars.Background = showBreakdown ? Brushes.Transparent : _theme["BarTrack"];
-            table.Background = showBreakdown ? _theme["BarTrack"] : Brushes.Transparent;
+            Paint(bars, active: !showBreakdown);
+            Paint(table, active: showBreakdown);
         }
 
         bars.Click += (_, _) => Select(false);
@@ -95,15 +102,65 @@ internal sealed class PanelTokenBars(LinuxPanelTheme theme)
         };
     }
 
-    private Button SwitchButton(string label, bool active) => new()
+    private Button SwitchButton(string label, bool active)
     {
-        Content = Text(label, 10.5, _theme[active ? "TextPrimary" : "TextMuted"]),
-        Background = active ? _theme["BarTrack"] : Brushes.Transparent,
-        BorderThickness = new Thickness(0),
-        CornerRadius = new CornerRadius(3),
-        Padding = new Thickness(8, 3),
-        Cursor = new Cursor(StandardCursorType.Hand),
-    };
+        var half = new Button
+        {
+            // The word a screen reader announces. The one on screen is drawn by the template,
+            // from the same string.
+            Content = label,
+            Template = Pill(label),
+            CornerRadius = new CornerRadius(3),
+            Padding = new Thickness(8, 3),
+
+            // A cursor can only be made once an Avalonia application has started the windowing
+            // platform. The switch is built in a test process as well, which has neither one
+            // nor a pointer to shape.
+            Cursor = Application.Current is null ? null : new Cursor(StandardCursorType.Hand),
+        };
+
+        Paint(half, active);
+        return half;
+    }
+
+    /// <summary>
+    /// Which half reads as the selected one — the filled pill and the brighter word, the same
+    /// two cues the Windows switch shows.
+    /// </summary>
+    private void Paint(Button half, bool active)
+    {
+        half.Background = active ? _theme["BarTrack"] : Brushes.Transparent;
+        half.Foreground = _theme[active ? "TextPrimary" : "TextMuted"];
+    }
+
+    /// <summary>
+    /// What a half of the switch is drawn as: the pill, and the word inside it.
+    ///
+    /// <para><b>Why the word sits in the template rather than in the button's content.</b> This
+    /// head registers no Avalonia theme, so a button falls back to a bare content presenter —
+    /// and a presenter fills itself from the content only once the tree it belongs to reaches a
+    /// window. The sample images are rendered offscreen, from a tree that never does, so both
+    /// halves came out as empty pills while the Windows panel read Bars | Breakdown. A control
+    /// placed in the template is measured and drawn either way, which is what every other piece
+    /// of this panel is built from.</para>
+    ///
+    /// <para>A border with a pointer handler would draw the word just as well, as the stat
+    /// tiles do, but it would cost the Space and Enter activation a button carries. The two
+    /// cues of the selection stay on the button and reach the pill through template bindings,
+    /// so the switch is still painted in one place.</para>
+    /// </summary>
+    private static FuncControlTemplate<Button> Pill(string label) => new((_, _) => new Border
+    {
+        [!Border.BackgroundProperty] = new TemplateBinding(TemplatedControl.BackgroundProperty),
+        [!Border.CornerRadiusProperty] = new TemplateBinding(TemplatedControl.CornerRadiusProperty),
+        [!Border.PaddingProperty] = new TemplateBinding(TemplatedControl.PaddingProperty),
+        Child = new TextBlock
+        {
+            Text = label,
+            FontSize = 10.5,
+            [!TextBlock.ForegroundProperty] = new TemplateBinding(TemplatedControl.ForegroundProperty),
+        },
+    });
 
     /// <summary>
     /// One composition bar: heading and billed total, the segmented track, and the legend
