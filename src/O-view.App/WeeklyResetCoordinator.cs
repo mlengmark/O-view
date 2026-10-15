@@ -179,6 +179,11 @@ public sealed class WeeklyResetCoordinator
             // No uncertainty field to set: both remaining sources are exact, so the weekly row
             // never wore the "~" and the field carrying it was removed (ADR-0014, issue #248).
             WeeklyResetPeriod = WeeklyWindow.Length,
+            // Both the stored anchor and the user's own entry are exact — same standing as any
+            // other source read directly. `with` carries the old status forward otherwise,
+            // which is how a snapshot ended up holding a weekly reset while still flagged
+            // Unavailable (its sibling below, WithReportedResets, sets this for the same reason).
+            WeeklyResetAtUtcStatus = UsageValueStatus.Real,
         };
     }
 
