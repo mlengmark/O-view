@@ -146,7 +146,7 @@ public static class PanelText
     /// </summary>
     public static string Freshness(UsageSnapshot snapshot, DateTimeOffset utcNow, TimeZoneInfo local)
     {
-        var age = AsOf(snapshot.CapturedAtUtc, utcNow, local);
+        var age = AsOf(snapshot.CapturedAtUtcValue, utcNow, local);
 
         return snapshot.Source switch
         {
@@ -167,9 +167,9 @@ public static class PanelText
     /// <c>now</c> for a sample taken in the current clock minute, otherwise its local
     /// <c>HH:mm</c>. Null when there is no capture time to report.
     /// </summary>
-    private static string? AsOf(DateTimeOffset? capturedAtUtc, DateTimeOffset utcNow, TimeZoneInfo local)
+    private static string? AsOf(UsageInstant capturedAt, DateTimeOffset utcNow, TimeZoneInfo local)
     {
-        if (capturedAtUtc is not { } at)
+        if (capturedAt is not { Status: not UsageValueStatus.Unavailable, Value: { } at })
         {
             return null;
         }

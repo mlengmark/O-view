@@ -95,6 +95,24 @@ public class PanelTextTests
             PanelText.Freshness(Snapshot(DataSource.Live, null), Now, Utc));
 
     /// <summary>
+    /// <see cref="PanelText.Freshness"/> reads <c>CapturedAtUtcValue</c> rather than the plain
+    /// nullable member, but the tier it reports (<c>As of</c> vs <c>Local estimate</c>) still
+    /// comes from the snapshot's <see cref="DataSource"/>, not from this status — a status can
+    /// read Estimated under a Live snapshot (a provider can mark one figure modelled without
+    /// changing the snapshot's own tier) and the stamp must not disappear because of it.
+    /// </summary>
+    [Fact]
+    public void AnEstimatedCaptureTimeUnderALiveSnapshotStillGetsStamped()
+    {
+        var snapshot = Snapshot(DataSource.Live, Now.AddMinutes(-40)) with
+        {
+            CapturedAtUtcStatus = UsageValueStatus.Estimated,
+        };
+
+        Assert.Equal("As of 11:20", PanelText.Freshness(snapshot, Now, Utc));
+    }
+
+    /// <summary>
     /// A capture stamped ahead of the clock is a clock adjustment, not a prediction. Report
     /// it as now rather than stamping the panel with a time that has not happened.
     /// </summary>

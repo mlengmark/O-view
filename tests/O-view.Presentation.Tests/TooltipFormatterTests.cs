@@ -78,6 +78,42 @@ public class TooltipFormatterTests
         Assert.Equal("5h: 31% (as of 06:49) · resets 11:14 · 7d: 6%", TooltipFormatter.Format(s, Utc));
     }
 
+    /// <summary>
+    /// Every figure here is <see cref="UsageValueStatus.Estimated"/> rather than
+    /// <see cref="UsageValueStatus.Real"/> — exactly how <c>PlanHistoryProvider</c> marks a
+    /// derived session reset. The tooltip reads the status through
+    /// <c>SessionPercentValue</c>/<c>SessionResetAtUtcValue</c>/<c>WeeklyPercentValue</c> now
+    /// rather than the plain nullable members, and must still show every figure: a modelled
+    /// value is not an absent one.
+    /// </summary>
+    [Fact]
+    public void ModelledFiguresStillShowBesideMeasuredOnes()
+    {
+        var s = new UsageSnapshot(DataSource.Live, 6, 1, Reset, Sampled)
+        {
+            SessionPercentStatus = UsageValueStatus.Estimated,
+            SessionResetAtUtcStatus = UsageValueStatus.Estimated,
+            WeeklyPercentStatus = UsageValueStatus.Estimated,
+        };
+
+        Assert.Equal("5h: 6% · resets 11:14 · 7d: 1%", TooltipFormatter.Format(s, Utc));
+    }
+
+    /// <summary>
+    /// The stale suffix reads <c>CapturedAtUtcValue</c> the same way: an Estimated capture
+    /// time still gets stamped, not swapped for the bare "(stale)" fallback.
+    /// </summary>
+    [Fact]
+    public void Stale_EstimatedCaptureTimeStillShowsTheStamp()
+    {
+        var s = new UsageSnapshot(DataSource.Stale, 31, 6, Reset, Sampled)
+        {
+            CapturedAtUtcStatus = UsageValueStatus.Estimated,
+        };
+
+        Assert.Equal("5h: 31% (as of 06:49) · resets 11:14 · 7d: 6%", TooltipFormatter.Format(s, Utc));
+    }
+
     [Fact]
     public void Estimate_AdmitsUnknownPercentages()
     {
