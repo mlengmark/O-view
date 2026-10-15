@@ -1,9 +1,5 @@
-using System.Globalization;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Shapes;
 using OView.App.Rendering;
 using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
@@ -11,11 +7,6 @@ using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Presentation.Panel;
 using OView.Presentation.Text;
-using Brush = System.Windows.Media.Brush;
-using Color = System.Windows.Media.Color;
-using Point = System.Windows.Point;
-using Rectangle = System.Windows.Shapes.Rectangle;
-using Size = System.Windows.Size;
 using ToolTip = System.Windows.Controls.ToolTip;
 
 namespace OView.Tray.Popup;
@@ -25,13 +16,16 @@ namespace OView.Tray.Popup;
 /// Dismisses on Esc and on deactivation (click-outside). Theme follows
 /// AppsUseLightTheme — the app-window setting, distinct from the taskbar's — and is
 /// re-read on every open so a theme switch never needs a restart.
+///
+/// <para>What the panel draws lives in one piece per thing drawn —
+/// <see cref="PopupTiles"/>, <see cref="PopupWeeklyRow"/>, <see cref="PopupMeter"/>,
+/// <see cref="PopupDivergence"/>, <see cref="PopupGraph"/> and
+/// <see cref="PopupTokenComposition"/> — each reading exactly the section view model
+/// <see cref="PanelSections"/> already built, and placing it. This file is left with
+/// the window's own lifecycle, layout and verification hooks.</para>
 /// </summary>
 public partial class PopupWindow : Window, IFlyout
 {
-    private static readonly Color Green = Color.FromRgb(64, 200, 110);
-    private static readonly Color Amber = Color.FromRgb(240, 170, 40);
-    private static readonly Color Red = Color.FromRgb(232, 72, 72);
-
     /// <summary>Forces a theme for verification screenshots; null follows the OS.</summary>
     public bool? ThemeOverride { get; set; }
 
@@ -56,6 +50,12 @@ public partial class PopupWindow : Window, IFlyout
     /// </summary>
     private readonly DockedFlyout _flyout;
 
+    private readonly PopupTiles _tiles;
+    private readonly PopupWeeklyRow _weeklyRow;
+    private readonly PopupDivergence _divergence;
+    private readonly PopupGraph _graph;
+    private readonly PopupTokenComposition _composition;
+
     /// <summary>Disables auto-hide for verification screenshots.</summary>
     public bool PinForVerification
     {
@@ -72,7 +72,15 @@ public partial class PopupWindow : Window, IFlyout
         _flyout = new DockedFlyout(this);
         Deactivated += (_, _) => _flyout.OnDeactivated();
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) _flyout.BeginClose(); };
-        _disclosure = new DisclosureAnimation(
+
+        _tiles = new PopupTiles(TokenScopeLine, TileTokensToday, TileEstToday, TileTokens31, TileEst31, TokenScopeNote);
+        _weeklyRow = new PopupWeeklyRow(this, WeeklyResetText, BoostChip, BoostChipText);
+        _divergence = new PopupDivergence(
+            this, DivergenceBanner, DivergenceTitle, DivergenceDetail, DivergenceLinkAnchor,
+            CreditsHeading, CreditsBadgeText, CreditsSpendLabel, CreditsSpendValue, CreditsCoverage, CreditsSection);
+        _graph = new PopupGraph(this, GraphHost);
+
+        var disclosure = new DisclosureAnimation(
             // No chevron: the Bars/Breakdown switch shows its state by which segment is lit
             // (issue #253), and an arrow beside it would be a second indicator of one thing.
             this, TokenBreakdownView, null,
@@ -86,87 +94,11 @@ public partial class PopupWindow : Window, IFlyout
             // The fold calls this on every frame it changes the window's height, so the
             // bottom edge stays pinned to the docked corner for the whole transition.
             () => _flyout.Redock(ActualWidth, DockHeight));
-
-        // Checked fires on the segment being turned ON only, so one handler per segment is
-        // one handler per state — no need to read IsChecked back off the group.
-        TokenViewBars.Checked += (_, _) => ShowBreakdown(false);
-        TokenViewBreakdown.Checked += (_, _) => ShowBreakdown(true);
+        _composition = new PopupTokenComposition(
+            this, disclosure, TokenViewBars, TokenViewBreakdown, TokenBarsView, TokenBreakdownView,
+            TokensUsedSection, TokensUsedHeading, TokenCoverageLine,
+            RefitForPendingGrowth, () => _flyout.Redock(ActualWidth, DockHeight));
     }
-
-    /// <summary>
-    /// Switches between the two views of what was billed, as a fold rather than as a jump.
-    ///
-    /// <para><b>The panel is never laid out at the far end of the fold.</b> The obvious order —
-    /// apply the final state, lay it out, then animate back from where the fold was — puts the
-    /// window at its full height for the length of that layout, still docked for the height it
-    /// had. It does not stay there, but it is presented: <c>--fold-check</c>'s screen grabs
-    /// caught the frame, a whole panel 72 px down with its bottom inside the taskbar. So the
-    /// end point is measured off the body alone, the body is pinned at the fold's starting
-    /// height, and every size the window takes from here is one the fold puts it at and
-    /// re-docks it for.</para>
-    /// </summary>
-    private void ShowBreakdown(bool expanded)
-    {
-        if (_compositionExpanded == expanded)
-        {
-            return;
-        }
-
-        _compositionExpanded = expanded;
-        RunFold(_disclosure, expanded, TokenBarsView.ActualWidth);
-    }
-
-    /// <summary>
-    /// The fold itself.
-    ///
-    /// <para><b>Kept as one method, because what makes it correct is easy to leave out.</b> The
-    /// re-fit below is one line and looks optional; without it a panel that fitted closed and
-    /// does not fit open is clipped by the taskbar, which is the reported failure this whole
-    /// path exists to prevent. A hand-written copy of this method would work on the developer's
-    /// tall display and fail on a short one.</para>
-    /// </summary>
-    /// <param name="availableWidth">
-    /// The text column the body wraps within — a disclosure measures against the line it sits
-    /// under, not against the panel.
-    /// </param>
-    private void RunFold(DisclosureAnimation disclosure, bool expanded, double availableWidth)
-    {
-        // Captured before anything moves, so a click landing mid-fold continues from what is
-        // on screen rather than snapping to one end and travelling the whole way again.
-        var (fromHeight, fromAngle) = disclosure.Current;
-        var toHeight = expanded ? disclosure.MeasureNatural(availableWidth) : 0;
-
-        disclosure.Prepare(fromHeight);
-
-        // Expanding is exactly when the panel crosses the work area, so the density is
-        // re-decided here rather than only at open — a panel that fitted closed and does
-        // not fit open is the whole reported case. It is told what the fold is about to add,
-        // because the panel in front of it is still the size it was before the fold.
-        if (_lastStats is { } stats && _lastSnapshot is { } snapshot)
-        {
-            FitToWorkArea(stats, snapshot, pendingGrowth: toHeight - fromHeight);
-        }
-
-        UpdateLayout();
-        _flyout.Redock(ActualWidth, DockHeight);
-
-        disclosure.Run(expanded, fromHeight, fromAngle, toHeight);
-    }
-
-    /// <summary>
-    /// Opens the breakdown for a verification render. The view resets to Bars on every
-    /// Populate, so a sample of the expanded state cannot be produced any other way — and an
-    /// unrendered state is how the no-data banner spent its whole life saying the wrong
-    /// thing (issues #58, #170).
-    /// </summary>
-    internal void ExpandCompositionForVerification() => SetCompositionExpanded(true);
-
-    /// <summary>
-    /// Folds the breakdown from outside, for <c>--fold-check</c>. The real transition,
-    /// not the instant state: an animation's completion is the thing being checked, and this
-    /// app has shipped a missed one before (<see cref="FlyoutAnimation"/>).
-    /// </summary>
-    internal void ToggleCompositionForVerification() => ShowBreakdown(!_compositionExpanded);
 
     /// <summary>
     /// The height to dock against: the content's freshly measured size, not the window's.
@@ -187,29 +119,27 @@ public partial class PopupWindow : Window, IFlyout
     /// Where the disclosure row sits on the physical screen, so <c>--fold-check</c> can cut
     /// its filmstrip to the band that actually moves rather than to the whole panel.
     /// </summary>
-    internal double DisclosureScreenTop => TokenViewBars.PointToScreen(new Point(0, 0)).Y;
+    internal double DisclosureScreenTop => _composition.ScreenTop;
 
     /// <summary>
     /// The folding body's current height — what <c>--fold-check</c> samples.
-    ///
-    /// <para>Read from the <c>Height</c> property rather than from <c>ActualHeight</c>: a
-    /// dependency property returns its animated value, while <c>ActualHeight</c> reported the
-    /// settled layout throughout the first trace and made a working fold look instant. Auto
-    /// (NaN) means nothing is animating, so the arranged height is the answer.</para>
     /// </summary>
-    internal double DisclosureHeight
-    {
-        get
-        {
-            if (TokenBreakdownView.Visibility != Visibility.Visible)
-            {
-                return 0;
-            }
+    internal double DisclosureHeight => _composition.Height;
 
-            var height = (double)TokenBreakdownView.GetValue(HeightProperty);
-            return double.IsNaN(height) ? TokenBreakdownView.ActualHeight : height;
-        }
-    }
+    /// <summary>
+    /// Opens the breakdown for a verification render. The view resets to Bars on every
+    /// Populate, so a sample of the expanded state cannot be produced any other way — and an
+    /// unrendered state is how the no-data banner spent its whole life saying the wrong
+    /// thing (issues #58, #170).
+    /// </summary>
+    internal void ExpandCompositionForVerification() => _composition.ExpandForVerification();
+
+    /// <summary>
+    /// Folds the breakdown from outside, for <c>--fold-check</c>. The real transition,
+    /// not the instant state: an animation's completion is the thing being checked, and this
+    /// app has shipped a missed one before (<see cref="FlyoutAnimation"/>).
+    /// </summary>
+    internal void ToggleCompositionForVerification() => _composition.ToggleForVerification();
 
     /// <summary>
     /// Freezes the disclosure partway open for a verification render. On a real desktop this
@@ -218,14 +148,7 @@ public partial class PopupWindow : Window, IFlyout
     /// height it has been given, is invisible at both ends of the fold.
     /// </summary>
     /// <param name="fraction">How far open, 0–1.</param>
-    internal void RevealCompositionForVerification(double fraction)
-    {
-        // Laid out fully open first: the fold's geometry is a fraction of the body's natural
-        // height, which is only known once it has been measured at that height.
-        SetCompositionExpanded(true);
-        UpdateLayout();
-        _disclosure.ApplyPartial(fraction, TokenBreakdownView.ActualHeight);
-    }
+    internal void RevealCompositionForVerification(double fraction) => _composition.RevealForVerification(fraction);
 
     /// <summary>
     /// Closes the panel from outside — the tray icon completing a toggle. Idempotent, so
@@ -304,7 +227,7 @@ public partial class PopupWindow : Window, IFlyout
     /// <param name="pendingGrowth">
     /// Height the panel is about to gain or lose but has not yet — the disclosure fold, which
     /// is measured before it plays so that the window is never laid out at the far end of it
-    /// (<see cref="ToggleComposition"/>). Zero everywhere else, where what is on screen and
+    /// (<see cref="PopupTokenComposition"/>). Zero everywhere else, where what is on screen and
     /// what is being measured are the same panel.
     /// </param>
     private void FitToWorkArea(PanelStatistics stats, UsageSnapshot snapshot, double pendingGrowth = 0)
@@ -320,13 +243,26 @@ public partial class PopupWindow : Window, IFlyout
             UpdateLayout();
         }
 
-        BuildGraph(stats, snapshot);
+        _graph.Draw(stats, snapshot, LocalZone);
+    }
+
+    /// <summary>
+    /// Re-fits the panel for height the composition disclosure is about to gain or lose, if
+    /// the panel has been populated yet. The disclosure measures before it plays, so the
+    /// window is never laid out at the far end of the fold (<see cref="PopupTokenComposition"/>).
+    /// </summary>
+    internal void RefitForPendingGrowth(double pendingGrowth)
+    {
+        if (_lastStats is { } stats && _lastSnapshot is { } snapshot)
+        {
+            FitToWorkArea(stats, snapshot, pendingGrowth);
+        }
     }
 
     /// <summary>
     /// Renders the panel to a bitmap without showing it — the detail panel's equivalent of
     /// <see cref="MenuWindow.RenderToBitmap"/>, driving the same <see cref="Populate"/> and
-    /// <see cref="BuildGraph"/> the live path does.
+    /// <see cref="FitToWorkArea"/> the live path does.
     ///
     /// <para>It exists because the panel is otherwise only inspectable by opening it on a
     /// real desktop, which needs the single-instance mutex, puts a window over whatever the
@@ -338,7 +274,7 @@ public partial class PopupWindow : Window, IFlyout
     /// <para>The two layout passes are load-bearing and mirror the live sequence. The chart
     /// is a <c>Canvas</c>, so its <c>ActualWidth</c> is unknown until the tree has been laid
     /// out once; the live path gets that from <c>Show()</c> + <c>UpdateLayout()</c> before
-    /// calling <see cref="BuildGraph"/>. Drawing the graph before the first pass silently
+    /// drawing the graph. Drawing the graph before the first pass silently
     /// falls back to the hard-coded default width and the gridlines land in the wrong
     /// places — which is precisely what this hook is meant to catch.</para>
     /// </summary>
@@ -364,7 +300,7 @@ public partial class PopupWindow : Window, IFlyout
                 ExpandCompositionForVerification();
             }
 
-            BuildGraph(stats, snapshot);
+            _graph.Draw(stats, snapshot, LocalZone);
         });
     }
 
@@ -472,696 +408,27 @@ public partial class PopupWindow : Window, IFlyout
         }
 
         var session = PanelSections.SessionMeter(snapshot, banner, utcNow, local);
-        PopulateBar(SessionPctText, SessionBar, SessionBarFill, session);
+        PopupMeter.Populate(SessionPctText, SessionBar, SessionBarFill, session);
         // The session line always has something to say — the unknown state is a sentence of its
         // own, not an absence — so SetLine's empty case is unreachable here.
-        SetLine(SessionResetText, session.ResetLine ?? "");
+        PopupText.SetLine(SessionResetText, session.ResetLine ?? "");
 
         var weekly = PanelSections.WeeklyMeter(
             snapshot, banner, _lastSettings, BoostNotices, utcNow, local);
-        PopulateBar(WeeklyPctText, WeeklyBar, WeeklyBarFill, weekly);
-        PopulateWeeklyReset(weekly);
-        PopulateBoostChip(weekly.Chip);
+        PopupMeter.Populate(WeeklyPctText, WeeklyBar, WeeklyBarFill, weekly);
+        _weeklyRow.Populate(weekly);
 
-        PopulateTiles(stats);
-        PopulateDivergence(stats, local);
-
-        // Nothing recorded at all, while the plan meters show real usage: the tiles are
-        // measuring a source this user does not feed, not measuring zero usage. Say which
-        // source, so the 0 is interpretable instead of looking broken.
-        //
-        // The text is derived from what the scan actually resolved, never a literal. It
-        // used to name a hard-coded %USERPROFILE%\.claude\projects and only Claude Code —
-        // so a Cowork user, whose transcripts ARE read, was told their source was not
-        // counted, and a packaged Desktop install was pointed at a path O-view never
-        // searched (issue #58; the mistake ClaudeDataRoots exists to prevent).
-        //
-        // Keyed on the token total, not on RecordedDays. Those meant the same thing while
-        // RecordedDays counted days with usage; now that it counts days observed (issue
-        // #142), a store older than the window reports full coverage while the tiles still
-        // read zero — the exact case this note is for. "The tiles show nothing" is what the
-        // note is about, so it is what the condition should say.
-        if (stats.Tokens31Days == 0 && authoritative && snapshot.SessionPercent is > 0)
-        {
-            TokenScopeNote.Text = (ScopeReport ?? TranscriptScopeReport.Inspect()).Explain();
-            TokenScopeNote.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            TokenScopeNote.Visibility = Visibility.Collapsed;
-        }
+        _tiles.Populate(stats, authoritative, snapshot.SessionPercent is > 0, ScopeReport);
+        _composition.Populate(
+            stats.CompositionToday, stats.Composition31Days,
+            (ScopeReport ?? TranscriptScopeReport.Inspect()).CoverageLine());
+        _divergence.Populate(stats, CachedUsage, utcNow, local);
 
         // Set here rather than in the markup so the day count is the window the bars below it
         // actually cover, which is the same thing the Linux panel's heading reads.
         GraphHeading.Text = PanelText.UsageWindowHeading(stats.WindowDays);
 
         // BuildGraph is deferred to ShowNearTrayIcon (needs post-layout ActualWidth).
-    }
-
-    /// <summary>
-    /// Places the weekly reset line, which mirrors the session one (issue #6, ADR-0014).
-    ///
-    /// <para>Which of its three states applies — known, not known, or no plan data at all —
-    /// is <see cref="PanelSections.WeeklyMeter"/>'s to decide, and the hint it hands over is
-    /// the hover card's content rather than a hint about whether to have one. No line means no
-    /// row, which is the no-plan-data case: the banner above already explains it.</para>
-    /// </summary>
-    private void PopulateWeeklyReset(PanelMeterView weekly)
-    {
-        SetLine(WeeklyResetText, weekly.ResetLine ?? "");
-        WeeklyResetText.ToolTip = weekly.ResetHint is { } hint ? HoverCard.Text(this, hint) : null;
-        HoverCard.ApplyTiming(WeeklyResetText);
-    }
-
-    /// <summary>
-    /// The boost chip beside the weekly label (issue #254). Absent in every other case, and
-    /// absent is the ordinary state — most of the time there is no promo running.
-    ///
-    /// <para>The chip carries O-view's summary; the hover card carries Claude's own sentence,
-    /// unedited, with who said it and when it was read.</para>
-    /// </summary>
-    private void PopulateBoostChip(PanelBoostChipView? chip)
-    {
-        if (chip is null)
-        {
-            BoostChip.Visibility = Visibility.Collapsed;
-            BoostChip.ToolTip = null;
-            return;
-        }
-
-        BoostChipText.Text = chip.Text;
-        BoostChip.ToolTip = HoverCard.Text(this, chip.Card);
-        HoverCard.ApplyTiming(BoostChip);
-        BoostChip.Visibility = Visibility.Visible;
-    }
-
-    /// <summary>
-    /// Fills the four statistics tiles, each with the per-model split behind its total
-    /// (issue #37). The split is passed in, not fetched: it is already on the
-    /// PanelStatistics the panel was opened with, so a click costs no I/O.
-    ///
-    /// Both today tiles share ModelsToday and both 31-day tiles share Models31Days —
-    /// one list per window, split two ways, because a token breakdown and a value
-    /// breakdown of the same usage are the same rows measured differently.
-    /// </summary>
-    private void PopulateTiles(PanelStatistics stats)
-    {
-        // Always shown, unlike the per-tile caveats. Partial history and an unpriced model are
-        // conditions that pass; the tiles excluding chat and cloud sessions is the standing shape
-        // of the data, and a note that appeared only sometimes would teach a reader that its
-        // absence means full coverage (issue #235). It sits under the block rather than on a
-        // tile, which is why it is not part of a tile's view model.
-        TokenScopeLine.Text = TokenText.TokenScopeCaveat;
-
-        // Both faces of all four tiles, including which caveat each carries and the colour slot
-        // every model takes. This panel only places them.
-        var tiles = PanelSections.Tiles(stats);
-
-        TileTokensToday.Populate(tiles.TokensToday);
-        TileEstToday.Populate(tiles.EstToday);
-        TileTokens31.Populate(tiles.Tokens31Days);
-        TileEst31.Populate(tiles.Est31Days);
-
-        // Which surfaces these figures are made of. Empty when nothing was found at all —
-        // the scope note owns that state and says considerably more (issue #171).
-        PopulateComposition(
-            stats.CompositionToday,
-            stats.Composition31Days,
-            (ScopeReport ?? TranscriptScopeReport.Inspect()).CoverageLine());
-    }
-
-    /// <summary>
-    /// The four-way split behind today's token total, and why it dwarfs the context figure
-    /// in Claude's own UI (issue #169).
-    ///
-    /// <para>Hidden rather than shown empty when there is nothing to break down: a
-    /// composition of zero explains nothing, and the scope note that appears in that state
-    /// is already saying the useful thing.</para>
-    ///
-    /// <para>The figures stay on screen; the prose folds behind a disclosure. It was four
-    /// lines of standing text that every user read on every open, and it answers a question
-    /// only some of them have — but the ones who do have it are looking straight at the
-    /// number that prompted it, so the answer stays one click away rather than moving to a
-    /// document nobody opens.</para>
-    ///
-    /// <para>Collapsed on every Populate, deliberately: the panel is a transient view, not a
-    /// setting, and StatTile resets its own expansion for the same reason.</para>
-    /// </summary>
-    /// <summary>
-    /// Sets a line's text and hides it when there is none. The empty string is the signal —
-    /// every text member that can have nothing to say returns one, so the decision
-    /// lives with the text rather than being re-derived from the statistics at each call site.
-    /// A visible but empty <see cref="TextBlock"/> leaves a gap that reads as a figure which
-    /// failed to load.
-    /// </summary>
-    private static void SetLine(TextBlock line, string text)
-    {
-        line.Text = text;
-        line.Visibility = text.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    private void PopulateComposition(
-        TokenComposition today, TokenComposition window31, string coverageLine)
-    {
-        // Today can be empty on a machine that has history but has not worked yet, so the
-        // section shows while EITHER window has something to say. Both empty means there is
-        // nothing to break down, and the scope note above already says considerably more.
-        var show = today.HasTokens || window31.HasTokens;
-        TokensUsedSection.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-
-        TokenBarsView.Children.Clear();
-        TokenBreakdownView.Children.Clear();
-
-        if (!show)
-        {
-            TokenBreakdownView.Visibility = Visibility.Collapsed;
-            return;
-        }
-
-        TokensUsedHeading.Text = TokenText.TokensUsedHeading;
-        TokenViewBars.Content = TokenText.TokenViewBarsLabel;
-        TokenViewBreakdown.Content = TokenText.TokenViewBreakdownLabel;
-
-        AddBar(today, TokenText.TokensUsedTodayLabel, TokenText.TokenWindowToday, first: true);
-        AddBar(window31, TokenText.TokensUsed31DaysLabel, TokenText.TokenWindow31Days, first: false);
-
-        TokenBreakdownView.Children.Add(BuildBreakdown(today, window31));
-
-        SetLine(TokenCoverageLine, coverageLine);
-
-        // Back to Bars on every open. The panel is a transient view, not a setting — the same
-        // reason StatTile resets its own expansion.
-        SetCompositionExpanded(false);
-    }
-
-    /// <summary>
-    /// One composition bar: heading and billed total, the segmented track, and the legend
-    /// that carries every exact figure the track's floors do not.
-    /// </summary>
-    private void AddBar(TokenComposition composition, string heading, string window, bool first)
-    {
-        var block = new StackPanel { Margin = new Thickness(0, first ? 0 : 9, 0, 0) };
-
-        var head = new Grid();
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-
-        var title = new TextBlock
-        {
-            Text = heading,
-            FontSize = 10.5,
-            VerticalAlignment = VerticalAlignment.Bottom,
-            Foreground = (Brush)FindResource("TextSecondary"),
-        };
-        Grid.SetColumn(title, 0);
-        head.Children.Add(title);
-
-        var total = new TextBlock
-        {
-            Text = FormatTokens(composition.Total),
-            FontSize = 12,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)FindResource("TextPrimary"),
-        };
-        Grid.SetColumn(total, 1);
-        head.Children.Add(total);
-        block.Children.Add(head);
-
-        var segments = composition.InDisplayOrder.Where(s => s.Tokens > 0).ToList();
-
-        // The track is measured, not assumed: the panel's content width moves with density
-        // and DPI, and TokenBarGeometry's floor is expressed in pixels. Widths are therefore
-        // applied on SizeChanged rather than at build time, when ActualWidth is still zero.
-        var track = new Grid { Height = 12, Margin = new Thickness(0, 4, 0, 0) };
-        for (var i = 0; i < segments.Count; i++)
-        {
-            track.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(0) });
-
-            var slice = segments[i];
-            var swatch = KindBrush(slice.Kind);
-            var piece = new Border
-            {
-                Background = swatch,
-                // Rounded only at the ends. A Border does not clip its children to a corner
-                // radius, so a rounded container over square segments shows the corners
-                // through — this gets the pill without a hand-maintained Clip geometry.
-                CornerRadius = new CornerRadius(
-                    i == 0 ? 3 : 0, i == segments.Count - 1 ? 3 : 0,
-                    i == segments.Count - 1 ? 3 : 0, i == 0 ? 3 : 0),
-                ToolTip = SegmentCard(slice, window, swatch),
-            };
-            HoverCard.ApplyTiming(piece);
-            Grid.SetColumn(piece, i);
-            track.Children.Add(piece);
-        }
-
-        track.SizeChanged += (_, _) => LayOutSegments(track, composition);
-        block.Children.Add(track);
-
-        // Every figure the bar cannot draw honestly. This is what makes the 3 px floor safe,
-        // so it is not optional decoration — see TokenBarGeometry.
-        var legend = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-        foreach (var slice in segments)
-        {
-            var swatch = KindBrush(slice.Kind);
-            var entry = new StackPanel
-            {
-                Orientation = System.Windows.Controls.Orientation.Horizontal,
-                Margin = new Thickness(0, 0, 10, 0),
-                ToolTip = SegmentCard(slice, window, swatch),
-            };
-            HoverCard.ApplyTiming(entry);
-
-            entry.Children.Add(new Border
-            {
-                Width = 8,
-                Height = 8,
-                CornerRadius = new CornerRadius(2),
-                Background = swatch,
-                VerticalAlignment = VerticalAlignment.Center,
-            });
-            entry.Children.Add(new TextBlock
-            {
-                Text = $"{TokenText.TokenKindLabel(slice.Kind)} {FormatTokens(slice.Tokens)}",
-                FontSize = 10.5,
-                Margin = new Thickness(5, 0, 0, 0),
-                VerticalAlignment = VerticalAlignment.Center,
-                Foreground = (Brush)FindResource("TextSecondary"),
-            });
-            legend.Children.Add(entry);
-        }
-
-        block.Children.Add(legend);
-        TokenBarsView.Children.Add(block);
-    }
-
-    /// <summary>
-    /// Applies the shared geometry to a laid-out track. Called on every size change, so the
-    /// floors are re-decided against the width the bar actually got rather than a guess.
-    /// </summary>
-    private static void LayOutSegments(Grid track, TokenComposition composition)
-    {
-        var segments = TokenBarGeometry.Segments(composition, track.ActualWidth);
-        if (segments.Count != track.ColumnDefinitions.Count)
-        {
-            return;
-        }
-
-        for (var i = 0; i < segments.Count; i++)
-        {
-            track.ColumnDefinitions[i].Width = new GridLength(segments[i].Width);
-        }
-    }
-
-    /// <summary>
-    /// The card behind one segment. Built through <see cref="HoverCard.Figure"/> rather than
-    /// as a third card shape — a kind's figure with a line naming it is exactly what that
-    /// shape is for, and the panel has shipped two unrelated tooltip designs before.
-    /// </summary>
-    private ToolTip SegmentCard(TokenKindSlice slice, string window, Brush swatch) =>
-        HoverCard.Figure(
-            this,
-            FormatTokens(slice.Tokens),
-            TokenText.TokenCardCaption(slice.Kind, slice.Share, slice.EstUsd, window),
-            swatch);
-
-    private Brush KindBrush(TokenKind kind) =>
-        (Brush)FindResource(TokenBarGeometry.PaletteKey(kind));
-
-    /// <summary>
-    /// The breakdown table: one row per kind, with <b>a share column per window</b>.
-    ///
-    /// <para>Two share columns rather than one shared, because the windows have measurably
-    /// different shapes — cache write ran 10.3% of a day against 0.93% of the month on the
-    /// machine this was designed against. One column between two token columns would be read
-    /// against whichever it sat nearer, which is the ambiguity issue #169 was reported about
-    /// in its original form.</para>
-    /// </summary>
-    private Grid BuildBreakdown(TokenComposition today, TokenComposition window31)
-    {
-        var table = new Grid();
-        table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-        for (var c = 0; c < 4; c++)
-        {
-            table.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-        }
-
-        var muted = (Brush)FindResource("TextMuted");
-        var secondary = (Brush)FindResource("TextSecondary");
-        var primary = (Brush)FindResource("TextPrimary");
-
-        AddRow(table, 0, null,
-            TokenText.TokenBreakdownKindHeader, TokenText.TokenBreakdownTodayHeader,
-            TokenText.TokenBreakdownShareHeader, TokenText.TokenBreakdown31DaysHeader,
-            TokenText.TokenBreakdownShareHeader, muted, 9.5);
-
-        // Driven off today's order so both columns describe the same row, even where a kind
-        // is present in one window and absent from the other.
-        var kinds = today.HasTokens ? today.InDisplayOrder : window31.InDisplayOrder;
-        var row = 1;
-        foreach (var slice in kinds)
-        {
-            var other = window31.InDisplayOrder.First(s => s.Kind == slice.Kind);
-            var mine = today.InDisplayOrder.First(s => s.Kind == slice.Kind);
-
-            AddRow(table, row++, KindBrush(slice.Kind),
-                TokenText.TokenKindLabel(slice.Kind),
-                FormatTokens(mine.Tokens), TokenText.TokenShare(mine.Share),
-                FormatTokens(other.Tokens), TokenText.TokenShare(other.Share),
-                secondary, 10.5);
-        }
-
-        AddRow(table, row, null,
-            TokenText.TokenBreakdownTotalLabel,
-            FormatTokens(today.Total), TokenText.TokenShare(today.HasTokens ? 1 : 0),
-            FormatTokens(window31.Total), TokenText.TokenShare(window31.HasTokens ? 1 : 0),
-            primary, 10.5, bold: true);
-
-        return table;
-    }
-
-    private static void AddRow(
-        Grid table, int row, Brush? chip, string kind, string todayTokens, string todayShare,
-        string windowTokens, string windowShare, Brush foreground, double fontSize, bool bold = false)
-    {
-        table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
-
-        var label = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
-        if (chip is not null)
-        {
-            label.Children.Add(new Border
-            {
-                Width = 8,
-                Height = 8,
-                CornerRadius = new CornerRadius(2),
-                Background = chip,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(0, 0, 6, 0),
-            });
-        }
-
-        label.Children.Add(new TextBlock
-        {
-            Text = kind,
-            FontSize = fontSize,
-            FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
-            Foreground = foreground,
-        });
-        Grid.SetRow(label, row);
-        Grid.SetColumn(label, 0);
-        table.Children.Add(label);
-
-        var cells = new[] { todayTokens, todayShare, windowTokens, windowShare };
-        for (var i = 0; i < cells.Length; i++)
-        {
-            var cell = new TextBlock
-            {
-                Text = cells[i],
-                FontSize = fontSize,
-                FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
-                TextAlignment = TextAlignment.Right,
-                Margin = new Thickness(10, 2, 0, 2),
-                Foreground = foreground,
-            };
-            Grid.SetRow(cell, row);
-            Grid.SetColumn(cell, i + 1);
-            table.Children.Add(cell);
-        }
-    }
-
-    /// <summary>
-    /// Puts the explanation in a finished state at once — open or closed, nothing in flight.
-    /// The interactive path goes through <see cref="ToggleComposition"/>, which folds; this
-    /// is what <c>Populate</c> and the verification renders use.
-    /// </summary>
-    private void SetCompositionExpanded(bool expanded)
-    {
-        _compositionExpanded = expanded;
-
-        // The switch is the state's only visible indicator, so it has to move with it —
-        // including on the Populate reset, where nothing was clicked. Set before Apply and
-        // guarded by the equality check in ShowBreakdown, so the Checked handler this
-        // raises finds the state already correct and does not fold a second time.
-        TokenViewBars.IsChecked = !expanded;
-        TokenViewBreakdown.IsChecked = expanded;
-
-        _disclosure.Apply(expanded);
-    }
-
-    private bool _compositionExpanded;
-
-    private readonly DisclosureAnimation _disclosure;
-
-    /// <summary>
-    /// Draws off-plan usage in the two registers <see cref="PanelOffPlanView"/> decides:
-    ///   • a live banner for what is happening in the CURRENT session window (the divergence
-    ///     detector's real-time signal), and
-    ///   • a standing 31-day off-plan SPEND total (GitHub issue #3), estimated from
-    ///     credit-billed models rather than the 5-hour session.
-    /// The two are independent: the 31-day figure shows even when the current window is
-    /// on-plan, and the banner shows even before any credit spend has accrued.
-    ///
-    /// <para>Every sentence and figure below arrives built. What is left here is the three
-    /// things WPF has an opinion about: whether the banner is collapsed or taking space, how a
-    /// hyperlink's inlines are filled, and where a tooltip hangs.</para>
-    /// </summary>
-    private void PopulateDivergence(PanelStatistics stats, TimeZoneInfo local)
-    {
-        var offPlan = PanelSections.OffPlan(stats, CachedUsage, Now(TimeZoneInfo.Utc), local);
-
-        // The Est.-today tile's label and note also flip with off-plan state; that happens in
-        // PopulateTiles, which owns everything the tiles show, from the same view model's
-        // ValueTileLabel and ValueTileNote.
-
-        // ── live, session-scoped signal ──────────────────────────────────────────
-        DivergenceBanner.Visibility = offPlan.Banner is null ? Visibility.Collapsed : Visibility.Visible;
-
-        if (offPlan.Banner is { } banner)
-        {
-            DivergenceTitle.Text = banner.Title;
-            DivergenceDetail.Text = banner.Detail;
-
-            // Filled here rather than in XAML so the label and the address have one definition
-            // in Presentation, next to the sentences that send the reader to them (issue #259).
-            DivergenceLinkAnchor.NavigateUri = new Uri(banner.LinkUrl);
-            DivergenceLinkAnchor.Inlines.Clear();
-            DivergenceLinkAnchor.Inlines.Add(banner.LinkLabel);
-        }
-
-        // ── standing 31-day off-plan spend (issue #3) ────────────────────────────
-        CreditsHeading.Text = offPlan.Heading;
-        CreditsBadgeText.Text = offPlan.Badge;
-        CreditsSpendLabel.Text = offPlan.SpendLabel;
-        CreditsSpendValue.Text = offPlan.SpendValue;
-        CreditsCoverage.Text = offPlan.Coverage;
-
-        // The explanation is on hover now rather than standing under the figure (issue #181).
-        // Both wordings still carry the rule-6 caveat that this is not what was charged —
-        // moving a caveat behind a hover is the obvious way to lose one, so the sentences
-        // live in OffPlanText where they have one definition and a test can assert them.
-        CreditsSection.ToolTip = HoverCard.Text(this, offPlan.Hint);
-        HoverCard.ApplyTiming(CreditsSection);
-    }
-
-    /// <summary>
-    /// Draws one meter from what <see cref="PanelSections"/> decided: the figure's own words,
-    /// the band it falls in, and how wide the fill runs. This panel's three colours are the
-    /// only part of it that is this head's own.
-    /// </summary>
-    private void PopulateBar(TextBlock pctText, Grid bar, Border fill, PanelMeterView meter)
-    {
-        System.Windows.Data.BindingOperations.ClearBinding(fill, WidthProperty);
-        pctText.Text = meter.Value;
-
-        if (meter.FillPercent is not { } p)
-        {
-            fill.Width = 0;
-            return;
-        }
-
-        fill.Background = new SolidColorBrush(meter.Band switch
-        {
-            UsageLevel.Critical => Red,
-            UsageLevel.Warning => Amber,
-            _ => Green,
-        });
-        // Fill width tracks the bar's laid-out width × percent.
-        fill.SetBinding(WidthProperty, new System.Windows.Data.Binding(nameof(bar.ActualWidth))
-        {
-            Source = bar,
-            Converter = new PercentWidthConverter(),
-            ConverterParameter = p,
-        });
-    }
-
-    // Blue gradient endpoints for within-week intensity (issue #5): light → dark.
-    private static readonly Color GraphBlueLo = Color.FromRgb(176, 208, 240);
-    private static readonly Color GraphBlueHi = Color.FromRgb(24, 95, 165);
-
-    /// <summary>
-    /// Draws the 31-day usage chart on the Canvas (issues #4, #5): one bar per day,
-    /// coloured light→dark blue by its intensity within its own plan week, dotted
-    /// gridlines at the weekly resets, vertical date labels, and a per-bar hover
-    /// tooltip. Pre-install days are blank columns (no bar) — with the date axis, an
-    /// empty column reads as "no data" without needing the old caption.
-    ///
-    /// <para>Every one of those is read from <see cref="PanelSections.Graph"/>, which the
-    /// Linux chart draws from too. What is left here is turning fractions into pixels against
-    /// this canvas, and the hover cards' chrome. The week bands, the boundary placement and
-    /// the card wording used to live in this file, where the other head could not reach
-    /// them — so it drew flat bars and no gridlines at all.</para>
-    ///
-    /// Bar and label are both placed from <see cref="BarCentre"/> (issue #31) so a date
-    /// always sits under the bar it describes; with 31 columns in ~344 px a few pixels
-    /// of drift is enough to make a label read against its neighbour.
-    /// </summary>
-    private void BuildGraph(PanelStatistics stats, UsageSnapshot snapshot)
-    {
-        GraphHost.Children.Clear();
-
-        var graph = PanelSections.Graph(stats, snapshot, LocalZone);
-        if (graph.Columns.Count == 0)
-        {
-            return;
-        }
-
-        var width = GraphHost.ActualWidth > 0 ? GraphHost.ActualWidth : 344;
-
-        // Derived from the canvas rather than fixed at 52. The canvas height is no longer a
-        // constant — a display too short for the panel gets a shorter one (PanelDensity) —
-        // and a fixed bar area meant the rotated date labels below it simply ran off the
-        // bottom and collided with the next section. Caught by rendering it; the constants
-        // alone look fine. At the normal 86 px canvas this is 52, exactly as before.
-        const double labelAreaHeight = 34;
-        var barAreaHeight = Math.Max(18, GraphHost.Height - labelAreaHeight);
-        var labelTop = barAreaHeight + 6;
-        var col = width / graph.Columns.Count;
-
-        var labelBrush = (Brush)FindResource("TextMuted");
-
-        for (var i = 0; i < graph.Columns.Count; i++)
-        {
-            var column = graph.Columns[i];
-            var x = i * col;
-
-            // Bar — height by absolute tokens, colour by within-week intensity.
-            if (column.HasBar)
-            {
-                var height = Math.Max(2, barAreaHeight * column.Height);
-                var barWidth = Math.Max(2, col - 2);
-                var bar = new Rectangle
-                {
-                    Width = barWidth,
-                    Height = height,
-                    Fill = new SolidColorBrush(Lerp(GraphBlueLo, GraphBlueHi, column.Intensity)),
-                    RadiusX = 1,
-                    RadiusY = 1,
-                    // Figure first, date beneath — the panel's shared hover card, not the
-                    // raw string this used to be. A bare `ToolTip = "…"` renders as system
-                    // chrome: a pale rectangle with a hard border, on a panel that is
-                    // otherwise entirely rounded cards on one palette.
-                    ToolTip = HoverCard.Figure(this, column.CardFigure, column.CardCaption),
-                };
-                HoverCard.ApplyTiming(bar);
-                // Placed from the column centre, like the label below it, so the two
-                // cannot drift apart as the gutter or column width changes (issue #31).
-                Canvas.SetLeft(bar, BarCentre(x, col) - barWidth / 2);
-                Canvas.SetTop(bar, barAreaHeight - height);
-                GraphHost.Children.Add(bar);
-            }
-
-            // Vertical date label under every column (rotated, small but legible),
-            // centred on its own bar (issue #31).
-            //
-            // A RenderTransform does not move the element's LAYOUT box, so Canvas.SetLeft
-            // still positions the un-rotated text while the ink lands somewhere else
-            // entirely: at 90° the box [0,w]×[0,h] maps to [-h,0]×[0,w], i.e. the label
-            // hangs to the LEFT of its anchor by one line height. The old code
-            // compensated with a constant +3, which stood in for half a line and was ~2 px
-            // short of an 8 pt one — a fifth of a column at 31 days, and what made the
-            // dates read as offset from their bars.
-            //
-            // Ask the transform for the rendered bounds rather than re-deriving them: the
-            // line height moves with font, DPI and the OS text-scaling setting, and this
-            // stays correct if the angle is ever changed.
-            var rotation = new RotateTransform(90);
-            var label = new TextBlock
-            {
-                Text = column.DateLabel,
-                FontSize = 8,
-                Foreground = labelBrush,
-                RenderTransform = rotation,
-                Opacity = column.Recorded ? 1.0 : 0.5,
-            };
-            // Parent first, so the font properties measured are the inherited ones.
-            GraphHost.Children.Add(label);
-            label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            var ink = rotation.TransformBounds(new Rect(label.DesiredSize));
-            Canvas.SetLeft(label, BarCentre(x, col) - ink.Left - ink.Width / 2);
-            Canvas.SetTop(label, labelTop - ink.Top);
-        }
-
-        DrawWeekBoundaries(graph.Boundaries, col, barAreaHeight);
-    }
-
-    /// <summary>
-    /// The week-boundary gridlines, drawn <em>last</em> so they sit above the bars.
-    ///
-    /// <para>A Canvas paints in child order, so these used to be added first and were
-    /// overdrawn by every bar they crossed — which is most of them in a busy week, leaving
-    /// the boundary visible only in the gaps. A reset line that disappears exactly where
-    /// the usage is heaviest is missing the moment it exists to mark.</para>
-    ///
-    /// <para>They wear the panel's note colour (<c>WarnText</c>), the same amber the
-    /// coverage and caveat lines use, rather than the muted grey they shared with the date
-    /// labels: this is an annotation over the data, not another axis decoration, and grey
-    /// on blue at one pixel was not carrying that.</para>
-    ///
-    /// <para>Placement is unchanged, and now decided above this head: a plan reset happens at
-    /// an instant, not at midnight, so the line sits at its true fractional position inside
-    /// the day it falls in — snapping to the nearest column edge would claim a boundary the
-    /// data does not have. The calendar-week fallback lands on a column edge because midnight
-    /// is one.</para>
-    /// </summary>
-    private void DrawWeekBoundaries(
-        IReadOnlyList<PanelGraphBoundaryView> boundaries, double col, double barAreaHeight)
-    {
-        var gridBrush = (Brush)FindResource("WarnText");
-
-        foreach (var boundary in boundaries)
-        {
-            var x = (boundary.Column + boundary.FractionOfDay) * col;
-            var line = new Line
-            {
-                X1 = x, X2 = x, Y1 = 0, Y2 = barAreaHeight + 3,
-                Stroke = gridBrush,
-                StrokeThickness = 1,
-                StrokeDashArray = [2, 2],
-                // No figure is the Monday fallback, which has no observed instant to state,
-                // so it takes the text-only card rather than a headline standing empty.
-                ToolTip = boundary.CardFigure.Length == 0
-                    ? HoverCard.Text(this, boundary.CardCaption)
-                    : HoverCard.Figure(this, boundary.CardFigure, boundary.CardCaption),
-            };
-            HoverCard.ApplyTiming(line);
-            GraphHost.Children.Add(line);
-        }
-    }
-
-    /// <summary>
-    /// Horizontal centre of the column starting at <paramref name="x"/>. The single
-    /// anchor the bar and its date label are both placed from (issue #31) — the label
-    /// was previously offset by a constant that no longer matched the bar.
-    /// </summary>
-    private static double BarCentre(double x, double col) => x + col / 2;
-
-    private static Color Lerp(Color a, Color b, double t)
-    {
-        t = Math.Clamp(t, 0, 1);
-        return Color.FromRgb(
-            (byte)(a.R + (b.R - a.R) * t),
-            (byte)(a.G + (b.G - a.G) * t),
-            (byte)(a.B + (b.B - a.B) * t));
     }
 
     /// <summary>
@@ -1208,25 +475,8 @@ public partial class PopupWindow : Window, IFlyout
     /// </summary>
     // Duration wording lives in OView.Presentation.Text.PanelText, shared with the Linux panel so
     // the two cannot describe the same reset differently. Kept as a local alias because it
-    // reads better unqualified at its call sites — the same reason FormatTokens exists.
+    // reads better unqualified at its call sites.
     private static string FormatCountdown(TimeSpan t) => PanelText.Countdown(t);
 
-    // Token formatting lives in OView.Presentation.Text.UsageFormatter, shared with the
-    // off-plan notification and the verification renders so one amount cannot be written two
-    // ways (issue #55). Kept as a local alias because it reads better unqualified at the dozen
-    // call sites above. The money alias beside it went when the last amount this file formatted
-    // moved into PanelOffPlanView.
-    private static string FormatTokens(long tokens) => UsageFormatter.Tokens(tokens);
-
     // Theming lives in PanelTheme, shared with the tray menu flyout (issue #33).
-}
-
-/// <summary>Bar fill width = track ActualWidth × percent.</summary>
-internal sealed class PercentWidthConverter : System.Windows.Data.IValueConverter
-{
-    public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        value is double actual && parameter is int percent ? Math.Max(percent == 0 ? 0.0 : 4.0, actual * percent / 100.0) : 0.0;
-
-    public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
-        throw new NotSupportedException();
 }
