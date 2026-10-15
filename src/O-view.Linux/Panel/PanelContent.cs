@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Input;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -29,6 +30,11 @@ namespace OView.Linux.Panel;
 /// a usage bar. Each section below them is its own piece, named for what it draws:
 /// <see cref="PanelStatTiles"/>, <see cref="PanelTokenBars"/>, <see cref="PanelGraph"/> and
 /// <see cref="PanelOffPlan"/>.</para>
+///
+/// <para>The frame can also put those sections in a scrolling viewport, so a panel the window
+/// has had to cap can still be reached to its last section — see <see cref="ScrollContent"/>,
+/// <see cref="Viewport"/> and <see cref="ScrollBar"/>. A panel with room never asks for one
+/// and is laid out exactly as it was before it could scroll at all.</para>
 /// </summary>
 public sealed class PanelContent : Border
 {
@@ -36,6 +42,23 @@ public sealed class PanelContent : Border
 
     /// <summary>Gap between sections at the natural density — this head's own constant.</summary>
     private const double NaturalRootSpacing = 10;
+
+    /// <summary>
+    /// How wide the scroll bar is drawn. Thin on purpose: it only ever appears on a display
+    /// that is already short of room, so it has to cost the content as little width as it can
+    /// while still reading as something to grab. The Windows panel draws the same width — the
+    /// two colours are shared through <see cref="PanelPalette"/>, and these three numbers are
+    /// stated here for that head to match.
+    /// </summary>
+    private const double ScrollBarWidth = 6;
+
+    /// <summary>Gap between the content and the bar, so a right-aligned figure does not read
+    /// as touching it.</summary>
+    private const double ScrollBarGap = 6;
+
+    /// <summary>Shortest the thumb may get. A thumb kept strictly proportional to very tall
+    /// content shrinks to a few pixels, which is neither visible nor grabbable.</summary>
+    private const double MinThumbHeight = 24;
 
     /// <summary>
     /// How tightly to pack, for a display too short for the natural layout
@@ -46,6 +69,14 @@ public sealed class PanelContent : Border
 
     private readonly LinuxPanelTheme _theme;
     private readonly StackPanel _root;
+    private readonly ScrollContentPresenter _viewport;
+    private readonly Border _scrollTrack;
+    private readonly Border _scrollThumb;
+    private readonly Grid _scrollFrame;
+
+    /// <summary>Where a thumb drag began: the pointer's Y on the track, and the offset then.</summary>
+    private double _dragFromY;
+    private double _dragFromOffset;
 
     private readonly PanelStatTiles _tiles;
     private readonly PanelTokenBars _tokenBars;
@@ -64,6 +95,23 @@ public sealed class PanelContent : Border
     /// </summary>
     public IReadOnlyList<PanelStatTiles.TileFlip> TileFlips => _tiles.Flips;
 
+    /// <summary>
+    /// The viewport the sections are scrolled inside, once <see cref="ScrollContent"/> has put
+    /// them there. Public for the same reason <see cref="PanelTokenBars.ViewSwitch"/> is: this
+    /// is the state a wheel turn and a thumb drag drive, and a test process has no windowing
+    /// subsystem to produce either gesture for real. It is also what says how much content is
+    /// out of sight — the one number that proves nothing was dropped when the window had to
+    /// cap itself.
+    /// </summary>
+    public ScrollContentPresenter Viewport => _viewport;
+
+    /// <summary>The scroll bar's track, hidden while everything fits inside the viewport.</summary>
+    public Control ScrollBar => _scrollTrack;
+
+    /// <summary>Whether the sections are currently in the viewport rather than straight in
+    /// the frame.</summary>
+    public bool Scrolls => ReferenceEquals(Child, _scrollFrame);
+
     public PanelContent(LinuxPanelTheme theme)
     {
         _theme = theme;
@@ -80,7 +128,122 @@ public sealed class PanelContent : Border
         Padding = new Thickness(16);
 
         _root = new StackPanel { Spacing = 10 };
+
+        _scrollThumb = new Border
+        {
+            Background = theme["ScrollThumb"],
+            CornerRadius = new CornerRadius(ScrollBarWidth / 2),
+            Width = ScrollBarWidth,
+            Height = MinThumbHeight,
+            VerticalAlignment = VerticalAlignment.Top,
+        };
+
+        _scrollTrack = new Border
+        {
+            Background = theme["ScrollTrack"],
+            CornerRadius = new CornerRadius(ScrollBarWidth / 2),
+            Width = ScrollBarWidth,
+            Margin = new Thickness(ScrollBarGap, 0, 0, 0),
+            ClipToBounds = true,
+            Child = _scrollThumb,
+
+            // Hidden until there is something out of sight, and it occupies an Auto column, so
+            // a panel that fits is laid out at exactly the width it was before this existed.
+            IsVisible = false,
+        };
+
+        _viewport = new ScrollContentPresenter
+        {
+            CanVerticallyScroll = true,
+            CanHorizontallyScroll = false,
+        };
+
+        _viewport.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == ScrollContentPresenter.OffsetProperty
+                || e.Property == ScrollContentPresenter.ExtentProperty
+                || e.Property == ScrollContentPresenter.ViewportProperty)
+            {
+                UpdateScrollBar();
+            }
+        };
+
+        WireScrollBar();
+
+        _scrollFrame = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
+        Grid.SetColumn(_scrollTrack, 1);
+        _scrollFrame.Children.Add(_viewport);
+        _scrollFrame.Children.Add(_scrollTrack);
+
         Child = _root;
+    }
+
+    /// <summary>
+    /// Puts the sections in a scrolling viewport, or takes them straight back into the frame.
+    ///
+    /// <para>The window asks for one exactly when <see cref="PanelFit"/> has had to cap it, so
+    /// everything past the cap stays reachable instead of being clipped off the bottom of the
+    /// screen.</para>
+    ///
+    /// <para><b>Why a panel with room does not simply always have one.</b> A viewport clips to
+    /// its own bounds, and this panel has a usage bar whose fill overruns the content column by
+    /// 2 DIP at 100 % — an overrun that is in 8 of the 22 verification renders as they stand.
+    /// A viewport on every display would quietly trim it, which is a change to how the panel
+    /// looks on every display that already fits, arriving inside a change about the ones that
+    /// do not. So a panel with room keeps exactly the tree it has always had.</para>
+    /// </summary>
+    public void ScrollContent(bool scrolls)
+    {
+        if (scrolls == Scrolls)
+        {
+            return;
+        }
+
+        // Detached from the old parent first: Avalonia refuses a control that still has one.
+        if (scrolls)
+        {
+            Child = null;
+            _viewport.Content = _root;
+
+            // A presenter fills itself from its content only once its tree reaches a window,
+            // and the verification renders come from a tree that never does — the same trap
+            // that left both halves of the Bars/Breakdown switch blank in every sample image.
+            // Asking for the child here means the sections are built either way.
+            _viewport.UpdateChild();
+            Child = _scrollFrame;
+        }
+        else
+        {
+            Child = null;
+            _viewport.Content = null;
+            _viewport.UpdateChild();
+            _scrollTrack.IsVisible = false;
+            Child = _root;
+        }
+    }
+
+    /// <summary>
+    /// The height this panel's content wants, measured against an unbounded height — the
+    /// content's own answer, not the window's.
+    ///
+    /// <para><b>Why it cannot be read off the window.</b> The panel is <c>SizeToContent</c>, so
+    /// its frame is whatever the compositor granted, and a compositor will not grant more than
+    /// the screen: on Maximilian's 1024×768 desktop the frame came back as exactly 768 and the
+    /// panel therefore concluded it was not too tall for a 712 DIP work area, while four
+    /// sections sat off the bottom edge with no way to reach them (his report of 2026-10-15).
+    /// Measuring the tree is how the verification renders have always sized themselves, and it
+    /// is the only number that is about the content rather than about the display.</para>
+    ///
+    /// <para>The measure is left invalidated afterwards so the next layout pass measures the
+    /// tree against the constraint it is actually being laid out in, rather than keeping this
+    /// unbounded answer.</para>
+    /// </summary>
+    public double NaturalHeightDip()
+    {
+        Measure(Size.Infinity);
+        var wanted = DesiredSize.Height;
+        InvalidateMeasure();
+        return wanted;
     }
 
     public void Populate(
@@ -95,6 +258,10 @@ public sealed class PanelContent : Border
         CachedUtilization? cachedUsage = null)
     {
         _root.Children.Clear();
+
+        // Back to the top. A re-populate is a fresh open or a re-layout at a new density, and
+        // either way the header is where the panel should start.
+        _viewport.Offset = default;
 
         // Applied here rather than in the constructor: the density depends on the screen this
         // open lands on, and a multi-monitor desktop can move between them. Normal reproduces
@@ -159,6 +326,88 @@ public sealed class PanelContent : Border
         {
             _root.Children.Add(Muted(_theme, (scopeReport ?? TranscriptScopeReport.Inspect()).Explain()));
         }
+    }
+
+    // ── the scroll bar ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// The gestures the bar itself answers: dragging the thumb, and clicking the track above
+    /// or below it to page.
+    ///
+    /// <para>The wheel is not here — <see cref="ScrollContentPresenter"/> handles that itself,
+    /// and over the content is where a wheel turn lands. These two are the routes for a user
+    /// whose pointer has no wheel at all.</para>
+    ///
+    /// <para>Hand-drawn rather than Avalonia's <c>ScrollBar</c> because this head registers no
+    /// Avalonia theme: a templated control arrives here with no template, so the toolkit's own
+    /// bar would not draw at all, and every other piece of this panel is built from the same
+    /// borders and text blocks.</para>
+    /// </summary>
+    private void WireScrollBar()
+    {
+        _scrollThumb.PointerPressed += (_, e) =>
+        {
+            _dragFromY = e.GetPosition(_scrollTrack).Y;
+            _dragFromOffset = _viewport.Offset.Y;
+            e.Pointer.Capture(_scrollThumb);
+            e.Handled = true;        // not a page click as well
+        };
+
+        _scrollThumb.PointerMoved += (_, e) =>
+        {
+            if (!ReferenceEquals(e.Pointer.Captured, _scrollThumb))
+            {
+                return;
+            }
+
+            var travel = _scrollTrack.Bounds.Height - _scrollThumb.Bounds.Height;
+            if (travel > 0)
+            {
+                ScrollTo(_dragFromOffset
+                    + ((e.GetPosition(_scrollTrack).Y - _dragFromY) * Hidden() / travel));
+            }
+        };
+
+        _scrollThumb.PointerReleased += (_, e) => e.Pointer.Capture(null);
+
+        _scrollTrack.PointerPressed += (_, e) =>
+        {
+            var above = e.GetPosition(_scrollTrack).Y < _scrollThumb.Bounds.Top;
+            ScrollTo(_viewport.Offset.Y + (above ? -1 : 1) * _viewport.Viewport.Height);
+        };
+    }
+
+    /// <summary>How much of the content is out of sight; zero when everything fits.</summary>
+    private double Hidden() => Math.Max(0, _viewport.Extent.Height - _viewport.Viewport.Height);
+
+    private void ScrollTo(double offsetY) =>
+        _viewport.Offset = _viewport.Offset.WithY(Math.Clamp(offsetY, 0, Hidden()));
+
+    /// <summary>
+    /// Shows or hides the bar and puts the thumb where the offset says, after any change to
+    /// what is on screen.
+    ///
+    /// <para>Making the bar visible narrows the content by its own width, which can reflow a
+    /// wrapped line and make the content taller still — so this can run twice for one scroll.
+    /// It cannot oscillate: a narrower column never shortens the content, so a bar that has
+    /// appeared never has cause to go away again.</para>
+    /// </summary>
+    private void UpdateScrollBar()
+    {
+        var viewport = _viewport.Viewport.Height;
+        var hidden = Hidden();
+
+        _scrollTrack.IsVisible = viewport > 0 && hidden > 0.5;
+        if (!_scrollTrack.IsVisible)
+        {
+            return;
+        }
+
+        var thumb = Math.Min(viewport, Math.Max(MinThumbHeight, viewport * viewport / _viewport.Extent.Height));
+        var travel = Math.Max(0, viewport - thumb);
+
+        _scrollThumb.Height = thumb;
+        _scrollThumb.Margin = new Thickness(0, travel * Math.Clamp(_viewport.Offset.Y / hidden, 0, 1), 0, 0);
     }
 
     // ── sections ────────────────────────────────────────────────────────────────────

@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Media.Imaging;
+using OView.App.Rendering;
 using OView.Presentation.Samples;
 
 namespace OView.Linux.Panel;
@@ -15,9 +16,30 @@ namespace OView.Linux.Panel;
 /// before anyone installs anything, and it reaches states real data on any one machine may
 /// never produce. The Windows head renders the same states under the same names, so where
 /// the two panels differ is visible side by side.</para>
+///
+/// <para>Every state is rendered at the height it asks for, which is the panel a display with
+/// room shows. One state is rendered a second time at a short display's work area, because
+/// that panel — compacted, capped and scrolling — is a layout no natural-height render
+/// contains, and it is the one that was reported broken.</para>
 /// </summary>
 public static class PanelSampleRenderer
 {
+    /// <summary>
+    /// The work area of the display the panel was reported cut off on: a 1024×768 desktop,
+    /// less <see cref="WorkAreaPlacement.DefaultMarginPx"/> at each end.
+    /// </summary>
+    private const double ShortWorkAreaDip = 712;
+
+    /// <summary>
+    /// The state rendered a second time for that display. Named rather than measured for:
+    /// the tallest state is what this wants, and it is one of the two off-plan states at 1008
+    /// DIP, but a name chosen at run time would rename the golden image the day some other
+    /// state grows past it. It is checked against the others in
+    /// <c>PanelShortScreenTests</c> instead, where being wrong is a failing test rather than
+    /// a quietly different picture.
+    /// </summary>
+    public const string ShortState = "offplan-on";
+
     public static void RenderAll(string directory)
     {
         Directory.CreateDirectory(directory);
@@ -30,24 +52,64 @@ public static class PanelSampleRenderer
                 // A FRESH control per sample. Reusing one silently produced eleven copies
                 // of the first image: layout is cached against the tree, so re-populating
                 // and re-rendering returns the size and content already arranged.
-                var content = new PanelContent(new LinuxPanelTheme(light));
-                content.Populate(state.Snapshot, state.Stats, state.Account, state.Plan, state.Scope,
-                    SampleStates.Now, state.Boost, SampleStates.Zone, state.CachedUsage);
-
-                Save(content, Path.Combine(directory, $"panel-{state.Name}-{(light ? "light" : "dark")}.png"));
+                Save(Build(state, light, PanelDensity.Normal),
+                    Path.Combine(directory, $"panel-{state.Name}-{Theme(light)}.png"));
                 written++;
             }
+
+            var shortState = SampleStates.All.First(s => s.Name == ShortState);
+            var panel = Build(shortState, light, PanelDensity.Compact);
+
+            // Exactly what the window does on that desktop: compact first, then capped at the
+            // work area, with the content scrolling inside the cap. The height is pinned here
+            // rather than granted by a window, because there is no window offscreen.
+            var fit = PanelFit.Resolve(panel.NaturalHeightDip(), ShortWorkAreaDip);
+            panel.ScrollContent(fit.MustScroll);
+            panel.Height = fit.WindowHeightDip;
+
+            Save(panel, Path.Combine(directory, $"panel-{shortState.Name}-short-{Theme(light)}.png"),
+                CappedLayoutPasses);
+            written++;
         }
 
         Console.WriteLine($"wrote {written} panel PNGs to {Path.GetFullPath(directory)}");
     }
 
-    private static void Save(Control content, string path)
+    private static string Theme(bool light) => light ? "light" : "dark";
+
+    private static PanelContent Build(SampleState state, bool light, PanelDensity density)
     {
-        // Two passes: the tree must be measured before its desired size is known, and
-        // arranged at that size before it will render anything but blank.
-        content.Measure(Size.Infinity);
-        content.Arrange(new Rect(content.DesiredSize));
+        var content = new PanelContent(new LinuxPanelTheme(light)) { Density = density };
+        content.Populate(state.Snapshot, state.Stats, state.Account, state.Plan, state.Scope,
+            SampleStates.Now, state.Boost, SampleStates.Zone, state.CachedUsage);
+        return content;
+    }
+
+    /// <summary>
+    /// How many measure/arrange pairs a capped panel needs before its layout settles. The
+    /// first discovers that the content overflows and brings the scroll bar in; the second
+    /// lays the content out in the narrower column that leaves; the third re-cuts the token
+    /// bars, which size their own segments against the track they were handed.
+    ///
+    /// <para>Run by hand because nothing offscreen has a layout manager to run them — the
+    /// tree never reaches a window, so an invalidation inside it is never picked up. Counted
+    /// rather than looped-until-valid for the same reason: the root stays valid while a
+    /// descendant is not.</para>
+    /// </summary>
+    private const int CappedLayoutPasses = 3;
+
+    private static void Save(Control content, string path, int passes = 1)
+    {
+        // The tree must be measured before its desired size is known, and arranged at that
+        // size before it will render anything but blank. A panel with room is done in one
+        // pass, exactly as before.
+        for (var pass = 0; pass < passes; pass++)
+        {
+            content.InvalidateMeasure();
+            content.Measure(Size.Infinity);
+            content.InvalidateArrange();
+            content.Arrange(new Rect(content.DesiredSize));
+        }
 
         var pixel = new PixelSize(
             Math.Max(1, (int)Math.Ceiling(content.DesiredSize.Width)),

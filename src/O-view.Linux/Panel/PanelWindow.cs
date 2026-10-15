@@ -136,8 +136,12 @@ public sealed class PanelWindow : Window
 
         if (placeable)
         {
-            FitToScreen(snapshot, stats, account, dataReport, scopeReport, utcNow, cachedUsage: cachedUsage);
-            PlaceAtWorkAreaCorner();
+            // Placed from what the fit decided, not from what the window reports: the corner
+            // is derived from the panel's height, and after a resize the compositor has not
+            // answered yet.
+            var height = FitToScreen(snapshot, stats, account, dataReport, scopeReport, utcNow,
+                boostNotices, cachedUsage);
+            PlaceAtWorkAreaCorner(height);
         }
 
         Activate();
@@ -161,19 +165,30 @@ public sealed class PanelWindow : Window
     }
 
     /// <summary>
-    /// Re-lays the panel out compactly when this screen is too short for the natural layout
-    /// (<see cref="PanelDensity"/>), so the bottom sections stay above the desktop's panel bar
-    /// rather than under it.
+    /// Makes the panel fit this screen, and answers how tall it now is in DIP.
     ///
-    /// <para>Measured after <c>Show</c>, because <see cref="Window.SizeToContent"/> gives no
-    /// height until the first layout pass — the same reason placement happens there. A
-    /// threshold on the screen alone would be a guess: the panel's height depends on whether a
-    /// banner, an off-plan section or an expanded explanation is present.</para>
+    /// <para>Two steps, in this order. First the panel is re-laid out compactly when the screen
+    /// is too short for the natural layout (<see cref="PanelDensity"/>), which buys back about
+    /// 94 DIP. Then, because compacting is not always enough, <see cref="PanelFit"/> caps the
+    /// window at the work area and the content scrolls inside it — nothing is dropped and the
+    /// last section stays reachable.</para>
     ///
-    /// <para>Re-populating rebuilds the whole tree, which is why this only runs when the panel
-    /// actually overflows. A display with room does one pass, exactly as before.</para>
+    /// <para><b>Both steps measure the content, never the window.</b> The panel is
+    /// <c>SizeToContent</c>, so its frame is only ever as tall as the compositor granted, and
+    /// a compositor will not grant more than the screen: reading it made a 1024×768 desktop
+    /// report a natural height of exactly 768 and conclude the panel fitted a 712 DIP work
+    /// area, with four sections off the bottom edge and nothing to scroll them back
+    /// (Maximilian's report of 2026-10-15). <see cref="PanelContent.NaturalHeightDip"/> asks
+    /// the tree instead.</para>
+    ///
+    /// <para>And it measures <i>again</i> after the compact re-layout, because the tree that
+    /// answered first is not the tree now on screen — the cap, the scroll decision and the
+    /// corner all have to be about the second one.</para>
+    ///
+    /// <para>Re-populating rebuilds the whole tree, which is why the compact step only runs
+    /// when the panel actually overflows. A display with room is laid out exactly as before.</para>
     /// </summary>
-    private void FitToScreen(
+    private double FitToScreen(
         UsageSnapshot snapshot,
         PanelStatistics stats,
         ClaudeAccount? account,
@@ -183,26 +198,63 @@ public sealed class PanelWindow : Window
         BoostNotices? boostNotices = null,
         CachedUtilization? cachedUsage = null)
     {
+        var natural = _content.NaturalHeightDip();
         if (TargetScreen() is not { } screen)
         {
-            return;
+            return natural;
         }
 
         var scaling = screen.Scaling > 0 ? screen.Scaling : 1.0;
         var available = WorkAreaPlacement.AvailableHeightPx(ToBox(screen.WorkingArea)) / scaling;
-        var natural = (FrameSize ?? ClientSize).Height;
 
         var density = PanelDensity.For(natural, available);
-        if (!density.IsCompact)
+        if (density.IsCompact)
         {
-            return;
+            _content.Density = density;
+            _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow, boostNotices,
+                cachedUsage: cachedUsage);
+            _log?.Write(
+                $"panel density: compact (natural {natural:0} dip > available {available:0} dip)");
         }
 
-        _content.Density = density;
-        _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow, boostNotices,
-            cachedUsage: cachedUsage);
-        _log?.Write(
-            $"panel density: compact (natural {natural:0} dip > available {available:0} dip)");
+        var fit = PanelFit.Resolve(_content.NaturalHeightDip(), available);
+        ApplyHeight(fit.WindowHeightDip, fit.MustScroll, available);
+        return fit.WindowHeightDip;
+    }
+
+    /// <summary>
+    /// Makes the window the height the fit decided.
+    ///
+    /// <para><c>SizeToContent</c> has to give up the height dimension for a capped panel, or
+    /// the next layout pass grows the window straight back past the work area;
+    /// <c>MaxHeight</c> holds the cap either way, including against a later re-layout this
+    /// method never sees. A panel that fits goes back to sizing itself, so moving between a
+    /// short screen and a tall one in one session leaves no cap behind.</para>
+    ///
+    /// <para>Takes the two figures rather than the <see cref="PanelFit"/> answer they came
+    /// from: naming that type here would read to this head's own guard against blocking on a
+    /// task as a wait on a task's result.</para>
+    /// </summary>
+    private void ApplyHeight(double heightDip, bool mustScroll, double availableHeightDip)
+    {
+        MaxHeight = availableHeightDip;
+        _content.ScrollContent(mustScroll);
+
+        if (mustScroll)
+        {
+            SizeToContent = SizeToContent.Width;
+            Height = heightDip;
+        }
+        else
+        {
+            Height = double.NaN;
+            SizeToContent = SizeToContent.WidthAndHeight;
+        }
+
+        _log?.Write(mustScroll
+            ? $"panel height: capped at {heightDip:0} dip of {availableHeightDip:0} dip "
+              + "available — content scrolls"
+            : $"panel height: {heightDip:0} dip of {availableHeightDip:0} dip available");
     }
 
     /// <summary>
@@ -210,8 +262,13 @@ public sealed class PanelWindow : Window
     ///
     /// <para>Called after <c>Show</c> because <see cref="Window.SizeToContent"/> leaves the
     /// size unknown until the first layout pass, and the corner is derived from it.</para>
+    ///
+    /// <para><paramref name="panelHeightDip"/> comes from <see cref="FitToScreen"/> rather than
+    /// from the window, for two reasons: the compositor has not answered the resize that was
+    /// just asked for, and on a short screen what it answers describes the screen rather than
+    /// the panel. Width is still read from the window — nothing has ever capped it.</para>
     /// </summary>
-    private void PlaceAtWorkAreaCorner()
+    private void PlaceAtWorkAreaCorner(double panelHeightDip)
     {
         if (TargetScreen() is not { } screen)
         {
@@ -223,7 +280,7 @@ public sealed class PanelWindow : Window
         // compositor that has not reported a frame yet. Both are DIPs, and the work area is
         // device pixels, so the scale has to be applied — the classic HiDPI mistake is to
         // compare the two directly and land a quarter of the way up the screen.
-        var size = FrameSize ?? ClientSize;
+        var size = new Size((FrameSize ?? ClientSize).Width, panelHeightDip);
         var scaling = screen.Scaling > 0 ? screen.Scaling : 1.0;
 
         var (left, top, corner) = WorkAreaPlacement.Place(
