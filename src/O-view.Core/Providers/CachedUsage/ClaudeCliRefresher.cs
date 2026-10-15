@@ -140,6 +140,27 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     public const string UsageArgument = "/usage";
 
     /// <summary>
+    /// Resumes the most recent conversation in the working directory instead of starting a new
+    /// one, so ten panel opens in quick succession land ten exchanges in <i>one</i> transcript
+    /// rather than spawning ten new session files. Measured: with this flag, three invocations
+    /// from the same working directory wrote to a single file throughout; without it, each one
+    /// wrote its own.
+    ///
+    /// <para><b>Only added when spawning from <see cref="OwnProjectFolder"/>'s preferred
+    /// directory</b> — see <see cref="Spawn"/>. While running from the user-profile fallback
+    /// instead, "the most recent conversation in this directory" could be a real conversation of
+    /// the user's own, and resuming it on their behalf, unasked, is not this feature's to do.</para>
+    ///
+    /// <para>Free on its own, same as <see cref="UsageArgument"/> — measured, repeated
+    /// invocations added no request id. But it moves the one thing
+    /// <see cref="TranscriptCostGuard"/> relies on: that a charge always lands in a transcript
+    /// that did not exist before the invocation. A continued session is the opposite of that by
+    /// design, so <see cref="Refresh"/> carries a second, file-content check for exactly this
+    /// file — see <see cref="SafeFindBilledInContinuedTranscript"/>.</para>
+    /// </summary>
+    public const string ContinueArgument = "--continue";
+
+    /// <summary>
     /// How long to wait before killing it.
     ///
     /// <para>Generous rather than tight, because the cost of being wrong is asymmetric: a slow
@@ -228,6 +249,30 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
             : null;
 
     /// <summary>
+    /// The file <see cref="ContinueArgument"/> will append to: the most recently written
+    /// transcript directly under <see cref="OwnProjectFolder"/>, or null when that folder does
+    /// not exist yet (the user-profile fallback is active) or holds no transcript yet (this
+    /// refresher has never run).
+    ///
+    /// <para>Walked with <see cref="TranscriptFileScan"/> rather than a hand-rolled
+    /// <see cref="Directory.GetFiles(string, string)"/> — the reason is the same one CLAUDE.md
+    /// rule 9 gives for every other walk of a Claude Code tree: a single unreadable node must not
+    /// turn into "no transcripts" for the whole folder.</para>
+    /// </summary>
+    private static string? MostRecentOwnTranscript()
+    {
+        if (OwnProjectFolder is not { } folder)
+        {
+            return null;
+        }
+
+        return TranscriptFileScan.FindInfos(folder, "*.jsonl", int.MaxValue, out _)
+            .OrderByDescending(f => f.LastWriteTimeUtc)
+            .FirstOrDefault()
+            ?.FullName;
+    }
+
+    /// <summary>
     /// Reproduces how Claude Code turns a working directory into a project folder name, by
     /// replacing path separators and colons with <c>-</c>
     /// (<c>C:\Users\X</c> → <c>C--Users-X</c>, docs/findings/jsonl-schema.md). Both forward
@@ -249,6 +294,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     private readonly Func<CachedUtilization?> _read;
     private readonly Func<TimeSpan, ProcessRun> _run;
     private readonly IBilledTranscriptGuard _guard;
+    private readonly Func<string?> _continuedTranscript;
     private readonly TimeSpan _timeout;
 
     /// <summary>How a run ended, independent of what it cost or changed.</summary>
@@ -261,23 +307,32 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
 
     /// <summary>Production wiring: the real process, the real file, the real transcripts.</summary>
     public ClaudeCliRefresher(TimeSpan? timeout = null)
-        : this(() => CachedUtilization.TryRead(), Spawn, new TranscriptCostGuard(), timeout)
+        : this(
+            () => CachedUtilization.TryRead(), Spawn, new TranscriptCostGuard(),
+            MostRecentOwnTranscript, timeout)
     {
     }
 
     /// <param name="read">Reads the cached block, so freshness can be compared before and after.</param>
     /// <param name="run">Runs the process. Injected so every outcome is testable without spawning.</param>
     /// <param name="guard">Decides whether the invocation was billed. Injected for the same reason.</param>
+    /// <param name="continuedTranscript">
+    /// The file <see cref="ContinueArgument"/> will append to, or null when none exists yet.
+    /// Injected for the same reason as <paramref name="guard"/>: <see cref="SafeFindBilledInContinuedTranscript"/>
+    /// needs this testable without a real project folder on disk.
+    /// </param>
     /// <param name="timeout">Overrides <see cref="DefaultTimeout"/>.</param>
     public ClaudeCliRefresher(
         Func<CachedUtilization?> read,
         Func<TimeSpan, ProcessRun> run,
         IBilledTranscriptGuard guard,
+        Func<string?> continuedTranscript,
         TimeSpan? timeout = null)
     {
         _read = read;
         _run = run;
         _guard = guard;
+        _continuedTranscript = continuedTranscript;
         _timeout = timeout ?? DefaultTimeout;
     }
 
@@ -313,6 +368,24 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
             return new ClaudeCliRefreshResult(RefreshOutcome.Failed, $"guard baseline ({ex.GetType().Name})");
         }
 
+        // The guard above is keyed on file identity, so it is blind to a charge appended to a
+        // file that already existed — exactly what ContinueArgument causes on purpose. This is
+        // the other half: the one file this invocation can continue, read for a request id
+        // before the process runs so the same read after can tell "already there" from "new".
+        string? continuedFile;
+        bool continuedHadRequestId;
+        try
+        {
+            continuedFile = _continuedTranscript();
+            continuedHadRequestId =
+                continuedFile is not null && TranscriptCostGuard.CarriesRequestId(continuedFile);
+        }
+        catch (Exception ex)
+        {
+            return new ClaudeCliRefreshResult(
+                RefreshOutcome.Failed, $"continued-session baseline ({ex.GetType().Name})");
+        }
+
         ProcessRun run;
         try
         {
@@ -334,6 +407,11 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
         if (SafeFindBilled(existing) is { } billed)
         {
             return new ClaudeCliRefreshResult(RefreshOutcome.Billed, billed);
+        }
+
+        if (SafeFindBilledInContinuedTranscript(continuedFile, continuedHadRequestId) is { } billedContinued)
+        {
+            return new ClaudeCliRefreshResult(RefreshOutcome.Billed, billedContinued);
         }
 
         if (!run.Exited)
@@ -409,6 +487,31 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     }
 
     /// <summary>
+    /// The other half of the cost guard: whether the file <see cref="ContinueArgument"/> might
+    /// have just appended to now carries a request id that was not there a moment ago. Mirrors
+    /// <see cref="SafeFindBilled"/>'s direction — a read that cannot be trusted must not be read
+    /// as "nothing was billed".
+    /// </summary>
+    private static string? SafeFindBilledInContinuedTranscript(string? path, bool hadRequestIdBefore)
+    {
+        if (path is null)
+        {
+            return null;
+        }
+
+        try
+        {
+            return !hadRequestIdBefore && TranscriptCostGuard.CarriesRequestId(path)
+                ? Path.GetFileName(path)
+                : null;
+        }
+        catch (Exception ex)
+        {
+            return $"continued transcript unreadable ({ex.GetType().Name})";
+        }
+    }
+
+    /// <summary>
     /// Runs <c>claude /usage</c> with no window, no shell and no stdin.
     ///
     /// <para>Output is redirected and drained rather than ignored: a child that fills its pipe
@@ -428,6 +531,14 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
             // Chosen, not inherited — Claude Code names the transcript's folder after it.
             WorkingDirectory = WorkingDirectory,
         };
+
+        // Only while spawning from O-view's own data directory — see ContinueArgument. While
+        // running from the user-profile fallback instead, "the most recent conversation here"
+        // could be a real one of the user's own.
+        if (OwnProjectFolder is not null)
+        {
+            info.ArgumentList.Add(ContinueArgument);
+        }
 
         info.ArgumentList.Add(UsageArgument);
 
