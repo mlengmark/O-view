@@ -347,15 +347,13 @@ public sealed class PlanHistoryProvider : IUsageProvider
             SessionResetUncertainty: windowStart?.Uncertainty)
         {
             // The two percentages and the sample's own timestamp are measured — read straight
-            // off a Desktop sample. The session reset is not: it is predicted from an observed
-            // drop, never reported by the source (see the type's own doc comment above), so it
-            // is estimated whenever there is one to predict. Weekly has nothing to add here at
-            // all, per the comment above — absent, same as the plain member.
-            SessionPercentValue = UsageSnapshot.Measured(sessionPercent),
-            WeeklyPercentValue = UsageSnapshot.Measured(latest.SevenDayPercent),
-            SessionResetAtUtcValue = UsageSnapshot.Estimated(nextReset),
-            WeeklyResetAtUtcValue = new UsageInstant(null, UsageValueStatus.Unavailable),
-            CapturedAtUtcValue = UsageSnapshot.Measured(latest.AtUtc),
+            // off a Desktop sample, which is UsageSnapshot's default status and needs no
+            // override here. The session reset is not: it is predicted from an observed drop,
+            // never reported by the source (see the type's own doc comment above), so it is
+            // estimated whenever there is one to predict. Weekly has nothing to add at all, per
+            // the comment above — its default (absent, since the plain member is null) already
+            // says so.
+            SessionResetAtUtcStatus = UsageSnapshot.EstimatedStatus(nextReset),
         };
     }
 

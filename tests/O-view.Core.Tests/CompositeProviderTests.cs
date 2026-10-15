@@ -109,13 +109,40 @@ public class CompositeProviderTests
     {
         var withStatus = new UsageSnapshot(DataSource.Live, 47, null, null, Now)
         {
-            SessionPercentValue = new UsagePercent(47, UsageValueStatus.Estimated),
+            SessionPercentStatus = UsageValueStatus.Estimated,
         };
         var composite = new CompositeUsageProvider(new Fixed(withStatus));
 
         var result = composite.GetSnapshot(Now);
 
         Assert.Equal(UsageValueStatus.Estimated, result.SessionPercentValue.Status);
+        Assert.Equal(47, result.SessionPercentValue.Value);
+    }
+
+    /// <summary>
+    /// A snapshot built the ordinary, positional way — no typed member touched at all — still
+    /// has every typed value agree with its plain counterpart, including the ones no provider
+    /// in this PR sets explicitly. This is what made findings 1 and 2 possible: the typed
+    /// members used to default independently of the plain ones, so any such snapshot claimed
+    /// a status of Real with no value for every one of them.
+    /// </summary>
+    [Fact]
+    public void PositionallyBuiltSnapshot_TypedValuesAgreeWithPlainMembers()
+    {
+        var snapshot = new UsageSnapshot(DataSource.Live, 25, 3, Now.AddHours(3), Now);
+
+        Assert.Equal(snapshot.SessionPercent, snapshot.SessionPercentValue.Value);
+        Assert.Equal(snapshot.WeeklyPercent, snapshot.WeeklyPercentValue.Value);
+        Assert.Equal(snapshot.SessionResetAtUtc, snapshot.SessionResetAtUtcValue.Value);
+        Assert.Equal(snapshot.CapturedAtUtc, snapshot.CapturedAtUtcValue.Value);
+        Assert.Equal(snapshot.WeeklyResetAtUtc, snapshot.WeeklyResetAtUtcValue.Value);
+
+        // And a `with` that changes only a plain member carries the typed value along with it,
+        // rather than leaving it pointing at the figure that `with` just replaced.
+        var changed = snapshot with { SessionPercent = 91, WeeklyPercent = 80 };
+
+        Assert.Equal(91, changed.SessionPercentValue.Value);
+        Assert.Equal(80, changed.WeeklyPercentValue.Value);
     }
 
     /// <summary>

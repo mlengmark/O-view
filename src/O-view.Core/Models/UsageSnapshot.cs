@@ -34,52 +34,67 @@ public sealed record UsageSnapshot(
     TimeSpan? SessionResetUncertainty = null)
 {
     /// <summary>
-    /// <see cref="SessionPercent"/>, paired with the status the provider that built this
-    /// snapshot gave it — <see cref="UsageValueStatus.Real"/> for a figure read straight from a
-    /// source, <see cref="UsageValueStatus.Estimated"/> for one this app derived, and
-    /// <see cref="UsageValueStatus.Unavailable"/> for "nothing was read". Built alongside the
-    /// plain member above, from the same read, never guessed afterwards from whether
-    /// <see cref="SessionPercent"/> happens to be null — a value can be unavailable for reasons
-    /// other than "nothing was read" (see <see cref="UsagePercent"/>).
+    /// The status behind <see cref="SessionPercent"/> — <see cref="UsageValueStatus.Real"/> for
+    /// a figure read straight from a source, <see cref="UsageValueStatus.Estimated"/> for one
+    /// this app derived, and <see cref="UsageValueStatus.Unavailable"/> for "nothing was read".
     ///
-    /// <para>Defaults to <c>default(UsagePercent)</c> — <see cref="UsageValueStatus.Real"/> with
-    /// no value — for the same reason <see cref="UsagePercent"/> itself documents: a provider
-    /// that has not set this has not yet said anything about it. Every provider in this app that
-    /// reports <see cref="SessionPercent"/> sets it explicitly.</para>
+    /// <para>Defaults to <see cref="UsageValueStatus.Real"/> when <see cref="SessionPercent"/>
+    /// is set and <see cref="UsageValueStatus.Unavailable"/> when it is null — "measured" is
+    /// what every value in this app is unless a provider says otherwise, and a provider that
+    /// has not set this has not yet said anything about it. Only a provider reporting an
+    /// estimated or modelled figure needs to override it.</para>
     /// </summary>
-    public UsagePercent SessionPercentValue { get; init; }
+    public UsageValueStatus SessionPercentStatus { get; init; } =
+        SessionPercent is null ? UsageValueStatus.Unavailable : UsageValueStatus.Real;
+
+    /// <inheritdoc cref="SessionPercentStatus"/>
+    public UsageValueStatus WeeklyPercentStatus { get; init; } =
+        WeeklyPercent is null ? UsageValueStatus.Unavailable : UsageValueStatus.Real;
+
+    /// <inheritdoc cref="SessionPercentStatus"/>
+    public UsageValueStatus SessionResetAtUtcStatus { get; init; } =
+        SessionResetAtUtc is null ? UsageValueStatus.Unavailable : UsageValueStatus.Real;
+
+    /// <inheritdoc cref="SessionPercentStatus"/>
+    public UsageValueStatus CapturedAtUtcStatus { get; init; } =
+        CapturedAtUtc is null ? UsageValueStatus.Unavailable : UsageValueStatus.Real;
+
+    /// <inheritdoc cref="SessionPercentStatus"/>
+    public UsageValueStatus WeeklyResetAtUtcStatus { get; init; } =
+        WeeklyResetAtUtc is null ? UsageValueStatus.Unavailable : UsageValueStatus.Real;
+
+    /// <summary>
+    /// <see cref="SessionPercent"/>, paired with <see cref="SessionPercentStatus"/>. Computed
+    /// from the plain member above rather than stored alongside it, so the two can never
+    /// disagree — including across a <c>with</c> expression that changes only
+    /// <see cref="SessionPercent"/>, which carries <see cref="SessionPercentStatus"/> forward
+    /// unchanged and this recomputes against the new figure.
+    /// </summary>
+    public UsagePercent SessionPercentValue => new(SessionPercent, SessionPercentStatus);
 
     /// <inheritdoc cref="SessionPercentValue"/>
-    public UsagePercent WeeklyPercentValue { get; init; }
+    public UsagePercent WeeklyPercentValue => new(WeeklyPercent, WeeklyPercentStatus);
 
     /// <inheritdoc cref="SessionPercentValue"/>
-    public UsageInstant SessionResetAtUtcValue { get; init; }
+    public UsageInstant SessionResetAtUtcValue => new(SessionResetAtUtc, SessionResetAtUtcStatus);
 
     /// <inheritdoc cref="SessionPercentValue"/>
-    public UsageInstant CapturedAtUtcValue { get; init; }
+    public UsageInstant CapturedAtUtcValue => new(CapturedAtUtc, CapturedAtUtcStatus);
 
     /// <inheritdoc cref="SessionPercentValue"/>
-    public UsageInstant WeeklyResetAtUtcValue { get; init; }
+    public UsageInstant WeeklyResetAtUtcValue => new(WeeklyResetAtUtc, WeeklyResetAtUtcStatus);
 
-    /// <summary>The canonical "no data" snapshot: absent on every typed value, not just null.</summary>
-    public static UsageSnapshot None { get; } = new(DataSource.None, null, null, null, null)
-    {
-        SessionPercentValue = new(null, UsageValueStatus.Unavailable),
-        WeeklyPercentValue = new(null, UsageValueStatus.Unavailable),
-        SessionResetAtUtcValue = new(null, UsageValueStatus.Unavailable),
-        CapturedAtUtcValue = new(null, UsageValueStatus.Unavailable),
-        WeeklyResetAtUtcValue = new(null, UsageValueStatus.Unavailable),
-    };
+    /// <summary>
+    /// The canonical "no data" snapshot: absent on every typed value, not just null — true by
+    /// construction here, since every plain member above is null and the status defaults follow.
+    /// </summary>
+    public static UsageSnapshot None { get; } = new(DataSource.None, null, null, null, null);
 
-    /// <summary>A figure read straight from a source: measured when present, absent when not.</summary>
-    internal static UsagePercent Measured(int? value) =>
-        new(value, value is null ? UsageValueStatus.Unavailable : UsageValueStatus.Real);
-
-    /// <inheritdoc cref="Measured(int?)"/>
-    internal static UsageInstant Measured(DateTimeOffset? value) =>
-        new(value, value is null ? UsageValueStatus.Unavailable : UsageValueStatus.Real);
-
-    /// <summary>An instant this app derived or predicted, rather than one a source reported.</summary>
-    internal static UsageInstant Estimated(DateTimeOffset? value) =>
-        new(value, value is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated);
+    /// <summary>
+    /// The status for a reading this app derived or predicted, rather than one a source
+    /// reported: estimated when there is a figure to label, absent when there is not — never
+    /// "estimated" for a value nothing produced.
+    /// </summary>
+    internal static UsageValueStatus EstimatedStatus(DateTimeOffset? value) =>
+        value is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated;
 }
