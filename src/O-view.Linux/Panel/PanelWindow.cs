@@ -116,9 +116,11 @@ public sealed class PanelWindow : Window
         PlanHistoryReport? dataReport,
         TranscriptScopeReport? scopeReport,
         DateTimeOffset utcNow,
-        BoostNotices? boostNotices = null)
+        BoostNotices? boostNotices = null,
+        CachedUtilization? cachedUsage = null)
     {
-        _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow, boostNotices);
+        _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow, boostNotices,
+            cachedUsage: cachedUsage);
         _dismissal.Opening();
 
         // Decided before Show, applied after it: the corner needs the panel's size, and
@@ -134,7 +136,7 @@ public sealed class PanelWindow : Window
 
         if (placeable)
         {
-            FitToScreen(snapshot, stats, account, dataReport, scopeReport, utcNow);
+            FitToScreen(snapshot, stats, account, dataReport, scopeReport, utcNow, cachedUsage: cachedUsage);
             PlaceAtWorkAreaCorner();
         }
 
@@ -178,7 +180,8 @@ public sealed class PanelWindow : Window
         PlanHistoryReport? dataReport,
         TranscriptScopeReport? scopeReport,
         DateTimeOffset utcNow,
-        BoostNotices? boostNotices = null)
+        BoostNotices? boostNotices = null,
+        CachedUtilization? cachedUsage = null)
     {
         if (TargetScreen() is not { } screen)
         {
@@ -196,7 +199,8 @@ public sealed class PanelWindow : Window
         }
 
         _content.Density = density;
-        _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow, boostNotices);
+        _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow, boostNotices,
+            cachedUsage: cachedUsage);
         _log?.Write(
             $"panel density: compact (natural {natural:0} dip > available {available:0} dip)");
     }
@@ -258,9 +262,11 @@ public sealed class PanelWindow : Window
         PlanHistoryReport? dataReport,
         TranscriptScopeReport? scopeReport,
         DateTimeOffset utcNow,
-        BoostNotices? boostNotices = null)
+        BoostNotices? boostNotices = null,
+        CachedUtilization? cachedUsage = null)
     {
-        _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow, boostNotices);
+        _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow, boostNotices,
+            cachedUsage: cachedUsage);
         return _content;
     }
 }

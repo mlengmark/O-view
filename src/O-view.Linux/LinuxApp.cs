@@ -271,7 +271,11 @@ public sealed class LinuxApp : Application, IShellToSkin
                 // Read on open like the two reports above. The flag cache refreshes when
                 // Claude Code starts, not when /usage runs, so it keeps its own clock and is
                 // read on its own rather than folded into the poll (issue #254).
-                BoostNotices.TryRead());
+                BoostNotices.TryRead(),
+                // Taken from the shell, not read here: the refresh forced above publishes
+                // into it, so this is the freshest block either skin has. Without it the
+                // off-plan banner can only say the billing setting is unknown.
+                shell.CachedUsage);
 
             // Which thread got here, not only that the panel came up. Taking BusCallback's
             // hand-off away leaves the window built on the D-Bus thread, and under a virtual
