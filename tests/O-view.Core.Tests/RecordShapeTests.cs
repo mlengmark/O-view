@@ -52,20 +52,25 @@ public class RecordShapeTests
     }
 
     /// <summary>
-    /// Eight parameters, five of them optional and three of those <see cref="TimeSpan"/>?.
-    /// Removing or reordering any of the tail rebinds the rest with no type change to notice —
-    /// which is exactly what happened in #248.
+    /// Eight parameters. The two trailing <see cref="TimeSpan"/>? are still the hazard #248
+    /// found: both optional, both the same type, so removing or reordering either rebinds the
+    /// other with no type change to notice.
+    ///
+    /// <para>The five readings in the middle are now each their own value-plus-status type, so
+    /// the two <see cref="UsagePercent"/> arguments can be swapped for each other and the three
+    /// <see cref="UsageInstant"/> ones for each other — fewer ways to get it wrong than the
+    /// plain nullables allowed, and still ways.</para>
     /// </summary>
     [Fact]
     public void UsageSnapshotPositionalOrderIsPinned() =>
         AssertOrder(
             typeof(UsageSnapshot),
             "Source",
-            "SessionPercent",
-            "WeeklyPercent",
-            "SessionResetAtUtc",
-            "CapturedAtUtc",
-            "WeeklyResetAtUtc",
+            "SessionPercentValue",
+            "WeeklyPercentValue",
+            "SessionResetAtUtcValue",
+            "CapturedAtUtcValue",
+            "WeeklyResetAtUtcValue",
             "WeeklyResetPeriod",
             "SessionResetUncertainty");
 
@@ -108,24 +113,22 @@ public class RecordShapeTests
     /// <summary>
     /// The more dangerous of the two, and it has never bitten — yet.
     ///
-    /// <para>It opens <c>long, decimal?, long, decimal?</c>: today's tokens, today's value, the
-    /// 31-day tokens, the 31-day value. Swapping either pair compiles, passes type checking, and
-    /// puts a month's figures where the day's belong — a wrong number rendered confidently, which
-    /// is the failure CLAUDE.md rule 6 is written against.</para>
+    /// <para>It opens <c>long, long</c>: today's tokens, then the 31-day tokens. Swapping them
+    /// compiles, passes type checking, and puts a month's figure where the day's belongs — a
+    /// wrong number rendered confidently, which is the failure CLAUDE.md rule 6 is written
+    /// against. The four Est. figures that used to interleave with them left the positional
+    /// list when they became <see cref="EstimatedUsd"/>, which halved the shape without making
+    /// the remaining pair any safer to transpose.</para>
     /// </summary>
     [Fact]
     public void PanelStatisticsPositionalOrderIsPinned() =>
         AssertOrder(
             typeof(PanelStatistics),
             "TokensToday",
-            "EstTodayUsd",
             "Tokens31Days",
-            "Est31DaysUsd",
             "RecordedDays",
             "WindowDays",
             "DailySeries",
             "CreditTokens31Days",
-            "EstCredit31DaysUsd",
-            "Divergence",
-            "EstOffPlanUsd");
+            "Divergence");
 }

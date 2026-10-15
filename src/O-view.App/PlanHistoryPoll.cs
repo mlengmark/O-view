@@ -232,10 +232,8 @@ public sealed class PlanHistoryPoll
             var fake = mode == "limit" ? new[] { 99, 100 } : [6, 6, 6];
             return stats.WithDivergence(_store, windowStart, fake, TimeSpan.Zero) with
             {
-                EstOffPlanUsd = 92.75m,
-                // Kept in step with the plain field above by hand, same as PanelStatistics.Priced
-                // does for every other figure — a typed reader must see the same simulated value
-                // the plain one carries, not whatever WithDivergence priced from the (empty) store.
+                // Stated outright rather than taken from WithDivergence, which priced the
+                // (empty) store — a simulation has to carry the figure it is simulating.
                 EstOffPlanValue = new EstimatedUsd(92.75m, UsageValueStatus.Estimated),
                 Divergence = DivergenceDetector.Evaluate(fake, 69_091, TimeSpan.Zero),
             };

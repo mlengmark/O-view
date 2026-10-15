@@ -180,7 +180,7 @@ public class ShellToSkinDispatchTests
         Assert.Equal(1, h.Dispatcher.Pump());
 
         Assert.Equal(["snapshot"], h.Skin.Calls);
-        Assert.Equal(42, h.Skin.Snapshots.Single().SessionPercent);
+        Assert.Equal(42, h.Skin.Snapshots.Single().SessionPercentValue.Value);
         Assert.Equal(0, h.Skin.ArrivedUndispatched);
     }
 

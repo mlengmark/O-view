@@ -218,10 +218,10 @@ public class CachedUtilizationTests
             var snapshot = For().GetSnapshot(Fetched.AddMinutes(2));
 
             Assert.Equal(DataSource.Live, snapshot.Source);
-            Assert.Equal(91, snapshot.SessionPercent);
-            Assert.Equal(79, snapshot.WeeklyPercent);
-            Assert.Equal(Fetched.AddHours(5), snapshot.SessionResetAtUtc);
-            Assert.Equal(Fetched.AddHours(21), snapshot.WeeklyResetAtUtc);
+            Assert.Equal(91, snapshot.SessionPercentValue.Value);
+            Assert.Equal(79, snapshot.WeeklyPercentValue.Value);
+            Assert.Equal(Fetched.AddHours(5), snapshot.SessionResetAtUtcValue.Value);
+            Assert.Equal(Fetched.AddHours(21), snapshot.WeeklyResetAtUtcValue.Value);
         }
 
         /// <summary>
@@ -247,8 +247,8 @@ public class CachedUtilizationTests
             var snapshot = For().GetSnapshot(Fetched.AddHours(1));
 
             Assert.Equal(DataSource.Stale, snapshot.Source);
-            Assert.Equal(91, snapshot.SessionPercent);
-            Assert.Equal(Fetched, snapshot.CapturedAtUtc);
+            Assert.Equal(91, snapshot.SessionPercentValue.Value);
+            Assert.Equal(Fetched, snapshot.CapturedAtUtcValue.Value);
         }
 
         /// <summary>
@@ -263,8 +263,8 @@ public class CachedUtilizationTests
         {
             var snapshot = For().GetSnapshot(Fetched.AddHours(6));
 
-            Assert.Null(snapshot.SessionPercent);
-            Assert.Null(snapshot.SessionResetAtUtc);
+            Assert.Null(snapshot.SessionPercentValue.Value);
+            Assert.Null(snapshot.SessionResetAtUtcValue.Value);
         }
 
         /// <summary>The windows roll independently; one expiring says nothing about the other.</summary>
@@ -273,8 +273,8 @@ public class CachedUtilizationTests
         {
             var snapshot = For().GetSnapshot(Fetched.AddHours(6));
 
-            Assert.Equal(79, snapshot.WeeklyPercent);
-            Assert.Equal(Fetched.AddHours(21), snapshot.WeeklyResetAtUtc);
+            Assert.Equal(79, snapshot.WeeklyPercentValue.Value);
+            Assert.Equal(Fetched.AddHours(21), snapshot.WeeklyResetAtUtcValue.Value);
         }
 
         /// <summary>
@@ -290,8 +290,8 @@ public class CachedUtilizationTests
         {
             var snapshot = For().GetSnapshot(Fetched.AddDays(8));
 
-            Assert.Null(snapshot.WeeklyResetAtUtc);
-            Assert.Null(snapshot.SessionResetAtUtc);
+            Assert.Null(snapshot.WeeklyResetAtUtcValue.Value);
+            Assert.Null(snapshot.SessionResetAtUtcValue.Value);
             Assert.Equal(DataSource.None, snapshot.Source);
         }
 
@@ -306,15 +306,15 @@ public class CachedUtilizationTests
         {
             var stale = Fetched.AddMinutes(30);
 
-            Assert.Null(For(fiveHour: 0).GetSnapshot(stale).SessionPercent);
-            Assert.Equal(4, For(fiveHour: 4).GetSnapshot(stale).SessionPercent);
+            Assert.Null(For(fiveHour: 0).GetSnapshot(stale).SessionPercentValue.Value);
+            Assert.Equal(4, For(fiveHour: 4).GetSnapshot(stale).SessionPercentValue.Value);
         }
 
         /// <summary>A zero that was just written is a measurement, and is shown.</summary>
         [Fact]
         public void AFreshZeroIsAMeasurementAndIsShown()
         {
-            Assert.Equal(0, For(fiveHour: 0).GetSnapshot(Fetched.AddMinutes(2)).SessionPercent);
+            Assert.Equal(0, For(fiveHour: 0).GetSnapshot(Fetched.AddMinutes(2)).SessionPercentValue.Value);
         }
 
         [Fact]
@@ -348,8 +348,8 @@ public class CachedUtilizationTests
 
             var snapshot = provider.GetSnapshot(Fetched.AddMinutes(2));
 
-            Assert.Equal(55, snapshot.SessionPercent);
-            Assert.Null(snapshot.SessionResetAtUtc);
+            Assert.Equal(55, snapshot.SessionPercentValue.Value);
+            Assert.Null(snapshot.SessionResetAtUtcValue.Value);
         }
     }
 }

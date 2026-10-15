@@ -35,10 +35,12 @@ public class ReportedResetTests
 
     /// <summary>A Desktop machine: percentages and derived, bracketed reset times.</summary>
     private static UsageSnapshot Derived { get; } = new(
-        DataSource.Live, 40, 60,
-        SessionResetAtUtc: T0.AddHours(2),
-        CapturedAtUtc: T0,
-        WeeklyResetAtUtc: T0.AddDays(3),
+        DataSource.Live,
+        UsageSnapshot.Percent(40),
+        UsageSnapshot.Percent(60),
+        UsageSnapshot.Instant(T0.AddHours(2)),
+        UsageSnapshot.Instant(T0),
+        UsageSnapshot.Instant(T0.AddDays(3)),
         WeeklyResetPeriod: TimeSpan.FromDays(7),
         SessionResetUncertainty: TimeSpan.FromMinutes(8));
 
@@ -91,8 +93,8 @@ public class ReportedResetTests
 
         engine.Refresh();
 
-        Assert.Equal(session, engine.Latest.SessionResetAtUtc);
-        Assert.Equal(weekly, engine.Latest.WeeklyResetAtUtc);
+        Assert.Equal(session, engine.Latest.SessionResetAtUtcValue.Value);
+        Assert.Equal(weekly, engine.Latest.WeeklyResetAtUtcValue.Value);
         Assert.Equal(TimeSpan.Zero, engine.Latest.SessionResetUncertainty);
     }
 
@@ -108,13 +110,13 @@ public class ReportedResetTests
         var weekly = T0.AddDays(2).AddHours(11);
         using var engine = Build(
             dir,
-            Derived with { WeeklyResetAtUtc = null },
+            Derived with { WeeklyResetAtUtcValue = UsageSnapshot.Instant(null) },
             Cache(sessionResets: null, weeklyResets: weekly),
             entry: new ManualWeeklyReset(DayOfWeek.Monday, new TimeOnly(22, 59)));
 
         engine.Refresh();
 
-        Assert.Equal(weekly, engine.Latest.WeeklyResetAtUtc);
+        Assert.Equal(weekly, engine.Latest.WeeklyResetAtUtcValue.Value);
     }
 
     /// <summary>
@@ -129,8 +131,8 @@ public class ReportedResetTests
 
         engine.Refresh();
 
-        Assert.Equal(Derived.SessionResetAtUtc, engine.Latest.SessionResetAtUtc);
-        Assert.Equal(Derived.WeeklyResetAtUtc, engine.Latest.WeeklyResetAtUtc);
+        Assert.Equal(Derived.SessionResetAtUtcValue.Value, engine.Latest.SessionResetAtUtcValue.Value);
+        Assert.Equal(Derived.WeeklyResetAtUtcValue.Value, engine.Latest.WeeklyResetAtUtcValue.Value);
 
         // The session bracket, not the weekly one. This asserted a weekly uncertainty until
         // issue #248 removed the field — the weekly reset is a reported instant with nothing to
@@ -162,8 +164,8 @@ public class ReportedResetTests
 
         engine.Refresh();
 
-        Assert.Equal(Derived.SessionResetAtUtc, engine.Latest.SessionResetAtUtc);
-        Assert.Equal(passedWeekly.AddDays(7), engine.Latest.WeeklyResetAtUtc);
+        Assert.Equal(Derived.SessionResetAtUtcValue.Value, engine.Latest.SessionResetAtUtcValue.Value);
+        Assert.Equal(passedWeekly.AddDays(7), engine.Latest.WeeklyResetAtUtcValue.Value);
     }
 
     /// <summary>Each window is folded on its own; one being absent must not drop the other.</summary>
@@ -176,8 +178,8 @@ public class ReportedResetTests
 
         engine.Refresh();
 
-        Assert.Equal(weekly, engine.Latest.WeeklyResetAtUtc);
-        Assert.Equal(Derived.SessionResetAtUtc, engine.Latest.SessionResetAtUtc);
+        Assert.Equal(weekly, engine.Latest.WeeklyResetAtUtcValue.Value);
+        Assert.Equal(Derived.SessionResetAtUtcValue.Value, engine.Latest.SessionResetAtUtcValue.Value);
         Assert.Equal(TimeSpan.FromMinutes(8), engine.Latest.SessionResetUncertainty);
     }
 
@@ -194,8 +196,8 @@ public class ReportedResetTests
         engine.Refresh();
 
         Assert.Equal(DataSource.None, engine.Latest.Source);
-        Assert.Null(engine.Latest.SessionResetAtUtc);
-        Assert.Null(engine.Latest.WeeklyResetAtUtc);
+        Assert.Null(engine.Latest.SessionResetAtUtcValue.Value);
+        Assert.Null(engine.Latest.WeeklyResetAtUtcValue.Value);
     }
 
     /// <summary>
@@ -223,8 +225,8 @@ public class ReportedResetTests
         engine.Refresh();
 
         Assert.Equal(DataSource.Live, engine.Latest.Source);
-        Assert.Equal(40, engine.Latest.SessionPercent);
-        Assert.Equal(Derived.SessionResetAtUtc, engine.Latest.SessionResetAtUtc);
+        Assert.Equal(40, engine.Latest.SessionPercentValue.Value);
+        Assert.Equal(Derived.SessionResetAtUtcValue.Value, engine.Latest.SessionResetAtUtcValue.Value);
     }
 
     /// <summary>
@@ -251,9 +253,9 @@ public class ReportedResetTests
         engine.Refresh();
 
         Assert.Equal(DataSource.Live, engine.Latest.Source);
-        Assert.Equal(91, engine.Latest.SessionPercent);
-        Assert.Equal(79, engine.Latest.WeeklyPercent);
-        Assert.Equal(T0.AddHours(3), engine.Latest.SessionResetAtUtc);
-        Assert.Equal(T0.AddDays(2), engine.Latest.WeeklyResetAtUtc);
+        Assert.Equal(91, engine.Latest.SessionPercentValue.Value);
+        Assert.Equal(79, engine.Latest.WeeklyPercentValue.Value);
+        Assert.Equal(T0.AddHours(3), engine.Latest.SessionResetAtUtcValue.Value);
+        Assert.Equal(T0.AddDays(2), engine.Latest.WeeklyResetAtUtcValue.Value);
     }
 }

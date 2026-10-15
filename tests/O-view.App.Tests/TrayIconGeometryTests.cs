@@ -12,7 +12,13 @@ namespace OView.App.Tests;
 public class TrayIconGeometryTests
 {
     private static UsageSnapshot Live(int percent) =>
-        new(DataSource.Live, percent, null, null, DateTimeOffset.UnixEpoch);
+        new(
+            DataSource.Live,
+            UsageSnapshot.Percent(percent),
+            UsageSnapshot.Percent(null),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(DateTimeOffset.UnixEpoch),
+            UsageSnapshot.Instant(null));
 
     [Theory]
     [InlineData(16, 16 / 7f)]
@@ -99,7 +105,13 @@ public class TrayIconGeometryTests
     {
         Assert.Equal(47, TrayIconGeometry.FillPercent(Live(47)));
         Assert.Equal(47, TrayIconGeometry.FillPercent(
-            new UsageSnapshot(DataSource.Stale, 47, null, null, DateTimeOffset.UnixEpoch)));
+            new UsageSnapshot(
+                DataSource.Stale,
+                UsageSnapshot.Percent(47),
+                UsageSnapshot.Percent(null),
+                UsageSnapshot.Instant(null),
+                UsageSnapshot.Instant(DateTimeOffset.UnixEpoch),
+                UsageSnapshot.Instant(null))));
     }
 
     /// <summary>
@@ -110,7 +122,13 @@ public class TrayIconGeometryTests
     [Fact]
     public void AnEstimateIsNotDrawnAsAFill()
     {
-        var estimate = new UsageSnapshot(DataSource.Estimate, 83, null, null, DateTimeOffset.UnixEpoch);
+        var estimate = new UsageSnapshot(
+            DataSource.Estimate,
+            UsageSnapshot.Percent(83),
+            UsageSnapshot.Percent(null),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(DateTimeOffset.UnixEpoch),
+            UsageSnapshot.Instant(null));
 
         Assert.Null(TrayIconGeometry.FillPercent(estimate));
     }
@@ -222,7 +240,13 @@ public class TrayIconGeometryTests
     [Fact]
     public void UnknownAndEstimatedDataKeepTheOpaqueNeutralPupil()
     {
-        var estimate = new UsageSnapshot(DataSource.Estimate, 83, null, null, DateTimeOffset.UnixEpoch);
+        var estimate = new UsageSnapshot(
+            DataSource.Estimate,
+            UsageSnapshot.Percent(83),
+            UsageSnapshot.Percent(null),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(DateTimeOffset.UnixEpoch),
+            UsageSnapshot.Instant(null));
 
         foreach (var light in new[] { false, true })
         {

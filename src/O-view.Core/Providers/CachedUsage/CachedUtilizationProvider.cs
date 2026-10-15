@@ -80,13 +80,17 @@ public sealed class CachedUtilizationProvider : IUsageProvider
             return UsageSnapshot.None;
         }
 
+        // Every figure here is what Claude reported, not something this provider derived — the
+        // whole reason this source exists (see the class summary above). UsageSnapshot.Percent
+        // and .Instant are exactly that pairing: measured where a figure was read, unavailable
+        // where the cache held none.
         return new UsageSnapshot(
             age <= _freshness ? DataSource.Live : DataSource.Stale,
-            session,
-            weekly,
-            sessionReset,
-            cached.FetchedAtUtc,
-            weeklyReset,
+            UsageSnapshot.Percent(session),
+            UsageSnapshot.Percent(weekly),
+            UsageSnapshot.Instant(sessionReset),
+            UsageSnapshot.Instant(cached.FetchedAtUtc),
+            UsageSnapshot.Instant(weeklyReset),
             // Named from here on. These trail a long positional list, and removing the weekly
             // uncertainty field in issue #248 would otherwise have re-pointed them silently —
             // the compiler caught it here, and naming them means it would not have to.
@@ -94,11 +98,6 @@ public sealed class CachedUtilizationProvider : IUsageProvider
             // Reported rather than inferred, so this carries no bracket. The weekly one no
             // longer exists at all (ADR-0014); the session window still rolls from first use,
             // so it keeps the field even when this source can fill it exactly.
-            //
-            // Every figure here is what Claude reported, not something this provider derived —
-            // the whole reason this source exists (see the class summary above). That is
-            // exactly UsageSnapshot's default status (Real when present, Unavailable when not),
-            // so none of the five typed members need setting here.
             SessionResetUncertainty: sessionReset is null ? null : TimeSpan.Zero);
     }
 

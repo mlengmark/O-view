@@ -99,19 +99,20 @@ public sealed class CompositeUsageProvider : IUsageProvider
         }
 
         // An undated snapshot cannot be shown to be newer, so it does not displace one.
-        if (challenger.CapturedAtUtc is not { } challengerAt)
+        if (challenger.CapturedAtUtcValue.Value is not { } challengerAt)
         {
             return incumbent;
         }
 
-        return incumbent.CapturedAtUtc is not { } incumbentAt || challengerAt > incumbentAt
+        return incumbent.CapturedAtUtcValue.Value is not { } incumbentAt || challengerAt > incumbentAt
             ? challenger
             : incumbent;
     }
 
     /// <summary>How many of the two plan meters this snapshot actually reports (0, 1 or 2).</summary>
     private static int MeterCount(UsageSnapshot snapshot) =>
-        (snapshot.SessionPercent is null ? 0 : 1) + (snapshot.WeeklyPercent is null ? 0 : 1);
+        (snapshot.SessionPercentValue.Value is null ? 0 : 1) +
+        (snapshot.WeeklyPercentValue.Value is null ? 0 : 1);
 
     /// <summary>
     /// A provider that throws (e.g. one backed by a corrupt local store — issue #16)

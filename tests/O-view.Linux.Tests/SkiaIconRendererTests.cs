@@ -15,7 +15,13 @@ namespace OView.Linux.Tests;
 public class SkiaIconRendererTests
 {
     private static UsageSnapshot Live(int percent) =>
-        new(DataSource.Live, percent, null, null, DateTimeOffset.UnixEpoch);
+        new(
+            DataSource.Live,
+            UsageSnapshot.Percent(percent),
+            UsageSnapshot.Percent(null),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(DateTimeOffset.UnixEpoch),
+            UsageSnapshot.Instant(null));
 
     private static byte[] Render(int size, UsageSnapshot snapshot, bool light = false) =>
         SkiaIconRenderer.RenderPng(size, snapshot, light);
@@ -72,7 +78,13 @@ public class SkiaIconRendererTests
     [Fact]
     public void AnEstimateRendersIdenticallyToNoData()
     {
-        var estimate = new UsageSnapshot(DataSource.Estimate, 83, null, null, DateTimeOffset.UnixEpoch);
+        var estimate = new UsageSnapshot(
+            DataSource.Estimate,
+            UsageSnapshot.Percent(83),
+            UsageSnapshot.Percent(null),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(DateTimeOffset.UnixEpoch),
+            UsageSnapshot.Instant(null));
 
         Assert.Equal(Render(24, UsageSnapshot.None), Render(24, estimate));
     }

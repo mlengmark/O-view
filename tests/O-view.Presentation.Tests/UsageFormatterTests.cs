@@ -76,7 +76,7 @@ public class UsageFormatterTests
     [Fact]
     public void PanelTextCaveat_CacheWriteFigure_AgreesWithTokens()
     {
-        var stats = new PanelStatistics(0, null, 0, null, 31, 31, [], 0, null)
+        var stats = new PanelStatistics(0, 0, 31, 31, [], 0)
         {
             TtlUnrecordedCacheWrites = 4_200_000,
         };

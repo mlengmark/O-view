@@ -197,7 +197,7 @@ internal sealed class PanelTokenBars(LinuxPanelTheme theme)
 
     private string SegmentTip(TokenKindSlice slice, string window) =>
         $"{UsageFormatter.Tokens(slice.Tokens)} · "
-        + TokenText.TokenCardCaption(slice.Kind, slice.Share, slice.EstUsd, window);
+        + TokenText.TokenCardCaption(slice.Kind, slice.Share, slice.EstUsdValue.Value, window);
 
     private IBrush KindBrush(TokenKind kind) => _theme[TokenBarGeometry.PaletteKey(kind)];
 

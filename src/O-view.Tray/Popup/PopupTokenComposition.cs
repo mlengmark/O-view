@@ -350,7 +350,7 @@ internal sealed class PopupTokenComposition
         HoverCard.Figure(
             _owner,
             FormatTokens(slice.Tokens),
-            TokenText.TokenCardCaption(slice.Kind, slice.Share, slice.EstUsd, window),
+            TokenText.TokenCardCaption(slice.Kind, slice.Share, slice.EstUsdValue.Value, window),
             swatch);
 
     private Brush KindBrush(TokenKind kind) =>

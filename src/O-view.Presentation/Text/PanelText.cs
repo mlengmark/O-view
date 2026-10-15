@@ -131,7 +131,7 @@ public static class PanelText
     /// halves overstated: O-view holds whatever the last poll returned, and the source itself
     /// samples on its own schedule, so the figures on screen are always a log of a past
     /// moment (GitHub issue #192). The time shown is now
-    /// <see cref="UsageSnapshot.CapturedAtUtc"/> — when the sample was actually taken.</para>
+    /// <see cref="UsageSnapshot.CapturedAtUtcValue"/> — when the sample was actually taken.</para>
     ///
     /// <para>"now" is claimed only for a reading captured within the current clock minute;
     /// once that minute has passed the reading is a past log and is stamped with its own

@@ -12,7 +12,13 @@ public class TooltipFormatterTests
     [Fact]
     public void Live_ShowsPercentagesAndReset()
     {
-        var s = new UsageSnapshot(DataSource.Live, 6, 1, Reset, Sampled);
+        var s = new UsageSnapshot(
+            DataSource.Live,
+            UsageSnapshot.Percent(6),
+            UsageSnapshot.Percent(1),
+            UsageSnapshot.Instant(Reset),
+            UsageSnapshot.Instant(Sampled),
+            UsageSnapshot.Instant(null));
 
         Assert.Equal("5h: 6% · resets 11:14 · 7d: 1%", TooltipFormatter.Format(s, Utc));
     }
@@ -20,7 +26,13 @@ public class TooltipFormatterTests
     [Fact]
     public void Live_UnknownReset_OmitsResetSegment()
     {
-        var s = new UsageSnapshot(DataSource.Live, 47, 20, null, Sampled);
+        var s = new UsageSnapshot(
+            DataSource.Live,
+            UsageSnapshot.Percent(47),
+            UsageSnapshot.Percent(20),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(Sampled),
+            UsageSnapshot.Instant(null));
 
         Assert.Equal("5h: 47% · 7d: 20%", TooltipFormatter.Format(s, Utc));
     }
@@ -30,8 +42,12 @@ public class TooltipFormatterTests
     {
         var weekly = new DateTimeOffset(2026, 8, 4, 6, 28, 57, TimeSpan.Zero);
         var s = new UsageSnapshot(
-            DataSource.Live, 6, 70, Reset, Sampled,
-            WeeklyResetAtUtc: weekly,
+            DataSource.Live,
+            UsageSnapshot.Percent(6),
+            UsageSnapshot.Percent(70),
+            UsageSnapshot.Instant(Reset),
+            UsageSnapshot.Instant(Sampled),
+            UsageSnapshot.Instant(weekly),
             WeeklyResetPeriod: TimeSpan.FromDays(7));
 
         Assert.Equal("5h: 6% · resets 11:14 · 7d: 70% · resets Tue 06:28", TooltipFormatter.Format(s, Utc));
@@ -54,7 +70,12 @@ public class TooltipFormatterTests
     {
         var weekly = new DateTimeOffset(2026, 8, 4, 6, 28, 57, TimeSpan.Zero);
         var s = new UsageSnapshot(
-            DataSource.Live, 6, 70, Reset, Sampled, WeeklyResetAtUtc: weekly);
+            DataSource.Live,
+            UsageSnapshot.Percent(6),
+            UsageSnapshot.Percent(70),
+            UsageSnapshot.Instant(Reset),
+            UsageSnapshot.Instant(Sampled),
+            UsageSnapshot.Instant(weekly));
 
         var tooltip = TooltipFormatter.Format(s, Utc);
 
@@ -65,7 +86,13 @@ public class TooltipFormatterTests
     [Fact]
     public void UndiscoveredWeeklyReset_OmitsTheSegmentEntirely()
     {
-        var s = new UsageSnapshot(DataSource.Live, 6, 70, Reset, Sampled);
+        var s = new UsageSnapshot(
+            DataSource.Live,
+            UsageSnapshot.Percent(6),
+            UsageSnapshot.Percent(70),
+            UsageSnapshot.Instant(Reset),
+            UsageSnapshot.Instant(Sampled),
+            UsageSnapshot.Instant(null));
 
         Assert.Equal("5h: 6% · resets 11:14 · 7d: 70%", TooltipFormatter.Format(s, Utc));
     }
@@ -73,7 +100,13 @@ public class TooltipFormatterTests
     [Fact]
     public void Stale_CarriesAsOfLabel()
     {
-        var s = new UsageSnapshot(DataSource.Stale, 31, 6, Reset, Sampled);
+        var s = new UsageSnapshot(
+            DataSource.Stale,
+            UsageSnapshot.Percent(31),
+            UsageSnapshot.Percent(6),
+            UsageSnapshot.Instant(Reset),
+            UsageSnapshot.Instant(Sampled),
+            UsageSnapshot.Instant(null));
 
         Assert.Equal("5h: 31% (as of 06:49) · resets 11:14 · 7d: 6%", TooltipFormatter.Format(s, Utc));
     }
@@ -89,12 +122,13 @@ public class TooltipFormatterTests
     [Fact]
     public void ModelledFiguresStillShowBesideMeasuredOnes()
     {
-        var s = new UsageSnapshot(DataSource.Live, 6, 1, Reset, Sampled)
-        {
-            SessionPercentStatus = UsageValueStatus.Estimated,
-            SessionResetAtUtcStatus = UsageValueStatus.Estimated,
-            WeeklyPercentStatus = UsageValueStatus.Estimated,
-        };
+        var s = new UsageSnapshot(
+            DataSource.Live,
+            new UsagePercent(6, UsageValueStatus.Estimated),
+            new UsagePercent(1, UsageValueStatus.Estimated),
+            new UsageInstant(Reset, UsageValueStatus.Estimated),
+            UsageSnapshot.Instant(Sampled),
+            UsageSnapshot.Instant(null));
 
         Assert.Equal("5h: 6% · resets 11:14 · 7d: 1%", TooltipFormatter.Format(s, Utc));
     }
@@ -106,10 +140,13 @@ public class TooltipFormatterTests
     [Fact]
     public void Stale_EstimatedCaptureTimeStillShowsTheStamp()
     {
-        var s = new UsageSnapshot(DataSource.Stale, 31, 6, Reset, Sampled)
-        {
-            CapturedAtUtcStatus = UsageValueStatus.Estimated,
-        };
+        var s = new UsageSnapshot(
+            DataSource.Stale,
+            UsageSnapshot.Percent(31),
+            UsageSnapshot.Percent(6),
+            UsageSnapshot.Instant(Reset),
+            new UsageInstant(Sampled, UsageValueStatus.Estimated),
+            UsageSnapshot.Instant(null));
 
         Assert.Equal("5h: 31% (as of 06:49) · resets 11:14 · 7d: 6%", TooltipFormatter.Format(s, Utc));
     }
@@ -117,7 +154,13 @@ public class TooltipFormatterTests
     [Fact]
     public void Estimate_AdmitsUnknownPercentages()
     {
-        var s = new UsageSnapshot(DataSource.Estimate, null, null, null, Sampled);
+        var s = new UsageSnapshot(
+            DataSource.Estimate,
+            UsageSnapshot.Percent(null),
+            UsageSnapshot.Percent(null),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(Sampled),
+            UsageSnapshot.Instant(null));
 
         Assert.Equal("O-view · local estimate · usage % unknown", TooltipFormatter.Format(s, Utc));
     }
@@ -132,7 +175,13 @@ public class TooltipFormatterTests
     public void Output_NeverExceedsNotifyIconCap()
     {
         // 127, not 128 — measured (docs/findings/tray-icon-rendering.md).
-        var s = new UsageSnapshot(DataSource.Live, 100, 100, Reset, Sampled);
+        var s = new UsageSnapshot(
+            DataSource.Live,
+            UsageSnapshot.Percent(100),
+            UsageSnapshot.Percent(100),
+            UsageSnapshot.Instant(Reset),
+            UsageSnapshot.Instant(Sampled),
+            UsageSnapshot.Instant(null));
 
         Assert.True(TooltipFormatter.Format(s, Utc).Length <= 127);
     }

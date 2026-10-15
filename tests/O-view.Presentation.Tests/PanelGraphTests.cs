@@ -31,17 +31,30 @@ public class PanelGraphTests
     private static readonly DateTimeOffset WeeklyReset = new(2026, 7, 28, 6, 28, 57, TimeSpan.Zero);
 
     private static UsageSnapshot WithReset(DateTimeOffset nextResetUtc) =>
-        new(DataSource.Live, 25, 3, Now.AddHours(3), Now, nextResetUtc, TimeSpan.FromDays(7));
+        new(
+            DataSource.Live,
+            UsageSnapshot.Percent(25),
+            UsageSnapshot.Percent(3),
+            UsageSnapshot.Instant(Now.AddHours(3)),
+            UsageSnapshot.Instant(Now),
+            UsageSnapshot.Instant(nextResetUtc),
+            WeeklyResetPeriod: TimeSpan.FromDays(7));
 
     /// <summary>No reported reset and no cadence: the Monday fallback.</summary>
-    private static UsageSnapshot WithoutReset() => new(DataSource.Live, 25, 3, Now.AddHours(3), Now);
+    private static UsageSnapshot WithoutReset() => new(
+        DataSource.Live,
+        UsageSnapshot.Percent(25),
+        UsageSnapshot.Percent(3),
+        UsageSnapshot.Instant(Now.AddHours(3)),
+        UsageSnapshot.Instant(Now),
+        UsageSnapshot.Instant(null));
 
     private static PanelStatistics Stats(params DayUsage[] series) =>
-        new(TokensToday: 0, EstTodayUsd: null,
-            Tokens31Days: series.Sum(d => d.OutputTokens), Est31DaysUsd: null,
+        new(TokensToday: 0,
+            Tokens31Days: series.Sum(d => d.OutputTokens),
             RecordedDays: series.Count(d => !d.PreInstall), WindowDays: series.Length,
             DailySeries: series,
-            CreditTokens31Days: 0, EstCredit31DaysUsd: null);
+            CreditTokens31Days: 0);
 
     private static DayUsage Day(int year, int month, int day, long tokens, bool preInstall = false) =>
         new(new DateOnly(year, month, day), tokens, preInstall);

@@ -180,7 +180,11 @@ internal static class SampleRenderer
         Directory.CreateDirectory(dir);
 
         ModelSlice S(string model, long tokens, decimal? usd) =>
-            new(model, ModelDisplayName.For(model), tokens, usd);
+            new(model, ModelDisplayName.For(model), tokens)
+            {
+                EstUsdValue = new(
+                    usd, usd is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated),
+            };
 
         // The 31-day window, and the tiles that draw from it. Deliberately shaped like
         // the reported case: "today" contains ONLY Opus 5, which used to make Opus 5 the
@@ -419,6 +423,18 @@ internal static class SampleRenderer
             Path.Combine(dir, $"{name}-{(light ? "light" : "dark")}.png"));
     }
 
+    /// <summary>
+    /// One icon state: the two meters as a source reported them, with no reset times, which
+    /// the icon does not draw.
+    /// </summary>
+    private static UsageSnapshot IconState(DataSource source, int? session, int? weekly) => new(
+        source,
+        UsageSnapshot.Percent(session),
+        UsageSnapshot.Percent(weekly),
+        UsageSnapshot.Instant(null),
+        UsageSnapshot.Instant(DateTimeOffset.UtcNow),
+        UsageSnapshot.Instant(null));
+
     private static StatTile NewSampleTile() =>
         new()
         {
@@ -427,7 +443,7 @@ internal static class SampleRenderer
         };
 
     private static string SumSampleUsd(ModelSlice[] slices) =>
-        UsageFormatter.Usd(slices.Sum(s => s.EstUsd ?? 0m));
+        UsageFormatter.Usd(slices.Sum(s => s.EstUsdValue.Value ?? 0m));
 
     /// <summary>Renders every icon state at 100% and 150% scaling sizes for visual verification.</summary>
     public static void RenderSamples(string dir)
@@ -438,14 +454,14 @@ internal static class SampleRenderer
             // A measured zero. Its own case because it is the one state with no arc at all,
             // where the pupil fades to the track — and nothing rendered it, which is how the
             // bright-green-pupil-on-an-empty-ring icon shipped (issue #139).
-            ("live-00", new(DataSource.Live, 0, 0, null, DateTimeOffset.UtcNow)),
-            ("live-06", new(DataSource.Live, 6, 1, null, DateTimeOffset.UtcNow)),
-            ("live-47", new(DataSource.Live, 47, 20, null, DateTimeOffset.UtcNow)),
-            ("live-58", new(DataSource.Live, 58, 30, null, DateTimeOffset.UtcNow)),
-            ("live-72", new(DataSource.Live, 72, 40, null, DateTimeOffset.UtcNow)),
-            ("live-91", new(DataSource.Live, 91, 60, null, DateTimeOffset.UtcNow)),
-            ("live-100", new(DataSource.Live, 100, 80, null, DateTimeOffset.UtcNow)),
-            ("estimate", new(DataSource.Estimate, null, null, null, DateTimeOffset.UtcNow)),
+            ("live-00", IconState(DataSource.Live, 0, 0)),
+            ("live-06", IconState(DataSource.Live, 6, 1)),
+            ("live-47", IconState(DataSource.Live, 47, 20)),
+            ("live-58", IconState(DataSource.Live, 58, 30)),
+            ("live-72", IconState(DataSource.Live, 72, 40)),
+            ("live-91", IconState(DataSource.Live, 91, 60)),
+            ("live-100", IconState(DataSource.Live, 100, 80)),
+            ("estimate", IconState(DataSource.Estimate, null, null)),
             ("none", UsageSnapshot.None),
         };
 
@@ -529,16 +545,23 @@ internal static class SampleRenderer
         // and nothing else in the panel affects the fold.
         var composition = new TokenComposition(1_400, 1_300_000, 11_300_000, 128_600);
         var stats = new PanelStatistics(
-            TokensToday: composition.Total, EstTodayUsd: 9.36m,
-            Tokens31Days: 684_600_000, Est31DaysUsd: 492.52m,
+            TokensToday: composition.Total,
+            Tokens31Days: 684_600_000,
             RecordedDays: 10, WindowDays: 31, DailySeries: [],
-            CreditTokens31Days: 0, EstCredit31DaysUsd: null)
+            CreditTokens31Days: 0)
         {
+            EstTodayValue = new(9.36m, UsageValueStatus.Estimated),
+            Est31DaysValue = new(492.52m, UsageValueStatus.Estimated),
             CompositionToday = composition,
         };
 
         var snapshot = new UsageSnapshot(
-            DataSource.Live, 25, 3, DateTimeOffset.UtcNow.AddHours(3), DateTimeOffset.UtcNow);
+            DataSource.Live,
+            UsageSnapshot.Percent(25),
+            UsageSnapshot.Percent(3),
+            UsageSnapshot.Instant(DateTimeOffset.UtcNow.AddHours(3)),
+            UsageSnapshot.Instant(DateTimeOffset.UtcNow),
+            UsageSnapshot.Instant(null));
 
         // Pinned: the check must not lose the panel to a deactivation halfway through the
         // sequence. Pinning suppresses the ENTRANCE animation, not this one, so the trace

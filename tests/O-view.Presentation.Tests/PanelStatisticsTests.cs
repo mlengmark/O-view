@@ -199,7 +199,7 @@ public class PanelStatisticsTests : IDisposable
 
         var stats = PanelStatistics.Build(_store, Now, Utc);
 
-        Assert.Equal(25.00m, stats.EstTodayUsd);       // the priced portion, reported
+        Assert.Equal(25.00m, stats.EstTodayValue.Value);       // the priced portion, reported
         Assert.Contains("claude-hypothetical-9", stats.UnpricedModels);  // and labelled
         Assert.Equal(2_000_000, stats.TokensToday);    // token counts still honest
     }
@@ -211,7 +211,7 @@ public class PanelStatisticsTests : IDisposable
 
         var stats = PanelStatistics.Build(_store, Now, Utc);
 
-        Assert.Equal(25.00m, stats.EstTodayUsd);
+        Assert.Equal(25.00m, stats.EstTodayValue.Value);
     }
 
     // ── 31-day off-plan credit spend (issue #3) ────────────────────────────────
@@ -227,7 +227,7 @@ public class PanelStatisticsTests : IDisposable
         // Fable output only: (1M + 0.5M) tokens.
         Assert.Equal(1_500_000, stats.CreditTokens31Days);
         // Priced at Fable's $50/MTok output: 1.5M -> $75.
-        Assert.Equal(75.00m, stats.EstCredit31DaysUsd);
+        Assert.Equal(75.00m, stats.EstCredit31DaysValue.Value);
         Assert.True(stats.HasCreditUsage);
     }
 
@@ -263,8 +263,8 @@ public class PanelStatisticsTests : IDisposable
 
         var stats = PanelStatistics.Build(_store, Now, Utc);
 
-        Assert.NotNull(stats.Est31DaysUsd);              // priced portion still reported
-        Assert.Equal(25.00m, stats.Est31DaysUsd);        // 1M Opus output @ $25/MTok
+        Assert.NotNull(stats.Est31DaysValue.Value);              // priced portion still reported
+        Assert.Equal(25.00m, stats.Est31DaysValue.Value);        // 1M Opus output @ $25/MTok
         Assert.Contains("claude-brand-new-9", stats.UnpricedModels);
     }
 
@@ -406,7 +406,7 @@ public class PanelStatisticsTests : IDisposable
 
         var stats = PanelStatistics.Build(_store, Now, Utc);
 
-        Assert.Null(stats.Est31DaysUsd);
+        Assert.Null(stats.Est31DaysValue.Value);
         Assert.Contains("claude-brand-new-9", stats.UnpricedModels);
     }
 

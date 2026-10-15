@@ -14,7 +14,11 @@ namespace OView.Core.Tests;
 public class ModelBreakdownTests
 {
     private static ModelSlice Slice(string model, long tokens, decimal? usd) =>
-        new(model, ModelDisplayName.For(model), tokens, usd);
+        new(model, ModelDisplayName.For(model), tokens)
+        {
+            EstUsdValue = new(
+                usd, usd is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated),
+        };
 
     private static readonly ModelSlice[] Window =
     [
@@ -116,7 +120,7 @@ public class ModelBreakdownTests
         var other = segments[^1];
         Assert.Equal(2, other.FoldedCount);
         Assert.Equal(45_000_000, other.Tokens);
-        Assert.Equal(82.14m, other.EstUsd);
+        Assert.Equal(82.14m, other.EstUsdValue.Value);
         Assert.Equal(Window.Sum(s => s.Tokens), segments.Sum(s => s.Tokens));
     }
 
@@ -202,7 +206,7 @@ public class ModelBreakdownTests
         var segments = ModelBreakdown.Segments(slices, BreakdownMeasure.Tokens, order);
 
         Assert.NotNull(segments[^1].FoldedCount);
-        Assert.Null(segments[^1].EstUsd);
+        Assert.Null(segments[^1].EstUsdValue.Value);
     }
 
     [Fact]

@@ -332,29 +332,25 @@ public sealed class PlanHistoryProvider : IUsageProvider
         //
         // The FIVE-hour reset above is unaffected and still derived, because that window
         // rolls from first use and is genuinely not a grid (issue #180).
+        //
+        // The two percentages and the sample's own timestamp are measured — read straight off
+        // a Desktop sample. The session reset is not: it is predicted from an observed drop,
+        // never reported by the source (see the type's own doc comment), so it is estimated
+        // whenever there is one to predict. Weekly has nothing to add at all, per the comment
+        // above, so it is unavailable rather than carrying a figure this provider guessed.
         return new UsageSnapshot(
             source,
-            sessionPercent,
-            latest.SevenDayPercent,
-            nextReset,
-            latest.AtUtc,
-            WeeklyResetAtUtc: null,
+            UsageSnapshot.Percent(sessionPercent),
+            UsageSnapshot.Percent(latest.SevenDayPercent),
+            UsageSnapshot.DerivedInstant(nextReset),
+            UsageSnapshot.Instant(latest.AtUtc),
+            UsageSnapshot.Instant(null),
             WeeklyResetPeriod: null,
             // How wide the bracket is, so a start inferred across a sampling gap is marked
             // approximate rather than printed to the minute (rule 6). The session window is
             // the only one that still carries this — the weekly reset is a reported instant
             // with no bracket to describe (ADR-0014).
-            SessionResetUncertainty: windowStart?.Uncertainty)
-        {
-            // The two percentages and the sample's own timestamp are measured — read straight
-            // off a Desktop sample, which is UsageSnapshot's default status and needs no
-            // override here. The session reset is not: it is predicted from an observed drop,
-            // never reported by the source (see the type's own doc comment above), so it is
-            // estimated whenever there is one to predict. Weekly has nothing to add at all, per
-            // the comment above — its default (absent, since the plain member is null) already
-            // says so.
-            SessionResetAtUtcStatus = UsageSnapshot.EstimatedStatus(nextReset),
-        };
+            SessionResetUncertainty: windowStart?.Uncertainty);
     }
 
 }

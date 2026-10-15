@@ -31,7 +31,7 @@ public class SampleStatesTests
         // and one made next year draw the same pixels.
         Assert.All(SampleStates.All, s =>
         {
-            if (s.Snapshot.CapturedAtUtc is { } captured)
+            if (s.Snapshot.CapturedAtUtcValue.Value is { } captured)
             {
                 Assert.Equal(SampleStates.Now, captured);
             }

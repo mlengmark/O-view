@@ -19,7 +19,13 @@ public class CompositeProviderTests
     }
 
     private static UsageSnapshot Snap(DataSource source, int? session = null) =>
-        new(source, session, null, null, Now);
+        new(
+            source,
+            UsageSnapshot.Percent(session),
+            UsageSnapshot.Percent(null),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(Now),
+            UsageSnapshot.Instant(null));
 
     [Fact]
     public void LiveBeatsEverything()
@@ -32,7 +38,7 @@ public class CompositeProviderTests
         var result = composite.GetSnapshot(Now);
 
         Assert.Equal(DataSource.Live, result.Source);
-        Assert.Equal(47, result.SessionPercent);
+        Assert.Equal(47, result.SessionPercentValue.Value);
     }
 
     [Fact]
@@ -47,7 +53,7 @@ public class CompositeProviderTests
         var result = composite.GetSnapshot(Now);
 
         Assert.Equal(DataSource.Stale, result.Source);
-        Assert.Equal(31, result.SessionPercent);
+        Assert.Equal(31, result.SessionPercentValue.Value);
     }
 
     [Fact]
@@ -88,7 +94,7 @@ public class CompositeProviderTests
         var result = composite.GetSnapshot(Now);
 
         Assert.Equal(DataSource.Live, result.Source);
-        Assert.Equal(47, result.SessionPercent);
+        Assert.Equal(47, result.SessionPercentValue.Value);
     }
 
     [Fact]
@@ -101,15 +107,15 @@ public class CompositeProviderTests
 
     /// <summary>
     /// The composite picks a snapshot whole and returns it unchanged (see the class summary
-    /// on <see cref="CompositeUsageProvider"/>) — so the typed status beside each value survives
-    /// just as the plain nullable members already do, rather than being re-derived or dropped.
+    /// on <see cref="CompositeUsageProvider"/>) — so the status beside each figure survives
+    /// selection rather than being re-derived or dropped on the way through.
     /// </summary>
     [Fact]
     public void TypedValues_SurviveSelectionUnchanged()
     {
-        var withStatus = new UsageSnapshot(DataSource.Live, 47, null, null, Now)
+        var withStatus = Snap(DataSource.Live) with
         {
-            SessionPercentStatus = UsageValueStatus.Estimated,
+            SessionPercentValue = new(47, UsageValueStatus.Estimated),
         };
         var composite = new CompositeUsageProvider(new Fixed(withStatus));
 
@@ -120,29 +126,44 @@ public class CompositeProviderTests
     }
 
     /// <summary>
-    /// A snapshot built the ordinary, positional way — no typed member touched at all — still
-    /// has every typed value agree with its plain counterpart, including the ones no provider
-    /// in this PR sets explicitly. This is what made findings 1 and 2 possible: the typed
-    /// members used to default independently of the plain ones, so any such snapshot claimed
-    /// a status of Real with no value for every one of them.
+    /// A snapshot built the ordinary, positional way carries both the figure and the reason it
+    /// is there on every reading, and a figure that was never read says so. This used to be a
+    /// test that the typed members agreed with their plain twins — the twins defaulted
+    /// independently, so a positionally built snapshot claimed Real with no value on every one
+    /// of them. There are no twins left to disagree; what is left to pin is that the pairing
+    /// the positional arguments asked for is the pairing the snapshot holds.
     /// </summary>
     [Fact]
-    public void PositionallyBuiltSnapshot_TypedValuesAgreeWithPlainMembers()
+    public void PositionallyBuiltSnapshot_PairsEveryFigureWithItsReason()
     {
-        var snapshot = new UsageSnapshot(DataSource.Live, 25, 3, Now.AddHours(3), Now);
+        var snapshot = new UsageSnapshot(
+            DataSource.Live,
+            UsageSnapshot.Percent(25),
+            UsageSnapshot.Percent(3),
+            UsageSnapshot.Instant(Now.AddHours(3)),
+            UsageSnapshot.Instant(Now),
+            UsageSnapshot.Instant(null));
 
-        Assert.Equal(snapshot.SessionPercent, snapshot.SessionPercentValue.Value);
-        Assert.Equal(snapshot.WeeklyPercent, snapshot.WeeklyPercentValue.Value);
-        Assert.Equal(snapshot.SessionResetAtUtc, snapshot.SessionResetAtUtcValue.Value);
-        Assert.Equal(snapshot.CapturedAtUtc, snapshot.CapturedAtUtcValue.Value);
-        Assert.Equal(snapshot.WeeklyResetAtUtc, snapshot.WeeklyResetAtUtcValue.Value);
+        Assert.Equal(new UsagePercent(25, UsageValueStatus.Real), snapshot.SessionPercentValue);
+        Assert.Equal(new UsagePercent(3, UsageValueStatus.Real), snapshot.WeeklyPercentValue);
+        Assert.Equal(
+            new UsageInstant(Now.AddHours(3), UsageValueStatus.Real), snapshot.SessionResetAtUtcValue);
+        Assert.Equal(new UsageInstant(Now, UsageValueStatus.Real), snapshot.CapturedAtUtcValue);
 
-        // And a `with` that changes only a plain member carries the typed value along with it,
-        // rather than leaving it pointing at the figure that `with` just replaced.
-        var changed = snapshot with { SessionPercent = 91, WeeklyPercent = 80 };
+        // The reading nothing produced: unavailable, and carrying no figure to read as one.
+        Assert.Equal(UsageValueStatus.Unavailable, snapshot.WeeklyResetAtUtcValue.Status);
+        Assert.Null(snapshot.WeeklyResetAtUtcValue.Value);
 
-        Assert.Equal(91, changed.SessionPercentValue.Value);
-        Assert.Equal(80, changed.WeeklyPercentValue.Value);
+        // A `with` replaces the pair, so a changed figure cannot be left beside the status of
+        // the one it replaced.
+        var changed = snapshot with
+        {
+            SessionPercentValue = UsageSnapshot.Percent(91),
+            WeeklyPercentValue = UsageSnapshot.Percent(80),
+        };
+
+        Assert.Equal(new UsagePercent(91, UsageValueStatus.Real), changed.SessionPercentValue);
+        Assert.Equal(new UsagePercent(80, UsageValueStatus.Real), changed.WeeklyPercentValue);
     }
 
     /// <summary>
@@ -162,7 +183,13 @@ public class CompositeProviderTests
 
         private static UsageSnapshot Snap(
             int? session, int? weekly, TimeSpan age, DataSource source = DataSource.Live) =>
-            new(source, session, weekly, null, Now - age);
+            new(
+                source,
+                UsageSnapshot.Percent(session),
+                UsageSnapshot.Percent(weekly),
+                UsageSnapshot.Instant(null),
+                UsageSnapshot.Instant(Now - age),
+                UsageSnapshot.Instant(null));
 
         /// <summary>
         /// Both sources cache the same upstream meter, so between equally complete readings the
@@ -178,8 +205,8 @@ public class CompositeProviderTests
 
             var result = composite.GetSnapshot(Now);
 
-            Assert.Equal(91, result.SessionPercent);
-            Assert.Equal(79, result.WeeklyPercent);
+            Assert.Equal(91, result.SessionPercentValue.Value);
+            Assert.Equal(79, result.WeeklyPercentValue.Value);
         }
 
         /// <summary>...and it wins from either position, or it is list order wearing a disguise.</summary>
@@ -190,7 +217,7 @@ public class CompositeProviderTests
                 new Fixed(Snap(91, 79, TimeSpan.FromMinutes(1))),
                 new Fixed(Snap(81, 78, TimeSpan.FromMinutes(11))));
 
-            Assert.Equal(91, composite.GetSnapshot(Now).SessionPercent);
+            Assert.Equal(91, composite.GetSnapshot(Now).SessionPercentValue.Value);
         }
 
         /// <summary>
@@ -208,8 +235,8 @@ public class CompositeProviderTests
 
             var result = composite.GetSnapshot(Now);
 
-            Assert.Equal(40, result.SessionPercent);
-            Assert.Equal(77, result.WeeklyPercent);
+            Assert.Equal(40, result.SessionPercentValue.Value);
+            Assert.Equal(77, result.WeeklyPercentValue.Value);
         }
 
         /// <summary>
@@ -227,7 +254,7 @@ public class CompositeProviderTests
             var result = composite.GetSnapshot(Now);
 
             Assert.Equal(DataSource.Live, result.Source);
-            Assert.Equal(40, result.SessionPercent);
+            Assert.Equal(40, result.SessionPercentValue.Value);
         }
 
         /// <summary>Equally complete and equally recent: deterministic, and the order given decides.</summary>
@@ -238,7 +265,7 @@ public class CompositeProviderTests
                 new Fixed(Snap(40, 60, TimeSpan.FromMinutes(3))),
                 new Fixed(Snap(91, 79, TimeSpan.FromMinutes(3))));
 
-            Assert.Equal(40, composite.GetSnapshot(Now).SessionPercent);
+            Assert.Equal(40, composite.GetSnapshot(Now).SessionPercentValue.Value);
         }
 
         /// <summary>
@@ -250,9 +277,15 @@ public class CompositeProviderTests
         {
             var composite = new CompositeUsageProvider(
                 new Fixed(Snap(40, 60, TimeSpan.FromMinutes(9))),
-                new Fixed(new UsageSnapshot(DataSource.Live, 91, 79, null, null)));
+                new Fixed(new UsageSnapshot(
+                    DataSource.Live,
+                    UsageSnapshot.Percent(91),
+                    UsageSnapshot.Percent(79),
+                    UsageSnapshot.Instant(null),
+                    UsageSnapshot.Instant(null),
+                    UsageSnapshot.Instant(null))));
 
-            Assert.Equal(40, composite.GetSnapshot(Now).SessionPercent);
+            Assert.Equal(40, composite.GetSnapshot(Now).SessionPercentValue.Value);
         }
 
         /// <summary>
@@ -269,9 +302,9 @@ public class CompositeProviderTests
 
             var result = composite.GetSnapshot(Now);
 
-            Assert.Equal(91, result.SessionPercent);
-            Assert.Equal(79, result.WeeklyPercent);
-            Assert.Equal(Now.AddMinutes(-1), result.CapturedAtUtc);
+            Assert.Equal(91, result.SessionPercentValue.Value);
+            Assert.Equal(79, result.WeeklyPercentValue.Value);
+            Assert.Equal(Now.AddMinutes(-1), result.CapturedAtUtcValue.Value);
         }
     }
 }

@@ -42,7 +42,7 @@ public class ShellInterfaceTests
         public int RefreshCalls { get; private set; }
         public DateTimeOffset? NoticedConflict { get; private set; }
 
-        public PanelStatistics BuildStatistics() => new(0, null, 0, null, 0, 31, [], 0, null);
+        public PanelStatistics BuildStatistics() => new(0, 0, 0, 31, [], 0);
 
         // Named as uninspected rather than described: this shell has no store, and a report
         // that read as a clean one would be the fabrication the real reader exists to avoid.

@@ -53,7 +53,13 @@ public class SwallowedFailureReportingTests : IDisposable
     public void AProviderThatThrowsIsStillAbsorbedAndIsNowNamed()
     {
         var lines = new List<string>();
-        var healthy = new UsageSnapshot(DataSource.Live, 42, 7, null, DateTimeOffset.UnixEpoch);
+        var healthy = new UsageSnapshot(
+            DataSource.Live,
+            UsageSnapshot.Percent(42),
+            UsageSnapshot.Percent(7),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(DateTimeOffset.UnixEpoch),
+            UsageSnapshot.Instant(null));
 
         var composite = new CompositeUsageProvider(
             new ThrowingProvider(new InvalidOperationException("store is unreachable")),
@@ -65,7 +71,7 @@ public class SwallowedFailureReportingTests : IDisposable
         var snapshot = composite.GetSnapshot(DateTimeOffset.UnixEpoch);
 
         // Absorbed: the healthy sibling still wins and the panel is unaffected.
-        Assert.Equal(42, snapshot.SessionPercent);
+        Assert.Equal(42, snapshot.SessionPercentValue.Value);
 
         // Named: the provider type and the failure both appear.
         var line = Assert.Single(lines);

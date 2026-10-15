@@ -28,12 +28,12 @@ public enum TokenKind
 /// One token kind's contribution to a window: how many, what share of the window, and what
 /// it would have cost at published API rates.
 /// </summary>
-/// <param name="EstUsd">
-/// Null when nothing in the window could be priced — the same "honest unknown" rule
-/// <see cref="PanelStatistics"/> applies to the Est. tiles, so a card and the tile above it
-/// cannot disagree about whether a figure is known.
+/// <param name="EstUsdValue">
+/// <see cref="UsageValueStatus.Unavailable"/> when nothing in the window could be priced — the
+/// same "honest unknown" rule <see cref="PanelStatistics"/> applies to the Est. tiles, so a
+/// card and the tile above it cannot disagree about whether a figure is known.
 /// </param>
-public sealed record TokenKindSlice(TokenKind Kind, long Tokens, double Share, decimal? EstUsd);
+public sealed record TokenKindSlice(TokenKind Kind, long Tokens, double Share, EstimatedUsd EstUsdValue);
 
 /// <summary>
 /// The four token kinds behind a window's figures, kept separate so the panel can say what
@@ -69,23 +69,7 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
         CacheCreationCount = Measured(0),
         CacheReadCount = Measured(0),
         OutputCount = Measured(0),
-        InputValue = Priced(null),
-        CacheCreationValue = Priced(null),
-        CacheReadValue = Priced(null),
-        OutputValue = Priced(null),
     };
-
-    /// <summary>Estimated value of the input tokens alone. See <see cref="TokenKindSlice.EstUsd"/>.</summary>
-    public decimal? InputUsd { get; init; }
-
-    /// <inheritdoc cref="InputUsd"/>
-    public decimal? CacheCreationUsd { get; init; }
-
-    /// <inheritdoc cref="InputUsd"/>
-    public decimal? CacheReadUsd { get; init; }
-
-    /// <inheritdoc cref="InputUsd"/>
-    public decimal? OutputUsd { get; init; }
 
     /// <summary>
     /// <see cref="Input"/>, paired with its <see cref="UsageValueStatus"/>. Always
@@ -104,20 +88,24 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
     public TokenCount OutputCount { get; init; }
 
     /// <summary>
-    /// <see cref="InputUsd"/>, paired with its <see cref="UsageValueStatus"/>:
+    /// What the input tokens alone would have cost at published API rates:
     /// <see cref="UsageValueStatus.Unavailable"/> when nothing in the window could be priced,
     /// <see cref="UsageValueStatus.Estimated"/> otherwise.
+    ///
+    /// <para>Unavailable unless <see cref="From"/> prices it, so <see cref="Empty"/> and any
+    /// composition built from counts alone read as "nothing was priced" rather than as a known
+    /// zero — the distinction this type's own rule rests on.</para>
     /// </summary>
-    public EstimatedUsd InputValue { get; init; }
+    public EstimatedUsd InputValue { get; init; } = Priced(null);
 
     /// <inheritdoc cref="InputValue"/>
-    public EstimatedUsd CacheCreationValue { get; init; }
+    public EstimatedUsd CacheCreationValue { get; init; } = Priced(null);
 
     /// <inheritdoc cref="InputValue"/>
-    public EstimatedUsd CacheReadValue { get; init; }
+    public EstimatedUsd CacheReadValue { get; init; } = Priced(null);
 
     /// <inheritdoc cref="InputValue"/>
-    public EstimatedUsd OutputValue { get; init; }
+    public EstimatedUsd OutputValue { get; init; } = Priced(null);
 
     /// <summary>
     /// Everything billed in this window. No longer the tiles' headline (issue #253), and
@@ -153,10 +141,10 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
     /// </summary>
     public IReadOnlyList<TokenKindSlice> InDisplayOrder =>
     [
-        new(TokenKind.Output, Output, ShareOf(Output), OutputUsd),
-        new(TokenKind.Input, Input, ShareOf(Input), InputUsd),
-        new(TokenKind.CacheWrite, CacheCreation, ShareOf(CacheCreation), CacheCreationUsd),
-        new(TokenKind.CacheRead, CacheRead, ShareOf(CacheRead), CacheReadUsd),
+        new(TokenKind.Output, Output, ShareOf(Output), OutputValue),
+        new(TokenKind.Input, Input, ShareOf(Input), InputValue),
+        new(TokenKind.CacheWrite, CacheCreation, ShareOf(CacheCreation), CacheCreationValue),
+        new(TokenKind.CacheRead, CacheRead, ShareOf(CacheRead), CacheReadValue),
     ];
 
     /// <summary>
@@ -215,10 +203,6 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
         // above already honour it. One bar segment, one figure.
         return new TokenComposition(total.Input, total.CacheWrite, total.CacheRead, total.Output)
         {
-            InputUsd = unknown ? null : inputUsd,
-            CacheCreationUsd = unknown ? null : cacheCreationUsd,
-            CacheReadUsd = unknown ? null : cacheReadUsd,
-            OutputUsd = unknown ? null : outputUsd,
             InputCount = Measured(total.Input),
             CacheCreationCount = Measured(total.CacheWrite),
             CacheReadCount = Measured(total.CacheRead),

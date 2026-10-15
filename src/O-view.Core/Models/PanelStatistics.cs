@@ -24,8 +24,9 @@ public sealed record DayUsage(DateOnly Date, long OutputTokens, bool PreInstall)
 /// <summary>
 /// Everything the popup's tiles and graph need, computed from the rollup store.
 /// "Est." values price tokens at public API rates — not money charged; the UI must
-/// keep the Est. prefix. A null estimate means an unpriced model was involved and
-/// the tile shows unknown rather than a partial sum presented as a total.
+/// keep the Est. prefix. An <see cref="UsageValueStatus.Unavailable"/> estimate means an
+/// unpriced model was involved and the tile shows unknown rather than a partial sum presented
+/// as a total.
 /// </summary>
 /// <param name="RecordedDays">
 /// How many days of the window O-view has data <b>for</b> — every day from the first day it
@@ -38,16 +39,12 @@ public sealed record DayUsage(DateOnly Date, long OutputTokens, bool PreInstall)
 /// </param>
 public sealed record PanelStatistics(
     long TokensToday,
-    decimal? EstTodayUsd,
     long Tokens31Days,
-    decimal? Est31DaysUsd,
     int RecordedDays,
     int WindowDays,
     IReadOnlyList<DayUsage> DailySeries,
     long CreditTokens31Days,
-    decimal? EstCredit31DaysUsd,
-    DivergenceResult? Divergence = null,
-    decimal? EstOffPlanUsd = null)
+    DivergenceResult? Divergence = null)
 {
     /// <summary>
     /// <see cref="TokensToday"/>, paired with its <see cref="UsageValueStatus"/>. Token counts
@@ -58,35 +55,38 @@ public sealed record PanelStatistics(
     public TokenCount TokensTodayCount { get; init; }
 
     /// <summary>
-    /// <see cref="EstTodayUsd"/>, paired with its <see cref="UsageValueStatus"/>:
+    /// What today's tokens would have cost at published API rates:
     /// <see cref="UsageValueStatus.Unavailable"/> when nothing in the window could be priced,
     /// <see cref="UsageValueStatus.Estimated"/> otherwise — the same split
-    /// <see cref="EstimateTotal"/> already returns, carried onto the typed figure rather than
-    /// re-derived from it later.
+    /// <see cref="EstimateTotal"/> already returns, carried onto the figure itself rather than
+    /// left for a reader to re-derive from a null.
+    ///
+    /// <para>Unavailable unless <see cref="Build"/> prices it, so a statistics record built
+    /// without money in mind reads as "nothing was priced" rather than as a known zero.</para>
     /// </summary>
-    public EstimatedUsd EstTodayValue { get; init; }
+    public EstimatedUsd EstTodayValue { get; init; } = Priced(null);
 
     /// <inheritdoc cref="TokensTodayCount"/>
     public TokenCount Tokens31DaysCount { get; init; }
 
     /// <inheritdoc cref="EstTodayValue"/>
-    public EstimatedUsd Est31DaysValue { get; init; }
+    public EstimatedUsd Est31DaysValue { get; init; } = Priced(null);
 
     /// <inheritdoc cref="TokensTodayCount"/>
     public TokenCount CreditTokens31DaysCount { get; init; }
 
     /// <inheritdoc cref="EstTodayValue"/>
-    public EstimatedUsd EstCredit31DaysValue { get; init; }
+    public EstimatedUsd EstCredit31DaysValue { get; init; } = Priced(null);
 
     /// <summary>
-    /// <see cref="EstOffPlanUsd"/>, paired with its <see cref="UsageValueStatus"/>.
+    /// What the current session window's off-plan work would have cost.
     /// <see cref="UsageValueStatus.Unavailable"/> both when the window turned out not to be
     /// off-plan (nothing was priced, by design — see <see cref="WithDivergence"/>) and when it
     /// is off-plan but nothing in it could be priced; a reader of this figure already has to
     /// check <see cref="IsOffPlan"/> before it means anything, so the two cases need no further
     /// distinction here.
     /// </summary>
-    public EstimatedUsd EstOffPlanValue { get; init; }
+    public EstimatedUsd EstOffPlanValue { get; init; } = Priced(null);
 
     /// <inheritdoc cref="TokensTodayCount"/>
     public TokenCount TtlUnrecordedCacheWritesCount { get; init; }
@@ -100,7 +100,7 @@ public sealed record PanelStatistics(
     public IReadOnlyList<string> UnpricedModels { get; init; } = [];
 
     /// <summary>
-    /// Per-model split behind <see cref="TokensToday"/> and <see cref="EstTodayUsd"/>
+    /// Per-model split behind <see cref="TokensToday"/> and <see cref="EstTodayValue"/>
     /// (GitHub issue #37). The rollups already arrive at (date × model) grain, so this
     /// costs one extra grouping over figures in hand — no second query, and nothing to
     /// fetch when a tile is clicked.
@@ -207,7 +207,6 @@ public sealed record PanelStatistics(
         return this with
         {
             Divergence = result,
-            EstOffPlanUsd = estOffPlan,
             EstOffPlanValue = Priced(estOffPlan),
         };
     }
@@ -267,9 +266,9 @@ public sealed record PanelStatistics(
 
         var est31 = EstimateTotal(rollups, out var unpriced);
 
-        // Each figure is computed once here, and both the plain member above and its typed
-        // companion below are built from that one value — never two separate computations of
-        // the same thing, which is exactly the trap a second, independent typed path would be.
+        // Each figure is computed once here and wrapped once below — never two separate
+        // computations of the same thing, which is exactly the trap a second, independent
+        // typed path would be.
         var tokensToday = todayRollups.Sum(r => r.Tokens.Output);
         var estToday = EstimateTotal(todayRollups);
         var tokens31Days = rollups.Sum(r => r.Tokens.Output);
@@ -283,14 +282,11 @@ public sealed record PanelStatistics(
         // from different inputs precisely because each one names what it is.
         return new PanelStatistics(
             tokensToday,
-            estToday,
             tokens31Days,
-            est31,
             recordedDays,
             windowDays,
             series,
-            creditTokens31Days,
-            estCredit31Days)
+            creditTokens31Days)
         {
             UnpricedModels = unpriced,
             // The card is carried on the result rather than looked up again at render time:
@@ -321,7 +317,7 @@ public sealed record PanelStatistics(
     /// model), so this only drops the date — the model dimension was being discarded
     /// at the very last step, not missing.
     ///
-    /// A model's estimate is null only when NOTHING of its usage could be priced, which
+    /// A model's estimate is unavailable only when NOTHING of its usage could be priced, which
     /// for a single model means its rate is unknown. That is deliberately the same rule
     /// <see cref="EstimateTotal"/> applies to the whole window: unknown stays unknown and
     /// gets named, rather than being folded in as a zero that would understate the total.
@@ -333,7 +329,7 @@ public sealed record PanelStatistics(
             {
                 var tokens = g.Sum(r => r.Tokens.Output);
                 var estUsd = EstimateTotal(g.ToList());
-                return new ModelSlice(g.Key, ModelDisplayName.For(g.Key), tokens, estUsd)
+                return new ModelSlice(g.Key, ModelDisplayName.For(g.Key), tokens)
                 {
                     TokensCount = Measured(tokens),
                     EstUsdValue = Priced(estUsd),

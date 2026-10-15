@@ -154,7 +154,8 @@ public sealed class PanelContent : Border
         // RecordedDays counted days with usage, but it now counts days observed (issue #142),
         // so a store older than the window reports full coverage while the tiles still read
         // zero — the exact case this note is for.
-        if (stats.Tokens31Days == 0 && authoritative && snapshot.SessionPercent is > 0)
+        if (stats.Tokens31Days == 0 && authoritative &&
+            snapshot.SessionPercentValue is { Status: not UsageValueStatus.Unavailable, Value: > 0 })
         {
             _root.Children.Add(Muted(_theme, (scopeReport ?? TranscriptScopeReport.Inspect()).Explain()));
         }

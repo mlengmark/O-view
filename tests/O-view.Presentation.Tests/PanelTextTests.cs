@@ -22,8 +22,17 @@ public class PanelTextTests
 
     // ── freshness ───────────────────────────────────────────────────────────────────
 
-    private static UsageSnapshot Snapshot(DataSource source, DateTimeOffset? capturedAtUtc) =>
-        new(source, 47, 20, null, capturedAtUtc);
+    private static UsageSnapshot Snapshot(
+        DataSource source, DateTimeOffset? capturedAtUtc, UsageValueStatus? captureStatus = null) =>
+        new(
+            source,
+            UsageSnapshot.Percent(47),
+            UsageSnapshot.Percent(20),
+            UsageSnapshot.Instant(null),
+            captureStatus is { } status
+                ? new UsageInstant(capturedAtUtc, status)
+                : UsageSnapshot.Instant(capturedAtUtc),
+            UsageSnapshot.Instant(null));
 
     /// <summary>
     /// The header used to read <c>Updated 11:34 · live</c>, where the time was the repaint
@@ -104,10 +113,8 @@ public class PanelTextTests
     [Fact]
     public void AnEstimatedCaptureTimeUnderALiveSnapshotStillGetsStamped()
     {
-        var snapshot = Snapshot(DataSource.Live, Now.AddMinutes(-40)) with
-        {
-            CapturedAtUtcStatus = UsageValueStatus.Estimated,
-        };
+        var snapshot = Snapshot(
+            DataSource.Live, Now.AddMinutes(-40), UsageValueStatus.Estimated);
 
         Assert.Equal("As of 11:20", PanelText.Freshness(snapshot, Now, Utc));
     }
@@ -209,7 +216,7 @@ public class PanelTextTests
     // ── caveats ─────────────────────────────────────────────────────────────────────
 
     private static PanelStatistics Stats(int recordedDays, params string[] unpriced) =>
-        new(0, null, 0, null, recordedDays, 31, [], 0, null) { UnpricedModels = unpriced };
+        new(0, 0, recordedDays, 31, [], 0) { UnpricedModels = unpriced };
 
     [Fact]
     public void AFullyCoveredWindowWithEverythingPricedHasNoCaveat() =>

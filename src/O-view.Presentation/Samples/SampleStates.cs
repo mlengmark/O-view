@@ -51,8 +51,14 @@ public static class SampleStates
     // day column rather than on the edge, which is where gridline placement goes wrong.
     private static readonly DateTimeOffset NextWeeklyReset = new(2026, 8, 4, 6, 28, 57, TimeSpan.Zero);
 
-    private static readonly UsageSnapshot Live = new(DataSource.Live, 25, 3,
-        Now.AddHours(3), Now, NextWeeklyReset, TimeSpan.FromDays(7));
+    private static readonly UsageSnapshot Live = new(
+        DataSource.Live,
+        UsageSnapshot.Percent(25),
+        UsageSnapshot.Percent(3),
+        UsageSnapshot.Instant(Now.AddHours(3)),
+        UsageSnapshot.Instant(Now),
+        UsageSnapshot.Instant(NextWeeklyReset),
+        TimeSpan.FromDays(7));
 
     private const string ProjectsRoot = @"C:\Users\<user>\.claude\projects";
     private const string CoworkRoot = @"C:\Users\<user>\AppData\Roaming\Claude\local-agent-mode-sessions";
@@ -69,12 +75,15 @@ public static class SampleStates
     /// thing these images exist to catch.
     /// </summary>
     private static readonly PanelStatistics Stats = new(
-        TokensToday: 128_600, EstTodayUsd: 9.36m,
-        Tokens31Days: 6_771_000, Est31DaysUsd: 492.52m,
+        TokensToday: 128_600,
+        Tokens31Days: 6_771_000,
         RecordedDays: 10, WindowDays: 31,
         DailySeries: Series,
-        CreditTokens31Days: 395_000, EstCredit31DaysUsd: 92.75m)
+        CreditTokens31Days: 395_000)
     {
+        EstTodayValue = Priced(9.36m),
+        Est31DaysValue = Priced(492.52m),
+        EstCredit31DaysValue = Priced(92.75m),
         CompositionToday = new TokenComposition(
             Input: 1_400, CacheCreation: 1_270_000, CacheRead: 11_300_000, Output: 128_600),
         Composition31Days = new TokenComposition(
@@ -99,9 +108,9 @@ public static class SampleStates
         var offPlanStats = Stats with
         {
             Divergence = new DivergenceResult(DivergenceState.PlanLimitReached, 69_091, 0),
-            EstOffPlanUsd = 92.75m,
+            EstOffPlanValue = Priced(92.75m),
         };
-        var offPlanSnapshot = Live with { SessionPercent = 100 };
+        var offPlanSnapshot = Live with { SessionPercentValue = UsageSnapshot.Percent(100) };
 
         return
         [
@@ -111,7 +120,8 @@ public static class SampleStates
 
             new("weekly-reset-unknown",
                 "No weekly reset reported yet: Monday-midnight gridlines and the row naming the fix (ADR-0014)",
-                new UsageSnapshot(DataSource.Live, 25, 3, Now.AddHours(3), Now), Stats, Account, BothSources),
+                Live with { WeeklyResetAtUtcValue = UsageSnapshot.Instant(null), WeeklyResetPeriod = null },
+                Stats, Account, BothSources),
 
             new("no-local-transcripts",
                 "Plan meters move but nothing is recorded locally: the token-scope note (issue #58)",
@@ -119,12 +129,18 @@ public static class SampleStates
 
             new("cli-only",
                 "Claude Code only: no plan-history file, tiles filled from transcripts (issue #170)",
-                new UsageSnapshot(DataSource.Estimate, null, null, null, Now), Stats, Account,
-                CliOnlyScope(), CliOnlyPlan()),
+                new UsageSnapshot(
+                    DataSource.Estimate,
+                    UsageSnapshot.Percent(null),
+                    UsageSnapshot.Percent(null),
+                    UsageSnapshot.Instant(null),
+                    UsageSnapshot.Instant(Now),
+                    UsageSnapshot.Instant(null)),
+                Stats, Account, CliOnlyScope(), CliOnlyPlan()),
 
             new("high-usage",
                 "Both meters in the red band",
-                Live with { SessionPercent = 91, WeeklyPercent = 80 }, Stats, Account, BothSources),
+                Live with { SessionPercentValue = UsageSnapshot.Percent(91), WeeklyPercentValue = UsageSnapshot.Percent(80) }, Stats, Account, BothSources),
 
             new("unpriced-model",
                 "A model with no published rate: a labelled partial, never a blank tile",
@@ -132,7 +148,7 @@ public static class SampleStates
 
             new("boosted",
                 "A live promo at its widest: three countdown units beside \"100% used\" (issue #254)",
-                Live with { WeeklyPercent = 100 }, Stats, Account, BothSources, Boost: Promo()),
+                Live with { WeeklyPercentValue = UsageSnapshot.Percent(100) }, Stats, Account, BothSources, Boost: Promo()),
 
             new("offplan-unknown",
                 "Plan window exhausted; extra-usage setting unknown (issue #259)",
@@ -174,18 +190,29 @@ public static class SampleStates
         return series;
     }
 
+    /// <summary>
+    /// A sample Est. figure: estimated where there is one, unavailable where the state is one
+    /// in which nothing could be priced — the same split <c>PanelStatistics</c> itself applies,
+    /// so a sample cannot describe a pairing the real builder would never produce.
+    /// </summary>
+    private static EstimatedUsd Priced(decimal? usd) =>
+        new(usd, usd is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated);
+
     private static PanelStatistics NoLocalUsage() => Stats with
     {
-        TokensToday = 0, EstTodayUsd = 0m,
-        Tokens31Days = 0, Est31DaysUsd = 0m,
+        TokensToday = 0, EstTodayValue = Priced(0m),
+        Tokens31Days = 0, Est31DaysValue = Priced(0m),
         RecordedDays = 0,
         DailySeries = [.. Series.Select(d => d with { OutputTokens = 0, PreInstall = true })],
-        CreditTokens31Days = 0, EstCredit31DaysUsd = 0m,
+        CreditTokens31Days = 0, EstCredit31DaysValue = Priced(0m),
         CompositionToday = TokenComposition.Empty,
         Composition31Days = TokenComposition.Empty,
     };
 
-    private static PanelStatistics EmptyStats() => NoLocalUsage() with { EstTodayUsd = null, Est31DaysUsd = null, EstCredit31DaysUsd = null };
+    private static PanelStatistics EmptyStats() => NoLocalUsage() with
+    {
+        EstTodayValue = Priced(null), Est31DaysValue = Priced(null), EstCredit31DaysValue = Priced(null),
+    };
 
     private static TranscriptScopeReport CliOnlyScope() =>
         TranscriptScopeReport.Inspect(ProjectsRoot, []) with
