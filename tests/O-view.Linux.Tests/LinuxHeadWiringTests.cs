@@ -357,6 +357,29 @@ public class LinuxHeadWiringTests
     }
 
     /// <summary>
+    /// The no-host notice the head builds is the one that waits, not an immediate send.
+    ///
+    /// <para>The structural half of the fix for a notice that fired at every GNOME login a
+    /// moment before the icon appeared: what the wait does once it is over is
+    /// <see cref="TrayHostNoticeTests"/>'s, and what is asserted here is that the head reaches
+    /// it at all, carrying the real ten seconds rather than a test's. It cannot prove
+    /// <c>StartTray</c> still routes the notice through this — nothing on a machine with no
+    /// Linux desktop can — but restoring a direct <c>ShowAsync</c> beside it would leave this
+    /// notice built and unused, which is the shape of the three regressions this file opens
+    /// with.</para>
+    /// </summary>
+    [Fact]
+    public void TheHeadsNoTrayHostNoticeWaitsBeforeItSpeaks()
+    {
+        var notice = (TrayHostNotice)typeof(LinuxApp)
+            .GetMethod("BuildHostNotice", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(Head, [])!;
+
+        Assert.Equal(TrayHostNotice.DefaultGrace, notice.Grace);
+        Assert.True(notice.Grace > TimeSpan.Zero, "a notice that waits for no time is the defect");
+    }
+
+    /// <summary>
     /// The seam the sweep above cannot see. Verified by using it the way the head does: the
     /// first claim succeeds, a second concurrent claim fails, and releasing frees it again.
     /// </summary>
