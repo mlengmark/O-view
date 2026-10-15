@@ -322,6 +322,7 @@ public sealed class PlanHistoryProvider : IUsageProvider
         // which was leaving the forecast systematically about half an interval late.
         var windowStart = NarrowWithLocalActivity(ResetDetector.FindCurrentWindowStart(samples));
         var nextReset = ResetDetector.PredictNextReset(windowStart, utcNow);
+        var sessionPercent = TrustedFiveHourPercent(latest.FiveHourPercent, age);
 
         // No weekly reset. This provider used to derive one by scanning the series for `sd`
         // drops; ADR-0014 removed that outright. The reset is a fixed weekly grid reported
@@ -333,7 +334,7 @@ public sealed class PlanHistoryProvider : IUsageProvider
         // rolls from first use and is genuinely not a grid (issue #180).
         return new UsageSnapshot(
             source,
-            TrustedFiveHourPercent(latest.FiveHourPercent, age),
+            sessionPercent,
             latest.SevenDayPercent,
             nextReset,
             latest.AtUtc,
@@ -343,7 +344,17 @@ public sealed class PlanHistoryProvider : IUsageProvider
             // approximate rather than printed to the minute (rule 6). The session window is
             // the only one that still carries this — the weekly reset is a reported instant
             // with no bracket to describe (ADR-0014).
-            SessionResetUncertainty: windowStart?.Uncertainty);
+            SessionResetUncertainty: windowStart?.Uncertainty)
+        {
+            // The two percentages and the sample's own timestamp are measured — read straight
+            // off a Desktop sample, which is UsageSnapshot's default status and needs no
+            // override here. The session reset is not: it is predicted from an observed drop,
+            // never reported by the source (see the type's own doc comment above), so it is
+            // estimated whenever there is one to predict. Weekly has nothing to add at all, per
+            // the comment above — its default (absent, since the plain member is null) already
+            // says so.
+            SessionResetAtUtcStatus = UsageSnapshot.EstimatedStatus(nextReset),
+        };
     }
 
 }

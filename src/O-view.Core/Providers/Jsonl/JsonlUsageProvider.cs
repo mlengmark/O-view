@@ -122,6 +122,14 @@ public sealed class JsonlUsageProvider : IUsageProvider
 
         return _store.LatestActivityUtc() is { } latest
             ? new UsageSnapshot(DataSource.Estimate, null, null, null, latest)
+            {
+                // No percentage and no reset time ever comes from a local token count (see the
+                // class summary above) — both absent, which is already the default status for
+                // a null plain member. The one figure this fallback does produce, the
+                // latest-activity instant, is modelled from local records rather than reported
+                // by a vendor, matching the Estimate label the whole snapshot already carries.
+                CapturedAtUtcStatus = UsageValueStatus.Estimated,
+            }
             : UsageSnapshot.None;
     }
 
