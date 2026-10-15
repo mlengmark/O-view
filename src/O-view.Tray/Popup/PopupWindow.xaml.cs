@@ -566,46 +566,21 @@ public partial class PopupWindow : Window, IFlyout
     /// </summary>
     private void PopulateTiles(PanelStatistics stats)
     {
-        // Partial history states its coverage — a small number without this caveat
-        // reads as low usage rather than short history (ADR-0006). An unpriced model is
-        // the same class of caveat: the total is real but incomplete, so say which model
-        // is missing rather than letting the figure read as the whole picture.
-        var coverage = TokenText.Caveat(stats);
-
-        // Always shown, unlike the caveat above it. Partial history and an unpriced model are
+        // Always shown, unlike the per-tile caveats. Partial history and an unpriced model are
         // conditions that pass; the tiles excluding chat and cloud sessions is the standing shape
         // of the data, and a note that appeared only sometimes would teach a reader that its
-        // absence means full coverage (issue #235).
+        // absence means full coverage (issue #235). It sits under the block rather than on a
+        // tile, which is why it is not part of a tile's view model.
         TokenScopeLine.Text = TokenText.TokenScopeCaveat;
 
-        // The "not money charged" framing is only true for plan usage. Off-plan work
-        // bills at API rates, so the label has to flip with it.
-        var offPlan = stats.IsOffPlan;
+        // Both faces of all four tiles, including which caveat each carries and the colour slot
+        // every model takes. This panel only places them.
+        var tiles = PanelSections.Tiles(stats);
 
-        // The "today" tiles carried a "(UTC)" hint for one release, while the figure was a UTC
-        // day under a local-time header (issue #210). The figure is the reader's own day now,
-        // so there is nothing left to qualify.
-        TileTokensToday.FormatSlice = s => FormatTokens(s.Tokens);
-        TileTokensToday.Populate(
-            TokenText.TokensTodayLabel, FormatTokens(stats.TokensToday), "",
-            stats.ModelsToday, BreakdownMeasure.Tokens, stats.ModelColourOrder);
-
-        TileEstToday.FormatSlice = s => FormatUsd(s.EstUsd);
-        TileEstToday.Populate(
-            TokenText.EstTodayLabel(offPlan),
-            FormatUsd(stats.EstTodayUsd),
-            OffPlanText.OffPlanNote(offPlan),
-            stats.ModelsToday, BreakdownMeasure.EstValue, stats.ModelColourOrder);
-
-        TileTokens31.FormatSlice = s => FormatTokens(s.Tokens);
-        TileTokens31.Populate(
-            TokenText.Tokens31DaysLabel, FormatTokens(stats.Tokens31Days), coverage,
-            stats.Models31Days, BreakdownMeasure.Tokens, stats.ModelColourOrder);
-
-        TileEst31.FormatSlice = s => FormatUsd(s.EstUsd);
-        TileEst31.Populate(
-            TokenText.Est31DaysLabel, FormatUsd(stats.Est31DaysUsd), coverage,
-            stats.Models31Days, BreakdownMeasure.EstValue, stats.ModelColourOrder);
+        TileTokensToday.Populate(tiles.TokensToday);
+        TileEstToday.Populate(tiles.EstToday);
+        TileTokens31.Populate(tiles.Tokens31Days);
+        TileEst31.Populate(tiles.Est31Days);
 
         // Which surfaces these figures are made of. Empty when nothing was found at all —
         // the scope note owns that state and says considerably more (issue #171).

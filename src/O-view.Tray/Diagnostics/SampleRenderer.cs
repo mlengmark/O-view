@@ -13,6 +13,7 @@ using OView.Core.Updates;
 using OView.Tray.Popup;
 using OView.Tray.Tray;
 using OView.Tray.Updates;
+using OView.Presentation.Panel;
 using OView.Presentation.Samples;
 using OView.Presentation.Text;
 using Border = System.Windows.Controls.Border;
@@ -210,7 +211,7 @@ internal static class SampleRenderer
             foreach (var expanded in new[] { false, true })
             {
                 var rows = new StackPanel { Margin = new Thickness(16) };
-                var pending = new List<(StatTile Tile, string Label, string Value, ModelSlice[] Slices, BreakdownMeasure Measure)>();
+                var pending = new List<(StatTile Tile, PanelTileView View)>();
                 foreach (var (name, slices) in cases)
                 {
                     rows.Children.Add(new TextBlock
@@ -224,19 +225,28 @@ internal static class SampleRenderer
                     });
 
                     var pair = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
-                    var tokensTile = NewSampleTile(BreakdownMeasure.Tokens);
-                    var valueTile = NewSampleTile(BreakdownMeasure.EstValue);
+                    var tokensTile = NewSampleTile();
+                    var valueTile = NewSampleTile();
                     pair.Children.Add(tokensTile);
                     pair.Children.Add(valueTile);
                     rows.Children.Add(pair);
 
-                    // Carry the coverage caveat on the samples too: it has to survive
-                    // into the breakdown view, and a sample that never shows one cannot
-                    // catch it going missing (it did).
-                    pending.Add((tokensTile, "Tokens · 31 days",
-                        UsageFormatter.Tokens(slices.Sum(s => s.Tokens)), slices, BreakdownMeasure.Tokens));
-                    pending.Add((valueTile, TokenText.Est31DaysLabel,
-                        SumSampleUsd(slices), slices, BreakdownMeasure.EstValue));
+                    // Built through PanelSections, so a sample is a picture of the shipped
+                    // tile rather than of one assembled here (issue #55).
+                    //
+                    // Carry the coverage caveat on the samples too: it has to survive into the
+                    // breakdown view, and a sample that never shows one cannot catch it going
+                    // missing (it did).
+                    pending.Add((tokensTile, PanelSections.Tile(
+                        "Tokens · 31 days",
+                        UsageFormatter.Tokens(slices.Sum(s => s.Tokens)),
+                        "8 of 31 days recorded",
+                        slices, BreakdownMeasure.Tokens, colourOrder)));
+                    pending.Add((valueTile, PanelSections.Tile(
+                        TokenText.Est31DaysLabel,
+                        SumSampleUsd(slices),
+                        "8 of 31 days recorded",
+                        slices, BreakdownMeasure.EstValue, colourOrder)));
                 }
 
                 // The tiles resolve their colours through DynamicResource, so the palette
@@ -254,9 +264,9 @@ internal static class SampleRenderer
                 // logical tree, so a tile populated before it is parented and themed has
                 // nowhere to find them. The real panel gets this ordering for free — its
                 // tiles are declared in XAML and the theme is applied before Populate.
-                foreach (var (tile, label, value, slices, _) in pending)
+                foreach (var (tile, view) in pending)
                 {
-                    tile.Populate(label, value, "8 of 31 days recorded", slices, tile.SplitBy, colourOrder);
+                    tile.Populate(view);
                     tile.SetExpanded(expanded);
                 }
 
@@ -409,17 +419,11 @@ internal static class SampleRenderer
             Path.Combine(dir, $"{name}-{(light ? "light" : "dark")}.png"));
     }
 
-    private static StatTile NewSampleTile(BreakdownMeasure measure) =>
+    private static StatTile NewSampleTile() =>
         new()
         {
             Width = 180,
             Margin = new Thickness(0, 0, 8, 0),
-            SplitBy = measure,
-            // The panel's own formatters, so a sample cannot render a figure differently
-            // from the tile it is a picture of (issue #55).
-            FormatSlice = measure == BreakdownMeasure.Tokens
-                ? s => UsageFormatter.Tokens(s.Tokens)
-                : s => UsageFormatter.Usd(s.EstUsd),
         };
 
     private static string SumSampleUsd(ModelSlice[] slices) =>
