@@ -5,7 +5,8 @@ using OView.Presentation.Text;
 namespace OView.Presentation.Panel;
 
 /// <summary>
-/// Builds the panel's header and its two meters, once, for both heads.
+/// Builds the panel's header, its two meters and its four statistics tiles, once, for both
+/// heads.
 ///
 /// <para><b>Why this exists above <see cref="PanelText"/>.</b> That class already held every
 /// sentence, and the heads still disagreed — not about wording but about which sentence a
@@ -131,6 +132,131 @@ public static class PanelSections
             ResetHint = PanelText.WeeklyResetUnknownHint,
         };
     }
+
+    /// <summary>
+    /// The four statistics tiles, each with the per-model split behind its total.
+    ///
+    /// <para>Both today tiles share <see cref="PanelStatistics.ModelsToday"/> and both 31-day
+    /// tiles share <see cref="PanelStatistics.Models31Days"/> — one list per window, split two
+    /// ways, because a token breakdown and a value breakdown of the same usage are the same
+    /// rows measured differently.</para>
+    ///
+    /// <para>The caveat rules are the part that was stated twice. Partial history and an
+    /// unpriced model are conditions that pass, so they ride on the tiles they qualify; the
+    /// tiles excluding chat and cloud sessions is the standing shape of the data and belongs
+    /// under the whole block, which is why no tile carries it (issue #235).</para>
+    /// </summary>
+    public static PanelTilesView Tiles(PanelStatistics stats)
+    {
+        // Partial history states its coverage — a small number without this caveat reads as
+        // low usage rather than short history (ADR-0006). An unpriced model is the same class
+        // of caveat: the total is real but incomplete.
+        var coverage = TokenText.Caveat(stats);
+
+        // The "not money charged" framing is only true for plan usage. Off-plan work bills at
+        // API rates, so the value tiles' label flips with it and they name the mixture.
+        var offPlan = stats.IsOffPlan;
+        var offPlanNote = OffPlanText.OffPlanNote(offPlan);
+
+        return new PanelTilesView(
+            // Today's token tile qualifies nothing. It carried a "(UTC)" hint for one release,
+            // while the figure was a UTC day under a local-time header (issue #210); the figure
+            // is the reader's own day now. The Linux head also put the off-plan note here,
+            // which the Windows one never did — the mixture is what the value tiles are about,
+            // and a token count is the same count either way.
+            Tile(
+                TokenText.TokensTodayLabel,
+                UsageFormatter.Tokens(stats.TokensToday),
+                "",
+                stats.ModelsToday,
+                BreakdownMeasure.Tokens,
+                stats.ModelColourOrder),
+            Tile(
+                TokenText.EstTodayLabel(offPlan),
+                UsageFormatter.Usd(stats.EstTodayUsd),
+                offPlanNote,
+                stats.ModelsToday,
+                BreakdownMeasure.EstValue,
+                stats.ModelColourOrder),
+            Tile(
+                TokenText.Tokens31DaysLabel,
+                UsageFormatter.Tokens(stats.Tokens31Days),
+                coverage,
+                stats.Models31Days,
+                BreakdownMeasure.Tokens,
+                stats.ModelColourOrder),
+            Tile(
+                TokenText.Est31DaysLabel,
+                UsageFormatter.Usd(stats.Est31DaysUsd),
+                coverage,
+                stats.Models31Days,
+                BreakdownMeasure.EstValue,
+                stats.ModelColourOrder));
+    }
+
+    /// <summary>
+    /// One tile, both faces. Public because the Windows verification renders build tiles
+    /// directly from hand-made slices — a sample assembled any other way would be a picture of
+    /// something other than the shipped tile.
+    /// </summary>
+    /// <param name="slices">
+    /// The window's full per-model list, not its segments. The unpriced models a value chart
+    /// has to leave out are read from this: by the time
+    /// <see cref="ModelBreakdown.Segments"/> has run they are gone, and a tile that reported
+    /// none would imply its total was the whole picture (rule 6).
+    /// </param>
+    /// <param name="colourOrder">
+    /// <see cref="PanelStatistics.ModelColourOrder"/> — the panel-wide slot order, so a model
+    /// keeps one colour across all four tiles.
+    /// </param>
+    public static PanelTileView Tile(
+        string label,
+        string value,
+        string note,
+        IReadOnlyList<ModelSlice> slices,
+        BreakdownMeasure measure,
+        IReadOnlyList<string> colourOrder)
+    {
+        var segments = ModelBreakdown.Segments(slices, measure, colourOrder);
+        var total = segments.Sum(s => ModelBreakdown.Measure(s, measure));
+
+        // Only a value chart can exclude a model — a token count exists for every model that
+        // recorded one, so asking on a token tile would always answer "none" and the caption
+        // would be deciding something it had no say in.
+        var unpriced = measure == BreakdownMeasure.EstValue
+            ? ModelBreakdown.Unpriced(slices)
+            : [];
+
+        return new PanelTileView(
+            label,
+            value,
+            note,
+            [.. segments.Select(s => Segment(s, measure, total, colourOrder))],
+            TokenText.ModelBreakdownCaption(unpriced.Count),
+            unpriced.Count > 0 ? TokenText.UnpricedModelsHint(unpriced) : null);
+    }
+
+    private static PanelTileSegmentView Segment(
+        ModelSlice slice, BreakdownMeasure measure, double total, IReadOnlyList<string> colourOrder) =>
+        new(
+            // A non-null FoldedCount is what marks the remainder — never a word in Model or
+            // DisplayName, both of which Core leaves empty on that segment.
+            slice.FoldedCount is not null ? TokenText.OtherSegmentLabel : slice.DisplayName,
+            Figure(slice, measure),
+            slice.FoldedCount is int folded ? TokenText.FoldedModelsLabel(folded) : slice.Model,
+            // Guarded rather than assumed non-zero: Segments drops zero-measure models, so a
+            // zero total means no segments at all and this never runs — but a share is a
+            // division and the guard costs less than finding out that changed.
+            total > 0 ? ModelBreakdown.Measure(slice, measure) / total : 0,
+            ModelBreakdown.SlotFor(slice.Model, colourOrder));
+
+    /// <summary>One segment's measure, worded as the tile's measure is worded.</summary>
+    private static string Figure(ModelSlice slice, BreakdownMeasure measure) => measure switch
+    {
+        BreakdownMeasure.Tokens => UsageFormatter.Tokens(slice.Tokens),
+        BreakdownMeasure.EstValue => UsageFormatter.Usd(slice.EstUsd),
+        _ => "",
+    };
 
     /// <summary>
     /// What both meters share: the figure, the band and the fill, or the placeholder that

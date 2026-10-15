@@ -31,6 +31,24 @@ public sealed class LinuxPanelTheme
         ? brush
         : throw new ArgumentOutOfRangeException(nameof(key), key, "Not a panel palette key.");
 
+    /// <summary>
+    /// The categorical colour for a breakdown segment's slot, or the neutral for the folded
+    /// remainder (slot -1).
+    ///
+    /// <para>Which slot a model takes is decided in Presentation, once for the whole panel, so
+    /// a model keeps one colour across every tile and both heads
+    /// (<see cref="OView.Presentation.Panel.PanelTileSegmentView.Slot"/>). This only looks the
+    /// palette up — the separation figures behind those three hues, and the reason a fourth
+    /// chromatic slot does not exist, are recorded in <see cref="PanelPalette"/>.</para>
+    /// </summary>
+    public IBrush Series(int slot) => this[slot switch
+    {
+        0 => "Series1",
+        1 => "Series2",
+        2 => "Series3",
+        _ => "SeriesOther",
+    }];
+
     /// <summary>The band colour for a usage percentage, from the shared classifier so the
     /// bars and the tray icon can never disagree about what "amber" means.</summary>
     public IBrush Level(int? percent) => percent is { } p

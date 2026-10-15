@@ -2,8 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using OView.App.Rendering;
-using OView.Core.Models;
-using OView.Presentation.Text;
+using OView.Presentation.Panel;
 using Brush = System.Windows.Media.Brush;
 using Orientation = System.Windows.Controls.Orientation;
 using Point = System.Windows.Point;
@@ -45,11 +44,11 @@ public partial class StatTile : UserControl
 
     private static void ApplyHoverTiming(DependencyObject element) => HoverCard.ApplyTiming(element);
 
-    private IReadOnlyList<ModelSlice> _slices = [];
-    private BreakdownMeasure _measure = BreakdownMeasure.Tokens;
-
-    /// <summary>Panel-wide slot order, so colour follows the model rather than its rank here.</summary>
-    private IReadOnlyList<string> _colourOrder = [];
+    /// <summary>
+    /// Both faces as Presentation built them, or an empty tile before the first
+    /// <see cref="Populate"/>.
+    /// </summary>
+    private PanelTileView _view = new("", "", "", [], "", null);
     private bool _expanded;
 
     public StatTile()
@@ -59,9 +58,6 @@ public partial class StatTile : UserControl
         Root.MouseEnter += (_, _) => UpdateGlyph();
         Root.MouseLeave += (_, _) => UpdateGlyph();
     }
-
-    /// <summary>Renders one slice's measure for the legend — supplied by the panel, which owns formatting.</summary>
-    public Func<ModelSlice, string> FormatSlice { get; set; } = _ => "";
 
     /// <summary>
     /// Inset inside the tile. Set by the panel from <see cref="PanelDensity"/> rather than
@@ -78,48 +74,30 @@ public partial class StatTile : UserControl
     }
 
     /// <summary>
-    /// Which measure this tile splits by. Named SplitBy rather than Measure because
-    /// UIElement.Measure is a layout method — hiding it would be a trap.
+    /// Fills the tile from the view model Presentation built. Resets to the summary view: a
+    /// panel that reopened still showing a breakdown from twenty minutes ago would be showing
+    /// stale intent, and the tile is a transient view rather than a setting.
     /// </summary>
-    public BreakdownMeasure SplitBy
+    public void Populate(PanelTileView view)
     {
-        get => _measure;
-        set => _measure = value;
-    }
-
-    /// <summary>
-    /// Fills the tile. Resets to the summary view: a panel that reopened still showing
-    /// a breakdown from twenty minutes ago would be showing stale intent, and the tile
-    /// is a transient view rather than a setting.
-    /// </summary>
-    public void Populate(
-        string label,
-        string value,
-        string note,
-        IReadOnlyList<ModelSlice> slices,
-        BreakdownMeasure measure,
-        IReadOnlyList<string> colourOrder)
-    {
-        LabelText.Text = label;
-        ValueText.Text = value;
-        NoteText.Text = note;
-        NoteText.Visibility = note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-        BreakdownTotal.Text = value;
-        // Same caveat, both views — see the XAML for why it is not treated as chrome.
-        BreakdownNote.Text = note;
-        BreakdownNote.Visibility = note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
-
-        _slices = slices;
-        _measure = measure;
-        _colourOrder = colourOrder;
+        _view = view;
         _expanded = false;
+
+        LabelText.Text = view.Label;
+        ValueText.Text = view.Value;
+        NoteText.Text = view.Note;
+        NoteText.Visibility = view.Note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
+        BreakdownTotal.Text = view.Value;
+        // Same caveat, both views — see the XAML for why it is not treated as chrome. One
+        // string now, so the two faces cannot be given different caveats.
+        BreakdownNote.Text = view.Note;
+        BreakdownNote.Visibility = view.Note.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
 
         // A tile with nothing to break down must not pretend to be clickable — an
         // affordance that leads nowhere is worse than none.
-        var segments = ModelBreakdown.Segments(slices, measure, colourOrder);
-        Root.IsEnabled = segments.Count > 0;
-        Root.Cursor = segments.Count > 0 ? System.Windows.Input.Cursors.Hand : null;
-        ExpandGlyph.Visibility = segments.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        Root.IsEnabled = view.CanFlip;
+        Root.Cursor = view.CanFlip ? System.Windows.Input.Cursors.Hand : null;
+        ExpandGlyph.Visibility = view.CanFlip ? Visibility.Visible : Visibility.Collapsed;
 
         // Built now, not on first click. Two reasons, and the first is the one that
         // bites: a Hidden element only reserves the space its CONTENT needs, so an
@@ -164,13 +142,13 @@ public partial class StatTile : UserControl
     /// </summary>
     internal ToolTip? BuildSampleTooltip(int segmentIndex)
     {
-        var segments = ModelBreakdown.Segments(_slices, _measure, _colourOrder);
-        if (segmentIndex >= segments.Count)
+        if (segmentIndex >= _view.Segments.Count)
         {
             return null;
         }
 
-        return SliceTooltip(segments[segmentIndex], SeriesBrushes(segments)[segmentIndex]);
+        return SliceTooltip(
+            _view.Segments[segmentIndex], SeriesBrushes(_view.Segments)[segmentIndex]);
     }
 
     /// <summary>Forces the view for verification renders (the --tile-samples hook).</summary>
@@ -197,14 +175,13 @@ public partial class StatTile : UserControl
         BarHost.Children.Clear();
         LegendHost.Children.Clear();
 
-        var segments = ModelBreakdown.Segments(_slices, _measure, _colourOrder);
+        var segments = _view.Segments;
         if (segments.Count == 0)
         {
             return;
         }
 
         var brushes = SeriesBrushes(segments);
-        var total = segments.Sum(s => ModelBreakdown.Measure(s, _measure));
 
         for (var i = 0; i < segments.Count; i++)
         {
@@ -214,8 +191,8 @@ public partial class StatTile : UserControl
             {
                 BarHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(SegmentGap) });
             }
-            var share = total > 0 ? ModelBreakdown.Measure(segments[i], _measure) / total : 0;
-            BarHost.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(share, GridUnitType.Star) });
+            BarHost.ColumnDefinitions.Add(
+                new ColumnDefinition { Width = new GridLength(segments[i].Share, GridUnitType.Star) });
 
             // Square at the baseline, 4px rounded at the data end — the bar grows from
             // the left, so only the final segment's right corners are rounded.
@@ -237,22 +214,14 @@ public partial class StatTile : UserControl
 
         // Unpriced models cannot be placed on a value chart — their worth is unknown,
         // not zero — so they are named rather than quietly missing from a total the
-        // chart would otherwise imply is complete (CLAUDE.md rule 6).
-        var unpriced = _measure == BreakdownMeasure.EstValue
-            ? ModelBreakdown.Unpriced(_slices)
-            : [];
-        // Counted, not listed: a raw model id is longer than the space and would either
-        // overflow the tile or crowd out the total. The count says something is missing
-        // — which is the part rule 6 requires — and the tooltip names it exactly. Both
-        // wordings, and the choice between them, come from TokenText.
-        BreakdownCaption.Text = TokenText.ModelBreakdownCaption(unpriced.Count);
-        BreakdownCaption.ToolTip = unpriced.Count > 0
-            ? TextTooltip(TokenText.UnpricedModelsHint(unpriced))
-            : null;
+        // chart would otherwise imply is complete (CLAUDE.md rule 6). Which models those
+        // are, and whether the caption counts or names them, is Presentation's decision.
+        BreakdownCaption.Text = _view.Caption;
+        BreakdownCaption.ToolTip = _view.CaptionHint is { } hint ? TextTooltip(hint) : null;
         ApplyHoverTiming(BreakdownCaption);
     }
 
-    private UIElement LegendEntry(ModelSlice slice, Brush brush, bool last)
+    private UIElement LegendEntry(PanelTileSegmentView slice, Brush brush, bool last)
     {
         var panel = new StackPanel
         {
@@ -278,7 +247,7 @@ public partial class StatTile : UserControl
         // light categorical hue is illegible as small text.
         panel.Children.Add(new TextBlock
         {
-            Text = slice.FoldedCount is not null ? TokenText.OtherSegmentLabel : slice.DisplayName,
+            Text = slice.Name,
             FontSize = 9,
             Margin = new Thickness(3, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
@@ -298,33 +267,21 @@ public partial class StatTile : UserControl
     /// The swatch matters beyond decoration: it ties the card to the exact colour being
     /// pointed at, which is the one thing a floating card otherwise loses.
     /// </summary>
-    private ToolTip SliceTooltip(ModelSlice slice, Brush swatch) =>
+    private ToolTip SliceTooltip(PanelTileSegmentView slice, Brush swatch) =>
         // Figure first, model id beneath, swatch alongside — the shared card shape, which
-        // this one defined before the graph needed it too.
-        //
-        // The id line is ALWAYS rendered. It used to be suppressed when it matched the
-        // friendly name — which is exactly the case for an UNRECOGNISED model, where
-        // DisplayName IS the raw id — so those cards would have shown a number and
-        // nothing identifying it.
-        HoverCard.Figure(
-            this,
-            FormatSlice(slice),
-            slice.FoldedCount is int foldedCount ? TokenText.FoldedModelsLabel(foldedCount) : slice.Model,
-            swatch);
+        // this one defined before the graph needed it too. Both lines are the view model's;
+        // see PanelTileSegmentView.Identity for why the second is never suppressed.
+        HoverCard.Figure(this, slice.Figure, slice.Identity, swatch);
 
     /// <summary>A styled hover card carrying a sentence — used for the caption's caveat.</summary>
     private ToolTip TextTooltip(string text) => HoverCard.Text(this, text);
 
     /// <summary>
-    /// Colour by the MODEL, from the panel-wide slot order — never by the segment's
-    /// position in this tile.
-    ///
-    /// Position-based colouring is what made the same model change colour between tiles:
-    /// Opus 5 came out blue where it happened to be largest and orange where it was
-    /// second, so the four tiles could not be read against one another. Anything outside
-    /// the slot order — including the folded remainder — takes the neutral.
+    /// The brush for each segment's slot. Which slot a segment takes is the view model's —
+    /// decided from the panel-wide order so colour follows the MODEL, never its rank in this
+    /// tile (<see cref="PanelTileSegmentView.Slot"/>). All this does is look the palette up.
     /// </summary>
-    private Brush[] SeriesBrushes(IReadOnlyList<ModelSlice> segments)
+    private Brush[] SeriesBrushes(IReadOnlyList<PanelTileSegmentView> segments)
     {
         var chromatic = new[]
         {
@@ -334,10 +291,6 @@ public partial class StatTile : UserControl
         };
         var other = (Brush)FindResource("SeriesOther");
 
-        return segments
-            .Select(s => ModelBreakdown.SlotFor(s.Model, _colourOrder) is var slot && slot >= 0
-                ? chromatic[slot]
-                : other)
-            .ToArray();
+        return segments.Select(s => s.Slot >= 0 ? chromatic[s.Slot] : other).ToArray();
     }
 }
