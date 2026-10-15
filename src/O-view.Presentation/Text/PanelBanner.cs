@@ -37,14 +37,18 @@ public sealed record PanelBanner(string Title, string Detail, string GaugePlaceh
     public const string UnknownGauge = "unknown";
 
     /// <summary>
-    /// The gauge reads this when O-view knows the figure is out of reach on this machine
-    /// rather than merely unavailable right now. Naming the cause is the difference between
-    /// a gap and a bug, and only one of them is worth a user's time.
+    /// The gauge reads this when O-view knows which reading is missing rather than merely
+    /// having no figure. Naming the cause is the difference between a gap and a bug, and
+    /// only one of them is worth a user's time.
+    ///
+    /// <para>It names the file, not an application. This read "needs Claude Desktop" until
+    /// a Claude Code user on a machine with no Desktop saw it beside two gauges Claude Code
+    /// itself can fill (issue #234).</para>
     /// </summary>
-    public const string NeedsDesktopGauge = "needs Claude Desktop";
+    public const string NoUsageFileGauge = "usage file not found";
 
     /// <summary>Heading for the case where only the two percentages are out of reach.</summary>
-    public const string ScopeTitle = "Session and weekly % need Claude Desktop";
+    public const string ScopeTitle = "Session and weekly % need a usage file";
 
     /// <summary>Heading for a panel that genuinely has nothing to show.</summary>
     public const string NoDataTitle = "No usage data";
@@ -91,26 +95,38 @@ public sealed record PanelBanner(string Title, string Detail, string GaugePlaceh
                 tokens31Days > 0
                     ? ScopeDetail(planReport, scopeReport)
                     : ScopeDetailWithNothingRecorded(planReport, scopeReport),
-                NeedsDesktopGauge);
+                NoUsageFileGauge);
         }
 
         return new PanelBanner(NoDataTitle, explanation, UnknownGauge);
     }
 
     /// <summary>
+    /// How both scope wordings open: who fills these two percentages.
+    ///
+    /// <para>This said <i>only</i> Claude Desktop wrote them, which stopped being true when
+    /// Claude Code began caching the same two figures (issue #234) — so the one sentence a
+    /// Claude Code user on a machine with no Desktop would read was the one that sent them
+    /// after an application they do not run. Both writers are named, and neither is said to
+    /// be absent: all O-view observed is that no reading arrived.</para>
+    /// </summary>
+    private const string Sources =
+        "Claude Desktop's usage file and the figures Claude Code caches both fill these two "
+        + "gauges, and O-view has neither.";
+
+    /// <summary>
     /// The CLI-only note. Every clause is an observation: which surfaces were found, how
-    /// many locations were searched, and what that costs. It never says Claude Desktop is
-    /// absent — the same file goes missing when a packaged install redirects it somewhere
-    /// O-view did not look, which is why the diagnostics offer stays.
+    /// many locations were searched, and what that costs. It never says either application
+    /// is absent — the file goes missing just as readily when a packaged install redirects
+    /// it somewhere O-view did not look, which is why the diagnostics offer stays.
     /// </summary>
     private static string ScopeDetail(PlanHistoryReport plan, TranscriptScopeReport scope) =>
-        $"Only Claude Desktop writes the usage file these two gauges need, and O-view found "
-        + $"none in the {Locations(plan)} it checked. Your {SourceList(scope)} token figures "
-        + "below are unaffected. "
+        $"{Sources} It found no usage file in the {Locations(plan)} it checked. "
+        + $"Your {SourceList(scope)} token figures below are unaffected. "
         // The instruction opens its own sentence: it is a capitalised imperative phrase on
         // Windows ("Right-click the tray icon → …"), which reads as a typo mid-sentence.
-        + $"Using Desktop? {DiagnosticsHint.Instruction} — O-view may be looking in the "
-        + "wrong place for how it is installed here.";
+        + $"{DiagnosticsHint.Instruction} — O-view may be looking in the wrong place for how "
+        + "they are installed here.";
 
     /// <summary>
     /// The same situation, but with nothing ingested from the transcripts that were found.
@@ -118,10 +134,10 @@ public sealed record PanelBanner(string Title, string Detail, string GaugePlaceh
     /// tiles is exactly the reader this whole class exists for.
     /// </summary>
     private static string ScopeDetailWithNothingRecorded(PlanHistoryReport plan, TranscriptScopeReport scope) =>
-        $"Only Claude Desktop writes the usage file these two gauges need, and O-view found "
-        + $"none in the {Locations(plan)} it checked. It did find {scope.TotalFiles} "
-        + $"{SourceList(scope)} transcript{(scope.TotalFiles == 1 ? "" : "s")} but recorded no "
-        + $"usage from them, which is unexpected. {DiagnosticsHint.Instruction} and report this.";
+        $"{Sources} It found no usage file in the {Locations(plan)} it checked. It did find "
+        + $"{scope.TotalFiles} {SourceList(scope)} transcript{(scope.TotalFiles == 1 ? "" : "s")} "
+        + $"but recorded no usage from them, which is unexpected. "
+        + $"{DiagnosticsHint.Instruction} and report this.";
 
     /// <summary>
     /// "1 location" or "3 locations" — pluralised rather than written "location(s)". The

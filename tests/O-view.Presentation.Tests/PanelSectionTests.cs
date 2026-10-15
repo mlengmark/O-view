@@ -122,11 +122,11 @@ public class PanelSectionTests
     [Fact]
     public void TheBannersOwnPlaceholderWinsWhenItHasOne()
     {
-        var banner = new PanelBanner("title", "detail", PanelBanner.NeedsDesktopGauge);
+        var banner = new PanelBanner("title", "detail", PanelBanner.NoUsageFileGauge);
 
         var meter = PanelSections.SessionMeter(UsageSnapshot.None, banner, Now, Utc);
 
-        Assert.Equal(PanelBanner.NeedsDesktopGauge, meter.Value);
+        Assert.Equal(PanelBanner.NoUsageFileGauge, meter.Value);
     }
 
     // ── the meters ──────────────────────────────────────────────────────────────────
