@@ -913,71 +913,53 @@ public partial class PopupWindow : Window, IFlyout
     private readonly DisclosureAnimation _disclosure;
 
     /// <summary>
-    /// Surfaces off-plan usage in two distinct registers:
-    ///   • a live banner + tile relabel for what is happening in the CURRENT session
-    ///     window (the divergence detector's real-time signal), and
+    /// Draws off-plan usage in the two registers <see cref="PanelOffPlanView"/> decides:
+    ///   • a live banner for what is happening in the CURRENT session window (the divergence
+    ///     detector's real-time signal), and
     ///   • a standing 31-day off-plan SPEND total (GitHub issue #3), estimated from
     ///     credit-billed models rather than the 5-hour session.
-    /// The two are independent: the 31-day figure shows even when the current window
-    /// is on-plan, and the banner shows even before any credit spend has accrued.
+    /// The two are independent: the 31-day figure shows even when the current window is
+    /// on-plan, and the banner shows even before any credit spend has accrued.
+    ///
+    /// <para>Every sentence and figure below arrives built. What is left here is the three
+    /// things WPF has an opinion about: whether the banner is collapsed or taking space, how a
+    /// hyperlink's inlines are filled, and where a tooltip hangs.</para>
     /// </summary>
     private void PopulateDivergence(PanelStatistics stats, TimeZoneInfo local)
     {
-        var d = stats.Divergence;
-        var offPlan = stats.IsOffPlan;
+        var offPlan = PanelSections.OffPlan(stats, CachedUsage, Now(TimeZoneInfo.Utc), local);
+
+        // The Est.-today tile's label and note also flip with off-plan state; that happens in
+        // PopulateTiles, which owns everything the tiles show, from the same view model's
+        // ValueTileLabel and ValueTileNote.
 
         // ── live, session-scoped signal ──────────────────────────────────────────
-        DivergenceBanner.Visibility = offPlan ? Visibility.Visible : Visibility.Collapsed;
+        DivergenceBanner.Visibility = offPlan.Banner is null ? Visibility.Collapsed : Visibility.Visible;
 
-        // The Est.-today tile's label and note also flip with off-plan state; that now
-        // happens in PopulateTiles, which owns everything the tiles show.
-
-        if (offPlan && d is not null)
+        if (offPlan.Banner is { } banner)
         {
-            // Both sentences live in OffPlanText, and the heading joined them there for issue
-            // #259: it was the half that asserted a charge — "usage is billing beyond your
-            // plan" — at readers whose accounts had extra usage switched off, while the detail
-            // line beneath it was already careful not to. A claim the panel makes in two
-            // registers should not be worded in two places.
-            var extraUsage = CachedUsage?.ExtraUsage ?? ExtraUsageStatus.Unknown;
-
-            DivergenceTitle.Text = OffPlanText.OffPlanTitle(d.State, extraUsage.State);
-            DivergenceDetail.Text = OffPlanText.OffPlanDetail(
-                d, extraUsage.State, CachedUsage?.FetchedAtUtc, Now(TimeZoneInfo.Utc), local);
+            DivergenceTitle.Text = banner.Title;
+            DivergenceDetail.Text = banner.Detail;
 
             // Filled here rather than in XAML so the label and the address have one definition
-            // in Core, next to the sentences that send the reader to them (issue #259).
-            DivergenceLinkAnchor.NavigateUri = new Uri(OffPlanText.UsageSettingsUrl);
+            // in Presentation, next to the sentences that send the reader to them (issue #259).
+            DivergenceLinkAnchor.NavigateUri = new Uri(banner.LinkUrl);
             DivergenceLinkAnchor.Inlines.Clear();
-            DivergenceLinkAnchor.Inlines.Add(OffPlanText.UsageSettingsLinkLabel);
+            DivergenceLinkAnchor.Inlines.Add(banner.LinkLabel);
         }
 
         // ── standing 31-day off-plan spend (issue #3) ────────────────────────────
-        // The heading counts the window the figure beside it covers, exactly as the chart
-        // heading above does. It read "last 31 days" as a literal, so the heading and the
-        // total under it were only in step as long as nothing moved the window.
-        CreditsHeading.Text = OffPlanText.OffPlanHeading(stats.WindowDays);
-
-        if (stats.HasCreditUsage)
-        {
-            CreditsBadgeText.Text = PanelText.CreditBadgeRecorded;
-            CreditsSpendLabel.Text = PanelText.CreditSpendLabel;
-            CreditsSpendValue.Text = FormatUsd(stats.EstCredit31DaysUsd);
-            CreditsCoverage.Text = TokenText.CoverageNote(stats);
-        }
-        else
-        {
-            CreditsBadgeText.Text = PanelText.CreditBadgeNoneRecorded;
-            CreditsSpendLabel.Text = PanelText.CreditSpendLabel;
-            CreditsSpendValue.Text = "$0.00";
-            CreditsCoverage.Text = "";
-        }
+        CreditsHeading.Text = offPlan.Heading;
+        CreditsBadgeText.Text = offPlan.Badge;
+        CreditsSpendLabel.Text = offPlan.SpendLabel;
+        CreditsSpendValue.Text = offPlan.SpendValue;
+        CreditsCoverage.Text = offPlan.Coverage;
 
         // The explanation is on hover now rather than standing under the figure (issue #181).
         // Both wordings still carry the rule-6 caveat that this is not what was charged —
         // moving a caveat behind a hover is the obvious way to lose one, so the sentences
         // live in OffPlanText where they have one definition and a test can assert them.
-        CreditsSection.ToolTip = HoverCard.Text(this, OffPlanText.OffPlanHint(stats.HasCreditUsage));
+        CreditsSection.ToolTip = HoverCard.Text(this, offPlan.Hint);
         HoverCard.ApplyTiming(CreditsSection);
     }
 
@@ -1229,13 +1211,12 @@ public partial class PopupWindow : Window, IFlyout
     // reads better unqualified at its call sites — the same reason FormatTokens exists.
     private static string FormatCountdown(TimeSpan t) => PanelText.Countdown(t);
 
-    // Token and money formatting live in OView.Presentation.Text.UsageFormatter, shared with
-    // the off-plan notification and the verification renders so one amount cannot be written
-    // two ways (issue #55). Kept as local aliases because they read better unqualified at
-    // the dozen call sites above.
+    // Token formatting lives in OView.Presentation.Text.UsageFormatter, shared with the
+    // off-plan notification and the verification renders so one amount cannot be written two
+    // ways (issue #55). Kept as a local alias because it reads better unqualified at the dozen
+    // call sites above. The money alias beside it went when the last amount this file formatted
+    // moved into PanelOffPlanView.
     private static string FormatTokens(long tokens) => UsageFormatter.Tokens(tokens);
-
-    private static string FormatUsd(decimal? usd) => UsageFormatter.Usd(usd);
 
     // Theming lives in PanelTheme, shared with the tray menu flyout (issue #33).
 }

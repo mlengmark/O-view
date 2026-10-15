@@ -157,8 +157,7 @@ public static class PanelSections
 
         // The "not money charged" framing is only true for plan usage. Off-plan work bills at
         // API rates, so the value tiles' label flips with it and they name the mixture.
-        var offPlan = stats.IsOffPlan;
-        var offPlanNote = OffPlanText.OffPlanNote(offPlan);
+        var (offPlanLabel, offPlanNote) = ValueTile(stats);
 
         return new PanelTilesView(
             // Today's token tile qualifies nothing. It carried a "(UTC)" hint for one release,
@@ -174,7 +173,7 @@ public static class PanelSections
                 BreakdownMeasure.Tokens,
                 stats.ModelColourOrder),
             Tile(
-                TokenText.EstTodayLabel(offPlan),
+                offPlanLabel,
                 UsageFormatter.Usd(stats.EstTodayUsd),
                 offPlanNote,
                 stats.ModelsToday,
@@ -195,6 +194,68 @@ public static class PanelSections
                 BreakdownMeasure.EstValue,
                 stats.ModelColourOrder));
     }
+
+    /// <summary>
+    /// The off-plan banner, the standing 31-day section and the value tile's relabel
+    /// (<see cref="PanelOffPlanView"/>).
+    ///
+    /// <para>The banner's claim about billing is the part that had to stop being built per
+    /// head: it follows a setting read from Claude Code's own cache, and the wording that
+    /// setting licenses is a statement about the reader's money (issue #259). Both readings are
+    /// taken from the one cached block rather than passed separately, so the sentence and the
+    /// stamp on it can never describe different reads.</para>
+    /// </summary>
+    /// <param name="cachedUsage">
+    /// What Claude Code last cached, or null from a machine where nothing was readable — which
+    /// reads as <see cref="ExtraUsageState.Unknown"/> and claims nothing either way.
+    /// </param>
+    public static PanelOffPlanView OffPlan(
+        PanelStatistics stats,
+        CachedUtilization? cachedUsage,
+        DateTimeOffset utcNow,
+        TimeZoneInfo local)
+    {
+        var (valueTileLabel, valueTileNote) = ValueTile(stats);
+        var extraUsage = (cachedUsage?.ExtraUsage ?? ExtraUsageStatus.Unknown).State;
+
+        // Guarded on the divergence rather than on IsOffPlan alone. The two cannot disagree —
+        // IsOffPlan reads the same field — but the banner needs the result itself, and a null
+        // check states that it is the result, not the verdict, the wording is built from.
+        var banner = stats.Divergence is { IsOffPlan: true } divergence
+            ? new PanelOffPlanBannerView(
+                OffPlanText.OffPlanTitle(divergence.State, extraUsage),
+                OffPlanText.OffPlanDetail(
+                    divergence, extraUsage, cachedUsage?.FetchedAtUtc, utcNow, local),
+                OffPlanText.UsageSettingsLinkLabel,
+                OffPlanText.UsageSettingsUrl)
+            : null;
+
+        return new PanelOffPlanView(
+            banner,
+            // The day count is the window the figure beside it covers, exactly as the chart's
+            // heading above is. A literal 31 here and a shorter window in the data would read
+            // as a full month of spend.
+            OffPlanText.OffPlanHeading(stats.WindowDays),
+            stats.HasCreditUsage ? PanelText.CreditBadgeRecorded : PanelText.CreditBadgeNoneRecorded,
+            PanelText.CreditSpendLabel,
+            // Zero is stated, not blanked: nothing credit-billed was recorded in the window,
+            // which is a measurement rather than an absence of one. The coverage caveat beside
+            // it is what qualifies how much of the window was actually watched.
+            UsageFormatter.Usd(stats.HasCreditUsage ? stats.EstCredit31DaysUsd : 0m),
+            stats.HasCreditUsage ? TokenText.CoverageNote(stats) : "",
+            OffPlanText.OffPlanHint(stats.HasCreditUsage),
+            valueTileLabel,
+            valueTileNote);
+    }
+
+    /// <summary>
+    /// The value tile's label and caveat for the window's off-plan state — read both by
+    /// <see cref="Tiles"/>, which draws the tile, and by <see cref="OffPlan"/>, which is where
+    /// the state is otherwise described. One definition, because a tile labelled "Est. spend"
+    /// beside a banner that is not showing describes a different window than the banner does.
+    /// </summary>
+    private static (string Label, string Note) ValueTile(PanelStatistics stats) =>
+        (TokenText.EstTodayLabel(stats.IsOffPlan), OffPlanText.OffPlanNote(stats.IsOffPlan));
 
     /// <summary>
     /// One tile, both faces. Public because the Windows verification renders build tiles

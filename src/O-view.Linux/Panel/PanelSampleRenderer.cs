@@ -32,7 +32,7 @@ public static class PanelSampleRenderer
                 // and re-rendering returns the size and content already arranged.
                 var content = new PanelContent(new LinuxPanelTheme(light));
                 content.Populate(state.Snapshot, state.Stats, state.Account, state.Plan, state.Scope,
-                    SampleStates.Now, state.Boost, SampleStates.Zone);
+                    SampleStates.Now, state.Boost, SampleStates.Zone, state.CachedUsage);
 
                 Save(content, Path.Combine(directory, $"panel-{state.Name}-{(light ? "light" : "dark")}.png"));
                 written++;
