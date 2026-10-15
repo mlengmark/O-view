@@ -1,3 +1,5 @@
+using System.Text.RegularExpressions;
+
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
@@ -43,9 +45,10 @@ public class PanelShortScreenTests
     // ── the measurement ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The guard the whole slice turns on: the height the panel lays itself out from is the
-    /// content's own, and a height the screen has already forced on the window does not change
-    /// it. Reading that forced height back was the bug.
+    /// Half of the guard the whole slice turns on: whatever height the screen has already forced
+    /// on the panel, the content still answers with the height it wants. The other half — that
+    /// the window asks the content at all, rather than its own frame — is structural, and is the
+    /// test below it.
     /// </summary>
     [Fact]
     public void TheNaturalHeightIsTheContentsOwnAndNotOneTheScreenHasForcedOnIt()
@@ -61,7 +64,58 @@ public class PanelShortScreenTests
         Assert.True(
             natural > ScreenHeightDip,
             $"the fullest panel measured {natural:0} dip, which a {ScreenHeightDip:0} dip screen "
-            + "cannot have reported — the height is being read from the window again");
+            + "cannot have reported. This test only means something while the panel it measures "
+            + "is taller than that screen, and it no longer is — the state it is built from needs "
+            + "replacing with one that still overflows.");
+    }
+
+    /// <summary>
+    /// The other half, structural, in the spirit of the guards in <c>PanelDismissalTests</c>:
+    /// the test above pins the content's answer, but the fault was the window's. It asked its
+    /// own frame how tall the panel wanted to be, and putting that one line back leaves every
+    /// behavioural test in this file green. <see cref="PanelWindow"/> cannot be built in a test
+    /// process — there is no windowing subsystem — so its source is read, which is how that
+    /// same file is already held.
+    ///
+    /// <para>The rule being held: the window may take its <i>width</i> from the size it reports
+    /// itself, because nothing has ever capped a 400 DIP panel's width, and may take nothing
+    /// else from it. Every height it sizes or places from comes through
+    /// <see cref="PanelContent.NaturalHeightDip"/>.</para>
+    /// </summary>
+    [Fact]
+    public void TheWindowSizesAndPlacesFromTheContentAndNeverFromItsOwnFrame()
+    {
+        var source = WindowSourceWithoutComments();
+
+        var reads = Regex.Matches(
+            source,
+            @"(?<![.\w])\(?(?:this\.)?(?:FrameSize|ClientSize|DesiredSize|Bounds)\b"
+            + @"(?:\s*\?\?\s*(?:FrameSize|ClientSize|DesiredSize|Bounds))*\s*\)?\s*(?<member>\.\w+)?");
+
+        foreach (Match read in reads)
+        {
+            Assert.True(
+                read.Groups["member"].Value == ".Width",
+                $"PanelWindow takes `{read.Value.Trim()}` off the size it reports itself. The panel "
+                + "is SizeToContent, so that size is only ever what the compositor granted, and no "
+                + "compositor grants more than the screen: reading it made a 1024x768 desktop "
+                + "report a natural height of exactly 768, conclude the panel fitted a 712 dip "
+                + "work area, and leave four sections below the bottom edge with nothing to scroll "
+                + "them back. Only the width may come from the window; every height comes from "
+                + "PanelContent.NaturalHeightDip.");
+        }
+
+        Assert.True(
+            source.Contains("_content.NaturalHeightDip()", StringComparison.Ordinal),
+            "PanelWindow never asks its content how tall it is, so the height it fits to can only "
+            + "have come from the window or from a guess at the screen.");
+
+        Assert.True(
+            Regex.IsMatch(source, @"PlaceAtWorkAreaCorner\(\s*double"),
+            "PanelWindow places the panel without being told how tall it is, so the corner can "
+            + "only have come from the window — which on a short screen describes the screen, and "
+            + "straight after a resize describes a size the compositor has not answered yet. Pass "
+            + "the height the fit decided.");
     }
 
     /// <summary>
@@ -315,6 +369,37 @@ public class PanelShortScreenTests
     private static readonly Lock FontLock = new();
 
     private static bool _fontsReady;
+
+    /// <summary>
+    /// The window's code without its comments. The paragraphs explaining why the frame is not
+    /// read name the very properties the structural guard looks for, so reading the file whole
+    /// would fail it on its own documentation. No string in that file contains a slash pair, so
+    /// cutting at one cannot swallow code.
+    /// </summary>
+    private static string WindowSourceWithoutComments()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            RepositoryRoot(), "src", "O-view.Linux", "Panel", "PanelWindow.cs"));
+
+        return Regex.Replace(source, @"//[^\n]*", string.Empty);
+    }
+
+    /// <summary>
+    /// Walks up from the test binary to the directory holding the solution file, the way
+    /// <c>PanelDismissalTests</c> and <c>PortalThemeSourceTests</c> do: the depth below
+    /// <c>bin/</c> differs by configuration, so the marker is searched for rather than counted.
+    /// </summary>
+    private static string RepositoryRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "O-view.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        Assert.NotNull(directory);
+        return directory.FullName;
+    }
 
     private static Color Hex(string key, bool light) => Color.Parse(PanelPalette.Get(key, light));
 
