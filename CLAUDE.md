@@ -32,11 +32,11 @@ Where code lives decides what it may touch:
 |---|---|---|
 | `O-view.Core` | `net10.0` | BCL and SQLite only. No UI, no Win32, no `System.Drawing`, no `Microsoft.Win32`. **Must build and pass its tests on Linux.** |
 | `O-view.App` | `net10.0` | The same. Orchestration only; platform behaviour arrives through injected interfaces. |
-| `O-view.Presentation` | `net10.0` | Everything a user reads or sees, shared by both heads; today the shared sample states the goldens are rendered from. Core only, never WPF or Avalonia (a test enforces it). |
+| `O-view.Presentation` | `net10.0` | Everything a user reads or sees, shared by both heads: wording, number and date formats, and a view model per panel section, tooltip and menu, plus the shared sample states the goldens are rendered from. Core only, never WPF or Avalonia (a test enforces it). |
 | `O-view.Tray` — Windows head | `net10.0-windows` | Win32, WPF, WinForms `NotifyIcon`, **directly. No abstraction tax.** |
 | `O-view.Linux` — Linux head | `net10.0` | D-Bus, StatusNotifierItem, Avalonia + SkiaSharp ([ADR-0013](docs/adr/0013-linux-ui-toolkit.md)). |
 
-The target layering, where display text moves out of Core into Presentation, is described in [docs/architecture.md](docs/architecture.md).
+The layering — the panel's content built once per section in Presentation, with each head only laying it out — is described in [docs/architecture.md](docs/architecture.md).
 
 **Before every PR, run `powershell -File tools/check.ps1`.** It builds, runs every test (including the smoke test against `tests/fixtures/claude-home`), renders both panels' shared sample states, and compares them pixel by pixel with `tests/golden`. A change that alters what a panel looks like updates the goldens with `-UpdateGolden`, and the PR shows them before and after. The PR format is `.github/pull_request_template.md`. CI's `pr-format`, `merge-order` and `guard-ratchet` checks enforce it, and [docs/feature-checklist.md](docs/feature-checklist.md) lists what must never silently break.
 
@@ -226,7 +226,8 @@ O-view.slnx
 │   ├── O-view.Core/          # net10.0        Providers, rollup store, window math — no UI, no Win32
 │   ├── O-view.Presentation/  # net10.0        Wording, formatting and view models shared by both
 │   │                         #                heads — PanelText, BoostText, TokenText, OffPlanText,
-│   │                         #                and the sample states the goldens render. Core only.
+│   │                         #                a view model per panel section (PanelSections), and
+│   │                         #                the sample states the goldens render. Core only.
 │   ├── O-view.App/           # net10.0        The shell. UsageEngine implements ISkinToShell (what
 │   │                         #                a skin asks) and is split into UsageCacheRefresh,
 │   │                         #                WeeklyResetCoordinator, PlanHistoryPoll, UsageAlerts,
