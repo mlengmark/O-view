@@ -242,6 +242,9 @@ public class LinuxHeadWiringTests
     [Fact]
     public void EveryShellToSkinCallReachesTheSkinOnTheUiThread()
     {
+        // Claimed before the first real touch below — see AvaloniaDispatcherTestSupport for why.
+        AvaloniaDispatcherTestSupport.ClaimUiThreadForThisThread();
+
         var dispatcher = Assert.IsType<AvaloniaUiDispatcher>(SeamValue(typeof(IUiDispatcher)));
         var skin = new ThreadRecordingSkin();
 
