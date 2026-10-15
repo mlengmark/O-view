@@ -19,7 +19,9 @@ public static class TooltipFormatter
         {
             DataSource.Live => FormatAuthoritative(snapshot, zone, staleSuffix: null),
             DataSource.Stale => FormatAuthoritative(snapshot, zone,
-                staleSuffix: snapshot.CapturedAtUtc is { } at ? $" (as of {ToLocal(at, zone):HH:mm})" : " (stale)"),
+                staleSuffix: snapshot.CapturedAtUtcValue is { Status: not UsageValueStatus.Unavailable, Value: { } at }
+                    ? $" (as of {ToLocal(at, zone):HH:mm})"
+                    : " (stale)"),
             DataSource.Estimate => "O-view · local estimate · usage % unknown",
             _ => "O-view · no usage data",
         };
@@ -29,13 +31,13 @@ public static class TooltipFormatter
 
     private static string FormatAuthoritative(UsageSnapshot s, TimeZoneInfo zone, string? staleSuffix)
     {
-        var session = s.SessionPercent is { } fh
+        var session = s.SessionPercentValue is { Status: not UsageValueStatus.Unavailable, Value: { } fh }
             ? string.Create(CultureInfo.InvariantCulture, $"5h: {fh}%")
             : "5h: ?";
-        var reset = s.SessionResetAtUtc is { } r
+        var reset = s.SessionResetAtUtcValue is { Status: not UsageValueStatus.Unavailable, Value: { } r }
             ? string.Create(CultureInfo.InvariantCulture, $" · resets {ToLocal(r, zone):HH:mm}")
             : "";
-        var weekly = s.WeeklyPercent is { } sd
+        var weekly = s.WeeklyPercentValue is { Status: not UsageValueStatus.Unavailable, Value: { } sd }
             ? string.Create(CultureInfo.InvariantCulture, $" · 7d: {sd}%")
             : "";
         // The weekly reset joins the tooltip on different terms from the session one: shown when
@@ -43,7 +45,7 @@ public static class TooltipFormatter
         // forward by whole weeks (ADR-0014), so there is no bracket to qualify — unlike the
         // session window, which rolls from first use and keeps its marker. Weekday, not clock
         // time alone — a bare "07:28" a week out would read as today.
-        var weeklyReset = s.WeeklyResetAtUtc is { } wr
+        var weeklyReset = s.WeeklyResetAtUtcValue is { Status: not UsageValueStatus.Unavailable, Value: { } wr }
             ? string.Create(CultureInfo.InvariantCulture,
                 $" · resets {ToLocal(wr, zone):ddd HH:mm}")
             : "";
