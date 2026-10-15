@@ -88,12 +88,109 @@
                     </Setter.Value>
                 </Setter>
             </Style>
+
+            <!-- The scroll bar for a panel the work area has had to cap, drawn from the
+                 palette's ScrollTrack and ScrollThumb so both heads draw one bar rather than
+                 each choosing its own grey. The three numbers are the Linux panel's, stated
+                 there for this head to match: 6 wide, 6 clear of the content, and a thumb no
+                 shorter than 24 so very tall content still leaves something grabbable.
+
+                 No arrow buttons, and the page strips are templated to a bare transparent
+                 Border rather than hidden: a collapsed RepeatButton stops answering clicks,
+                 and a click on the track either side of the thumb is a page, exactly as it is
+                 on the Linux bar. The bar only ever appears on a display already short of
+                 room, so it costs the content as little width as it can. -->
+            <Style x:Key="PanelScrollBar" TargetType="ScrollBar">
+                <Setter Property="Width" Value="6"/>
+
+                <!-- MinWidth as well as Width: the stock vertical bar sets a MinWidth of the
+                     system scroll-bar width, and a minimum outranks a width whatever the style
+                     precedence says. Without this the bar comes out at the Windows default of
+                     17 DIP — nearly three times the Linux one, in the one place on the panel
+                     where width is scarce. -->
+                <Setter Property="MinWidth" Value="6"/>
+                <Setter Property="Margin" Value="6,0,0,0"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollBar">
+                            <Border Background="{DynamicResource ScrollTrack}" CornerRadius="3"
+                                    SnapsToDevicePixels="True">
+                                <Track x:Name="PART_Track" IsDirectionReversed="True">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageUpCommand"
+                                                      Focusable="False" IsTabStop="False">
+                                            <RepeatButton.Template>
+                                                <ControlTemplate TargetType="RepeatButton">
+                                                    <Border Background="Transparent"/>
+                                                </ControlTemplate>
+                                            </RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <Thumb MinHeight="24">
+                                            <Thumb.Template>
+                                                <ControlTemplate TargetType="Thumb">
+                                                    <Border Background="{DynamicResource ScrollThumb}"
+                                                            CornerRadius="3" SnapsToDevicePixels="True"/>
+                                                </ControlTemplate>
+                                            </Thumb.Template>
+                                        </Thumb>
+                                    </Track.Thumb>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="ScrollBar.PageDownCommand"
+                                                      Focusable="False" IsTabStop="False">
+                                            <RepeatButton.Template>
+                                                <ControlTemplate TargetType="RepeatButton">
+                                                    <Border Background="Transparent"/>
+                                                </ControlTemplate>
+                                            </RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.IncreaseRepeatButton>
+                                </Track>
+                            </Border>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- The viewport the sections move into once the panel has been capped
+                 (PopupScroll). Templated rather than left to the stock ScrollViewer so the
+                 bar above is the one that appears, and so the bar occupies an Auto column
+                 beside the content instead of overlaying it. -->
+            <Style x:Key="PanelScrollViewer" TargetType="ScrollViewer">
+                <Setter Property="VerticalScrollBarVisibility" Value="Auto"/>
+                <Setter Property="HorizontalScrollBarVisibility" Value="Disabled"/>
+                <Setter Property="Focusable" Value="False"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ScrollViewer">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <ScrollContentPresenter x:Name="PART_ScrollContentPresenter"
+                                                        Grid.Column="0"/>
+                                <ScrollBar x:Name="PART_VerticalScrollBar" Grid.Column="1"
+                                           Orientation="Vertical"
+                                           Style="{StaticResource PanelScrollBar}"
+                                           Value="{TemplateBinding VerticalOffset}"
+                                           Maximum="{TemplateBinding ScrollableHeight}"
+                                           ViewportSize="{TemplateBinding ViewportHeight}"
+                                           Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}"/>
+                            </Grid>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
         </ResourceDictionary>
     </Window.Resources>
 
     <Border x:Name="PanelRoot" Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource PanelBorder}"
             BorderThickness="1" CornerRadius="10" Padding="16">
-        <StackPanel>
+        <!-- Named because a capped panel is laid out inside a scrolling viewport instead of
+             directly in the border above (PopupScroll). -->
+        <StackPanel x:Name="PanelBody">
 
             <!-- Header: title + freshness left, account right (ui-spec.md) -->
             <Grid>

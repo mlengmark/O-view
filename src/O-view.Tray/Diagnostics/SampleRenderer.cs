@@ -43,6 +43,20 @@ namespace OView.Tray.Diagnostics;
 internal static class SampleRenderer
 {
     /// <summary>
+    /// The work area of the display the panel was reported running off: a 1024×768 desktop,
+    /// less <see cref="WorkAreaPlacement.DefaultMarginPx"/> at each end. The Linux head
+    /// renders its short sample against the same figure, so the two pictures are comparable.
+    /// </summary>
+    private const double ShortWorkAreaDip = 712;
+
+    /// <summary>
+    /// The state rendered a second time for that display — the tallest one, which is what
+    /// this wants. Named rather than measured: a name chosen at run time would rename the
+    /// golden image the day some other state grows past it.
+    /// </summary>
+    private const string ShortState = "offplan-on";
+
+    /// <summary>
     /// Renders the detail panel offscreen, in both themes, for every shared sample state
     /// (<see cref="SampleStates"/>), plus the views only this head has: the token
     /// explanation open and caught mid-fold, the compact density, and the graph's hover cards.
@@ -63,6 +77,7 @@ internal static class SampleRenderer
         const double scale = 2.0;
 
         var typical = SampleStates.All.Single(s => s.Name == "typical");
+        var tallest = SampleStates.All.Single(s => s.Name == ShortState);
 
         PopupWindow NewPopup(bool light, SampleState state) => new()
         {
@@ -103,6 +118,15 @@ internal static class SampleRenderer
             SavePng(NewPopup(light, typical).RenderToBitmap(typical.Snapshot, typical.Stats, typical.Account, scale,
                     expandComposition: true, density: PanelDensity.Compact),
                 File("typical-compact", light));
+
+            // And the display that compacting alone cannot save: the tallest state against a
+            // 712 DIP work area, where the panel is capped at the work area and its content
+            // scrolls inside it. Compact is passed rather than left to be chosen, because it
+            // is what PanelDensity.For returns for this state at this height and the picture
+            // should be the one that display actually gets.
+            SavePng(NewPopup(light, tallest).RenderToBitmap(tallest.Snapshot, tallest.Stats, tallest.Account, scale,
+                    density: PanelDensity.Compact, availableHeightDip: ShortWorkAreaDip),
+                File($"{ShortState}-short", light));
 
             // The graph's hover cards, standalone: a ToolTip cannot be given a parent, so it
             // appears in no render of the panel.

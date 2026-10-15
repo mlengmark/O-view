@@ -7,6 +7,7 @@ using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Presentation.Panel;
 using OView.Presentation.Text;
+using Size = System.Windows.Size;
 using ToolTip = System.Windows.Controls.ToolTip;
 
 namespace OView.Tray.Popup;
@@ -50,6 +51,12 @@ public partial class PopupWindow : Window, IFlyout
     /// </summary>
     private readonly DockedFlyout _flyout;
 
+    /// <summary>
+    /// The viewport the sections move into on a display too short for them, so nothing past
+    /// the cap is left unreachable (<see cref="PopupScroll"/>).
+    /// </summary>
+    private readonly PopupScroll _scroll;
+
     private readonly PopupTiles _tiles;
     private readonly PopupWeeklyRow _weeklyRow;
     private readonly PopupDivergence _divergence;
@@ -72,6 +79,8 @@ public partial class PopupWindow : Window, IFlyout
         _flyout = new DockedFlyout(this);
         Deactivated += (_, _) => _flyout.OnDeactivated();
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) _flyout.BeginClose(); };
+
+        _scroll = new PopupScroll(PanelRoot, PanelBody);
 
         _tiles = new PopupTiles(TokenScopeLine, TileTokensToday, TileEstToday, TileTokens31, TileEst31, TokenScopeNote);
         _weeklyRow = new PopupWeeklyRow(this, WeeklyResetText, BoostChip, BoostChipText);
@@ -212,7 +221,8 @@ public partial class PopupWindow : Window, IFlyout
     }
 
     /// <summary>
-    /// Picks the density this display can actually fit, then draws the chart at it.
+    /// Picks the density this display can actually fit, caps the panel at the work area if
+    /// even that is not enough, then draws the chart at whatever is left.
     ///
     /// <para><b>Measured, not guessed.</b> The natural layout is applied first and laid out,
     /// because the panel's height depends on what is in it — a no-data banner, an off-plan
@@ -220,9 +230,19 @@ public partial class PopupWindow : Window, IFlyout
     /// wrong for most of those combinations. The extra layout pass costs nothing next to the
     /// two the flyout already runs.</para>
     ///
+    /// <para><b>And measured from the content, not from the window.</b> This used to ask both
+    /// questions about <c>ActualHeight</c>, which is the height of a window that has already
+    /// been fitted to the display — so a panel too tall for the screen reads back the cap and
+    /// concludes it fits. That is what the Linux panel did when four sections sat off the
+    /// bottom of a 1024×768 desktop with nothing to scroll them back (Maximilian's B13 report
+    /// of 2026-10-15). <see cref="NaturalHeightDip"/> asks the tree instead, and asks again
+    /// after the compact re-layout, because the tree that answered first is not the one the
+    /// cap and the scroll decision are about.</para>
+    ///
     /// <para>The chart is drawn last and unconditionally: its bars are laid out against the
     /// canvas height, so a canvas that just changed size would otherwise keep the previous
-    /// drawing at the previous scale.</para>
+    /// drawing at the previous scale. It is also drawn after the fit rather than before, since
+    /// a scroll bar narrows the column the canvas is measured in.</para>
     /// </summary>
     /// <param name="pendingGrowth">
     /// Height the panel is about to gain or lose but has not yet — the disclosure fold, which
@@ -235,15 +255,58 @@ public partial class PopupWindow : Window, IFlyout
         ApplyDensity(PanelDensity.Normal);
         UpdateLayout();
 
-        var density = PanelDensity.For(
-            ActualHeight + pendingGrowth, PopupPositioner.AvailableHeightDip());
+        var available = PopupPositioner.AvailableHeightDip();
+        var density = PanelDensity.For(NaturalHeightDip() + pendingGrowth, available);
         if (density.IsCompact)
         {
             ApplyDensity(density);
             UpdateLayout();
         }
 
+        ApplyFit(PanelFit.Resolve(NaturalHeightDip() + pendingGrowth, available), available);
+        UpdateLayout();
+
         _graph.Draw(stats, snapshot, LocalZone);
+    }
+
+    /// <summary>
+    /// The height the panel's content wants, measured against an unbounded height — the
+    /// content's own answer rather than the window's.
+    ///
+    /// <para>Any cap already on the root is cleared before measuring. Leaving one would hand
+    /// back the cap itself, which is the same mistake as measuring <c>ActualHeight</c>: a
+    /// panel that scrolled the last time it opened would decide it now fits, and stop
+    /// scrolling.</para>
+    ///
+    /// <para>The measure is left invalidated afterwards, so the next layout pass measures the
+    /// tree against the constraint it is actually being laid out in rather than keeping this
+    /// unbounded answer.</para>
+    /// </summary>
+    private double NaturalHeightDip()
+    {
+        PanelRoot.Height = double.NaN;
+        PanelRoot.Measure(new Size(Width, double.PositiveInfinity));
+        var wanted = PanelRoot.DesiredSize.Height;
+        PanelRoot.InvalidateMeasure();
+        return wanted;
+    }
+
+    /// <summary>
+    /// Makes the panel the height the fit decided, and puts the sections in a viewport if that
+    /// height had to cut them short.
+    ///
+    /// <para>The cap goes on the content rather than on the window, because the window is
+    /// <c>SizeToContent</c> and follows it — and because the verification renders lay the same
+    /// content out with no window at all, so a cap stated there is one both paths obey.
+    /// <c>MaxHeight</c> holds it on the window as well, against a later re-layout this method
+    /// never sees. A panel that fits goes back to sizing itself, so moving between a short
+    /// display and a tall one in one session leaves no cap behind.</para>
+    /// </summary>
+    private void ApplyFit(PanelFit.Result fit, double availableHeightDip)
+    {
+        MaxHeight = availableHeightDip;
+        _scroll.ScrollContent(fit.MustScroll);
+        PanelRoot.Height = fit.MustScroll ? fit.WindowHeightDip : double.NaN;
     }
 
     /// <summary>
@@ -278,13 +341,28 @@ public partial class PopupWindow : Window, IFlyout
     /// falls back to the hard-coded default width and the gridlines land in the wrong
     /// places — which is precisely what this hook is meant to catch.</para>
     /// </summary>
+    /// <param name="availableHeightDip">
+    /// The work area to fit the render into, for the short-display sample; null renders the
+    /// panel at whatever height it wants, as every other sample does. Given one, this does
+    /// what <see cref="FitToWorkArea"/> does on that display — caps the content and scrolls
+    /// it — with the figure pinned by the caller, because an offscreen tree has no window and
+    /// no monitor to be granted one by.
+    /// </param>
     internal System.Windows.Media.Imaging.BitmapSource RenderToBitmap(
         UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account, double scale,
-        bool expandComposition = false, PanelDensity? density = null, double? compositionReveal = null)
+        bool expandComposition = false, PanelDensity? density = null, double? compositionReveal = null,
+        double? availableHeightDip = null)
     {
         PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
         ApplyDensity(density ?? PanelDensity.Normal);
         Populate(snapshot, stats, account);
+
+        // Before the render's own layout passes, so the chart the second one draws is measured
+        // in the column a scroll bar has already narrowed.
+        if (availableHeightDip is { } available)
+        {
+            ApplyFit(PanelFit.Resolve(NaturalHeightDip(), available), available);
+        }
 
         // The second layout pass is the whole reason betweenPasses exists — see the
         // remarks above and on VisualRenderer.RenderContent. The disclosure is opened here
@@ -378,6 +456,10 @@ public partial class PopupWindow : Window, IFlyout
         _lastStats = stats;
         _lastSnapshot = snapshot;
         _lastSettings = SettingsForDisplay;
+
+        // Back to the top: a populate is a fresh open or a re-layout at a new density, and
+        // either way the header is where the panel should start (PopupScroll).
+        _scroll.ScrollToTop();
 
         var local = LocalZone;
         var utcNow = Now(TimeZoneInfo.Utc);
