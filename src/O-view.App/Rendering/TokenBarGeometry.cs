@@ -16,7 +16,7 @@ namespace OView.App.Rendering;
 /// a caller can say so rather than leaving the reader to assume the bar is to scale.
 /// </param>
 public readonly record struct TokenBarSegment(
-    TokenKind Kind, long Tokens, double Share, decimal? EstUsd, double Width, bool Floored);
+    TokenKind Kind, long Tokens, double Share, EstimatedUsd EstUsdValue, double Width, bool Floored);
 
 /// <summary>
 /// Widths for the two composition bars, computed once for both heads.
@@ -131,7 +131,7 @@ public static class TokenBarGeometry
 
             consumed += width;
             segments.Add(new TokenBarSegment(
-                slice.Kind, slice.Tokens, slice.Share, slice.EstUsd, width, floored));
+                slice.Kind, slice.Tokens, slice.Share, slice.EstUsdValue, width, floored));
         }
 
         return segments;

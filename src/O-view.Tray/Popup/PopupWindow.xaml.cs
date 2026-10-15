@@ -418,7 +418,11 @@ public partial class PopupWindow : Window, IFlyout
         PopupMeter.Populate(WeeklyPctText, WeeklyBar, WeeklyBarFill, weekly);
         _weeklyRow.Populate(weekly);
 
-        _tiles.Populate(stats, authoritative, snapshot.SessionPercent is > 0, ScopeReport);
+        _tiles.Populate(
+            stats,
+            authoritative,
+            snapshot.SessionPercentValue is { Status: not UsageValueStatus.Unavailable, Value: > 0 },
+            ScopeReport);
         _composition.Populate(
             stats.CompositionToday, stats.Composition31Days,
             (ScopeReport ?? TranscriptScopeReport.Inspect()).CoverageLine());

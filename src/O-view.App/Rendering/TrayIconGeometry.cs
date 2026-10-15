@@ -90,8 +90,9 @@ public static class TrayIconGeometry
     /// (CLAUDE.md rule 6). It gets the neutral empty ring instead.</para>
     /// </summary>
     public static int? FillPercent(UsageSnapshot snapshot) =>
-        snapshot.Source is DataSource.Live or DataSource.Stale && snapshot.SessionPercent is { } p
-            ? Math.Clamp(p, 0, 100)
+        snapshot.Source is DataSource.Live or DataSource.Stale &&
+        snapshot.SessionPercentValue.Value is { } p
+            ? Math.Clamp((int)p, 0, 100)
             : null;
 
     /// <summary>The arc colour for a snapshot — neutral when there is no authoritative percentage.</summary>

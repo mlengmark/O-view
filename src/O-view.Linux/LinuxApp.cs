@@ -345,7 +345,8 @@ public sealed class LinuxApp : Application, IShellToSkin
             // user could open the menu.
             SyncResumeItem();
 
-            _log?.Write($"icon rendered session={snapshot.SessionPercent?.ToString() ?? "null"}");
+            _log?.Write(
+                $"icon rendered session={Describe(snapshot.SessionPercentValue)}");
         }
         catch (Exception ex)
         {
@@ -353,6 +354,19 @@ public sealed class LinuxApp : Application, IShellToSkin
             _log?.Write($"render FAILED {ex.GetType().Name}: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// The meter as a bug report needs it: the figure and why it is the figure. "unavailable"
+    /// and a missing reading used to print the same <c>null</c>, which left the most common
+    /// Linux report — the icon showing nothing — unable to say which had happened.
+    /// </summary>
+    private static string Describe(UsagePercent percent) => percent.Status switch
+    {
+        UsageValueStatus.Unavailable => "unavailable",
+        _ => percent.Value is { } value
+            ? $"{value}{(percent.Status == UsageValueStatus.Estimated ? " (estimated)" : "")}"
+            : "unknown",
+    };
 
     /// <summary>
     /// SNI wants pixels, not a themed icon name — the gauge changes every poll, so there is

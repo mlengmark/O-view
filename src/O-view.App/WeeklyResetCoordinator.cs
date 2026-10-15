@@ -175,15 +175,15 @@ public sealed class WeeklyResetCoordinator
 
         return snapshot with
         {
-            WeeklyResetAtUtc = next,
+            // Both the stored anchor and the user's own entry are exact — same standing as any
+            // other source read directly, so the instant carries Real with it. Replacing the
+            // whole pair is what keeps the two from parting company: a figure assigned on its
+            // own used to leave the old status beside it, which is how a snapshot ended up
+            // holding a weekly reset while still flagged Unavailable.
+            WeeklyResetAtUtcValue = UsageSnapshot.Instant(next),
             // No uncertainty field to set: both remaining sources are exact, so the weekly row
             // never wore the "~" and the field carrying it was removed (ADR-0014, issue #248).
             WeeklyResetPeriod = WeeklyWindow.Length,
-            // Both the stored anchor and the user's own entry are exact — same standing as any
-            // other source read directly. `with` carries the old status forward otherwise,
-            // which is how a snapshot ended up holding a weekly reset while still flagged
-            // Unavailable (its sibling below, WithReportedResets, sets this for the same reason).
-            WeeklyResetAtUtcStatus = UsageValueStatus.Real,
         };
     }
 
@@ -258,11 +258,10 @@ public sealed class WeeklyResetCoordinator
         {
             snapshot = snapshot with
             {
-                SessionResetAtUtc = sessionReset,
                 // An instant Claude Code reported, same standing as any other source read
-                // directly — `with` carries the old status forward otherwise, which can leave
-                // a snapshot holding a value while still flagged Unavailable.
-                SessionResetAtUtcStatus = UsageValueStatus.Real,
+                // directly. Figure and status are replaced together, so neither can be left
+                // behind describing the other one's reading.
+                SessionResetAtUtcValue = UsageSnapshot.Instant(sessionReset),
                 // Exact, so it renders without the "~" that marks a derived bracket.
                 SessionResetUncertainty = TimeSpan.Zero,
             };

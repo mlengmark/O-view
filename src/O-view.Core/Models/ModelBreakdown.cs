@@ -87,7 +87,7 @@ public static class ModelBreakdown
     /// Zero-measure models are dropped: a segment of width zero is invisible but its
     /// legend entry is not, so it reads as a model that contributed nothing to a total
     /// it is listed under. For <see cref="BreakdownMeasure.EstValue"/> that also removes
-    /// unpriced models (null) — they are NOT silently lost, they are reported by
+    /// unpriced models — they are NOT silently lost, they are reported by
     /// <see cref="Unpriced"/> so the caller can state the gap (rule 6).
     /// </summary>
     public static IReadOnlyList<ModelSlice> Segments(
@@ -110,6 +110,12 @@ public static class ModelBreakdown
         // A single leftover keeps its own name — "Other · 1 more models" would be a
         // clumsy way to say "Haiku 4.5". It still takes the neutral colour, because it is
         // not one of the panel's coloured models.
+        // The remainder keeps a real summed value so the segment's width is the truth — but
+        // stays unavailable if anything in it was unpriced.
+        var restUsd = rest.Any(s => s.EstUsdValue.Value is null)
+            ? null
+            : (decimal?)rest.Sum(s => s.EstUsdValue.Value ?? 0m);
+
         named.Add(rest.Count == 1
             ? rest[0]
             : new ModelSlice(
@@ -119,10 +125,12 @@ public static class ModelBreakdown
                 Model: "",
                 DisplayName: "",
                 Tokens: rest.Sum(s => s.Tokens),
-                // The remainder keeps a real summed value so the segment's width is the
-                // truth — but stays unknown if anything in it was unpriced.
-                EstUsd: rest.Any(s => s.EstUsd is null) ? null : rest.Sum(s => s.EstUsd ?? 0m),
-                FoldedCount: rest.Count));
+                FoldedCount: rest.Count)
+            {
+                EstUsdValue = new(
+                    restUsd,
+                    restUsd is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated),
+            });
 
         return named;
     }
@@ -134,13 +142,14 @@ public static class ModelBreakdown
     /// chart imply the total is complete.
     /// </summary>
     public static IReadOnlyList<string> Unpriced(IReadOnlyList<ModelSlice> slices) =>
-        slices.Where(s => s.EstUsd is null).Select(s => s.DisplayName).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        slices.Where(s => s.EstUsdValue.Value is null).Select(s => s.DisplayName)
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
     /// <summary>The measure's value for one slice, as a double for proportioning.</summary>
     public static double Measure(ModelSlice slice, BreakdownMeasure measure) => measure switch
     {
         BreakdownMeasure.Tokens => slice.Tokens,
-        BreakdownMeasure.EstValue => (double)(slice.EstUsd ?? 0m),
+        BreakdownMeasure.EstValue => (double)(slice.EstUsdValue.Value ?? 0m),
         _ => 0,
     };
 }

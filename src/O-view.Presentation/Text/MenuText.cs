@@ -45,7 +45,7 @@ public static class MenuText
     /// <summary>
     /// The words after the pill. The shorter wording is a deliberate choice (@mlengmark on
     /// issue #141), taken over "session usage": the watcher reads
-    /// <c>UsageSnapshot.SessionPercent</c> only, and what closes that gap is the notification
+    /// <c>UsageSnapshot.SessionPercentValue</c> only, and what closes that gap is the notification
     /// itself, which names the window. <b>If that balloon's copy is ever shortened, this row
     /// becomes the only place the distinction could have been made.</b>
     /// </summary>

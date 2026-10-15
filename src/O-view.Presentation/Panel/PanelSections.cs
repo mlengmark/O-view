@@ -59,9 +59,9 @@ public static class PanelSections
         UsageSnapshot snapshot, PanelBanner? banner, DateTimeOffset utcNow, TimeZoneInfo local)
     {
         var line = PanelText.SessionReset(
-            snapshot.SessionResetAtUtc, utcNow, local, snapshot.SessionResetUncertainty);
+            snapshot.SessionResetAtUtcValue.Value, utcNow, local, snapshot.SessionResetUncertainty);
 
-        return Meter(PanelText.SessionBarLabel, snapshot.SessionPercent, snapshot, banner) with
+        return Meter(PanelText.SessionBarLabel, snapshot.SessionPercentValue, snapshot, banner) with
         {
             ResetLine = line,
             ResetLineWithAction = line,
@@ -95,12 +95,12 @@ public static class PanelSections
         DateTimeOffset utcNow,
         TimeZoneInfo local)
     {
-        var meter = Meter(PanelText.WeeklyBarLabel, snapshot.WeeklyPercent, snapshot, banner) with
+        var meter = Meter(PanelText.WeeklyBarLabel, snapshot.WeeklyPercentValue, snapshot, banner) with
         {
             Chip = Chip(boost, utcNow, local),
         };
 
-        if (snapshot.WeeklyResetAtUtc is { } reset)
+        if (snapshot.WeeklyResetAtUtcValue.Value is { } reset)
         {
             // A user-supplied reset is labelled. This used to also require a zero bracket, to
             // exclude a derived reset on a machine that happened to have an entered one; that
@@ -174,7 +174,7 @@ public static class PanelSections
                 stats.ModelColourOrder),
             Tile(
                 offPlanLabel,
-                UsageFormatter.Usd(stats.EstTodayUsd),
+                UsageFormatter.Usd(stats.EstTodayValue.Value),
                 offPlanNote,
                 stats.ModelsToday,
                 BreakdownMeasure.EstValue,
@@ -188,7 +188,7 @@ public static class PanelSections
                 stats.ModelColourOrder),
             Tile(
                 TokenText.Est31DaysLabel,
-                UsageFormatter.Usd(stats.Est31DaysUsd),
+                UsageFormatter.Usd(stats.Est31DaysValue.Value),
                 coverage,
                 stats.Models31Days,
                 BreakdownMeasure.EstValue,
@@ -241,7 +241,7 @@ public static class PanelSections
             // Zero is stated, not blanked: nothing credit-billed was recorded in the window,
             // which is a measurement rather than an absence of one. The coverage caveat beside
             // it is what qualifies how much of the window was actually watched.
-            UsageFormatter.Usd(stats.HasCreditUsage ? stats.EstCredit31DaysUsd : 0m),
+            UsageFormatter.Usd(stats.HasCreditUsage ? stats.EstCredit31DaysValue.Value : 0m),
             stats.HasCreditUsage ? TokenText.CoverageNote(stats) : "",
             OffPlanText.OffPlanHint(stats.HasCreditUsage),
             valueTileLabel,
@@ -317,7 +317,7 @@ public static class PanelSections
     private static string Figure(ModelSlice slice, BreakdownMeasure measure) => measure switch
     {
         BreakdownMeasure.Tokens => UsageFormatter.Tokens(slice.Tokens),
-        BreakdownMeasure.EstValue => UsageFormatter.Usd(slice.EstUsd),
+        BreakdownMeasure.EstValue => UsageFormatter.Usd(slice.EstUsdValue.Value),
         _ => "",
     };
 
@@ -455,7 +455,8 @@ public static class PanelSections
             var fromUtc = LocalDays.StartUtc(series[0].Date, zone);
             var toUtc = LocalDays.EndUtc(series[^1].Date, zone);
 
-            if (snapshot.WeeklyResetAtUtc is { } next && snapshot.WeeklyResetPeriod is { } period)
+            if (snapshot.WeeklyResetAtUtcValue.Value is { } next &&
+                snapshot.WeeklyResetPeriod is { } period)
             {
                 return new PlanWeeks(
                     WeeklyWindow.BoundariesWithin(next, period, fromUtc, toUtc),
@@ -495,9 +496,12 @@ public static class PanelSections
     /// — an estimate has no meter to fill (ADR-0002).
     /// </summary>
     private static PanelMeterView Meter(
-        string label, int? reported, UsageSnapshot snapshot, PanelBanner? banner)
+        string label, UsagePercent reported, UsageSnapshot snapshot, PanelBanner? banner)
     {
-        var percent = IsAuthoritative(snapshot) ? reported : null;
+        // Integer precision only, which is what the meter has always carried — the typed value
+        // widens to a double so one percent type can serve figures that are not whole numbers,
+        // and these two are.
+        var percent = IsAuthoritative(snapshot) ? (int?)reported.Value : null;
 
         return new PanelMeterView(
             label,
