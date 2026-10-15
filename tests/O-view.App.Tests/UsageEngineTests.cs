@@ -1,4 +1,5 @@
 using OView.Core.Models;
+using OView.Core.Providers.CachedUsage;
 
 namespace OView.App.Tests;
 
@@ -585,6 +586,65 @@ public class UsageEngineTests
     }
 
     /// <summary>
+    /// An absent session percentage (<see cref="UsageValueStatus.Unavailable"/>) must never be
+    /// read as a zero crossing the threshold — the whole reason the engine now branches on
+    /// <see cref="UsageSnapshot.SessionPercentStatus"/> rather than on nullness. The threshold
+    /// is set to the lowest value the UI allows, so any fabricated number at all would notify.
+    /// </summary>
+    [Fact]
+    public void AnAbsentPercentageNeverCrossesTheThreshold()
+    {
+        using var dir = new TempDir();
+        var (engine, provider, timers, _) = Build(dir);
+        using var _e = engine;
+
+        var notifications = new List<AppNotification>();
+        engine.NotificationRequested += notifications.Add;
+        engine.SetThresholdPercent(1);
+
+        provider.Next = new UsageSnapshot(DataSource.Live, null, null, null, DateTimeOffset.UnixEpoch);
+        engine.Start(timers);
+        Assert.Empty(notifications);
+
+        timers.Poll.Tick();
+        Assert.Empty(notifications);
+
+        // Re-arms correctly once a real reading arrives, rather than staying stuck.
+        provider.SetSession(50);
+        timers.Poll.Tick();
+        Assert.Single(notifications);
+    }
+
+    /// <summary>
+    /// <see cref="UsagePercent"/>'s own doc states the converse of the test above does not
+    /// hold: a status other than <see cref="UsageValueStatus.Unavailable"/> can still carry no
+    /// figure. The threshold notifier used to branch on the status alone and then dereference
+    /// the figure unconditionally, which crashed on exactly that combination — no provider
+    /// shipped today produces it, but nothing says one never will.
+    /// </summary>
+    [Fact]
+    public void APresentStatusWithNoFigureNeverCrashesTheThresholdNotifier()
+    {
+        using var dir = new TempDir();
+        var (engine, provider, timers, _) = Build(dir);
+        using var _e = engine;
+
+        var notifications = new List<AppNotification>();
+        engine.NotificationRequested += notifications.Add;
+        engine.SetThresholdPercent(1);
+
+        provider.Next = new UsageSnapshot(DataSource.Live, null, null, null, DateTimeOffset.UnixEpoch)
+        {
+            SessionPercentStatus = UsageValueStatus.Real,
+        };
+        engine.Start(timers);          // must not throw
+        Assert.Empty(notifications);
+
+        timers.Poll.Tick();            // must not throw
+        Assert.Empty(notifications);
+    }
+
+    /// <summary>
     /// A monitoring tool must not die on a bad poll. The previous snapshot survives and the
     /// loop keeps running (the historical behaviour of <c>TrayController.Refresh</c>).
     /// </summary>
@@ -737,5 +797,40 @@ public class UsageEngineTests
 
         Assert.All(timers.Created, t => Assert.False(t.IsRunning));
         Assert.All(timers.Created, t => Assert.True(t.Disposed));
+    }
+
+    /// <summary>
+    /// Regression: <c>WeeklyResetCoordinator.WithReportedResets</c> overrode the session reset
+    /// instant with a <c>with</c> expression that left <c>SessionResetAtUtcStatus</c> carried
+    /// forward from the snapshot it refines — <c>Unavailable</c>, on the ordinary path where
+    /// nothing had been derived yet. That left a snapshot holding an instant while still
+    /// flagged as carrying none, and reading <c>SessionResetAtUtcValue</c> threw. The override
+    /// must read back as <see cref="UsageValueStatus.Real"/>, the same as any other source read
+    /// directly.
+    /// </summary>
+    [Fact]
+    public void AReportedSessionResetReadsBackRealEvenWhenNoneWasDerivedYet()
+    {
+        using var dir = new TempDir();
+        var reported = T0.AddHours(3).AddMinutes(10);
+        var cache = new CachedUtilization(T0, "acct", new UtilizationBar(91, reported), null);
+        var (engine, provider, timers, _) = Build(dir, o => o with
+        {
+            CachedUtilization = new CachedUtilizationProvider(() => cache),
+            CachedUtilizationSource = () => cache,
+        });
+        using var _e = engine;
+
+        // No derived session reset: SessionResetAtUtc is null, so SessionResetAtUtcStatus
+        // starts Unavailable by UsageSnapshot's own default — the exact state the override
+        // must leave readable rather than carry forward unchanged.
+        provider.Next = new UsageSnapshot(DataSource.Live, 40, 60, null, T0);
+        engine.Start(timers);
+
+        var ex = Record.Exception(() => engine.Latest.SessionResetAtUtcValue);
+
+        Assert.Null(ex);
+        Assert.Equal(reported, engine.Latest.SessionResetAtUtcValue.Value);
+        Assert.Equal(UsageValueStatus.Real, engine.Latest.SessionResetAtUtcValue.Status);
     }
 }

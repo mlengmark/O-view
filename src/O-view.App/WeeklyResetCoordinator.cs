@@ -249,11 +249,15 @@ public sealed class WeeklyResetCoordinator
             return snapshot;
         }
 
-        if (reported.SessionResetAtUtc is { } sessionReset)
+        if (reported.SessionResetAtUtcValue.Value is { } sessionReset)
         {
             snapshot = snapshot with
             {
                 SessionResetAtUtc = sessionReset,
+                // An instant Claude Code reported, same standing as any other source read
+                // directly — `with` carries the old status forward otherwise, which can leave
+                // a snapshot holding a value while still flagged Unavailable.
+                SessionResetAtUtcStatus = UsageValueStatus.Real,
                 // Exact, so it renders without the "~" that marks a derived bracket.
                 SessionResetUncertainty = TimeSpan.Zero,
             };
