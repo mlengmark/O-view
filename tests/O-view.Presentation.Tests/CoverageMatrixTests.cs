@@ -27,6 +27,10 @@ namespace OView.Presentation.Tests;
 /// <item><term>Cowork</term><description>tokens ✓, percentages ✗</description></item>
 /// <item><term>Chat</term><description>neither — no local record exists</description></item>
 /// </list>
+///
+/// <para>"percentages" above means the plan-history file, which is what
+/// <see cref="PercentagesAvailable"/> reads. Claude Code also caches the same two figures,
+/// so a ✗ row is a statement about that file rather than about the panel's bars.</para>
 /// </summary>
 public class CoverageMatrixTests : IDisposable
 {
@@ -82,7 +86,11 @@ public class CoverageMatrixTests : IDisposable
         File.WriteAllText(Path.Combine(session, CoworkAuditLocator.AuditFileName), CoworkLine(id) + "\n");
     }
 
-    /// <summary>The file only Claude Desktop writes — the sole source of the two percentages.</summary>
+    /// <summary>
+    /// The file only Claude Desktop writes. It is one source of the two percentages, not the
+    /// sole one: Claude Code caches the same two figures, which is why the panel's copy names
+    /// both writers and the ✗ rows below mean "no percentages <i>from this file</i>".
+    /// </summary>
     private void GiveDesktopPlanHistory()
     {
         Directory.CreateDirectory(Path.GetDirectoryName(PlanFile)!);

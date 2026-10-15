@@ -135,6 +135,16 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
     /// hosted inside Desktop write to the ordinary user-profile location and ARE counted;
     /// chat is the surface that genuinely cannot be measured, because it keeps no local
     /// usage record (CLAUDE.md rule 9).</para>
+    ///
+    /// <para><b>It no longer names what fills the two bars.</b> It said they came from
+    /// Claude Desktop's own usage file, which two sources have reported since Claude Code
+    /// began caching the same two figures — and nothing that reaches this report says which
+    /// of them answered. <see cref="UsageSnapshot.Source"/> carries freshness, not
+    /// provenance, and <see cref="CompositeUsageProvider"/> picks whichever reading is the
+    /// more complete and recent, so on a machine with both the named source was a coin
+    /// toss. The reassurance the sentence exists for — a zero tile does not mean a wrong
+    /// bar — survives without it: what matters to the reader is that the bars are not fed
+    /// by transcripts, and that is true of either source (CLAUDE.md rule 6).</para>
     /// </summary>
     public string Explain() => Status switch
     {
@@ -143,7 +153,7 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
             + $"Claude Code and Cowork sessions on this machine, and O-view checked "
             + $"{SearchedRoots.Count} location(s) without finding any. Chat conversations keep "
             + "no local usage record, so they cannot be counted here. The session and weekly "
-            + "bars above come from Claude Desktop's own usage file and do cover all of your "
+            + "bars above do not come from transcripts, so they still cover all of your "
             + $"usage. {DiagnosticsHint.Instruction} to see the exact locations.",
 
         _ =>

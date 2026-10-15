@@ -73,6 +73,34 @@ public class TranscriptScopeReportTests : IDisposable
         Assert.DoesNotContain("chats in the Claude Desktop app", text, StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// The note claims no source for the two percentage bars. It used to say they came from
+    /// Claude Desktop's usage file; two sources have reported them since Claude Code began
+    /// caching the same figures, nothing reaching this report says which one answered, and
+    /// naming either was therefore an assertion about the machine O-view had not made
+    /// (CLAUDE.md rule 6).
+    ///
+    /// <para>The reassurance it exists for is what must survive: a reader looking at zeroed
+    /// token tiles beside two moving bars needs to know the bars are not fed by the
+    /// transcripts that were not found.</para>
+    /// </summary>
+    [Fact]
+    public void Explain_ClaimsNoSourceForTheTwoPercentageBars()
+    {
+        var text = TranscriptScopeReport.Inspect(Projects, [Cowork]).Explain();
+
+        Assert.Equal(TranscriptScopeStatus.NoTranscripts,
+            TranscriptScopeReport.Inspect(Projects, [Cowork]).Status);
+
+        Assert.DoesNotContain("Claude Desktop", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("usage file", text, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("come from Claude", text, StringComparison.OrdinalIgnoreCase);
+
+        // What the sentence is for, kept.
+        Assert.Contains("do not come from transcripts", text, StringComparison.Ordinal);
+        Assert.Contains("cover all of your usage", text, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Explain_DistinguishesNoFilesFromFilesThatYieldedNothing()
     {

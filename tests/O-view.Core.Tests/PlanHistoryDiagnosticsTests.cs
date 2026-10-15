@@ -27,7 +27,44 @@ public class PlanHistoryDiagnosticsTests : IDisposable
 
         Assert.Equal(PlanDataStatus.FileMissing, report.Status);
         Assert.False(report.FileExists);
-        Assert.Contains("Claude Desktop", report.Explain());
+        Assert.Contains("found none", report.Explain(), StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Both writers of the two percentages are named, and the file is not called "the"
+    /// source of them. Claude Code caches the same two figures, so the single-source
+    /// phrasing was false for exactly the reader most likely to meet this sentence.
+    /// </summary>
+    [Fact]
+    public void The_missing_file_sentence_names_both_writers_of_the_percentages()
+    {
+        var text = PlanHistoryDiagnostics.Inspect(Path.Combine(_dir, "absent.json")).Explain();
+
+        Assert.Contains("Claude Desktop", text, StringComparison.Ordinal);
+        Assert.Contains("Claude Code", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("the source of session and weekly", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Neither the missing-file nor the stale sentence tells the reader to start Claude
+    /// Desktop. A Claude Code user on a machine with no Desktop cannot act on that, and it
+    /// was the only instruction either sentence gave them. State what was looked for and
+    /// what was found; the diagnostics report carries the detail.
+    /// </summary>
+    [Fact]
+    public void Neither_sentence_sends_the_reader_to_an_application()
+    {
+        var missing = PlanHistoryDiagnostics.Inspect(Path.Combine(_dir, "absent.json")).Explain();
+        var stale = PlanHistoryDiagnostics
+            .Inspect(Write($$"""{"version":2,"samples":[{{Sample(MinutesAgo(120))}}]}"""))
+            .Explain();
+
+        foreach (var text in new[] { missing, stale })
+        {
+            Assert.DoesNotContain("start it", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("is not running", text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("reopen this panel", text, StringComparison.OrdinalIgnoreCase);
+        }
     }
 
     [Fact]
@@ -94,7 +131,9 @@ public class PlanHistoryDiagnosticsTests : IDisposable
         var report = PlanHistoryDiagnostics.Inspect(Write($$"""{"version":2,"samples":[{{Sample(MinutesAgo(120))}}]}"""));
 
         Assert.Equal(PlanDataStatus.Stale, report.Status);
-        Assert.Contains("not recorded usage recently", report.Explain());
+        // Names the file whose newest sample aged, not an application presumed to be idle.
+        Assert.Contains("older than O-view's freshness window", report.Explain(), StringComparison.Ordinal);
+        Assert.Contains("plan-usage-history.json", report.Explain(), StringComparison.Ordinal);
     }
 
     [Fact]
