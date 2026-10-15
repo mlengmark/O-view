@@ -1,12 +1,14 @@
+using System.Globalization;
 using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
+using OView.Core.Providers.PlanHistory;
 using OView.Presentation.Text;
 
 namespace OView.Presentation.Panel;
 
 /// <summary>
-/// Builds the panel's header, its two meters and its four statistics tiles, once, for both
-/// heads.
+/// Builds the panel's header, its two meters, its four statistics tiles and its 31-day graph,
+/// once, for both heads.
 ///
 /// <para><b>Why this exists above <see cref="PanelText"/>.</b> That class already held every
 /// sentence, and the heads still disagreed — not about wording but about which sentence a
@@ -257,6 +259,174 @@ public static class PanelSections
         BreakdownMeasure.EstValue => UsageFormatter.Usd(slice.EstUsd),
         _ => "",
     };
+
+    /// <summary>
+    /// The 31-day graph: every column measured and dated, every gridline placed, every hover
+    /// card worded (<see cref="PanelGraphView"/>).
+    ///
+    /// <para>An empty series gives a view with no columns, which is a chart neither head
+    /// draws. It is not an error state — a store that has recorded nothing is a new install —
+    /// and the no-data banner above the chart is what says so.</para>
+    /// </summary>
+    /// <param name="zone">
+    /// The reader's timezone, or a pinned one for verification renders. Everything the chart
+    /// places is taken in it: the columns are local days and so a gridline drawn over them
+    /// has to be positioned in the same frame (<see cref="LocalDays"/>, issue #211).
+    /// </param>
+    public static PanelGraphView Graph(PanelStatistics stats, UsageSnapshot snapshot, TimeZoneInfo zone)
+    {
+        var heading = PanelText.UsageWindowHeading(stats.WindowDays);
+        var series = stats.DailySeries;
+        if (series.Count == 0)
+        {
+            return new PanelGraphView(heading, [], []);
+        }
+
+        var weeks = PlanWeeks.ForSeries(series, snapshot, zone);
+
+        // Floored at 1 so a window with nothing in it divides rather than throwing. Every
+        // column is then zero-height, which is what a store with no usage should draw.
+        var peak = Math.Max(1, series.Max(d => d.OutputTokens));
+        var weekPeak = series
+            .Where(d => !d.PreInstall)
+            .GroupBy(weeks.IndexOf)
+            .ToDictionary(g => g.Key, g => Math.Max(1, g.Max(d => d.OutputTokens)));
+
+        var columns = new List<PanelGraphColumnView>(series.Count);
+        foreach (var day in series)
+        {
+            var bar = !day.PreInstall && day.OutputTokens > 0;
+            columns.Add(new PanelGraphColumnView(
+                string.Create(CultureInfo.InvariantCulture, $"{day.Date:d MMM}"),
+                !day.PreInstall,
+                bar ? day.OutputTokens / (double)peak : 0,
+                bar ? day.OutputTokens / (double)weekPeak[weeks.IndexOf(day)] : 0,
+                bar ? TokenText.DayBarTokens(day.OutputTokens) : "",
+                bar ? string.Create(CultureInfo.InvariantCulture, $"{day.Date:dddd d MMMM}") : ""));
+        }
+
+        var columnOf = series
+            .Select((day, index) => (day.Date, index))
+            .ToDictionary(t => t.Date, t => t.index);
+
+        var boundaries = new List<PanelGraphBoundaryView>();
+        foreach (var boundary in weeks.Boundaries)
+        {
+            if (!columnOf.TryGetValue(boundary.Day, out var column))
+            {
+                continue;   // outside the plotted range
+            }
+
+            var fraction = boundary.FractionOfDay;
+            if (column == 0 && fraction <= 0)
+            {
+                continue;   // the chart's own left edge, where a line reads as a border
+            }
+
+            boundaries.Add(new PanelGraphBoundaryView(
+                column,
+                fraction,
+                weeks.IsPlanDerived
+                    ? string.Create(CultureInfo.InvariantCulture,
+                        $"{TimeZoneInfo.ConvertTime(boundary.AtUtc, zone):ddd d MMM · HH:mm}")
+                    : "",
+                weeks.IsPlanDerived ? PanelText.WeeklyResetMarker : PanelText.CalendarWeekMarker));
+        }
+
+        return new PanelGraphView(heading, columns, boundaries);
+    }
+
+    /// <summary>
+    /// Where one week boundary lands on the chart: the day column it falls in, and how far
+    /// through that column, since a plan reset happens at a time of day rather than at
+    /// midnight.
+    ///
+    /// <para>Both answers are taken in the column's own frame — a <b>local</b> day, of
+    /// whatever length the timezone says it was (issue #211). Dividing by a flat 24 hours
+    /// would put the line up to an hour off its true position on the two DST days, and off in
+    /// the same direction for every day after them.</para>
+    /// </summary>
+    private readonly record struct WeekBoundary(DateTimeOffset AtUtc, TimeZoneInfo Zone)
+    {
+        public DateOnly Day => LocalDays.DateOf(AtUtc, Zone);
+
+        public double FractionOfDay => LocalDays.FractionThrough(AtUtc, Day, Zone);
+    }
+
+    /// <summary>
+    /// The week bands the 31-day graph is divided into.
+    ///
+    /// <para>Originally these were calendar weeks (Mon–Sun) with a stated reason: the plan's
+    /// true weekly boundary was not derivable, so Monday was an honest visual reference rather
+    /// than a claim about the plan. That premise no longer holds — ADR-0011 derives the weekly
+    /// reset — so the bands follow the plan's own boundary wherever it is known, which is what
+    /// the graph was always trying to convey. Mondays remain the fallback, and say so on
+    /// hover, because until a reset has been observed the real boundary is still genuinely
+    /// unknown (rule 6).</para>
+    ///
+    /// <para>Boundaries are derived by stepping the cadence back from the predicted next
+    /// reset, so they cover the whole window including days before O-view was installed — the
+    /// log only holds resets it was running for.</para>
+    /// </summary>
+    private sealed class PlanWeeks
+    {
+        private readonly IReadOnlyList<DateTimeOffset> _boundaries;
+        private readonly TimeZoneInfo _zone;
+
+        private PlanWeeks(IReadOnlyList<DateTimeOffset> boundaries, bool isPlanDerived, TimeZoneInfo zone)
+        {
+            _boundaries = boundaries;
+            _zone = zone;
+            IsPlanDerived = isPlanDerived;
+        }
+
+        /// <summary>False when these are calendar weeks standing in for an unknown plan week.</summary>
+        public bool IsPlanDerived { get; }
+
+        public IEnumerable<WeekBoundary> Boundaries => _boundaries.Select(b => new WeekBoundary(b, _zone));
+
+        public static PlanWeeks ForSeries(
+            IReadOnlyList<DayUsage> series, UsageSnapshot snapshot, TimeZoneInfo zone)
+        {
+            // The span the columns actually cover, taken from the timezone. The columns are
+            // local days, so their first and last instants are not local midnight interpreted
+            // as UTC — which would clip or over-collect boundaries by the offset.
+            var fromUtc = LocalDays.StartUtc(series[0].Date, zone);
+            var toUtc = LocalDays.EndUtc(series[^1].Date, zone);
+
+            if (snapshot.WeeklyResetAtUtc is { } next && snapshot.WeeklyResetPeriod is { } period)
+            {
+                return new PlanWeeks(
+                    WeeklyWindow.BoundariesWithin(next, period, fromUtc, toUtc),
+                    isPlanDerived: true,
+                    zone);
+            }
+
+            // Fallback: the start of each local Monday in range.
+            var mondays = series
+                .Select(d => d.Date)
+                .Where(d => d.DayOfWeek == DayOfWeek.Monday)
+                .Select(d => LocalDays.StartUtc(d, zone))
+                .ToList();
+            return new PlanWeeks(mondays, isPlanDerived: false, zone);
+        }
+
+        /// <summary>
+        /// Which band a day belongs to, for the purpose of normalising its colour.
+        ///
+        /// <para>A day that contains a boundary genuinely belongs to neither band — its tokens
+        /// are split across two weeks and the rollups are daily, so the split is not
+        /// recoverable. It is assigned to whichever band holds the majority of the day, which
+        /// is what testing the MIDPOINT does. That is an approximation, and the only one
+        /// available at this grain; it affects shading alone, never a stated figure.</para>
+        /// </summary>
+        public int IndexOf(DayUsage day)
+        {
+            var start = LocalDays.StartUtc(day.Date, _zone);
+            var midday = start + (LocalDays.EndUtc(day.Date, _zone) - start) / 2;
+            return _boundaries.Count(boundary => boundary <= midday);
+        }
+    }
 
     /// <summary>
     /// What both meters share: the figure, the band and the fill, or the placeholder that
