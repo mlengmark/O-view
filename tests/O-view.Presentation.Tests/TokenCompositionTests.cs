@@ -103,8 +103,8 @@ public class TokenCompositionTests
 
         Assert.Equal(
             tile,
-            composition.InputUsd + composition.CacheCreationUsd
-                + composition.CacheReadUsd + composition.OutputUsd);
+            composition.InputValue.Value + composition.CacheCreationValue.Value
+                + composition.CacheReadValue.Value + composition.OutputValue.Value);
     }
 
     /// <summary>
@@ -117,9 +117,9 @@ public class TokenCompositionTests
         var composition = TokenComposition.From([Rollup("claude-not-a-model", 10, 20, 30, 40)]);
 
         Assert.Equal(100, composition.Total);
-        Assert.Null(composition.OutputUsd);
-        Assert.Null(composition.CacheReadUsd);
-        Assert.All(composition.InDisplayOrder, s => Assert.Null(s.EstUsd));
+        Assert.Null(composition.OutputValue.Value);
+        Assert.Null(composition.CacheReadValue.Value);
+        Assert.All(composition.InDisplayOrder, s => Assert.Null(s.EstUsdValue.Value));
     }
 
     [Fact]

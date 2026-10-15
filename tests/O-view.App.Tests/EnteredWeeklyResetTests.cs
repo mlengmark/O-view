@@ -53,19 +53,25 @@ public class EnteredWeeklyResetTests
     public void AMachineWithNoPlanHistoryStillGetsTheEnteredReset()
     {
         using var dir = new TempDir();
-        var jsonlOnly = new UsageSnapshot(DataSource.Estimate, null, null, null, T0.AddMinutes(-2));
+        var jsonlOnly = new UsageSnapshot(
+            DataSource.Estimate,
+            UsageSnapshot.Percent(null),
+            UsageSnapshot.Percent(null),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(T0.AddMinutes(-2)),
+            UsageSnapshot.Instant(null));
         using var engine = Build(dir, jsonlOnly, Entry);
 
         engine.Refresh();
 
-        Assert.NotNull(engine.Latest.WeeklyResetAtUtc);
+        Assert.NotNull(engine.Latest.WeeklyResetAtUtcValue.Value);
         Assert.Equal(DayOfWeek.Monday,
-            TimeZoneInfo.ConvertTime(engine.Latest.WeeklyResetAtUtc!.Value, TimeZoneInfo.Local).DayOfWeek);
+            TimeZoneInfo.ConvertTime(engine.Latest.WeeklyResetAtUtcValue.Value!.Value, TimeZoneInfo.Local).DayOfWeek);
 
         // The percentages stay null — those genuinely cannot be known without Desktop, and
         // inventing one would be the fabrication rule 6 forbids.
-        Assert.Null(engine.Latest.WeeklyPercent);
-        Assert.Null(engine.Latest.SessionPercent);
+        Assert.Null(engine.Latest.WeeklyPercentValue.Value);
+        Assert.Null(engine.Latest.SessionPercentValue.Value);
     }
 
     /// <summary>
@@ -87,14 +93,18 @@ public class EnteredWeeklyResetTests
         // rule wrong is that the derived value was an inference and the entry was read off
         // Claude's own screen; deferring to the inference preferred a guess to an answer.
         var stale = new UsageSnapshot(
-            DataSource.Live, 40, 60, T0.AddHours(2), T0,
-            WeeklyResetAtUtc: T0.AddDays(3),
+            DataSource.Live,
+            UsageSnapshot.Percent(40),
+            UsageSnapshot.Percent(60),
+            UsageSnapshot.Instant(T0.AddHours(2)),
+            UsageSnapshot.Instant(T0),
+            UsageSnapshot.Instant(T0.AddDays(3)),
             WeeklyResetPeriod: TimeSpan.FromDays(7));
         using var engine = Build(dir, stale, Entry);
 
         engine.Refresh();
 
-        Assert.Equal(Entry.NextAfter(T0, TimeZoneInfo.Local), engine.Latest.WeeklyResetAtUtc);
+        Assert.Equal(Entry.NextAfter(T0, TimeZoneInfo.Local), engine.Latest.WeeklyResetAtUtcValue.Value);
     }
 
     /// <summary>With nothing entered, nothing is added.</summary>
@@ -102,12 +112,18 @@ public class EnteredWeeklyResetTests
     public void WithNoEntryTheSnapshotIsUntouched()
     {
         using var dir = new TempDir();
-        var jsonlOnly = new UsageSnapshot(DataSource.Estimate, null, null, null, T0.AddMinutes(-2));
+        var jsonlOnly = new UsageSnapshot(
+            DataSource.Estimate,
+            UsageSnapshot.Percent(null),
+            UsageSnapshot.Percent(null),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(T0.AddMinutes(-2)),
+            UsageSnapshot.Instant(null));
         using var engine = Build(dir, jsonlOnly, entry: null);
 
         engine.Refresh();
 
-        Assert.Null(engine.Latest.WeeklyResetAtUtc);
+        Assert.Null(engine.Latest.WeeklyResetAtUtcValue.Value);
     }
 
     /// <summary>
@@ -122,7 +138,7 @@ public class EnteredWeeklyResetTests
 
         engine.Refresh();
 
-        Assert.Null(engine.Latest.WeeklyResetAtUtc);
+        Assert.Null(engine.Latest.WeeklyResetAtUtcValue.Value);
         Assert.Equal(DataSource.None, engine.Latest.Source);
     }
 
@@ -168,12 +184,12 @@ public class EnteredWeeklyResetTests
         var timers = new FakeTimerFactory();
         engine.Start(timers);
 
-        var afterFullPoll = engine.Latest.WeeklyResetAtUtc;
+        var afterFullPoll = engine.Latest.WeeklyResetAtUtcValue.Value;
         Assert.NotNull(afterFullPoll);
 
         // The tick that used to blank it.
         timers.PlanPoll.Tick();
 
-        Assert.Equal(afterFullPoll, engine.Latest.WeeklyResetAtUtc);
+        Assert.Equal(afterFullPoll, engine.Latest.WeeklyResetAtUtcValue.Value);
     }
 }

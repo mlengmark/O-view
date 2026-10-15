@@ -52,8 +52,8 @@ public class SmokeTests
         var (snapshot, _) = RunOnce();
 
         Assert.Equal(DataSource.Live, snapshot.Source);
-        Assert.Equal(25, snapshot.SessionPercent);
-        Assert.Equal(3, snapshot.WeeklyPercent);
+        Assert.Equal(25, snapshot.SessionPercentValue.Value);
+        Assert.Equal(3, snapshot.WeeklyPercentValue.Value);
     }
 
     [Fact]

@@ -26,13 +26,19 @@ public class ResetTimeProvenanceTests : IDisposable
     public void Dispose() => Directory.Delete(_dir, recursive: true);
 
     /// <summary>
-    /// A snapshot with data but no weekly reset yet — <see cref="UsageSnapshot.WeeklyResetAtUtc"/>
+    /// A snapshot with data but no weekly reset yet — <see cref="UsageSnapshot.WeeklyResetAtUtcValue.Value"/>
     /// null, so its status defaults to <see cref="UsageValueStatus.Unavailable"/>. This is what
     /// every snapshot looks like before <see cref="WeeklyResetCoordinator.WithWeeklyReset"/> runs,
     /// and it is the carried-forward value the bug left behind.
     /// </summary>
     private static UsageSnapshot NoWeeklyResetYet { get; } =
-        new(DataSource.Live, 10, 20, SessionResetAtUtc: null, CapturedAtUtc: T0);
+        new(
+            DataSource.Live,
+            UsageSnapshot.Percent(10),
+            UsageSnapshot.Percent(20),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(T0),
+            UsageSnapshot.Instant(null));
 
     private WeeklyResetCoordinator Build(
         Func<CachedUtilization?> cachedUtilizationSource, TraySettings settings) =>

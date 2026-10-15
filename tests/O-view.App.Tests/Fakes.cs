@@ -191,7 +191,13 @@ public sealed class FakeProvider : IUsageProvider
 
     /// <summary>Convenience: a live snapshot at a given session percentage.</summary>
     public void SetSession(int percent, DataSource source = DataSource.Live) =>
-        Next = new UsageSnapshot(source, percent, null, null, DateTimeOffset.UnixEpoch);
+        Next = new UsageSnapshot(
+            source,
+            UsageSnapshot.Percent(percent),
+            UsageSnapshot.Percent(null),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(DateTimeOffset.UnixEpoch),
+            UsageSnapshot.Instant(null));
 }
 
 /// <summary>Captures log lines so a test can assert what was recorded without a file.</summary>

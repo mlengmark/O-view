@@ -56,7 +56,7 @@ public class PollThreadingTests
         blocked.Set();
 
         Assert.True(dispatcher.PumpWithin(Patience), "the poll never published its result");
-        Assert.Equal(42, engine.Latest.SessionPercent);
+        Assert.Equal(42, engine.Latest.SessionPercentValue.Value);
     }
 
     /// <summary>
@@ -128,7 +128,7 @@ public class PollThreadingTests
         using var engine = NewEngine(dir, provider);
         engine.Start(new FakeTimerFactory());
 
-        Assert.Equal(63, engine.Latest.SessionPercent);
+        Assert.Equal(63, engine.Latest.SessionPercentValue.Value);
         Assert.Equal([Environment.CurrentManagedThreadId], provider.ReadThreadIds);
     }
 
@@ -149,13 +149,13 @@ public class PollThreadingTests
 
         engine.Start(timers, dispatcher);
         Assert.True(dispatcher.PumpWithin(Patience));
-        Assert.Equal(30, engine.Latest.SessionPercent);
+        Assert.Equal(30, engine.Latest.SessionPercentValue.Value);
 
         provider.ThrowOnNext = new InvalidOperationException("store is unreadable");
         timers.Poll.Tick();
 
         Assert.True(dispatcher.PumpWithin(Patience), "a failed poll published nothing at all");
-        Assert.Equal(30, engine.Latest.SessionPercent);   // the previous state, kept
+        Assert.Equal(30, engine.Latest.SessionPercentValue.Value);   // the previous state, kept
     }
 
     /// <summary>
@@ -215,6 +215,6 @@ public class PollThreadingTests
 
         Assert.True(dispatcher.PumpWithin(Patience), "the cadence never recovered from a failed read");
         Assert.Equal(2, provider.Calls);
-        Assert.Equal(30, engine.Latest.SessionPercent);
+        Assert.Equal(30, engine.Latest.SessionPercentValue.Value);
     }
 }

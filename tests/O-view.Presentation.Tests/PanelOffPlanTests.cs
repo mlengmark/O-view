@@ -29,17 +29,26 @@ public class PanelOffPlanTests
     private static PanelStatistics Stats(
         long creditTokens = 395_000, decimal? creditUsd = 92.75m, int recordedDays = 31) =>
         new(
-            TokensToday: 128_600, EstTodayUsd: 9.36m,
-            Tokens31Days: 6_771_000, Est31DaysUsd: 492.52m,
+            TokensToday: 128_600,
+            Tokens31Days: 6_771_000,
             RecordedDays: recordedDays, WindowDays: 31,
             DailySeries: Series,
-            CreditTokens31Days: creditTokens, EstCredit31DaysUsd: creditUsd);
+            CreditTokens31Days: creditTokens)
+        {
+            EstTodayValue = Priced(9.36m),
+            Est31DaysValue = Priced(492.52m),
+            EstCredit31DaysValue = Priced(creditUsd),
+        };
+
+    /// <summary>An Est. figure as the real builder pairs it: estimated, or unavailable.</summary>
+    private static EstimatedUsd Priced(decimal? usd) =>
+        new(usd, usd is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated);
 
     /// <summary>The exhausted-window state the three sample renders are built on.</summary>
     private static PanelStatistics Exhausted() => Stats() with
     {
         Divergence = new DivergenceResult(DivergenceState.PlanLimitReached, 69_091, 0),
-        EstOffPlanUsd = 92.75m,
+        EstOffPlanValue = Priced(92.75m),
     };
 
     private static CachedUtilization Cached(ExtraUsageState state, bool userDisabled = false) =>

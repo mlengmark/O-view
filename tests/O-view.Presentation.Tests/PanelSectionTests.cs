@@ -24,7 +24,14 @@ public class PanelSectionTests
         new("Sample User", "sample@example.com", "claude_pro", "sample-org");
 
     private static UsageSnapshot Live(int session = 25, int weekly = 3) =>
-        new(DataSource.Live, session, weekly, Now.AddHours(3), Now, WeeklyReset, TimeSpan.FromDays(7));
+        new(
+            DataSource.Live,
+            UsageSnapshot.Percent(session),
+            UsageSnapshot.Percent(weekly),
+            UsageSnapshot.Instant(Now.AddHours(3)),
+            UsageSnapshot.Instant(Now),
+            UsageSnapshot.Instant(WeeklyReset),
+            WeeklyResetPeriod: TimeSpan.FromDays(7));
 
     // ── the header ──────────────────────────────────────────────────────────────────
 
@@ -76,7 +83,13 @@ public class PanelSectionTests
     [InlineData(DataSource.Estimate, false)]
     [InlineData(DataSource.None, false)]
     public void OnlyTheAccountsOwnFiguresAreAuthoritative(DataSource source, bool expected) =>
-        Assert.Equal(expected, PanelSections.IsAuthoritative(new UsageSnapshot(source, 25, 3, null, Now)));
+        Assert.Equal(expected, PanelSections.IsAuthoritative(new UsageSnapshot(
+            source,
+            UsageSnapshot.Percent(25),
+            UsageSnapshot.Percent(3),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(Now),
+            UsageSnapshot.Instant(null))));
 
     /// <summary>
     /// A JSONL-derived snapshot can carry percentages, and they are not the account's meters
@@ -86,7 +99,13 @@ public class PanelSectionTests
     [Fact]
     public void AnEstimateFillsNoMeter()
     {
-        var estimate = new UsageSnapshot(DataSource.Estimate, 91, 80, null, Now);
+        var estimate = new UsageSnapshot(
+            DataSource.Estimate,
+            UsageSnapshot.Percent(91),
+            UsageSnapshot.Percent(80),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(Now),
+            UsageSnapshot.Instant(null));
 
         var session = PanelSections.SessionMeter(estimate, null, Now, Utc);
 
@@ -157,7 +176,7 @@ public class PanelSectionTests
 
         Assert.Equal(
             PanelText.SessionReset(
-                snapshot.SessionResetAtUtc, Now, Utc, snapshot.SessionResetUncertainty),
+                snapshot.SessionResetAtUtcValue.Value, Now, Utc, snapshot.SessionResetUncertainty),
             session.ResetLine);
         Assert.Equal(session.ResetLine, session.ResetLineWithAction);
         Assert.Null(session.ResetHint);
@@ -200,7 +219,13 @@ public class PanelSectionTests
     [Fact]
     public void AnUnknownWeeklyResetCarriesTheActionOnEitherSurface()
     {
-        var snapshot = new UsageSnapshot(DataSource.Live, 25, 3, Now.AddHours(3), Now);
+        var snapshot = new UsageSnapshot(
+            DataSource.Live,
+            UsageSnapshot.Percent(25),
+            UsageSnapshot.Percent(3),
+            UsageSnapshot.Instant(Now.AddHours(3)),
+            UsageSnapshot.Instant(Now),
+            UsageSnapshot.Instant(null));
 
         var weekly = PanelSections.WeeklyMeter(snapshot, null, null, null, Now, Utc);
 
@@ -274,7 +299,11 @@ public class PanelSectionTests
     // ── the statistics tiles ────────────────────────────────────────────────────────
 
     private static ModelSlice Slice(string model, long tokens, decimal? usd, string? name = null) =>
-        new(model, name ?? model, tokens, usd);
+        new(model, name ?? model, tokens) { EstUsdValue = Priced(usd) };
+
+    /// <summary>An Est. figure as the real builder pairs it: estimated, or unavailable.</summary>
+    private static EstimatedUsd Priced(decimal? usd) =>
+        new(usd, usd is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated);
 
     /// <summary>
     /// Four models, so the fourth is folded into the remainder — the shape that exercises both
@@ -297,16 +326,15 @@ public class PanelSectionTests
 
         return new PanelStatistics(
             TokensToday: today?.Sum(s => s.Tokens) ?? 0,
-            EstTodayUsd: today?.Sum(s => s.EstUsd ?? 0m) ?? 0m,
             Tokens31Days: models31.Sum(s => s.Tokens),
-            Est31DaysUsd: models31.Sum(s => s.EstUsd ?? 0m),
             RecordedDays: 31,
             WindowDays: 31,
             DailySeries: [],
             CreditTokens31Days: 0,
-            EstCredit31DaysUsd: null,
             Divergence: divergence)
         {
+            EstTodayValue = Priced(today?.Sum(s => s.EstUsdValue.Value ?? 0m) ?? 0m),
+            Est31DaysValue = Priced(models31.Sum(s => s.EstUsdValue.Value ?? 0m)),
             ModelsToday = today ?? [],
             Models31Days = models31,
             ModelColourOrder = ModelBreakdown.ColourOrder(models31),

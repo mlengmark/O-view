@@ -32,7 +32,7 @@ public class OffPlanWindowTests
 
         Assert.Equal(DivergenceState.RiseNotMeasurable, stats.Divergence?.State);
         Assert.False(stats.IsOffPlan);
-        Assert.Null(stats.EstOffPlanUsd);
+        Assert.Null(stats.EstOffPlanValue.Value);
     }
 
     /// <summary>

@@ -73,9 +73,9 @@ public class PlanHistoryProviderTests : IDisposable
         var snapshot = provider.GetSnapshot(Now);
 
         Assert.Equal(DataSource.Live, snapshot.Source);
-        Assert.Equal(47, snapshot.SessionPercent);
-        Assert.Equal(8, snapshot.WeeklyPercent);
-        Assert.Equal(Now.AddMinutes(-5), snapshot.CapturedAtUtc);
+        Assert.Equal(47, snapshot.SessionPercentValue.Value);
+        Assert.Equal(8, snapshot.WeeklyPercentValue.Value);
+        Assert.Equal(Now.AddMinutes(-5), snapshot.CapturedAtUtcValue.Value);
     }
 
     [Fact]
@@ -87,7 +87,7 @@ public class PlanHistoryProviderTests : IDisposable
         var snapshot = provider.GetSnapshot(Now);
 
         Assert.Equal(DataSource.Stale, snapshot.Source);
-        Assert.Equal(31, snapshot.SessionPercent);
+        Assert.Equal(31, snapshot.SessionPercentValue.Value);
     }
 
     [Fact]
@@ -98,7 +98,7 @@ public class PlanHistoryProviderTests : IDisposable
             (Now.AddMinutes(-5), "org-a", 47, 8));
         var provider = new PlanHistoryProvider(path);
 
-        Assert.Null(provider.GetSnapshot(Now).SessionResetAtUtc);
+        Assert.Null(provider.GetSnapshot(Now).SessionResetAtUtcValue.Value);
     }
 
     /// <summary>
@@ -122,7 +122,7 @@ public class PlanHistoryProviderTests : IDisposable
             (firstUse, "org-a", 12, 7));
         var provider = new PlanHistoryProvider(path);
 
-        Assert.Equal(firstUse.AddHours(5), provider.GetSnapshot(Now).SessionResetAtUtc);
+        Assert.Equal(firstUse.AddHours(5), provider.GetSnapshot(Now).SessionResetAtUtcValue.Value);
     }
 
     /// <summary>
@@ -155,7 +155,7 @@ public class PlanHistoryProviderTests : IDisposable
             (Now.AddHours(-6), "org-a", 30, 7));
         var provider = new PlanHistoryProvider(path);
 
-        Assert.Null(provider.GetSnapshot(Now).SessionResetAtUtc);
+        Assert.Null(provider.GetSnapshot(Now).SessionResetAtUtcValue.Value);
     }
 
     [Fact]
@@ -168,8 +168,8 @@ public class PlanHistoryProviderTests : IDisposable
 
         var snapshot = provider.GetSnapshot(Now);
 
-        Assert.Equal(40, snapshot.SessionPercent);
-        Assert.Equal(Now.AddMinutes(-10), snapshot.CapturedAtUtc);
+        Assert.Equal(40, snapshot.SessionPercentValue.Value);
+        Assert.Equal(Now.AddMinutes(-10), snapshot.CapturedAtUtcValue.Value);
     }
 
     [Fact]
@@ -187,8 +187,8 @@ public class PlanHistoryProviderTests : IDisposable
         var snapshot = provider.GetSnapshot(Now);
 
         Assert.Equal(DataSource.Live, snapshot.Source);
-        Assert.Equal(47, snapshot.SessionPercent);
-        Assert.Equal(8, snapshot.WeeklyPercent);
+        Assert.Equal(47, snapshot.SessionPercentValue.Value);
+        Assert.Equal(8, snapshot.WeeklyPercentValue.Value);
     }
 
     [Fact]
@@ -204,9 +204,9 @@ public class PlanHistoryProviderTests : IDisposable
 
         var snapshot = provider.GetSnapshot(Now);
 
-        Assert.Equal(33, snapshot.SessionPercent);
-        Assert.Equal(9, snapshot.WeeklyPercent);
-        Assert.Equal(Now.AddMinutes(-5), snapshot.CapturedAtUtc);
+        Assert.Equal(33, snapshot.SessionPercentValue.Value);
+        Assert.Equal(9, snapshot.WeeklyPercentValue.Value);
+        Assert.Equal(Now.AddMinutes(-5), snapshot.CapturedAtUtcValue.Value);
     }
 
 
@@ -231,8 +231,8 @@ public class PlanHistoryProviderTests : IDisposable
 
         var snapshot = new PlanHistoryProvider(path, orgUuid: "org-a").GetSnapshot(Now);
 
-        Assert.Null(snapshot.SessionPercent);
-        Assert.Equal(42, snapshot.WeeklyPercent);   // the weekly figure is untouched
+        Assert.Null(snapshot.SessionPercentValue.Value);
+        Assert.Equal(42, snapshot.WeeklyPercentValue.Value);   // the weekly figure is untouched
     }
 
     /// <summary>
@@ -249,7 +249,7 @@ public class PlanHistoryProviderTests : IDisposable
 
         var snapshot = new PlanHistoryProvider(path, orgUuid: "org-a").GetSnapshot(Now);
 
-        Assert.Equal(0, snapshot.SessionPercent);
+        Assert.Equal(0, snapshot.SessionPercentValue.Value);
         Assert.Equal(DataSource.Live, snapshot.Source);
     }
 
@@ -266,7 +266,7 @@ public class PlanHistoryProviderTests : IDisposable
 
         var snapshot = new PlanHistoryProvider(path, orgUuid: "org-a").GetSnapshot(Now);
 
-        Assert.Equal(72, snapshot.SessionPercent);
+        Assert.Equal(72, snapshot.SessionPercentValue.Value);
     }
 
     /// <summary>
@@ -309,7 +309,7 @@ public class PlanHistoryProviderTests : IDisposable
             (Now.AddMinutes(-5), "org-a", 6, 2));
         var provider = new PlanHistoryProvider(path, orgUuid: "org-a");
 
-        Assert.Null(provider.GetSnapshot(Now).SessionResetAtUtc);
+        Assert.Null(provider.GetSnapshot(Now).SessionResetAtUtcValue.Value);
     }
 
     // ── the divergence window is a window (issue #274) ──────────────────────────────
@@ -422,7 +422,7 @@ public class PlanHistoryProviderTests : IDisposable
 
         var snapshot = provider.GetSnapshot(Now);
 
-        Assert.Equal(firstRequest.AddHours(5), snapshot.SessionResetAtUtc);
+        Assert.Equal(firstRequest.AddHours(5), snapshot.SessionResetAtUtcValue.Value);
         Assert.Equal(TimeSpan.FromMinutes(6), snapshot.SessionResetUncertainty);
     }
 
@@ -441,8 +441,8 @@ public class PlanHistoryProviderTests : IDisposable
         var withoutLookup = new PlanHistoryProvider(path).GetSnapshot(Now);
         var withEmptyLookup = new PlanHistoryProvider(path, earliestActivity: (_, _) => null).GetSnapshot(Now);
 
-        Assert.Equal(firstSeen.AddHours(5), withoutLookup.SessionResetAtUtc);
-        Assert.Equal(withoutLookup.SessionResetAtUtc, withEmptyLookup.SessionResetAtUtc);
+        Assert.Equal(firstSeen.AddHours(5), withoutLookup.SessionResetAtUtcValue.Value);
+        Assert.Equal(withoutLookup.SessionResetAtUtcValue.Value, withEmptyLookup.SessionResetAtUtcValue.Value);
     }
 
     /// <summary>
@@ -459,7 +459,7 @@ public class PlanHistoryProviderTests : IDisposable
         var provider = new PlanHistoryProvider(path,
             earliestActivity: (_, _) => throw new InvalidOperationException("store is busy"));
 
-        Assert.Equal(firstSeen.AddHours(5), provider.GetSnapshot(Now).SessionResetAtUtc);
+        Assert.Equal(firstSeen.AddHours(5), provider.GetSnapshot(Now).SessionResetAtUtcValue.Value);
     }
 
     /// <summary>
@@ -490,7 +490,7 @@ public class PlanHistoryProviderTests : IDisposable
 
         var snapshot = provider.GetSnapshot(Now);
 
-        Assert.Equal(9, snapshot.SessionPercent);
-        Assert.Equal(7, snapshot.WeeklyPercent);
+        Assert.Equal(9, snapshot.SessionPercentValue.Value);
+        Assert.Equal(7, snapshot.WeeklyPercentValue.Value);
     }
 }

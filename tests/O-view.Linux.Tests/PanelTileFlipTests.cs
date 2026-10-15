@@ -25,7 +25,11 @@ public class PanelTileFlipTests
     private static readonly DateTimeOffset Now = new(2026, 10, 14, 12, 0, 0, TimeSpan.Zero);
 
     private static ModelSlice Slice(string model, long tokens, decimal? usd, string name) =>
-        new(model, name, tokens, usd);
+        new(model, name, tokens) { EstUsdValue = Priced(usd) };
+
+    /// <summary>An Est. figure as the real builder pairs it: estimated, or unavailable.</summary>
+    private static EstimatedUsd Priced(decimal? usd) =>
+        new(usd, usd is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated);
 
     /// <summary>Four models in the window, so the fourth folds into the remainder.</summary>
     private static readonly ModelSlice[] Window =
@@ -48,15 +52,14 @@ public class PanelTileFlipTests
 
         return new PanelStatistics(
             TokensToday: 0,
-            EstTodayUsd: 0m,
             Tokens31Days: models31.Sum(s => s.Tokens),
-            Est31DaysUsd: models31.Sum(s => s.EstUsd ?? 0m),
             RecordedDays: 31,
             WindowDays: 31,
             DailySeries: [],
-            CreditTokens31Days: 0,
-            EstCredit31DaysUsd: null)
+            CreditTokens31Days: 0)
         {
+            EstTodayValue = Priced(0m),
+            Est31DaysValue = Priced(models31.Sum(s => s.EstUsdValue.Value ?? 0m)),
             ModelsToday = [],
             Models31Days = models31,
             ModelColourOrder = ModelBreakdown.ColourOrder(models31),
@@ -69,7 +72,13 @@ public class PanelTileFlipTests
 
         // Live, so the meters are the account's own figures and no banner stands in for them.
         content.Populate(
-            new UsageSnapshot(DataSource.Live, 25, 3, Now.AddHours(3), Now),
+            new UsageSnapshot(
+                DataSource.Live,
+                UsageSnapshot.Percent(25),
+                UsageSnapshot.Percent(3),
+                UsageSnapshot.Instant(Now.AddHours(3)),
+                UsageSnapshot.Instant(Now),
+                UsageSnapshot.Instant(null)),
             Stats(window),
             account: null,
             dataReport: null,
@@ -193,7 +202,13 @@ public class PanelTileFlipTests
         first.Toggle();
 
         content.Populate(
-            new UsageSnapshot(DataSource.Live, 25, 3, Now.AddHours(3), Now),
+            new UsageSnapshot(
+                DataSource.Live,
+                UsageSnapshot.Percent(25),
+                UsageSnapshot.Percent(3),
+                UsageSnapshot.Instant(Now.AddHours(3)),
+                UsageSnapshot.Instant(Now),
+                UsageSnapshot.Instant(null)),
             Stats(),
             account: null,
             dataReport: null,

@@ -51,8 +51,8 @@ public class UsageEngineTests
         engine.Start(timers);
 
         Assert.Single(seen);
-        Assert.Equal(42, seen[0].SessionPercent);
-        Assert.Equal(42, engine.Latest.SessionPercent);
+        Assert.Equal(42, seen[0].SessionPercentValue.Value);
+        Assert.Equal(42, engine.Latest.SessionPercentValue.Value);
     }
 
     [Fact]
@@ -145,7 +145,7 @@ public class UsageEngineTests
         WritePlanHistory(dir, (T0.AddMinutes(-2), 40, 10), (T0.AddMinutes(-1), 55, 11));
         timers.PlanPoll.Tick();
 
-        Assert.Equal(55, engine.Latest.SessionPercent);
+        Assert.Equal(55, engine.Latest.SessionPercentValue.Value);
         Assert.Equal(callsAfterStart, provider.Calls);   // the composite was not re-read
     }
 
@@ -188,11 +188,11 @@ public class UsageEngineTests
 
         provider.SetSession(37, DataSource.Estimate);
         engine.Start(timers);
-        Assert.Equal(37, engine.Latest.SessionPercent);
+        Assert.Equal(37, engine.Latest.SessionPercentValue.Value);
 
         timers.PlanPoll.Tick();   // the file does not exist
 
-        Assert.Equal(37, engine.Latest.SessionPercent);
+        Assert.Equal(37, engine.Latest.SessionPercentValue.Value);
         Assert.Equal(DataSource.Estimate, engine.Latest.Source);
     }
 
@@ -226,13 +226,13 @@ public class UsageEngineTests
         WritePlanHistory(dir, (T0.AddMinutes(-3), 30, 10), (T0.AddMinutes(-1), 77, 25));
         timers.PlanPoll.Tick();
         Assert.True(dispatcher.PumpWithin(Patience));
-        Assert.Equal(77, engine.Latest.SessionPercent);
+        Assert.Equal(77, engine.Latest.SessionPercentValue.Value);
 
         // The full poll now completes, carrying the reading it took BEFORE that tick.
         ingesting.Set();
         Assert.True(dispatcher.PumpWithin(Patience), "the full poll never published");
 
-        Assert.Equal(77, engine.Latest.SessionPercent);
+        Assert.Equal(77, engine.Latest.SessionPercentValue.Value);
     }
 
     /// <summary>
@@ -267,7 +267,7 @@ public class UsageEngineTests
         ingesting.Set();
         Assert.True(dispatcher.PumpWithin(Patience));
 
-        Assert.Equal(77, engine.Latest.SessionPercent);              // its snapshot was dropped
+        Assert.Equal(77, engine.Latest.SessionPercentValue.Value);              // its snapshot was dropped
         Assert.Equal(TimeSpan.FromSeconds(60), timers.Poll.Interval); // its cadence decision was not
     }
 
@@ -290,7 +290,7 @@ public class UsageEngineTests
         provider.SetSession(64);
         engine.Start(timers);
         timers.PlanPoll.Tick();
-        Assert.Equal(T0.AddMinutes(-1), engine.Latest.CapturedAtUtc);
+        Assert.Equal(T0.AddMinutes(-1), engine.Latest.CapturedAtUtcValue.Value);
 
         // Plan history stops resolving; the composite falls back to the local estimate, whose
         // capture time is older than the live sample now displayed.
@@ -298,7 +298,7 @@ public class UsageEngineTests
         timers.Poll.Tick();
 
         Assert.Equal(DataSource.Estimate, engine.Latest.Source);
-        Assert.Equal(37, engine.Latest.SessionPercent);
+        Assert.Equal(37, engine.Latest.SessionPercentValue.Value);
     }
 
     /// <summary>
@@ -348,7 +348,7 @@ public class UsageEngineTests
         timers.PlanPoll.Tick();
 
         Assert.Equal(DataSource.Estimate, engine.Latest.Source);
-        Assert.Equal(37, engine.Latest.SessionPercent);
+        Assert.Equal(37, engine.Latest.SessionPercentValue.Value);
     }
 
     // ── automatic updates (ADR-0009 as amended, issue #140) ───────────────────────
@@ -602,7 +602,13 @@ public class UsageEngineTests
         engine.NotificationRequested += notifications.Add;
         engine.SetThresholdPercent(1);
 
-        provider.Next = new UsageSnapshot(DataSource.Live, null, null, null, DateTimeOffset.UnixEpoch);
+        provider.Next = new UsageSnapshot(
+            DataSource.Live,
+            UsageSnapshot.Percent(null),
+            UsageSnapshot.Percent(null),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(DateTimeOffset.UnixEpoch),
+            UsageSnapshot.Instant(null));
         engine.Start(timers);
         Assert.Empty(notifications);
 
@@ -633,10 +639,15 @@ public class UsageEngineTests
         engine.NotificationRequested += notifications.Add;
         engine.SetThresholdPercent(1);
 
-        provider.Next = new UsageSnapshot(DataSource.Live, null, null, null, DateTimeOffset.UnixEpoch)
-        {
-            SessionPercentStatus = UsageValueStatus.Real,
-        };
+        provider.Next = new UsageSnapshot(
+            DataSource.Live,
+            // Real with no figure: a provider that said nothing about the meter rather than
+            // one that reported it missing. The alert path must not read it as a reading.
+            new UsagePercent(null, UsageValueStatus.Real),
+            UsageSnapshot.Percent(null),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(DateTimeOffset.UnixEpoch),
+            UsageSnapshot.Instant(null));
         engine.Start(timers);          // must not throw
         Assert.Empty(notifications);
 
@@ -657,17 +668,17 @@ public class UsageEngineTests
 
         provider.SetSession(33);
         engine.Start(timers);
-        Assert.Equal(33, engine.Latest.SessionPercent);
+        Assert.Equal(33, engine.Latest.SessionPercentValue.Value);
 
         provider.ThrowOnNext = new InvalidOperationException("provider exploded");
         timers.Poll.Tick();                       // must not throw
 
-        Assert.Equal(33, engine.Latest.SessionPercent);
+        Assert.Equal(33, engine.Latest.SessionPercentValue.Value);
         Assert.Contains(log.Lines, l => l.StartsWith("refresh FAILED", StringComparison.Ordinal));
 
         provider.SetSession(44);
         timers.Poll.Tick();
-        Assert.Equal(44, engine.Latest.SessionPercent);
+        Assert.Equal(44, engine.Latest.SessionPercentValue.Value);
     }
 
     /// <summary>
@@ -824,7 +835,13 @@ public class UsageEngineTests
         // No derived session reset: SessionResetAtUtc is null, so SessionResetAtUtcStatus
         // starts Unavailable by UsageSnapshot's own default — the exact state the override
         // must leave readable rather than carry forward unchanged.
-        provider.Next = new UsageSnapshot(DataSource.Live, 40, 60, null, T0);
+        provider.Next = new UsageSnapshot(
+            DataSource.Live,
+            UsageSnapshot.Percent(40),
+            UsageSnapshot.Percent(60),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(T0),
+            UsageSnapshot.Instant(null));
         engine.Start(timers);
 
         var ex = Record.Exception(() => engine.Latest.SessionResetAtUtcValue);

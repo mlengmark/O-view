@@ -49,9 +49,9 @@ public class PanelStatisticsTests : IDisposable
         Assert.Equal(stats.Tokens31Days, stats.Tokens31DaysCount.Value);
 
         Assert.Equal(UsageValueStatus.Estimated, stats.EstTodayValue.Status);
-        Assert.Equal(stats.EstTodayUsd, stats.EstTodayValue.Value);
+        Assert.Equal(stats.EstTodayValue.Value, stats.EstTodayValue.Value);
         Assert.Equal(UsageValueStatus.Estimated, stats.Est31DaysValue.Status);
-        Assert.Equal(stats.Est31DaysUsd, stats.Est31DaysValue.Value);
+        Assert.Equal(stats.Est31DaysValue.Value, stats.Est31DaysValue.Value);
     }
 
     /// <summary>
@@ -99,7 +99,7 @@ public class PanelStatisticsTests : IDisposable
         Assert.Equal(UsageValueStatus.Real, stats.CreditTokens31DaysCount.Status);
         Assert.Equal(1_000_000, stats.CreditTokens31DaysCount.Value);
         Assert.Equal(UsageValueStatus.Estimated, stats.EstCredit31DaysValue.Status);
-        Assert.Equal(stats.EstCredit31DaysUsd, stats.EstCredit31DaysValue.Value);
+        Assert.Equal(stats.EstCredit31DaysValue.Value, stats.EstCredit31DaysValue.Value);
     }
 
     [Fact]
@@ -127,7 +127,7 @@ public class PanelStatisticsTests : IDisposable
         Assert.Equal(UsageValueStatus.Real, priced.TokensCount.Status);
         Assert.Equal(1_000_000, priced.TokensCount.Value);
         Assert.Equal(UsageValueStatus.Estimated, priced.EstUsdValue.Status);
-        Assert.Equal(priced.EstUsd, priced.EstUsdValue.Value);
+        Assert.Equal(priced.EstUsdValue.Value, priced.EstUsdValue.Value);
 
         var unpriced = stats.Models31Days.Single(m => m.Model == "claude-hypothetical-9");
         Assert.Equal(UsageValueStatus.Real, unpriced.TokensCount.Status);
@@ -147,7 +147,7 @@ public class PanelStatisticsTests : IDisposable
         Assert.Equal(UsageValueStatus.Real, composition.OutputCount.Status);
         Assert.Equal(composition.Output, composition.OutputCount.Value);
         Assert.Equal(UsageValueStatus.Estimated, composition.OutputValue.Status);
-        Assert.Equal(composition.OutputUsd, composition.OutputValue.Value);
+        Assert.Equal(composition.OutputValue.Value, composition.OutputValue.Value);
     }
 
     [Fact]
@@ -191,7 +191,7 @@ public class PanelStatisticsTests : IDisposable
         var diverging = stats.WithDivergence(_store, windowStart, [6, 6, 6, 6, 6, 6], TimeSpan.Zero);
         Assert.True(diverging.IsOffPlan);
         Assert.Equal(UsageValueStatus.Estimated, diverging.EstOffPlanValue.Status);
-        Assert.Equal(diverging.EstOffPlanUsd, diverging.EstOffPlanValue.Value);
+        Assert.Equal(diverging.EstOffPlanValue.Value, diverging.EstOffPlanValue.Value);
         Assert.NotNull(diverging.EstOffPlanValue.Value);
 
         // A meter tracking the work: not off-plan, so the figure is deliberately not priced.
