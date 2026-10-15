@@ -8,6 +8,28 @@ namespace OView.Linux.Tests.Runtime;
 /// <param name="Argb32">The raw bytes. Four per pixel, so a well-formed pixmap has Width × Height × 4 of them.</param>
 public sealed record TrayIconPixmap(int Width, int Height, byte[] Argb32);
 
+/// <summary>
+/// The <c>ToolTip</c> an item published, as the spec shapes it: <c>(sa(iiay)ss)</c>.
+///
+/// <para>Four fields, of which a notification area draws the last two. An item with nothing to
+/// say publishes all four empty, which is a different fact from the property being absent —
+/// hence <see cref="IsEmpty"/> rather than a null.</para>
+/// </summary>
+/// <param name="IconName">A themed icon name for the tooltip, or empty.</param>
+/// <param name="IconPixmap">Pixels for that icon, or none.</param>
+/// <param name="Title">The heading a host draws, in bold.</param>
+/// <param name="Description">The body underneath it.</param>
+public sealed record TrayIconToolTip(
+    string IconName,
+    IReadOnlyList<TrayIconPixmap> IconPixmap,
+    string Title,
+    string Description)
+{
+    /// <summary>Nothing in any of the four fields — an item that publishes the property and fills none of it.</summary>
+    public bool IsEmpty =>
+        IconName.Length == 0 && IconPixmap.Count == 0 && Title.Length == 0 && Description.Length == 0;
+}
+
 /// <summary>What one call to <c>RegisterStatusNotifierItem</c> left behind.</summary>
 /// <param name="BusName">
 /// Where the item actually lives. Taken from the message's sender, not from its argument:
@@ -58,7 +80,7 @@ public sealed class StandInTrayHost : IAsyncDisposable
     private const string DefaultItemPath = "/StatusNotifierItem";
 
     /// <summary>
-    /// How long <see cref="ReadIconPixmapAsync"/> waits for an item to answer. Well under
+    /// How long <see cref="ReadPropertyAsync"/> waits for an item to answer. Well under
     /// D-Bus's own 25 s reply timeout, so a test that is going to fail does so while the job
     /// still has time to upload what it captured.
     /// </summary>
@@ -141,11 +163,16 @@ public sealed class StandInTrayHost : IAsyncDisposable
         await _firstItem.Task.WaitAsync(timeout);
 
     /// <summary>
-    /// Asks an item for its <c>IconPixmap</c> — the pixels a notification area would draw.
-    /// Empty when the item publishes an icon name instead, which is equally valid under the
-    /// spec; null when it could not be asked at all.
+    /// Asks an item for one of its <c>org.kde.StatusNotifierItem</c> properties, the way a
+    /// notification area does: <c>org.freedesktop.DBus.Properties.Get</c> over the bus, not a
+    /// peek at the object on this side.
+    ///
+    /// <para>Returns the value with its variant wrappers taken off, or null when the item could
+    /// not be asked at all — it never answered, or it answered with an error because it does not
+    /// publish that property. Those two are one answer here on purpose: both mean a host has
+    /// nothing to draw, which is the only distinction a tooltip question turns on.</para>
     /// </summary>
-    public async Task<IReadOnlyList<TrayIconPixmap>?> ReadIconPixmapAsync(RegisteredItem item)
+    public async Task<VariantValue?> ReadPropertyAsync(RegisteredItem item, string property)
     {
         try
         {
@@ -158,10 +185,10 @@ public sealed class StandInTrayHost : IAsyncDisposable
                 signature: "ss",
                 flags: MessageFlags.None);
             writer.WriteString(ItemInterface);
-            writer.WriteString("IconPixmap");
+            writer.WriteString(property);
 
             return await _connection
-                .CallMethodAsync(writer.CreateMessage(), static (m, _) => ReadPixmaps(m))
+                .CallMethodAsync(writer.CreateMessage(), static (m, _) => Unwrap(m.GetBodyReader().ReadVariantValue()))
                 .WaitAsync(ReplyTimeout);
         }
         catch (Exception ex) when (ex is DBusExceptionBase or IOException or InvalidOperationException
@@ -170,6 +197,37 @@ public sealed class StandInTrayHost : IAsyncDisposable
             return null;
         }
     }
+
+    /// <summary>
+    /// Asks an item for its <c>IconPixmap</c> — the pixels a notification area would draw.
+    /// Empty when the item publishes an icon name instead, which is equally valid under the
+    /// spec; null when it could not be asked at all.
+    /// </summary>
+    public async Task<IReadOnlyList<TrayIconPixmap>?> ReadIconPixmapAsync(RegisteredItem item) =>
+        await ReadPropertyAsync(item, "IconPixmap") is { } value ? ReadPixmaps(value) : null;
+
+    /// <summary>
+    /// Asks an item for its <c>Title</c> — the one line a host has to name the item by. Null
+    /// when it could not be asked, or answered with something that is not a string.
+    /// </summary>
+    public async Task<string?> ReadTitleAsync(RegisteredItem item) =>
+        await ReadPropertyAsync(item, "Title") is { Type: VariantValueType.String } value
+            ? value.GetString()
+            : null;
+
+    /// <summary>
+    /// Asks an item for its <c>ToolTip</c> — what a host draws on hover. Null when it could not
+    /// be asked, or answered with something that is not the spec's four-field structure;
+    /// <see cref="TrayIconToolTip.IsEmpty"/> when it published the property and filled none of it.
+    /// </summary>
+    public async Task<TrayIconToolTip?> ReadToolTipAsync(RegisteredItem item) =>
+        await ReadPropertyAsync(item, "ToolTip") is { Type: VariantValueType.Struct, Count: 4 } value
+            ? new TrayIconToolTip(
+                value.GetItem(0).GetString(),
+                ReadPixmaps(Unwrap(value.GetItem(1))),
+                value.GetItem(2).GetString(),
+                value.GetItem(3).GetString())
+            : null;
 
     /// <summary>
     /// Drops the name and the connection with it, which is what makes the host "gone" as far
@@ -183,18 +241,23 @@ public sealed class StandInTrayHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Unwraps the <c>a(iiay)</c> an item returns. The value arrives inside a variant, and
-    /// some items nest it inside another, so unwrap until the array falls out rather than
-    /// assuming a depth — the same shape <c>PortalThemeSource</c> deals with.
+    /// The value inside however many variants it arrived in. One is the ordinary case; some
+    /// items nest a second, so unwrap until something else falls out rather than assuming a
+    /// depth — the same shape <c>PortalThemeSource</c> deals with.
     /// </summary>
-    private static IReadOnlyList<TrayIconPixmap> ReadPixmaps(Message message)
+    private static VariantValue Unwrap(VariantValue value)
     {
-        var value = message.GetBodyReader().ReadVariantValue();
         while (value.Type == VariantValueType.Variant)
         {
             value = value.GetVariantValue();
         }
 
+        return value;
+    }
+
+    /// <summary>Reads an <c>a(iiay)</c> — an array of pixmaps — out of an already unwrapped value.</summary>
+    private static IReadOnlyList<TrayIconPixmap> ReadPixmaps(VariantValue value)
+    {
         if (value.Type != VariantValueType.Array)
         {
             return [];
