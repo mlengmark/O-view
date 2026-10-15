@@ -18,8 +18,8 @@ mixed together throughout, and they are not equally binding:
 | **Windows presentation** — *where* a surface appears and how it moves. Docked placement, `PopupPositioner`, work-area insets, the 230 ms rise, foreground/`AttachThreadInput` handling, `Shell_NotifyIcon` behaviour, Segoe glyph avoidance | **The Windows head only** | `O-view.Tray` |
 
 Read every section below as Windows presentation unless it is describing content. Where Linux
-**cannot** meet a section, it is noted inline rather than left to be inferred — the three real
-divergences are the panel's placement (§2), the menu (§3) and motion (§4).
+**cannot** meet a section, it is noted inline rather than left to be inferred — the four real
+divergences are the tooltip (§1), the panel's placement (§2), the menu (§3) and motion (§4).
 
 The Linux head's own constraints are [ADR-0013](adr/0013-linux-ui-toolkit.md) and the [tray
 spike](findings/linux-tray-spike.md). Nothing in this document has been verified on Linux
@@ -40,6 +40,14 @@ Per [ADR-0003](adr/0003-windows-tray-constraints.md) and the [legibility spike](
   **green < 50% · amber 50–69% · red ≥ 70%**. Same classifier drives the popup bars.
 - No data / estimate: faint empty ring — never a fabricated fill
 - Tooltip (≤127 chars): `5h: 47% · resets 16:32 · 7d: 61% · resets ~Tue 06:28`. The weekly reset joins on the same terms as the session one — shown once derived, absent while unknown, `~` when the observation behind it was bracketed by a gap in Desktop's sampling ([ADR-0011](adr/0011-weekly-reset-derivation.md)).
+
+> **Linux: GNOME shows none of this.** The text above is still what O-view publishes, but as
+> the tray item's `Title` — Avalonia's tray backend fills `ToolTip` with an empty structure and
+> offers no way to change that, and the AppIndicators extension GNOME needs before it has a
+> tray at all has `ToolTip` commented out of its own D-Bus interface, so filling it would still
+> show nothing there. The exact figures are in the detail panel instead; see the README's
+> [Platform support](../README.md#platform-support) for what KDE Plasma does with an empty
+> `ToolTip`, which is not known.
 
 The icon tracks the **session** window, since that is the limit users hit first.
 A threshold notification fires once when session usage first reaches the critical

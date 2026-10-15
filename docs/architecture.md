@@ -9,12 +9,26 @@ References run one way: **skins → App → Presentation → Core**. A project m
 | Project | Holds | Never holds |
 |---|---|---|
 | `O-view.Core` | Reading Claude's files, the usage store, pricing, reset and divergence detection, usage snapshots and statistics | Display text, formatting, colours, UI or platform APIs |
-| `O-view.Presentation` | Everything a user reads or sees: wording, number and date formats, colour bands, icon geometry, and view models for the panel, tooltip and menu | WPF, Avalonia, Win32, D-Bus; anything platform-specific |
+| `O-view.Presentation` | Everything a user reads or sees: wording, number and date formats, colour bands, icon geometry, and a view model per panel section, tooltip and menu, shared by both skins | WPF, Avalonia, Win32, D-Bus; anything platform-specific |
 | `O-view.App` | The shell: polling, settings, alerts, updates, and the two interfaces to the skins | Formatting; any knowledge of which skin is running |
 | `O-view.Tray` | The Windows skin: XAML layout and styles, `NotifyIcon`, the registry, the Windows updater | Formatting or business logic |
 | `O-view.Linux` | The Linux skin: Avalonia layout and styles, StatusNotifierItem over D-Bus, XDG autostart | Formatting or business logic |
 
 **The test for any change:** a new panel tile is added once, in Presentation. Each skin then needs only layout to show it. If a change needs the same logic written in both skins, it belongs in Presentation instead.
+
+## Where the panel's content is built
+
+`PanelSections` (`src/O-view.Presentation/Panel/PanelSections.cs`) builds one view model per section, each in its own file beside it under `src/O-view.Presentation/Panel/`:
+
+| Section | View model |
+|---|---|
+| Header, account | `PanelHeaderView` |
+| Session/weekly meters, boost chip | `PanelMeterView`, `PanelBoostChipView` |
+| Stat tiles, per-model breakdown | `PanelTileView`, `PanelTilesView`, `PanelTileSegmentView` |
+| 31-day graph, weekly-reset gridlines | `PanelGraphView`, `PanelGraphColumnView`, `PanelGraphBoundaryView` |
+| Off-plan banner and section | `PanelOffPlanView`, `PanelOffPlanBannerView` |
+
+A skin only lays the view model it is given out — it computes no figure, no band and no word. Windows does this in `src/O-view.Tray/Popup/` (`PopupWindow.xaml.cs`, plus `PopupMeter.cs`, `PopupTiles.cs`, `PopupGraph.cs`, `PopupDivergence.cs` and `PopupWeeklyRow.cs`); Linux does it in `src/O-view.Linux/Panel/` (`PanelContent.cs`, plus `PanelGraph.cs`, `PanelOffPlan.cs`, `PanelStatTiles.cs` and `PanelTokenBars.cs`). Both files that assemble a whole panel, `PopupWindow.xaml.cs` and `PanelContent.cs`, stay under 600 lines by design — a skin that grows past that is usually a skin that has started computing content again.
 
 ## How data flows
 
