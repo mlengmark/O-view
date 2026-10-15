@@ -55,7 +55,7 @@ public class PanelFitTests
     // ── the real panels, against the work areas that matter ────────────────────────
     //
     // Content heights measured from the goldens on 2026-10-15: Linux 710-1008 DIP, Windows
-    // 790-906 DIP (Windows renders at scale 2; these are already converted to DIP). Work
+    // 696-906 DIP (Windows renders at scale 2; these are already converted to DIP). Work
     // areas: 712 DIP (a 1024x768 desktop — Maximilian's B13 run), 830 DIP (1080p at 125%)
     // and 1032 DIP (1080p at 100%). PanelDensity.Compact saves about 94 DIP off the natural
     // height measured here; applying that approximation is what turns "the content is this
@@ -72,20 +72,20 @@ public class PanelFitTests
         // even compacted; both panels' shortest states fit.
         { "Linux shortest", 710, 712, 710 - CompactSavingDip, false },
         { "Linux tallest", 1008, 712, 712, true },
-        { "Windows shortest", 790, 712, 790 - CompactSavingDip, false },
+        { "Windows shortest", 696, 712, 696 - CompactSavingDip, false },
         { "Windows tallest", 906, 712, 712, true },
 
         // 830 DIP work area (1080p at 125%): Linux's tallest state still overflows compacted;
         // everything else now fits.
         { "Linux shortest", 710, 830, 710 - CompactSavingDip, false },
         { "Linux tallest", 1008, 830, 830, true },
-        { "Windows shortest", 790, 830, 790 - CompactSavingDip, false },
+        { "Windows shortest", 696, 830, 696 - CompactSavingDip, false },
         { "Windows tallest", 906, 830, 906 - CompactSavingDip, false },
 
         // 1032 DIP work area (1080p at 100%): everything fits compacted, nothing scrolls.
         { "Linux shortest", 710, 1032, 710 - CompactSavingDip, false },
         { "Linux tallest", 1008, 1032, 1008 - CompactSavingDip, false },
-        { "Windows shortest", 790, 1032, 790 - CompactSavingDip, false },
+        { "Windows shortest", 696, 1032, 696 - CompactSavingDip, false },
         { "Windows tallest", 906, 1032, 906 - CompactSavingDip, false },
     };
 
