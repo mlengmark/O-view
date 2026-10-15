@@ -204,8 +204,8 @@ public sealed class PlanHistoryPoll
         var latest = _getLatest();
         return PollingCadence.IsAuthoritative(snapshot.Source)
             && PollingCadence.IsAuthoritative(latest.Source)
-            && snapshot.CapturedAtUtc is { } incoming
-            && latest.CapturedAtUtc is { } current
+            && snapshot.CapturedAtUtcValue.Value is { } incoming
+            && latest.CapturedAtUtcValue.Value is { } current
             && incoming < current;
     }
 
@@ -233,6 +233,10 @@ public sealed class PlanHistoryPoll
             return stats.WithDivergence(_store, windowStart, fake, TimeSpan.Zero) with
             {
                 EstOffPlanUsd = 92.75m,
+                // Kept in step with the plain field above by hand, same as PanelStatistics.Priced
+                // does for every other figure — a typed reader must see the same simulated value
+                // the plain one carries, not whatever WithDivergence priced from the (empty) store.
+                EstOffPlanValue = new EstimatedUsd(92.75m, UsageValueStatus.Estimated),
                 Divergence = DivergenceDetector.Evaluate(fake, 69_091, TimeSpan.Zero),
             };
         }
@@ -265,8 +269,8 @@ public sealed class PlanHistoryPoll
         try
         {
             var reported = _cachedUtilization.GetSnapshot(utcNow);
-            return reported.SessionPercent is { } percent
-                ? (percent, utcNow - reported.CapturedAtUtc)
+            return reported.SessionPercentValue is { Status: not UsageValueStatus.Unavailable, Value: { } percent }
+                ? ((int?)percent, utcNow - reported.CapturedAtUtcValue.Value)
                 : (null, null);
         }
         catch (Exception ex)

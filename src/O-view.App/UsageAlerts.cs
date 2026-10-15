@@ -126,10 +126,16 @@ public sealed class UsageAlerts
 
     public void NotifyOnThreshold(UsageSnapshot snapshot)
     {
-        if (_getSettings().NotifyOnThreshold && _watcher.ShouldNotify(snapshot.SessionPercent))
+        // Branches on the status rather than on nullness: an Unavailable percentage carries no
+        // figure by construction (UsageValueRule), so this can never read one as a crossing to
+        // zero — the trap a plain `?? 0` on the nullable field would have walked straight into.
+        var session = snapshot.SessionPercentValue;
+        var percent = session.Status == UsageValueStatus.Unavailable ? (int?)null : (int)session.Value!.Value;
+
+        if (_getSettings().NotifyOnThreshold && _watcher.ShouldNotify(percent))
         {
             _notify(new AppNotification(NoticeText.ThresholdTitle,
-                NoticeText.ThresholdBody(snapshot.SessionPercent!.Value),
+                NoticeText.ThresholdBody(percent!.Value),
                 NotificationKind.Warning));
         }
     }
@@ -182,9 +188,12 @@ public sealed class UsageAlerts
         // The two the engine raises are both genuine warnings, and they are the reason the
         // kind exists: these are what the yellow triangle is FOR, and it meant nothing while
         // every "up to date" balloon wore the same one.
+        var estOffPlan = stats.EstOffPlanValue;
+        var estOffPlanUsd = estOffPlan.Status == UsageValueStatus.Unavailable ? (decimal?)null : estOffPlan.Value;
+
         _notify(new AppNotification(
             OffPlanText.NotificationTitle(extraUsage),
-            OffPlanText.NotificationBody(stats.EstOffPlanUsd, extraUsage),
+            OffPlanText.NotificationBody(estOffPlanUsd, extraUsage),
             NotificationKind.Warning));
     }
 

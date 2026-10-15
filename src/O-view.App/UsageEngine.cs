@@ -501,7 +501,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
             Latest = result.Snapshot;
 
             _log?.Write($"refresh source={result.Snapshot.Source} " +
-                        $"session={result.Snapshot.SessionPercent?.ToString() ?? "null"}");
+                        $"session={result.Snapshot.SessionPercentValue.Value?.ToString() ?? "null"}");
             SnapshotUpdated?.Invoke(result.Snapshot);
 
             _alerts.NotifyOnThreshold(result.Snapshot);
@@ -509,7 +509,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
         else
         {
             _log?.Write($"refresh superseded — read a sample older than the one displayed " +
-                        $"({result.Snapshot.CapturedAtUtc:u} < {Latest.CapturedAtUtc:u})");
+                        $"({result.Snapshot.CapturedAtUtcValue.Value:u} < {Latest.CapturedAtUtcValue.Value:u})");
         }
 
         _alerts.CheckOffPlan(result.OffPlan);

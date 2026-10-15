@@ -585,6 +585,36 @@ public class UsageEngineTests
     }
 
     /// <summary>
+    /// An absent session percentage (<see cref="UsageValueStatus.Unavailable"/>) must never be
+    /// read as a zero crossing the threshold — the whole reason the engine now branches on
+    /// <see cref="UsageSnapshot.SessionPercentStatus"/> rather than on nullness. The threshold
+    /// is set to the lowest value the UI allows, so any fabricated number at all would notify.
+    /// </summary>
+    [Fact]
+    public void AnAbsentPercentageNeverCrossesTheThreshold()
+    {
+        using var dir = new TempDir();
+        var (engine, provider, timers, _) = Build(dir);
+        using var _e = engine;
+
+        var notifications = new List<AppNotification>();
+        engine.NotificationRequested += notifications.Add;
+        engine.SetThresholdPercent(1);
+
+        provider.Next = new UsageSnapshot(DataSource.Live, null, null, null, DateTimeOffset.UnixEpoch);
+        engine.Start(timers);
+        Assert.Empty(notifications);
+
+        timers.Poll.Tick();
+        Assert.Empty(notifications);
+
+        // Re-arms correctly once a real reading arrives, rather than staying stuck.
+        provider.SetSession(50);
+        timers.Poll.Tick();
+        Assert.Single(notifications);
+    }
+
+    /// <summary>
     /// A monitoring tool must not die on a bad poll. The previous snapshot survives and the
     /// loop keeps running (the historical behaviour of <c>TrayController.Refresh</c>).
     /// </summary>

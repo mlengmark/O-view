@@ -249,7 +249,7 @@ public sealed class WeeklyResetCoordinator
             return snapshot;
         }
 
-        if (reported.SessionResetAtUtc is { } sessionReset)
+        if (reported.SessionResetAtUtcValue.Value is { } sessionReset)
         {
             snapshot = snapshot with
             {
