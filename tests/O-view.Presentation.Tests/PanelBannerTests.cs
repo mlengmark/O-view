@@ -109,7 +109,7 @@ public class PanelBannerTests : IDisposable
             authoritative: false, MissingPlanFile(), ClaudeCodeOnly(), tokens31Days: 1);
 
         Assert.NotNull(banner);
-        Assert.Equal(PanelBanner.NeedsDesktopGauge, banner.GaugePlaceholder);
+        Assert.Equal(PanelBanner.NoUsageFileGauge, banner.GaugePlaceholder);
         Assert.NotEqual(PanelBanner.UnknownGauge, banner.GaugePlaceholder);
     }
 
@@ -203,7 +203,7 @@ public class PanelBannerTests : IDisposable
 
         Assert.NotNull(banner);
         Assert.Equal(PanelBanner.ScopeTitle, banner.Title);
-        Assert.Equal(PanelBanner.NeedsDesktopGauge, banner.GaugePlaceholder);
+        Assert.Equal(PanelBanner.NoUsageFileGauge, banner.GaugePlaceholder);
         Assert.DoesNotContain("unaffected", banner.Detail, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("unexpected", banner.Detail, StringComparison.OrdinalIgnoreCase);
     }
@@ -213,6 +213,11 @@ public class PanelBannerTests : IDisposable
     /// <summary>
     /// Issue #58 pointed the other way: telling a Cowork user their tokens come from Claude
     /// Code is the same error as telling a Claude Code user they come from Cowork.
+    ///
+    /// <para>The claim under test is the one about <i>this user's</i> tokens, so it is the
+    /// "Your … token figures" clause that is pinned rather than the whole paragraph. The
+    /// copy now also names Claude Code as one of the two writers of the percentages (issue
+    /// #234), which is a statement about O-view's sources and true on every machine.</para>
     /// </summary>
     [Fact]
     public void CoworkOnlyIsNamedAsCoworkNotAsClaudeCode()
@@ -223,8 +228,8 @@ public class PanelBannerTests : IDisposable
         var banner = PanelBanner.Resolve(authoritative: false, MissingPlanFile(), scope, 1);
 
         Assert.NotNull(banner);
-        Assert.Contains("Cowork", banner.Detail, StringComparison.Ordinal);
-        Assert.DoesNotContain("Claude Code", banner.Detail, StringComparison.Ordinal);
+        Assert.Contains("Your Cowork token figures", banner.Detail, StringComparison.Ordinal);
+        Assert.DoesNotContain("Your Claude Code", banner.Detail, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -237,8 +242,7 @@ public class PanelBannerTests : IDisposable
         var banner = PanelBanner.Resolve(authoritative: false, MissingPlanFile(), scope, 1);
 
         Assert.NotNull(banner);
-        Assert.Contains("Claude Code", banner.Detail, StringComparison.Ordinal);
-        Assert.Contains("Cowork", banner.Detail, StringComparison.Ordinal);
+        Assert.Contains("Your Claude Code and Cowork token figures", banner.Detail, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -277,6 +281,42 @@ public class PanelBannerTests : IDisposable
         Assert.Contains("1 location it checked", banner.Detail, StringComparison.Ordinal);
         Assert.DoesNotContain("not installed", banner.Detail, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("isn't installed", banner.Detail, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // ── the percentages have two writers, not one ───────────────────────────────────
+
+    /// <summary>
+    /// The banner told a Claude Code user on a machine with no Claude Desktop that only
+    /// Desktop writes what these gauges read. Claude Code caches the same two percentages
+    /// and has done since issue #234, so the sentence was false for exactly the reader most
+    /// likely to meet it — and its only remedy was an application they do not run.
+    ///
+    /// <para>Both wordings open with the same claim, so both are pinned here.</para>
+    /// </summary>
+    [Fact]
+    public void NeitherWordingSaysDesktopIsTheOnlyWriterOfThePercentages()
+    {
+        var scope = ClaudeCodeOnly();
+
+        foreach (var tokens in new long[] { 1, 0 })
+        {
+            var banner = PanelBanner.Resolve(authoritative: false, MissingPlanFile(), scope, tokens);
+
+            Assert.NotNull(banner);
+            Assert.DoesNotContain("only Claude Desktop", banner.Detail, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Claude Code caches", banner.Detail, StringComparison.Ordinal);
+        }
+    }
+
+    /// <summary>
+    /// The heading and the gauge name the reading that is missing, not an application to go
+    /// and install. Naming one was the same rule-6 error in two fewer words.
+    /// </summary>
+    [Fact]
+    public void TheHeadingAndTheGaugeNameTheMissingFileRatherThanAnApplication()
+    {
+        Assert.DoesNotContain("Desktop", PanelBanner.ScopeTitle, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Desktop", PanelBanner.NoUsageFileGauge, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
