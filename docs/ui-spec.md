@@ -90,6 +90,42 @@ The scroll bar itself is thin — 6 px — and painted in O-view's own colours, 
 palette, in both the light and dark themes, so it reads as part of this panel rather than a
 borrowed system control.
 
+### Moving the panel
+
+**The header is a drag handle.** A press that travels past a small threshold (4 dip) becomes
+a drag; a press that does not is a click, and opens or dismisses the panel exactly as it did
+before dragging existed — the threshold is what keeps the two apart.
+
+**Letting go snaps and clamps, in that order.** The place where the pointer released is
+nudged flush to whichever edge or corner it landed within 16 px of
+([`PanelPlacementMemory.SnapThresholdDip`](../src/O-view.App/Rendering/PanelPlacementMemory.cs)),
+then clamped back inside the work area as it stands right now — so letting go anywhere, even
+partway off a screen edge, still leaves the whole panel on screen. The result is remembered
+per display.
+
+**The next open restores it, re-clamped and capped.** Each display keeps its own place;
+opening the panel on one re-runs the same clamp against that display's work area as it stands
+at that moment, so a shrunk screen or a moved taskbar still shows the whole panel, and the
+result is then capped by the same height rule as a corner-placed panel (*The window never
+grows past the display's work area*, above) — a restored place scrolls exactly as a freshly
+opened one does. A display that was never dragged to, or a panel that no longer fits it at
+all, opens at the work-area corner instead, same as it always has.
+
+**Alt and an arrow key moves the panel 10 dip; Alt+Shift and an arrow key moves it 1 dip** —
+through the same clamp, snap and save a drag's release goes through, because a keyboard nudge
+is nothing but a release at the next place along. A screen reader reaching the header
+announces "Move panel", naming what the drag and the nudge both do.
+
+> **Linux: asking to place the window is a request, not a command.** A window manager is free
+> to ignore it, and a native Wayland compositor always will — a Wayland client can neither set
+> nor read its own window position, so on that session the panel keeps the work-area corner,
+> no drag handle appears on the header, and the menu's reset row is absent. Every other
+> session reaches an X server — the session's own under Xorg, or XWayland under a Wayland
+> compositor — so a position can be requested and read back, and the app's own log says
+> whether the window manager actually honoured it (`"honoured"` or `"OVERRIDDEN by the window
+> manager"`). This head has exactly one Linux backend, `Avalonia.X11`; there is no separate
+> native-Wayland behaviour beyond the one difference stated above.
+
 ### Header
 
 | Position | Content | Source |
@@ -327,11 +363,12 @@ The right-click surface. Rebuilt as a **docked flyout window** ([GitHub issue #3
 > O-view: the host renders it in its own style, at a position O-view cannot know, and the
 > custom flyout below has no equivalent.
 >
-> The Linux menu carries three rows, in this order:
+> The Linux menu carries four rows, in this order:
 >
 > | Row | Kind | Notes |
 > |---|---|---|
 > | Show usage | action | Opens the panel ([issue #315](https://github.com/mlengmark/O-view/issues/315)) |
+> | Reset panel position | action | Forgets the dragged place for this display and puts an open panel back at the work-area corner. Absent on a native Wayland session — there is nothing to reset there |
 > | Run at startup | toggle | Re-read from the autostart `.desktop` file whenever the panel opens |
 > | Exit O-view | action | |
 >
@@ -342,6 +379,11 @@ The right-click surface. Rebuilt as a **docked flyout window** ([GitHub issue #3
 > that host does with clicks, which is why this is the fix rather than asking each desktop for
 > different click handling. It runs the icon click's own handler, so the row and the click open
 > the same panel by the same route and cannot drift apart.
+>
+> **Reset panel position follows it directly**, as someone opening this menu for that reason
+> has a panel sitting somewhere they cannot get it back from — the row belongs beside the one
+> that opens the panel, not at the end of a list. It forgets the display's saved place first,
+> so the corner placement that follows is the ordinary fallback rather than a special case.
 >
 > **The startup row** follows the same rule as its Windows counterpart — the tick shows the
 > state as it stands *after* the write, never the state requested, because writing the
@@ -370,6 +412,7 @@ The right-click surface. Rebuilt as a **docked flyout window** ([GitHub issue #3
 
 | Row | Kind | Notes |
 |---|---|---|
+| Reset panel position | action | First row — there is no "Show usage" row above it to follow, since the tray icon's own click already opens the panel on this head. Forgets the dragged place for this display and puts an open panel back at the work-area corner |
 | Run at startup | toggle | Re-read from `HKCU\...\Run` on every open |
 | Notify at *N*% session usage | toggle | *N* from settings |
 | Copy diagnostics | action | Support bundle to clipboard |

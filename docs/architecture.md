@@ -51,6 +51,29 @@ the same question, rather than each picking its own answer.
 - **Neither face decides the cap or the scroll choice itself.** Both call `PanelFit.Resolve`
   and act on what it returns; the rule never duplicates into a skin.
 
+## Where a dragged panel's place lives
+
+Clamping, snapping, saving and restoring a dragged panel's place are each decided once, in
+App, behind an injected store — never per head:
+
+- **`PanelPlacementMemory`** (`src/O-view.App/Rendering/PanelPlacementMemory.cs`) owns the
+  rule. `Resolve` answers where the panel opens, re-clamping a remembered place into the work
+  area as it stands now; `Remember` answers what to store when the user lets go, snapping the
+  offset flush once it is within 16 px of an edge or corner. A keyboard nudge calls both in
+  sequence — it is a release at the next place along, not a second rule.
+- **`IPanelPositionStore`** (`src/O-view.App/Platform/IPanelPositionStore.cs`) is the seam
+  between that rule and storage, so `PanelPlacementMemory`'s edge cases can be exercised
+  against an in-memory fake instead of real file I/O.
+- **`PanelPositionFile`** (`src/O-view.Core/Storage/PanelPositionFile.cs`) is where a place is
+  actually kept on disk — one entry per display, written atomically and read defensively,
+  the same shape as `WeeklyResetAnchor`. It stores the work-area corner as a bare string,
+  since Core may not name `PanelPlacementMemory`'s own `WorkAreaCorner` type; translating
+  between the two is the file-backed `IPanelPositionStore` implementation's job.
+
+Each head only wires up the gesture that reaches these: a drag handle on the header and the
+Alt-arrow-key shortcuts, both of which end at the same `Remember`/`Resolve` pair a release
+goes through. Neither head clamps, snaps or reads the file itself ([ADR-0017](adr/0017-remembered-panel-position.md)).
+
 ## How data flows
 
     Claude's files ──▶ Core (providers ▶ snapshot + statistics)

@@ -77,6 +77,7 @@ run Claude Desktop has nothing for O-view to read. **macOS is out of scope.** Se
 | Run at startup | ✅ registry `Run` key, toggled from the menu | ✅ XDG autostart `.desktop`, from the menu **or** `o-view --startup-on`, *menu rendering never observed* |
 | Light/dark theme | ✅ follows `AppsUseLightTheme` | ✅ XDG desktop portal, *never observed* — the portal read deadlocked the UI thread on the first report (fixed in v0.6.4, not re-tested) |
 | Auto-update | ✅ in-place, one confirmation — or none, if you turn on **Update automatically** (off by default) | ⚠️ **notifies only, by design** — tells you once per version, installs nothing ([ADR-0009](docs/adr/0009-auto-update.md)) |
+| Remembered position | ✅ drag the panel by its header, or Alt and an arrow key; it reopens where it was left | ⚠️ **XWayland and X11 only** — a native Wayland session cannot set or read its own position, so it keeps the work-area corner and has no reset row. *Never observed* — the Ubuntu 24.04 VM has not been run against a movable panel yet |
 
 **What the Linux column's three states mean.** They are deliberately not two, because
 "shipped" and "seen working" are different claims and the difference is the whole point.
