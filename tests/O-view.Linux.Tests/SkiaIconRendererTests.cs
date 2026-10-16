@@ -1,5 +1,6 @@
 using OView.Core.Models;
 using OView.Linux.Rendering;
+using SkiaSharp;
 
 namespace OView.Linux.Tests;
 
@@ -100,4 +101,31 @@ public class SkiaIconRendererTests
     [Fact]
     public void RenderingIsDeterministic() =>
         Assert.Equal(Render(24, Live(47)), Render(24, Live(47)));
+
+    /// <summary>
+    /// The track alone paints the ring, so even a 0% snapshot — no arc — reports a non-zero
+    /// count. If this were ever zero for an ordinary snapshot, the number would be useless to
+    /// a VM report: it has to actually distinguish a ring that drew from one that didn't.
+    /// </summary>
+    [Fact]
+    public void AnOrdinarySnapshotReportsPaintedPixels()
+    {
+        SkiaIconRenderer.RenderPng(24, Live(47), lightPanel: false, out var diagnostics);
+
+        Assert.Equal(24, diagnostics.Width);
+        Assert.Equal(24, diagnostics.Height);
+        Assert.True(diagnostics.PaintedPixelCount > 0);
+    }
+
+    /// <summary>
+    /// Proves the count itself means something, independent of whatever <c>Draw</c> happens
+    /// to draw: a surface nothing was painted onto reports zero.
+    /// </summary>
+    [Fact]
+    public void ASurfaceWithNothingDrawnReportsZeroPaintedPixels()
+    {
+        using var surface = SKSurface.Create(new SKImageInfo(24, 24, SKColorType.Rgba8888, SKAlphaType.Premul));
+
+        Assert.Equal(0, SkiaIconRenderer.CountPaintedPixels(surface, 24));
+    }
 }

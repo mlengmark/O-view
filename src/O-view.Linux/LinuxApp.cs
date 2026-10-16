@@ -395,7 +395,7 @@ public sealed class LinuxApp : Application, IShellToSkin
                 return;
             }
 
-            _tray.Icon = ToWindowIcon(snapshot);
+            _tray.Icon = ToWindowIcon(snapshot, out var diagnostics);
 
             // Set every poll, and on this platform it does not become a tooltip. Avalonia's
             // tray backend publishes this text as the item's SNI Title and answers the SNI
@@ -412,7 +412,8 @@ public sealed class LinuxApp : Application, IShellToSkin
             SyncResumeItem();
 
             _log?.Write(
-                $"icon rendered session={Describe(snapshot.SessionPercentValue)}");
+                $"icon rendered session={Describe(snapshot.SessionPercentValue)} "
+                + $"pixmap={diagnostics.Width}x{diagnostics.Height} painted={diagnostics.PaintedPixelCount}");
         }
         catch (Exception ex)
         {
@@ -438,11 +439,13 @@ public sealed class LinuxApp : Application, IShellToSkin
     /// SNI wants pixels, not a themed icon name — the gauge changes every poll, so there is
     /// no theme entry it could refer to.
     /// </summary>
-    private static WindowIcon ToWindowIcon(UsageSnapshot snapshot)
+    private static WindowIcon ToWindowIcon(UsageSnapshot snapshot) => ToWindowIcon(snapshot, out _);
+
+    private static WindowIcon ToWindowIcon(UsageSnapshot snapshot, out IconRenderDiagnostics diagnostics)
     {
         // 24 px is the size Linux panels most commonly request; hosts scale from what they
         // are given. HiDPI sizing is one of the things still to confirm on real hardware.
-        using var stream = new MemoryStream(SkiaIconRenderer.RenderPng(24, snapshot, lightPanel: false));
+        using var stream = new MemoryStream(SkiaIconRenderer.RenderPng(24, snapshot, lightPanel: false, out diagnostics));
         return new WindowIcon(stream);
     }
 
