@@ -244,8 +244,14 @@ internal sealed class FilePanelPositionStore(PanelPositionFile file) : IPanelPos
 {
     public FilePanelPositionStore() : this(new PanelPositionFile()) { }
 
+    /// <summary>
+    /// <c>Enum.IsDefined</c> beside the parse, because <c>TryParse</c> also accepts a bare
+    /// number — <c>"7"</c> would hand back a corner that does not exist and the panel would be
+    /// placed against it. A hand-edited or half-written file is exactly where that comes from.
+    /// </summary>
     public PanelPlace? Read(string displayId) =>
-        file.Read(displayId) is { } place && Enum.TryParse<WorkAreaCorner>(place.Corner, out var corner)
+        file.Read(displayId) is { } place
+        && Enum.TryParse<WorkAreaCorner>(place.Corner, out var corner) && Enum.IsDefined(corner)
             ? new PanelPlace(corner, place.OffsetXDip, place.OffsetYDip)
             : null;
 
