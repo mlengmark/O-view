@@ -4,6 +4,7 @@ using Avalonia.Threading;
 using OView.App;
 using OView.App.Platform;
 using OView.Core.Models;
+using OView.Linux.Panel;
 using OView.Linux.Platform;
 using OView.Linux.Tray;
 using OView.Presentation.Text;
@@ -56,6 +57,19 @@ public class LinuxHeadWiringTests
     public void TheHeadWiresTheThemeSourceToThePortalImplementation()
     {
         Assert.IsType<PortalThemeSource>(SeamValue(typeof(IThemeSource)));
+    }
+
+    /// <summary>
+    /// Where a dragged panel's place is kept, named rather than only swept for: the sweep below
+    /// would be just as green if the head held the Windows head's store, or any other
+    /// implementation of the seam, and what the panel reopening in the right spot depends on is
+    /// this one — the file in O-view's own data folder, with the corner translation
+    /// <c>PanelPositionFile</c> cannot do for itself.
+    /// </summary>
+    [Fact]
+    public void TheHeadWiresThePanelPositionStoreToTheFileBackedImplementation()
+    {
+        Assert.IsType<LinuxPanelPositionStore>(SeamValue(typeof(IPanelPositionStore)));
     }
 
     /// <summary>
@@ -180,14 +194,22 @@ public class LinuxHeadWiringTests
             .Invoke(Head, [null])!;
 
     /// <summary>
-    /// The real menu the head builds. Null shell, for the reason
-    /// <see cref="TheTrayClickHandlerIsMarshalledOntoTheUiThread"/> gives: it is captured in
-    /// closures and only dereferenced when a click runs, and nothing here runs one.
+    /// The real menu the head builds, for a session that can remember where the panel was put.
+    /// Null shell, for the reason <see cref="TheTrayClickHandlerIsMarshalledOntoTheUiThread"/>
+    /// gives: it is captured in closures and only dereferenced when a click runs, and nothing
+    /// here runs one.
     /// </summary>
-    private static NativeMenu Menu() =>
+    private static NativeMenu Menu() => Menu(ClientPlacement.From("x11", null, ":0"));
+
+    /// <summary>
+    /// The menu as <paramref name="placement"/> would have it. Passed in rather than read from
+    /// the machine, which is in neither Linux session — it is how the Wayland branch's missing
+    /// row is assertable from Windows CI at all.
+    /// </summary>
+    private static NativeMenu Menu(ClientPlacement placement) =>
         (NativeMenu)typeof(LinuxApp)
             .GetMethod("BuildMenu", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .Invoke(Head, [null])!;
+            .Invoke(Head, [null, placement])!;
 
     private static Delegate[] ClickHandlersOf(NativeMenuItem item)
     {
@@ -328,13 +350,43 @@ public class LinuxHeadWiringTests
         Assert.Equal(
             [
                 MenuText.ShowUsageRow,
+
+                // Directly below the row that opens the panel: someone opening the menu for
+                // this has a panel somewhere they cannot get back from, so it must not be
+                // something to hunt for.
+                MenuText.ResetPanelPositionRow,
+
                 MenuText.RunAtStartupRow,
 
                 // Between the two it has something to say about and the one that ends the app,
-                // and hidden until the refresh has blocked itself — so a person sees three rows.
+                // and hidden until the refresh has blocked itself — so a person sees four rows.
                 PanelText.UsageRefreshBlockedRow,
                 MenuText.ExitRow,
             ],
+            headers);
+    }
+
+    /// <summary>
+    /// And on a native Wayland session the reset row is not there at all, because there is
+    /// nothing for it to reset: a client cannot read its own position back, so no place is
+    /// stored and the panel keeps the work-area corner. A row offering the reset would be
+    /// O-view claiming a thing it cannot do.
+    ///
+    /// <para>Unlike the two rows above that appear only when they have something to say, this
+    /// one is absent on a whole class of session rather than a passing state — which is why its
+    /// absence is asserted rather than left to the row order above.</para>
+    /// </summary>
+    [Fact]
+    public void NativeWaylandGetsNoResetRowBecauseNoPlaceIsEverStoredThere()
+    {
+        var wayland = ClientPlacement.From("wayland", "wayland-0", x11Display: null);
+        Assert.False(wayland.Allowed);   // the branch this test is about
+
+        var headers = Menu(wayland).Items.OfType<NativeMenuItem>().Select(i => i.Header ?? "").ToArray();
+
+        Assert.DoesNotContain(MenuText.ResetPanelPositionRow, headers);
+        Assert.Equal(
+            [MenuText.ShowUsageRow, MenuText.RunAtStartupRow, PanelText.UsageRefreshBlockedRow, MenuText.ExitRow],
             headers);
     }
 

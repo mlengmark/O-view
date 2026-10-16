@@ -27,7 +27,9 @@ namespace OView.Linux.Panel;
 /// rendered offscreen for verification, exactly as the WPF panel does.</para>
 ///
 /// <para>This class owns the panel's frame and the two rows it draws itself — the header and
-/// a usage bar. Each section below them is its own piece, named for what it draws:
+/// a usage bar. The header is also the panel's drag handle, which is why it is the one row
+/// built once and refilled rather than rebuilt (<see cref="Header"/>). Each section below them
+/// is its own piece, named for what it draws:
 /// <see cref="PanelStatTiles"/>, <see cref="PanelTokenBars"/>, <see cref="PanelGraph"/> and
 /// <see cref="PanelOffPlan"/>.</para>
 ///
@@ -66,6 +68,7 @@ public sealed class PanelContent : Border
 
     private readonly LinuxPanelTheme _theme;
     private readonly StackPanel _root;
+    private readonly Grid _header;
     private readonly ScrollContentPresenter _viewport;
     private readonly Border _scrollTrack;
     private readonly Border _scrollThumb;
@@ -106,6 +109,23 @@ public sealed class PanelContent : Border
     /// the frame.</summary>
     public bool Scrolls => ReferenceEquals(Child, _scrollFrame);
 
+    /// <summary>
+    /// The title row, which is also the band the panel is dragged by — the one part of the
+    /// panel with nothing on it to click, so a press here can mean "move me" without taking a
+    /// click away from anything.
+    ///
+    /// <para>Built once in the constructor and refilled by each <see cref="Populate"/> rather
+    /// than rebuilt with the rest of the tree. A re-populate happens on every open and again
+    /// when the density changes, and a fresh control each time would silently drop whatever
+    /// handlers the window had attached to the last one.</para>
+    ///
+    /// <para><b>Its transparent background is load-bearing.</b> A control with no background is
+    /// not hit-testable in the gaps between its children, so without one the handle would only
+    /// answer on the words themselves. It paints nothing, so the verification renders are
+    /// unchanged.</para>
+    /// </summary>
+    public Control Header => _header;
+
     public PanelContent(LinuxPanelTheme theme)
     {
         _theme = theme;
@@ -122,6 +142,14 @@ public sealed class PanelContent : Border
         Padding = new Thickness(16);
 
         _root = new StackPanel { Spacing = 10 };
+
+        // See Header: built here, filled by AddHeader, so the window's drag handlers survive a
+        // re-populate. Transparent for hit-testing, which paints nothing.
+        _header = new Grid
+        {
+            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
+            Background = Brushes.Transparent,
+        };
 
         _scrollThumb = new Border
         {
@@ -328,6 +356,8 @@ public sealed class PanelContent : Border
 
     private void AddHeader(PanelHeaderView header)
     {
+        _header.Children.Clear();
+
         var left = new StackPanel { Spacing = 2 };
         left.Children.Add(Text(header.Title, 20, _theme["TextPrimary"], FontWeight.SemiBold));
         left.Children.Add(Text(header.Freshness, 12, _theme["TextSecondary"]));
@@ -348,11 +378,10 @@ public sealed class PanelContent : Border
             Child = Text(header.Tier, 11, _theme["BadgeText"]),
         });
 
-        var grid = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         Grid.SetColumn(right, 1);
-        grid.Children.Add(left);
-        grid.Children.Add(right);
-        _root.Children.Add(grid);
+        _header.Children.Add(left);
+        _header.Children.Add(right);
+        _root.Children.Add(_header);
     }
 
     /// <summary>
