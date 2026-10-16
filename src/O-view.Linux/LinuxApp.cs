@@ -35,6 +35,23 @@ public sealed class LinuxApp : Application, IShellToSkin
     private readonly IStartupRegistration _startup = new XdgAutostartRegistration();
 
     /// <summary>
+    /// Where a dragged panel's place is kept. One per app rather than one per panel, because
+    /// the panel is rebuilt on every open and the file it reads is a fact about the machine
+    /// either way.
+    ///
+    /// <para>Constructed whatever the session says; whether the panel is <i>given</i> it is
+    /// <see cref="_placement"/>'s decision, so nothing is read or written on a session that
+    /// could not read a place back.</para>
+    /// </summary>
+    private readonly LinuxPanelPositionStore _panelPositions = new();
+
+    /// <summary>
+    /// Whether this session lets the panel be put back where the user left it. Read once: a
+    /// session does not change underneath a running process.
+    /// </summary>
+    private readonly ClientPlacement _placement = ClientPlacement.Detect();
+
+    /// <summary>
     /// This head's one hop onto the UI thread. <see cref="Program"/> hands the same object to
     /// the shell, so a push and a bus callback arrive by exactly the same route — and there is
     /// one place to look when either turns out not to.
@@ -68,6 +85,12 @@ public sealed class LinuxApp : Application, IShellToSkin
     private TrayIcon? _tray;
     private PanelWindow? _panel;
     private CancellationTokenSource? _hostWatch;
+
+    /// <summary>
+    /// Set by the reset row when there is no panel yet to forget a place for — see
+    /// <see cref="ResetPanelPosition"/>.
+    /// </summary>
+    private bool _forgetPanelPlaceOnNextOpen;
 
     /// <summary>Set by <c>--panel-samples</c>: render the panel offscreen and exit.</summary>
     internal static string? SampleDirectory { get; set; }
@@ -129,12 +152,18 @@ public sealed class LinuxApp : Application, IShellToSkin
             + ((ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.ShutdownMode.ToString()
                ?? "(no desktop lifetime)"));
 
+        // Which of the two Wayland cases this is, and why — the one decision behind both the
+        // panel keeping its corner and the reset row being absent, so a report from a session
+        // where dragging does nothing says in one line that it was meant to.
+        _log?.Write($"remembered panel position: {(_placement.Allowed ? "available" : "unavailable")} "
+                    + $"— {_placement.Reason}");
+
         _tray = new TrayIcon
         {
             Icon = ToWindowIcon(UsageSnapshot.None),
             ToolTipText = "O-view",
             IsVisible = true,
-            Menu = BuildMenu(host.Shell),
+            Menu = BuildMenu(host.Shell, _placement),
         };
         _tray.Clicked += OpenPanelHandler(host.Shell);
 
@@ -261,7 +290,21 @@ public sealed class LinuxApp : Application, IShellToSkin
             shell.RefreshUsageCache(force: true);
 
             _panel?.Close();
-            _panel = new PanelWindow(new LinuxPanelTheme(_theme.IsPanelLight()), _log);
+
+            // The store only where a place can be read back again; on a native Wayland session
+            // the panel is handed none and behaves exactly as it did before dragging existed
+            // (PanelWindow.StoreFor).
+            _panel = new PanelWindow(
+                new LinuxPanelTheme(_theme.IsPanelLight()),
+                _log,
+                PanelWindow.StoreFor(_placement, _panelPositions))
+            {
+                // Carried onto the panel the row could not reach, and spent here: the reset is
+                // one request, not a standing setting.
+                ForgetPlaceOnOpen = _forgetPanelPlaceOnNextOpen,
+            };
+
+            _forgetPanelPlaceOnNextOpen = false;
 
             // Both reports are inspected on open, not cached, so the banners describe the
             // machine as it is now rather than as it was at startup.
@@ -403,7 +446,12 @@ public sealed class LinuxApp : Application, IShellToSkin
         return new WindowIcon(stream);
     }
 
-    private NativeMenu BuildMenu(ISkinToShell shell)
+    /// <param name="placement">
+    /// Whether this session can remember where the panel was put, which decides whether the
+    /// reset row is there at all. Taken as an argument rather than read from the field so both
+    /// the row's presence and its absence can be asserted on a machine in neither session.
+    /// </param>
+    private NativeMenu BuildMenu(ISkinToShell shell, ClientPlacement placement)
     {
         // First, because on Ubuntu's AppIndicators tray this menu is everything a single click
         // gets you and the panel had no gesture at all: Activate arrives only on a double click,
@@ -415,6 +463,23 @@ public sealed class LinuxApp : Application, IShellToSkin
         // the panel differently from a click is not a state this file can get into.
         var showUsage = new NativeMenuItem(MenuText.ShowUsageRow);
         showUsage.Click += OpenPanelHandler(shell);
+
+        // Directly below Show usage, as Maximilian's F52 note of 2026-10-16 asks: someone
+        // opening the menu for this has a panel sitting somewhere they cannot get it back from,
+        // so it belongs beside the row that opens it rather than at the end of a list.
+        //
+        // Absent where no place can be remembered, unlike the command rows below it: on a
+        // native Wayland session there is nothing to reset, and a row offering it would be
+        // O-view claiming a thing it cannot do (rule 6, and ClientPlacement).
+        NativeMenuItem? reset = null;
+        if (placement.Allowed)
+        {
+            reset = new NativeMenuItem(MenuText.ResetPanelPositionRow);
+
+            // Marshalled like every other row here: a DBusMenu event arrives on the bus thread,
+            // and moving a window from there is the SIGSEGV of issue #143.
+            reset.Click += BusCallback.For(_dispatcher, ResetPanelPosition, _log);
+        }
 
         var startup = new NativeMenuItem(MenuText.RunAtStartupRow)
         {
@@ -479,7 +544,32 @@ public sealed class LinuxApp : Application, IShellToSkin
         _usageRefreshBlocked = () => shell.UsageRefreshBlocked;
 
         _startupItem = startup;
-        return [showUsage, startup, resume, exit];
+
+        return reset is null
+            ? [showUsage, startup, resume, exit]
+            : [showUsage, reset, startup, resume, exit];
+    }
+
+    /// <summary>
+    /// The menu's "Reset panel position" row: forget wherever the panel was dragged to, and put
+    /// an open one back at the work-area corner.
+    ///
+    /// <para>Deferred to the next open when no panel exists yet. A place is stored per display,
+    /// and which display a panel will open on is not knowable until there is a panel to ask —
+    /// this head has no screen geometry of its own, only a window's. The next open knows it, and
+    /// is also the first moment a reset would be visible to anyone, so nothing is lost by
+    /// waiting for it.</para>
+    /// </summary>
+    private void ResetPanelPosition()
+    {
+        if (_panel is { } panel)
+        {
+            panel.ReturnToCorner();
+            return;
+        }
+
+        _forgetPanelPlaceOnNextOpen = true;
+        _log?.Write("reset panel position — deferred to the next open, the first panel there is");
     }
 
     /// <summary>

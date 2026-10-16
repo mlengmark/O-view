@@ -421,3 +421,74 @@ internal static class Program
     internal static string RuntimeDescription() =>
         $"{RuntimeInformation.OSDescription.Trim()} / {RuntimeInformation.OSArchitecture}";
 }
+
+/// <summary>
+/// Whether this session lets O-view put its own window back where the user left it, and why it
+/// decided that.
+///
+/// <para><b>Why it has to be asked at all.</b> A native Wayland client can neither set nor read
+/// its own position on screen. The compositor will happily move a window for the user, but it
+/// tells the client nothing about where — so a place dragged to there cannot be read back, and
+/// offering to remember one would be O-view claiming a thing it cannot do (rule 6). On that
+/// session the panel keeps the corner placement it has always had, nothing is stored, and the
+/// menu's reset row is absent, because there is nothing for it to reset.</para>
+///
+/// <para><b>What tells it apart from XWayland.</b> This head's toolkit has exactly one Linux
+/// backend — <c>Avalonia.Desktop</c> ships <c>Avalonia.X11</c> and no Wayland one — so every
+/// window it opens talks to an X server: the session's own under Xorg, and XWayland under a
+/// Wayland compositor. Position requests reach that server either way, which is why the Ubuntu
+/// VM's Wayland session already places the panel in its corner and its log shows an X11 input
+/// method (Maximilian's run of 2026-10-16). Native Wayland is therefore the case where the
+/// session is Wayland and there is no X server to ask at all, which <c>DISPLAY</c> says; those
+/// three variables are the whole of what Avalonia and the environment can offer, and they
+/// answer it.</para>
+///
+/// <para>A session cannot change underneath a running process, so this is read once at startup
+/// rather than per open.</para>
+/// </summary>
+/// <param name="Allowed">Whether a dragged place may be stored and restored.</param>
+/// <param name="Reason">What was read and what it concluded — the sentence the log carries.</param>
+public readonly record struct ClientPlacement(bool Allowed, string Reason)
+{
+    /// <summary>What this machine's session says.</summary>
+    public static ClientPlacement Detect() => From(
+        Environment.GetEnvironmentVariable("XDG_SESSION_TYPE"),
+        Environment.GetEnvironmentVariable("WAYLAND_DISPLAY"),
+        Environment.GetEnvironmentVariable("DISPLAY"));
+
+    /// <summary>
+    /// The decision itself, from the three variables rather than from the environment — its own
+    /// method so each of the three branches can be driven on a machine that is in none of them.
+    /// </summary>
+    public static ClientPlacement From(string? sessionType, string? waylandDisplay, string? x11Display)
+    {
+        // Either one: a compositor may leave XDG_SESSION_TYPE to the login manager, and some
+        // set it to "tty" for a session started by hand, but a Wayland compositor always names
+        // its socket.
+        var wayland = string.Equals(sessionType, "wayland", StringComparison.OrdinalIgnoreCase)
+                      || waylandDisplay is { Length: > 0 };
+
+        var xServer = x11Display is { Length: > 0 };
+
+        return (wayland, xServer) switch
+        {
+            (true, true) => new ClientPlacement(true,
+                $"XWayland — a Wayland session (XDG_SESSION_TYPE={Describe(sessionType)}, "
+                + $"WAYLAND_DISPLAY={Describe(waylandDisplay)}) with an X server at "
+                + $"DISPLAY={Describe(x11Display)}, which is what this head's windows talk to, "
+                + "so a position can be requested and read back"),
+
+            (true, false) => new ClientPlacement(false,
+                $"native Wayland — a Wayland session (XDG_SESSION_TYPE={Describe(sessionType)}, "
+                + $"WAYLAND_DISPLAY={Describe(waylandDisplay)}) with no X server (DISPLAY unset), "
+                + "where a client can neither set nor read its own position, so the panel keeps "
+                + "the work-area corner and no place is stored"),
+
+            _ => new ClientPlacement(true,
+                $"X11 — no Wayland session reported (XDG_SESSION_TYPE={Describe(sessionType)}, "
+                + $"WAYLAND_DISPLAY unset), DISPLAY={Describe(x11Display)}"),
+        };
+    }
+
+    private static string Describe(string? value) => value is { Length: > 0 } ? value : "(unset)";
+}

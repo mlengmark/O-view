@@ -20,8 +20,8 @@ namespace OView.Linux.Tests.Runtime;
 ///
 /// <para><b>What an empty menu does.</b> Fails. A menu with no rows answers <c>GetLayout</c>
 /// instantly, which is the one way a timing test can pass while the thing it is about is
-/// broken, so the rows the head builds — "Show usage", "Run at startup" and "Exit O-view" —
-/// have to be in what came back, in that order.</para>
+/// broken, so the rows the head builds — "Show usage", "Reset panel position", "Run at
+/// startup" and "Exit O-view" — have to be in what came back, in that order.</para>
 ///
 /// <para><b>Clicking a row is not in this.</b> "Exit O-view" ends the app, and the rest of the
 /// menu's rows open a window, change this machine's autostart entry or touch the usage cache.
@@ -47,8 +47,14 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
     /// the panel was reachable only by a double click nothing suggests (issue #315). It is the
     /// one row whose absence a user could not work around, and the only check that it reaches a
     /// real desktop's menu is the one below.</para>
+    ///
+    /// <para>"Reset panel position" is expected here because this job has an X server behind it,
+    /// which is the session the row exists in. The head leaves it out where no place can be
+    /// remembered — a native Wayland session — so this is the list for a session that can, and
+    /// the absence is asserted in-process instead, where either session can be arranged.</para>
     /// </summary>
-    private static readonly string[] TheRowsTheHeadBuilds = ["Show usage", "Run at startup", "Exit O-view"];
+    private static readonly string[] TheRowsTheHeadBuilds =
+        ["Show usage", "Reset panel position", "Run at startup", "Exit O-view"];
 
     /// <summary>
     /// How long the menu has, for all three round trips together. The bound this test exists to
@@ -227,6 +233,7 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
             new[]
             {
                 "\"Show usage\" is not in the menu at all",
+                "\"Reset panel position\" is not in the menu at all",
                 "\"Run at startup\" is not in the menu at all",
                 "\"Exit O-view\" is not in the menu at all",
             },
