@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using OView.App.Rendering;
 
 namespace OView.App.Tests;
 
@@ -119,6 +120,83 @@ public class WindowsPanelDragWiringTests
     }
 
     /// <summary>
+    /// And the release moves the window the user is looking at, rather than only the file — the
+    /// B15 half of the question, asked of this head because the Linux one failed it: its settled
+    /// place reached the log and the store and the open panel stayed where it was dropped.
+    ///
+    /// <para><b>Three calls in one order is the whole claim.</b> <c>DragMove</c> blocks until the
+    /// user lets go, so what follows it runs with the panel still open and the system's move loop
+    /// already finished — the timing the Linux head has to work for. <c>Remember</c> snaps and
+    /// stores the released place and <c>Redock</c> reads it straight back onto the window;
+    /// either one missing, or <c>Redock</c> running first, leaves the window where it was
+    /// dropped.</para>
+    ///
+    /// <para>Read from the source for the reason this whole file gives: no test project can
+    /// reference this head, so a <c>Redock</c> quietly dropped from the release would compile,
+    /// run, and look right on the one desktop it was tried on.</para>
+    /// </summary>
+    [Fact]
+    public void TheDragReleaseMovesTheOpenWindowToTheSettledPlace()
+    {
+        var release = MethodBody(ReadHeadFile(Flyout), "private void Drag()");
+
+        var order = new[] { "host.DragMove()", "PopupPositioner.Remember(", "Redock(" }
+            .Select(call => (Call: call, At: release.IndexOf(call, StringComparison.Ordinal)))
+            .ToArray();
+
+        foreach (var (call, at) in order)
+        {
+            Assert.True(at >= 0,
+                $"DockedFlyout.Drag no longer calls {call}, so a released panel is either never "
+                + $"stored or never moved to where the shared rule puts it:{Environment.NewLine}{release}");
+        }
+
+        Assert.True(order.Select(step => step.At).SequenceEqual(order.Select(step => step.At).Order()),
+            "DockedFlyout.Drag must run the move loop, then store the released place, then "
+            + $"re-place the window from it, in that order:{Environment.NewLine}{release}");
+    }
+
+    /// <summary>
+    /// What <c>Redock</c> does with it: the window's own position, straight out of the funnel. A
+    /// re-placement that read the position from anywhere else would apply a settled place that
+    /// had skipped the clamp — which is the one thing a drop half off-screen needs.
+    /// </summary>
+    [Theory]
+    [InlineData("PopupPositioner.Place(")]
+    [InlineData("host.Left")]
+    public void TheRePlacementSetsTheWindowFromTheFunnel(string required)
+    {
+        var redock = MethodBody(ReadHeadFile(Flyout), "public void Redock(");
+
+        Assert.True(redock.Contains(required, StringComparison.Ordinal),
+            $"DockedFlyout.Redock no longer contains \"{required}\", so the surface is not moved "
+            + $"to the place the shared rule answers with:{Environment.NewLine}{redock}");
+    }
+
+    /// <summary>
+    /// And the place that re-placement applies, for the drop B15 reported: dropped at 791,571 on
+    /// a 1024×768 screen whose work area is 958×736+66+32, a 400×712 panel ends at 624,56 —
+    /// pulled fully back on screen and flush into the corner it was thrown at.
+    ///
+    /// <para>The rule is shared, so this is the figure both heads' releases apply. Asserted here
+    /// as well as on the Linux side because the two heads reach it by completely different
+    /// routes, and the Windows one has no other test that can run at all.</para>
+    /// </summary>
+    [Fact]
+    public void ADropHalfOffScreenIsPulledBackInsideTheWorkArea()
+    {
+        var memory = new PanelPlacementMemory(new FakePanelPositionStore());
+        var work = new DipBox(66, 32, 958, 736);
+
+        memory.Remember("DISPLAY1", leftDip: 791, topDip: 571, widthDip: 400, heightDip: 712, work);
+        var settled = memory.Resolve("DISPLAY1", work, widthDip: 400, heightDip: 712);
+
+        Assert.NotNull(settled);
+        Assert.Equal(624, settled!.Value.LeftDip, precision: 3);
+        Assert.Equal(56, settled.Value.TopDip, precision: 3);
+    }
+
+    /// <summary>
     /// The keyboard reaches the same funnel. Which arrow key means which direction is read in
     /// exactly one file, and that file is one of the pair — anywhere else it would be a second
     /// way to move the panel, with its own arithmetic and no obligation to save what it did.
@@ -173,6 +251,33 @@ public class WindowsPanelDragWiringTests
         }
 
         return offenders;
+    }
+
+    /// <summary>
+    /// The body of the method <paramref name="signature"/> opens, by matching its braces — so a
+    /// claim about what one method does is read from that method rather than from the file it
+    /// happens to share with a dozen others.
+    /// </summary>
+    private static string MethodBody(string source, string signature)
+    {
+        var at = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(at >= 0, $"no \"{signature}\" in the file — the assertion below would read nothing");
+
+        var open = source.IndexOf('{', at);
+        Assert.True(open > 0, $"\"{signature}\" has no body");
+
+        var depth = 0;
+        for (var i = open; i < source.Length; i++)
+        {
+            depth += source[i] switch { '{' => 1, '}' => -1, _ => 0 };
+            if (depth == 0)
+            {
+                return source[open..(i + 1)];
+            }
+        }
+
+        Assert.Fail($"\"{signature}\" has no closing brace — the file does not parse");
+        return string.Empty;
     }
 
     private static string ReadHeadFile(string name)

@@ -33,6 +33,17 @@ public class PanelDragTests
 
     private const double PanelHeight = 600;
 
+    /// <summary>
+    /// The same VM on the fourth run: a 1024×768 screen whose work area is 958×736+66+32, which
+    /// is a dock down the left and a top bar. Spelled out separately from
+    /// <see cref="WorkArea"/> because every figure B15 reported is in it, and a drop on it
+    /// settles to a different place from a drop on a work area starting at the left edge.
+    /// </summary>
+    private static readonly DipBox FourthRunWorkArea = new(66, 32, 958, 736);
+
+    /// <summary>The panel as that run had it: capped to the work area's height, so it scrolls.</summary>
+    private const double FourthRunPanelHeight = 712;
+
     // ── a press becomes a move, or stays a click ────────────────────────────────────
 
     /// <summary>
@@ -209,6 +220,126 @@ public class PanelDragTests
         Assert.Equal(WorkArea.Bottom - PanelHeight, settled!.Value.TopDip, precision: 3);
         Assert.True(settled.Value.TopDip >= WorkArea.Y, "the panel starts above the work area");
     }
+
+    // ── and the open panel goes there, not only the file ────────────────────────────
+
+    /// <summary>
+    /// The defect B15 is: the settled place reached the log and the file, and the panel stayed
+    /// where it was dropped until the next open. These are the three drops that run reported,
+    /// against a window manager that does as it is told — the panel ends at the settled place
+    /// with no reopen.
+    /// </summary>
+    [Theory]
+    [InlineData(791, 571, 624, 56)]     // dropped past the bottom-right corner, mostly off-screen
+    [InlineData(76, 56, 66, 56)]        // dropped 10 dip from the dock, inside the snap distance
+    [InlineData(300, 700, 300, 56)]     // dropped below the bottom edge
+    public void ADropEndsAtTheSettledPlaceWhileThePanelIsStillOpen(
+        double droppedX, double droppedY, int endsX, int endsY)
+    {
+        var manager = new StandInWindowManager(new PixelPoint((int)droppedX, (int)droppedY));
+
+        var settled = Drop(manager, droppedX, droppedY);
+
+        Assert.NotNull(settled);
+        Assert.Equal(new PixelPoint(endsX, endsY), manager.Position);
+
+        // And it is told once, which is the answer being read back rather than assumed.
+        Assert.Equal(1, manager.Requests);
+        Assert.Equal(1, manager.LetTheGraceElapse());
+        Assert.Equal(new PixelPoint(endsX, endsY), manager.Position);
+    }
+
+    /// <summary>
+    /// A request made while the window manager still owns the move is discarded in silence — no
+    /// move, and no position change to notice the refusal by. That is why the place is read back:
+    /// a second request a grace later, once the button is up, lands.
+    /// </summary>
+    [Fact]
+    public void ADropTheWindowManagerRefusesIsAskedForOnceMoreAndThenLands()
+    {
+        var manager = new StandInWindowManager(new PixelPoint(791, 571), refusals: 1);
+
+        Drop(manager, 791, 571);
+
+        Assert.Equal(new PixelPoint(791, 571), manager.Position);   // the first request vanished
+        Assert.Equal(2, manager.LetTheGraceElapse());
+
+        Assert.Equal(new PixelPoint(624, 56), manager.Position);
+        Assert.Equal(2, manager.Requests);
+    }
+
+    /// <summary>
+    /// Every request says in the log what became of it, word for word as a keyboard nudge does —
+    /// a reader comparing a drop with a nudge is comparing the same question, and B15 reached a
+    /// VM precisely because a drop said nothing.
+    /// </summary>
+    [Fact]
+    public void EveryRequestSaysWhatTheWindowManagerDidWithIt()
+    {
+        var manager = new StandInWindowManager(new PixelPoint(791, 571), refusals: 1);
+
+        Drop(manager, 791, 571);
+        manager.LetTheGraceElapse();
+
+        Assert.Equal(
+            [
+                "panel position -> 791,571 (requested 624,56; OVERRIDDEN by the window manager)",
+                "panel position -> 624,56 (requested 624,56; honoured)",
+            ],
+            manager.Log);
+    }
+
+    /// <summary>
+    /// A manager that will not be told is asked twice and then left alone, with the outcome named.
+    /// The bound is the point: a panel asking to be moved for as long as it is open would be a
+    /// worse fault than one left where the user dropped it, and the place is still stored, so the
+    /// next open uses it.
+    /// </summary>
+    [Fact]
+    public void AWindowManagerThatWillNotBeToldIsAskedTwiceAndThenSaidSoAbout()
+    {
+        var manager = new StandInWindowManager(new PixelPoint(791, 571), refusals: int.MaxValue);
+
+        Drop(manager, 791, 571);
+        manager.LetTheGraceElapse();
+
+        Assert.Equal(PanelMoveSettling.MostRequests, manager.Requests);
+        Assert.Equal(new PixelPoint(791, 571), manager.Position);
+        Assert.False(manager.Settling.AwaitingAnswer);
+
+        Assert.Equal(
+            "panel left at 791,571 — 624,56 was asked for 2 times and refused; the next open "
+            + "will use it instead",
+            manager.Log[^1]);
+    }
+
+    /// <summary>
+    /// A new move drops a request still waiting on an answer: the panel is being taken somewhere
+    /// else, and asking again for where the last drop belonged would fight the gesture in flight.
+    /// </summary>
+    [Fact]
+    public void ANewMoveDropsAPlaceStillWaitingOnAnAnswer()
+    {
+        var manager = new StandInWindowManager(new PixelPoint(791, 571), refusals: int.MaxValue);
+        Drop(manager, 791, 571);
+
+        manager.Settling.Abandon();
+
+        Assert.False(manager.Settling.AwaitingAnswer);
+        Assert.False(manager.Settling.ReadBack());
+        Assert.Equal(1, manager.Requests);
+        Assert.Empty(manager.Log);
+    }
+
+    /// <summary>
+    /// A release on the fourth run's desktop, asked of <paramref name="manager"/> — the pair of
+    /// calls <c>PanelWindow.FinishMove</c> makes, through the one method it makes them with.
+    /// </summary>
+    private static PanelPlacementMemory.Resolved? Drop(
+        StandInWindowManager manager, double droppedX, double droppedY) =>
+        PanelWindow.Settle(
+            new PanelPlacementMemory(new FakePositions()), DisplayId, FourthRunWorkArea,
+            droppedX, droppedY, PanelWidth, FourthRunPanelHeight, manager.Settling);
 
     // ── and what the next open does with it ─────────────────────────────────────────
 
@@ -423,6 +554,71 @@ public class PanelDragTests
         Assert.True(placement.Allowed);
         Assert.Same(store, PanelWindow.StoreFor(placement, store));
         Assert.StartsWith(named, placement.Reason, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// A window manager holding a window, which may be told where to put it and may refuse — the
+    /// stand-in for the only part of a drop that needs a real one.
+    ///
+    /// <para>Refusing in silence is the behaviour worth standing in for: that is what the VM's
+    /// manager did to a request made inside its own move grab, and it is why the panel has to
+    /// read its position back rather than assume a request took.</para>
+    /// </summary>
+    private sealed class StandInWindowManager
+    {
+        private int _refusals;
+
+        public StandInWindowManager(PixelPoint holding, int refusals = 0)
+        {
+            Position = holding;
+            _refusals = refusals;
+            Settling = new PanelMoveSettling(() => Position, Request, Log.Add);
+        }
+
+        /// <summary>Where the manager is holding the window — what the panel reads back.</summary>
+        public PixelPoint Position { get; private set; }
+
+        /// <summary>How many times it has been told, refusals included.</summary>
+        public int Requests { get; private set; }
+
+        public List<string> Log { get; } = [];
+
+        public PanelMoveSettling Settling { get; }
+
+        /// <summary>
+        /// Ticks the panel's grace until the settling is finished, exactly as
+        /// <c>PanelWindow.GraceElapsed</c> does, and answers how many ticks that took.
+        ///
+        /// <para>Refuses to tick past <see cref="PanelMoveSettling.MostRequests"/>, so a settling
+        /// that had come to loop fails here rather than spinning the test run.</para>
+        /// </summary>
+        public int LetTheGraceElapse()
+        {
+            var ticks = 0;
+            do
+            {
+                ticks++;
+                Assert.True(ticks <= PanelMoveSettling.MostRequests,
+                    $"the settling asked for more than {PanelMoveSettling.MostRequests} "
+                    + $"read-backs, so it loops: {string.Join(" / ", Log)}");
+            }
+            while (Settling.ReadBack());
+
+            return ticks;
+        }
+
+        private void Request(PixelPoint place)
+        {
+            Requests++;
+
+            if (_refusals > 0)
+            {
+                _refusals--;
+                return;
+            }
+
+            Position = place;
+        }
     }
 
     /// <summary>An in-memory store, so the rule's arithmetic is asserted without file I/O.</summary>
