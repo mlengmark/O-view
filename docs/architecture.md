@@ -43,7 +43,7 @@ the same question, rather than each picking its own answer.
   so its frame is already capped by whatever the display granted before `PanelFit` is ever
   asked — reading the frame back would describe the screen, not what the content wants. Each
   face has its own `NaturalHeightDip()` that measures the tree directly instead
-  (`PanelContent.NaturalHeightDip` on Linux, `PopupWindow.NaturalHeightDip` on Windows).
+  (`PanelContent.NaturalHeightDip` on Linux, `PopupFit.NaturalHeightDip` on Windows).
 - **A display too short even for the compact layout (`PanelDensity`) gets a scroll viewport,**
   built only once `PanelFit` says the content overflows — a panel with room keeps exactly the
   tree it always had, so no existing render moves. Windows: `PopupScroll`. Linux:
