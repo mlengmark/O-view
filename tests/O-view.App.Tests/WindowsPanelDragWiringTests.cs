@@ -32,7 +32,7 @@ public class WindowsPanelDragWiringTests
 
     /// <summary>
     /// Below this, something has moved and the scan is reading an almost empty directory —
-    /// which would pass while asserting nothing. The head has forty-nine source files today.
+    /// which would pass while asserting nothing. The head has fifty source files today.
     /// </summary>
     private const int FewestFilesTheHeadCanHave = 20;
 
