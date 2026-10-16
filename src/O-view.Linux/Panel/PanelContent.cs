@@ -34,7 +34,8 @@ namespace OView.Linux.Panel;
 /// <para>The frame can also put those sections in a scrolling viewport, so a panel the window
 /// has had to cap can still be reached to its last section — see <see cref="ScrollContent"/>,
 /// <see cref="Viewport"/> and <see cref="ScrollBar"/>. A panel with room never asks for one
-/// and is laid out exactly as it was before it could scroll at all.</para>
+/// and is laid out exactly as it was before it could scroll at all. The gestures that move it
+/// — the wheel, a thumb drag, a click on the track — are <see cref="PanelScroll"/>.</para>
 /// </summary>
 public sealed class PanelContent : Border
 {
@@ -56,10 +57,6 @@ public sealed class PanelContent : Border
     /// as touching it.</summary>
     private const double ScrollBarGap = 6;
 
-    /// <summary>Shortest the thumb may get. A thumb kept strictly proportional to very tall
-    /// content shrinks to a few pixels, which is neither visible nor grabbable.</summary>
-    private const double MinThumbHeight = 24;
-
     /// <summary>
     /// How tightly to pack, for a display too short for the natural layout
     /// (<see cref="PanelDensity"/>). Set before <see cref="Populate"/>; defaults to the
@@ -73,10 +70,7 @@ public sealed class PanelContent : Border
     private readonly Border _scrollTrack;
     private readonly Border _scrollThumb;
     private readonly Grid _scrollFrame;
-
-    /// <summary>Where a thumb drag began: the pointer's Y on the track, and the offset then.</summary>
-    private double _dragFromY;
-    private double _dragFromOffset;
+    private readonly PanelScroll _scroll;
 
     private readonly PanelStatTiles _tiles;
     private readonly PanelTokenBars _tokenBars;
@@ -134,7 +128,7 @@ public sealed class PanelContent : Border
             Background = theme["ScrollThumb"],
             CornerRadius = new CornerRadius(ScrollBarWidth / 2),
             Width = ScrollBarWidth,
-            Height = MinThumbHeight,
+            Height = PanelScroll.MinThumbHeight,
             VerticalAlignment = VerticalAlignment.Top,
         };
 
@@ -158,17 +152,19 @@ public sealed class PanelContent : Border
             CanHorizontallyScroll = false,
         };
 
+        // Every gesture that moves the content, and the thumb that follows it, live together
+        // in PanelScroll — including the wheel, which this file used to leave to the viewport.
+        _scroll = new PanelScroll(this, _viewport, _scrollTrack, _scrollThumb);
+
         _viewport.PropertyChanged += (_, e) =>
         {
             if (e.Property == ScrollContentPresenter.OffsetProperty
                 || e.Property == ScrollContentPresenter.ExtentProperty
                 || e.Property == ScrollContentPresenter.ViewportProperty)
             {
-                UpdateScrollBar();
+                _scroll.UpdateBar();
             }
         };
-
-        WireScrollBar();
 
         _scrollFrame = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         Grid.SetColumn(_scrollTrack, 1);
@@ -326,88 +322,6 @@ public sealed class PanelContent : Border
         {
             _root.Children.Add(Muted(_theme, (scopeReport ?? TranscriptScopeReport.Inspect()).Explain()));
         }
-    }
-
-    // ── the scroll bar ──────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// The gestures the bar itself answers: dragging the thumb, and clicking the track above
-    /// or below it to page.
-    ///
-    /// <para>The wheel is not here — <see cref="ScrollContentPresenter"/> handles that itself,
-    /// and over the content is where a wheel turn lands. These two are the routes for a user
-    /// whose pointer has no wheel at all.</para>
-    ///
-    /// <para>Hand-drawn rather than Avalonia's <c>ScrollBar</c> because this head registers no
-    /// Avalonia theme: a templated control arrives here with no template, so the toolkit's own
-    /// bar would not draw at all, and every other piece of this panel is built from the same
-    /// borders and text blocks.</para>
-    /// </summary>
-    private void WireScrollBar()
-    {
-        _scrollThumb.PointerPressed += (_, e) =>
-        {
-            _dragFromY = e.GetPosition(_scrollTrack).Y;
-            _dragFromOffset = _viewport.Offset.Y;
-            e.Pointer.Capture(_scrollThumb);
-            e.Handled = true;        // not a page click as well
-        };
-
-        _scrollThumb.PointerMoved += (_, e) =>
-        {
-            if (!ReferenceEquals(e.Pointer.Captured, _scrollThumb))
-            {
-                return;
-            }
-
-            var travel = _scrollTrack.Bounds.Height - _scrollThumb.Bounds.Height;
-            if (travel > 0)
-            {
-                ScrollTo(_dragFromOffset
-                    + ((e.GetPosition(_scrollTrack).Y - _dragFromY) * Hidden() / travel));
-            }
-        };
-
-        _scrollThumb.PointerReleased += (_, e) => e.Pointer.Capture(null);
-
-        _scrollTrack.PointerPressed += (_, e) =>
-        {
-            var above = e.GetPosition(_scrollTrack).Y < _scrollThumb.Bounds.Top;
-            ScrollTo(_viewport.Offset.Y + (above ? -1 : 1) * _viewport.Viewport.Height);
-        };
-    }
-
-    /// <summary>How much of the content is out of sight; zero when everything fits.</summary>
-    private double Hidden() => Math.Max(0, _viewport.Extent.Height - _viewport.Viewport.Height);
-
-    private void ScrollTo(double offsetY) =>
-        _viewport.Offset = _viewport.Offset.WithY(Math.Clamp(offsetY, 0, Hidden()));
-
-    /// <summary>
-    /// Shows or hides the bar and puts the thumb where the offset says, after any change to
-    /// what is on screen.
-    ///
-    /// <para>Making the bar visible narrows the content by its own width, which can reflow a
-    /// wrapped line and make the content taller still — so this can run twice for one scroll.
-    /// It cannot oscillate: a narrower column never shortens the content, so a bar that has
-    /// appeared never has cause to go away again.</para>
-    /// </summary>
-    private void UpdateScrollBar()
-    {
-        var viewport = _viewport.Viewport.Height;
-        var hidden = Hidden();
-
-        _scrollTrack.IsVisible = viewport > 0 && hidden > 0.5;
-        if (!_scrollTrack.IsVisible)
-        {
-            return;
-        }
-
-        var thumb = Math.Min(viewport, Math.Max(MinThumbHeight, viewport * viewport / _viewport.Extent.Height));
-        var travel = Math.Max(0, viewport - thumb);
-
-        _scrollThumb.Height = thumb;
-        _scrollThumb.Margin = new Thickness(0, travel * Math.Clamp(_viewport.Offset.Y / hidden, 0, 1), 0, 0);
     }
 
     // ── sections ────────────────────────────────────────────────────────────────────
