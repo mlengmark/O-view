@@ -99,6 +99,44 @@ internal static class PopupPositioner
     }
 
     /// <summary>
+    /// Moves a surface standing at <paramref name="leftDip"/>, <paramref name="topDip"/> one
+    /// keyboard step and stores where it lands, so the next <see cref="Place"/> puts it there —
+    /// the keyboard's half of <see cref="Remember"/>, and the same shared rule decides the step,
+    /// the snap and the clamp.
+    ///
+    /// <para>A display the monitor query cannot name is not nudged: the step would be stored
+    /// under a made-up key and restored onto whichever display next failed the same way, which
+    /// is the reason <see cref="Remember"/> gives for refusing the same thing.</para>
+    ///
+    /// <para><b>The display comes from <paramref name="window"/>, not from the pointer.</b>
+    /// Everything else here is keyed by the cursor, and rightly: a flyout opens on the display
+    /// whose tray was clicked, and a drag carries the pointer along with the surface, so the two
+    /// never disagree. A keystroke is the first thing that can arrive with the pointer parked on
+    /// another display, and keying a nudge by the cursor would then store the step as an offset
+    /// into that display's work area and throw the panel across to it. The Linux head asks which
+    /// screen its window is on for the same reason.</para>
+    /// </summary>
+    public static void Nudge(
+        PanelPlacementMemory memory,
+        nint window,
+        double leftDip,
+        double topDip,
+        double widthDip,
+        double heightDip,
+        NudgeDirection direction,
+        bool fine)
+    {
+        var (_, work, scale, displayId) = CurrentMonitor(window);
+        if (displayId is null)
+        {
+            return;
+        }
+
+        memory.Nudge(
+            displayId, ToDipBox(work, scale), leftDip, topDip, widthDip, heightDip, direction, fine);
+    }
+
+    /// <summary>
     /// The display the pointer is on, as the remembered place is keyed — or null when the
     /// monitor query fails, which <see cref="Remember"/> treats as "do not remember".
     /// </summary>
@@ -132,10 +170,23 @@ internal static class PopupPositioner
     /// with the resolution, and that is exactly the case a remembered place is supposed to
     /// survive by being re-clamped rather than forgotten.</para>
     /// </summary>
-    private static (RECT Monitor, RECT Work, double Scale, string? DisplayId) CurrentMonitor()
+    /// <param name="window">
+    /// The surface being placed, for the one caller that must not use the cursor — see
+    /// <see cref="Nudge"/>. Null is the cursor, which is every other caller.
+    /// </param>
+    private static (RECT Monitor, RECT Work, double Scale, string? DisplayId) CurrentMonitor(
+        nint? window = null)
     {
-        GetCursorPos(out var anchor);
-        var monitor = MonitorFromPoint(anchor, MONITOR_DEFAULTTONEAREST);
+        nint monitor;
+        if (window is { } hwnd)
+        {
+            monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        }
+        else
+        {
+            GetCursorPos(out var anchor);
+            monitor = MonitorFromPoint(anchor, MONITOR_DEFAULTTONEAREST);
+        }
 
         var info = new MONITORINFOEX { cbSize = Marshal.SizeOf<MONITORINFOEX>() };
         RECT mon, work;
@@ -220,6 +271,9 @@ internal static class PopupPositioner
 
     [DllImport("user32.dll")]
     private static extern nint MonitorFromPoint(POINT pt, int dwFlags);
+
+    [DllImport("user32.dll")]
+    private static extern nint MonitorFromWindow(nint hwnd, int dwFlags);
 
     [DllImport("user32.dll", CharSet = CharSet.Unicode)]
     private static extern bool GetMonitorInfoW(nint hMonitor, ref MONITORINFOEX lpmi);

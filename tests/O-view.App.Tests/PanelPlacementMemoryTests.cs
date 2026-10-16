@@ -179,6 +179,124 @@ public class PanelPlacementMemoryTests
         Assert.Equal(0, resolved!.Value.TopDip);
     }
 
+    // ── moved from the keyboard (Done-when: 10 dip, 1 dip, and the same save) ──────
+
+    /// <summary>
+    /// One press of Alt and an arrow key, in each direction. Ten DIP, decided here so neither
+    /// head works the figure out for itself.
+    /// </summary>
+    [Theory]
+    [InlineData(NudgeDirection.Left, 490, 300)]
+    [InlineData(NudgeDirection.Right, 510, 300)]
+    [InlineData(NudgeDirection.Up, 500, 290)]
+    [InlineData(NudgeDirection.Down, 500, 310)]
+    public void OneStepMovesThePanelTenDip(NudgeDirection direction, double leftDip, double topDip)
+    {
+        var memory = new PanelPlacementMemory(new FakePanelPositionStore());
+
+        var nudged = memory.Nudge(DisplayId, FullHd, 500, 300, 300, 500, direction, fine: false);
+
+        Assert.NotNull(nudged);
+        Assert.Equal(leftDip, nudged!.Value.LeftDip, precision: 3);
+        Assert.Equal(topDip, nudged.Value.TopDip, precision: 3);
+    }
+
+    /// <summary>And with Shift held, one DIP — the step for placing it against something seen.</summary>
+    [Theory]
+    [InlineData(NudgeDirection.Left, 499, 300)]
+    [InlineData(NudgeDirection.Right, 501, 300)]
+    [InlineData(NudgeDirection.Up, 500, 299)]
+    [InlineData(NudgeDirection.Down, 500, 301)]
+    public void OneFineStepMovesThePanelASingleDip(
+        NudgeDirection direction, double leftDip, double topDip)
+    {
+        var memory = new PanelPlacementMemory(new FakePanelPositionStore());
+
+        var nudged = memory.Nudge(DisplayId, FullHd, 500, 300, 300, 500, direction, fine: true);
+
+        Assert.NotNull(nudged);
+        Assert.Equal(leftDip, nudged!.Value.LeftDip, precision: 3);
+        Assert.Equal(topDip, nudged.Value.TopDip, precision: 3);
+    }
+
+    /// <summary>
+    /// Held against an edge, the keyboard cannot push the panel off the work area — the same
+    /// clamp a drag release goes through, reached by the same call. Pressing again from where it
+    /// now stands leaves it exactly there, so holding the key down does not walk the stored
+    /// offset off into the distance.
+    /// </summary>
+    [Theory]
+    [InlineData(0, 300, NudgeDirection.Left)]       // flush against the left edge already
+    [InlineData(500, 0, NudgeDirection.Up)]         // and against the top
+    public void AStepIntoAnEdgeLeavesThePanelFlushAgainstIt(
+        double leftDip, double topDip, NudgeDirection direction)
+    {
+        var memory = new PanelPlacementMemory(new FakePanelPositionStore());
+
+        var first = memory.Nudge(DisplayId, FullHd, leftDip, topDip, 300, 500, direction, fine: false);
+        Assert.NotNull(first);
+        Assert.Equal(leftDip, first!.Value.LeftDip, precision: 3);
+        Assert.Equal(topDip, first.Value.TopDip, precision: 3);
+
+        var again = memory.Nudge(
+            DisplayId, FullHd, first.Value.LeftDip, first.Value.TopDip, 300, 500, direction, fine: false);
+        Assert.Equal(leftDip, again!.Value.LeftDip, precision: 3);
+        Assert.Equal(topDip, again.Value.TopDip, precision: 3);
+    }
+
+    /// <summary>
+    /// The other edge, where the clamp has the panel's own size to subtract: a step down from
+    /// the bottom of the work area keeps the whole panel on screen.
+    /// </summary>
+    [Fact]
+    public void AStepOffTheBottomKeepsTheWholePanelInsideTheWorkArea()
+    {
+        var memory = new PanelPlacementMemory(new FakePanelPositionStore());
+
+        var nudged = memory.Nudge(
+            DisplayId, FullHd, 500, FullHd.Bottom - 500, 300, 500, NudgeDirection.Down, fine: false);
+
+        Assert.NotNull(nudged);
+        Assert.Equal(FullHd.Bottom - 500, nudged!.Value.TopDip, precision: 3);
+    }
+
+    /// <summary>
+    /// The Done-when in one assertion: what a nudge stores is what a release at the same place
+    /// stores. Not two rules that agree today — <c>Nudge</c> adds the step and then makes the
+    /// release's own two calls, so a nudge cannot reach a place a drag could not.
+    /// </summary>
+    [Theory]
+    [InlineData(500, 300)]       // open space
+    [InlineData(500, 8)]         // inside the snap distance of the top edge
+    [InlineData(4, 300)]         // and of the left edge
+    public void ANudgeSavesTheSameShapeAReleaseSaves(double leftDip, double topDip)
+    {
+        var byKeyboard = new FakePanelPositionStore();
+        var byPointer = new FakePanelPositionStore();
+
+        var nudged = new PanelPlacementMemory(byKeyboard)
+            .Nudge(DisplayId, FullHd, leftDip, topDip, 300, 500, NudgeDirection.Right, fine: false);
+
+        var released = new PanelPlacementMemory(byPointer);
+        released.Remember(
+            DisplayId, leftDip + PanelPlacementMemory.NudgeStepDip, topDip, 300, 500, FullHd);
+
+        Assert.Equal(byPointer.Read(DisplayId), byKeyboard.Read(DisplayId));
+        Assert.Equal(released.Resolve(DisplayId, FullHd, 300, 500), nudged);
+    }
+
+    /// <summary>
+    /// A panel that no longer fits resolves to nothing, exactly as a remembered place does —
+    /// the caller leaves it where it is rather than being handed a position off the screen.
+    /// </summary>
+    [Fact]
+    public void AStepOnAPanelThatNoLongerFits_AnswersNothing()
+    {
+        var memory = new PanelPlacementMemory(new FakePanelPositionStore());
+
+        Assert.Null(memory.Nudge(DisplayId, FullHd, 0, 0, 300, 1200, NudgeDirection.Down, fine: false));
+    }
+
     /// <summary>A stand-in whose read always throws, so a test can assert <see cref="PanelPlacementMemory"/> does not swallow a failure it has not been told to.</summary>
     private sealed class ThrowingReadStore : IPanelPositionStore
     {

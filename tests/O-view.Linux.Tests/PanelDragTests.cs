@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Input;
 using OView.App.Platform;
 using OView.App.Rendering;
 using OView.Core.Storage;
@@ -246,6 +247,101 @@ public class PanelDragTests
 
         Assert.Null(memory.Resolve("a-display-that-left", WorkArea, PanelWidth, PanelHeight));
         Assert.Null(memory.Resolve(DisplayId, WorkArea, PanelWidth, heightDip: 2000));
+    }
+
+    // ── moving it from the keyboard ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// Which keys move the panel: Alt and an arrow key, and Alt with Shift for the fine step.
+    /// Nothing else is this panel's to take — a bare arrow key belongs to whatever is scrolling,
+    /// and a press this does not claim is left unhandled for the content.
+    /// </summary>
+    [Theory]
+    [InlineData(Key.Left, KeyModifiers.Alt, NudgeDirection.Left, false)]
+    [InlineData(Key.Right, KeyModifiers.Alt, NudgeDirection.Right, false)]
+    [InlineData(Key.Up, KeyModifiers.Alt, NudgeDirection.Up, false)]
+    [InlineData(Key.Down, KeyModifiers.Alt, NudgeDirection.Down, false)]
+    [InlineData(Key.Left, KeyModifiers.Alt | KeyModifiers.Shift, NudgeDirection.Left, true)]
+    [InlineData(Key.Down, KeyModifiers.Alt | KeyModifiers.Shift, NudgeDirection.Down, true)]
+    public void AltAndAnArrowKeyAsksForAStepAndShiftMakesItFine(
+        Key key, KeyModifiers modifiers, NudgeDirection direction, bool fine)
+    {
+        var nudge = PanelWindow.NudgeOf(key, modifiers);
+
+        Assert.NotNull(nudge);
+        Assert.Equal(direction, nudge!.Value.Direction);
+        Assert.Equal(fine, nudge.Value.Fine);
+    }
+
+    [Theory]
+    [InlineData(Key.Left, KeyModifiers.None)]
+    [InlineData(Key.Left, KeyModifiers.Shift)]
+    [InlineData(Key.Left, KeyModifiers.Control)]
+    [InlineData(Key.Escape, KeyModifiers.Alt)]
+    [InlineData(Key.Tab, KeyModifiers.Alt)]
+    public void EveryOtherPressIsNotAStep(Key key, KeyModifiers modifiers) =>
+        Assert.Null(PanelWindow.NudgeOf(key, modifiers));
+
+    /// <summary>
+    /// A step on this head's own desktop: ten DIP, through the shared rule, saved. The figures
+    /// are <c>PanelPlacementMemory</c>'s for both heads — what is asserted here is that this
+    /// head asks it rather than working out dips of its own.
+    /// </summary>
+    [Theory]
+    [InlineData(NudgeDirection.Left, false, 290, 120)]
+    [InlineData(NudgeDirection.Right, false, 310, 120)]
+    [InlineData(NudgeDirection.Up, false, 300, 110)]
+    [InlineData(NudgeDirection.Down, false, 300, 130)]
+    [InlineData(NudgeDirection.Up, true, 300, 119)]
+    [InlineData(NudgeDirection.Down, true, 300, 121)]
+    public void AStepGoesThroughTheSharedRuleAndIsSaved(
+        NudgeDirection direction, bool fine, double leftDip, double topDip)
+    {
+        var store = new FakePositions();
+        var memory = new PanelPlacementMemory(store);
+
+        // 120 dip down, which is where a 600 dip panel still fits inside a 712 dip work area.
+        var nudged = memory.Nudge(
+            DisplayId, WorkArea, 300, 120, PanelWidth, PanelHeight, direction, fine);
+
+        Assert.NotNull(nudged);
+        Assert.Equal(leftDip, nudged!.Value.LeftDip, precision: 3);
+        Assert.Equal(topDip, nudged.Value.TopDip, precision: 3);
+        Assert.NotNull(store.Read(DisplayId));
+    }
+
+    /// <summary>
+    /// The top bar is the edge that matters on this desktop: stepping up into it leaves the
+    /// panel flush under the bar rather than behind it, because the step goes through the same
+    /// clamp a release does.
+    /// </summary>
+    [Fact]
+    public void AStepUpIntoTheTopBarStopsBeneathIt()
+    {
+        var memory = new PanelPlacementMemory(new FakePositions());
+
+        var nudged = memory.Nudge(
+            DisplayId, WorkArea, 300, WorkArea.Y, PanelWidth, PanelHeight, NudgeDirection.Up,
+            fine: false);
+
+        Assert.NotNull(nudged);
+        Assert.Equal(WorkArea.Y, nudged!.Value.TopDip, precision: 3);
+    }
+
+    /// <summary>
+    /// Native Wayland takes the keyboard move away with the drag, and by the same gate: no
+    /// store means no <c>PanelPlacementMemory</c>, which is what both the header handle and the
+    /// arrow keys are hung on — see <see cref="NativeWaylandRemembersNothing"/> for the store
+    /// itself. <see cref="PanelWindow.NudgeOf"/> still names the key, since what a press means
+    /// does not depend on the session; what the panel does with it does.
+    /// </summary>
+    [Fact]
+    public void NativeWaylandHasNoKeyboardMoveEither()
+    {
+        var placement = ClientPlacement.From("wayland", "wayland-0", x11Display: null);
+
+        Assert.Null(PanelWindow.StoreFor(placement, new LinuxPanelPositionStore()));
+        Assert.NotNull(PanelWindow.NudgeOf(Key.Left, KeyModifiers.Alt));
     }
 
     // ── the store this head keeps it in ─────────────────────────────────────────────

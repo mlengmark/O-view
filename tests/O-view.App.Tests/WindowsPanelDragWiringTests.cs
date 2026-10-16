@@ -66,6 +66,8 @@ public class WindowsPanelDragWiringTests
     [InlineData(".Resolve(", "nothing re-clamps a remembered place into today's work area")]
     [InlineData(".Remember(", "nothing snaps and stores a released place")]
     [InlineData("WorkAreaPlacement.Place(", "the tray-corner placement is gone")]
+    [InlineData(".Nudge(", "the keyboard moves the panel without the shared rule, so a step "
+        + "skips the clamp, the snap and the save a release goes through")]
     public void ThePlacementFunnelAsksBothSharedRules(string required, string whatIsLost)
     {
         var source = ReadHeadFile(Positioner);
@@ -114,6 +116,39 @@ public class WindowsPanelDragWiringTests
             $"{files[0].Name} drags the window but never calls PopupPositioner.Remember — a "
             + "released position that is not handed to the shared rule is never snapped, never "
             + "stored, and gone at the next open");
+    }
+
+    /// <summary>
+    /// The keyboard reaches the same funnel. Which arrow key means which direction is read in
+    /// exactly one file, and that file is one of the pair — anywhere else it would be a second
+    /// way to move the panel, with its own arithmetic and no obligation to save what it did.
+    ///
+    /// <para>Pinned by the count for the reason <see cref="EveryDragReleaseSavesThroughTheSharedRule"/>
+    /// gives, and because the mapping has nowhere else it could sensibly go: the host window
+    /// forwards the press and reads no key of its own.</para>
+    ///
+    /// <para>The horizontal key is the sentinel because the tray menu reads Up and Down for its
+    /// own row navigation, which moves a highlight rather than a window and has nothing to do
+    /// with placement.</para>
+    /// </summary>
+    [Fact]
+    public void TheKeyboardStepIsMappedOnlyInThePlacementPair()
+    {
+        var files = HeadFiles()
+            .Where(file => File.ReadAllText(file.Path).Contains("Key.Right", StringComparison.Ordinal))
+            .ToArray();
+
+        Assert.True(files.Length == 1,
+            $"expected exactly one file in {Head} to read the arrow keys, found {files.Length}: "
+            + string.Join(", ", files.Select(f => f.Name)));
+
+        Assert.Equal(Flyout, files[0].Name);
+
+        Assert.True(
+            File.ReadAllText(files[0].Path).Contains("PopupPositioner.Nudge(", StringComparison.Ordinal),
+            $"{files[0].Name} reads the arrow keys but never calls PopupPositioner.Nudge — a "
+            + "step that is not handed to the shared rule is never snapped, never clamped and "
+            + "never stored, so the panel is back at its old place at the next open");
     }
 
     /// <summary>

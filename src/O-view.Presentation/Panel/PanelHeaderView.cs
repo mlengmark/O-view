@@ -26,4 +26,16 @@ public sealed record PanelHeaderView(
     /// something to bind to when a slice next opens that file.</para>
     /// </summary>
     public const string AppName = "O-view";
+
+    /// <summary>
+    /// What the header is, said out loud: a screen reader reaching it announces "Move panel"
+    /// rather than reading the app name and the account block and leaving the one thing the band
+    /// does unsaid.
+    ///
+    /// <para>Here rather than in either head for the plain reason all the panel's wording is:
+    /// two heads authoring it separately is two spoken names for one band, and the drag and the
+    /// keyboard nudge are the same affordance on both. It is a name, not a sentence — the words
+    /// a reader puts in front of its own "grouping"/"pane" role noun.</para>
+    /// </summary>
+    public const string MoveName = "Move panel";
 }

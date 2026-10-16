@@ -43,8 +43,9 @@ namespace OView.Linux.Panel;
 /// <see cref="PanelPlacementMemory"/> decides both the snap on release and the re-clamp on
 /// open, shared with the Windows head so dragging cannot come to mean two different things.
 /// Given nowhere, which is a native Wayland session (<see cref="ClientPlacement"/>), nothing
-/// about this file changes: no handle, no cursor, no stored place, the same corner as before.
-/// The gesture itself is <see cref="PanelDrag"/>.</para>
+/// about this file changes: no handle, no cursor, no stored place, no keyboard move, the same
+/// corner as before. The gesture itself is <see cref="PanelDrag"/>, and Alt with an arrow key is
+/// <see cref="NudgeOf"/> — the same save through the same rule, without the pointer.</para>
 ///
 /// <para>Deactivation only dismisses once the panel has actually been focused — see
 /// <see cref="PanelDismissal"/> for why an unguarded handler makes a refused activation look
@@ -130,12 +131,22 @@ public sealed class PanelWindow : Window
                 + $"{(honoured ? "honoured" : "OVERRIDDEN by the window manager")})");
         };
 
-        // Dismissal mirrors the Windows panel: Esc, or clicking away.
+        // Dismissal mirrors the Windows panel: Esc, or clicking away. So does moving it from
+        // the keyboard, which is the same gesture as the header drag by another route.
         KeyDown += (_, e) =>
         {
             if (e.Key == Key.Escape)
             {
                 Dismiss("escape");
+                return;
+            }
+
+            // Marked handled only when the panel actually moved, so every other press — and the
+            // same press in a session that can keep no place — reaches the content exactly as it
+            // did before.
+            if (NudgeOf(e.Key, e.KeyModifiers) is { } nudge && NudgeTo(nudge.Direction, nudge.Fine))
+            {
+                e.Handled = true;
             }
         };
         Activated += (_, _) => _dismissal.Activated();
@@ -574,6 +585,77 @@ public sealed class PanelWindow : Window
     {
         memory.Remember(displayId, leftDip, topDip, widthDip, heightDip, workArea);
         return memory.Resolve(displayId, workArea, widthDip, heightDip);
+    }
+
+    // ── moving it from the keyboard ─────────────────────────────────────────────────
+
+    /// <summary>
+    /// The move a key press asks for, or null when it is not one: Alt and an arrow key for a
+    /// step, Alt and Shift and an arrow key for a fine one.
+    ///
+    /// <para>Static and pure, because this is the half of a keyboard move a test can reach —
+    /// Avalonia raises no key events without a windowing subsystem either, the same gap
+    /// <see cref="PanelDrag"/> names for the pointer.</para>
+    ///
+    /// <para>Alt is the modifier because a bare arrow key belongs to whatever the panel is
+    /// scrolling, and because no desktop this head runs on claims Alt with an arrow key — the
+    /// window-moving shortcuts are Alt+F7 and Super with an arrow key. How far each step goes is
+    /// not decided here: <see cref="PanelPlacementMemory"/> owns both figures, for both
+    /// heads.</para>
+    /// </summary>
+    public static (NudgeDirection Direction, bool Fine)? NudgeOf(Key key, KeyModifiers modifiers)
+    {
+        if (!modifiers.HasFlag(KeyModifiers.Alt))
+        {
+            return null;
+        }
+
+        var direction = key switch
+        {
+            Key.Left => NudgeDirection.Left,
+            Key.Right => NudgeDirection.Right,
+            Key.Up => NudgeDirection.Up,
+            Key.Down => NudgeDirection.Down,
+            _ => (NudgeDirection?)null,
+        };
+
+        return direction is { } step ? (step, modifiers.HasFlag(KeyModifiers.Shift)) : null;
+    }
+
+    /// <summary>
+    /// Moves the panel one step and puts it where the shared rule says that place is, answering
+    /// whether the key was this panel's to use at all.
+    ///
+    /// <para>False is every case a drag also refuses: no store, which is a native Wayland
+    /// session, a display the toolkit cannot name, a move the window manager is still running,
+    /// and a panel that has not been placed yet and so has no position to step from. In each the
+    /// press is left for whatever else wants it rather than silently swallowed.</para>
+    ///
+    /// <para>The step itself goes through <see cref="PanelPlacementMemory.Nudge"/>, which is
+    /// <see cref="Settle"/>'s own pair of calls with the step added first — so the keyboard
+    /// snaps, clamps and saves exactly as letting go of the header does.</para>
+    /// </summary>
+    private bool NudgeTo(NudgeDirection direction, bool fine)
+    {
+        if (_memory is null || _drag.InFlight || _placedHeightDip <= 0
+            || TargetScreen() is not { } screen || DisplayId(screen) is not { } displayId)
+        {
+            return false;
+        }
+
+        var scaling = Scaling(screen);
+
+        var place = _memory.Nudge(
+            displayId, ToDipBox(screen.WorkingArea, scaling),
+            Position.X / scaling, Position.Y / scaling,
+            (FrameSize ?? ClientSize).Width, _placedHeightDip, direction, fine);
+
+        if (place is { } nudged)
+        {
+            RequestPosition(nudged, scaling);
+        }
+
+        return true;
     }
 
     /// <summary>

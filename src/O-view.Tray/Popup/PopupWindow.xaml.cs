@@ -90,7 +90,22 @@ public partial class PopupWindow : Window, IFlyout
         InitializeComponent();
         _flyout = new DockedFlyout(this);
         Deactivated += (_, _) => _flyout.OnDeactivated();
-        PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) _flyout.BeginClose(); };
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape)
+            {
+                _flyout.BeginClose();
+                return;
+            }
+
+            // Alt and an arrow key moves the panel. Marked handled only when it actually moved,
+            // so every other key — and the same press on a panel with nowhere to save a place
+            // to — reaches the content exactly as it did before.
+            if (_flyout.Nudge(e))
+            {
+                e.Handled = true;
+            }
+        };
 
         // The header is the handle. Hooked here rather than in the markup because the
         // threshold, the move loop and the save-on-release are one state machine, and it is the
