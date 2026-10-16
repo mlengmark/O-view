@@ -45,7 +45,9 @@ namespace OView.Linux.Panel;
 /// Given nowhere, which is a native Wayland session (<see cref="ClientPlacement"/>), nothing
 /// about this file changes: no handle, no cursor, no stored place, no keyboard move, the same
 /// corner as before. The gesture itself is <see cref="PanelDrag"/>, and Alt with an arrow key is
-/// <see cref="NudgeOf"/> — the same save through the same rule, without the pointer.</para>
+/// <see cref="NudgeOf"/> — the same save through the same rule, without the pointer. What makes
+/// the settled place stick once the manager lets go is <see cref="PanelMoveSettling"/>, which has
+/// to ask twice.</para>
 ///
 /// <para>Deactivation only dismisses once the panel has actually been focused — see
 /// <see cref="PanelDismissal"/> for why an unguarded handler makes a refused activation look
@@ -67,9 +69,17 @@ public sealed class PanelWindow : Window
 
     /// <summary>
     /// Waits for the window manager to stop moving the panel, which is the only way the end of
-    /// a move is observable — see <see cref="PanelDrag"/>.
+    /// a move is observable — see <see cref="PanelDrag"/>. The same wait then carries the
+    /// settling's read-backs, since both are "give the manager a grace and look again".
     /// </summary>
     private readonly DispatcherTimer _settle;
+
+    /// <summary>
+    /// Makes the settled place stick, which asking for it once does not —
+    /// <see cref="PanelMoveSettling"/> says why. Built for every session, since a head with no
+    /// store never reaches a drop to settle.
+    /// </summary>
+    private readonly PanelMoveSettling _settling;
 
     /// <summary>The corner we asked for, until the compositor has answered. Null once logged.</summary>
     private PixelPoint? _requestedPosition;
@@ -91,8 +101,11 @@ public sealed class PanelWindow : Window
         _positions = positions;
         _memory = positions is null ? null : new PanelPlacementMemory(positions);
 
+        _settling = new PanelMoveSettling(
+            () => Position, place => Position = place, line => _log?.Write(line));
+
         _settle = new DispatcherTimer { Interval = PanelDrag.SettleGrace };
-        _settle.Tick += (_, _) => FinishMove();
+        _settle.Tick += (_, _) => GraceElapsed();
 
         Title = "O-view";
         Content = _content;
@@ -521,6 +534,10 @@ public sealed class PanelWindow : Window
     /// </summary>
     private void BeginMove(PointerPressedEventArgs press)
     {
+        // A place still waiting on an answer is about to be the wrong one: the panel is being
+        // taken somewhere else, and the next drop decides where it belongs.
+        _settling.Abandon();
+
         _drag.Began();
         BeginMoveDrag(press);
         RestartSettle();
@@ -528,24 +545,42 @@ public sealed class PanelWindow : Window
     }
 
     /// <summary>
-    /// Saves where the move left the panel and puts it where the shared rule says that place
-    /// is, so a snap to an edge is visible as soon as the manager lets go rather than only at
-    /// the next open.
+    /// The grace has elapsed, which means one of two things in order: the window manager has
+    /// gone quiet, so the move is over and the settled place can be asked for, or the request
+    /// that followed is due to be read back.
+    ///
+    /// <para>The grace is re-stamped at every step, so the dismissal window covers the whole
+    /// settling rather than just its first tick: a panel that closed itself halfway through
+    /// being put where it belongs would be the same defect as one that closed itself when
+    /// dragged.</para>
+    /// </summary>
+    private void GraceElapsed()
+    {
+        _settle.Stop();
+        _drag.Ended(DateTimeOffset.UtcNow);
+
+        if (_settling.AwaitingAnswer ? _settling.ReadBack() : FinishMove())
+        {
+            _settle.Start();
+        }
+    }
+
+    /// <summary>
+    /// Saves where the move left the panel and asks for the place the shared rule says that is,
+    /// so a snap to an edge is visible as soon as the manager lets go rather than only at the
+    /// next open. Answers whether that request is now owed a read-back.
     ///
     /// <para>Nothing is stored for a display the toolkit cannot name: the place would then be
     /// restored onto whichever display next failed the same way. Losing it is the smaller cost,
     /// and the panel opens at the corner as it always did — the Windows head refuses the same
     /// thing for the same reason.</para>
     /// </summary>
-    private void FinishMove()
+    private bool FinishMove()
     {
-        _settle.Stop();
-        _drag.Ended(DateTimeOffset.UtcNow);
-
         if (_memory is null || TargetScreen() is not { } screen || DisplayId(screen) is not { } displayId)
         {
             _log?.Write("panel move finished; no place was saved — the display cannot be named");
-            return;
+            return false;
         }
 
         var scaling = Scaling(screen);
@@ -553,27 +588,36 @@ public sealed class PanelWindow : Window
 
         var place = Settle(
             _memory, displayId, ToDipBox(screen.WorkingArea, scaling),
-            Position.X / scaling, Position.Y / scaling, widthDip, _placedHeightDip);
+            Position.X / scaling, Position.Y / scaling, widthDip, _placedHeightDip,
+            _settling, scaling);
 
         _log?.Write(
             $"panel moved to {Position.X},{Position.Y} on \"{screen.DisplayName}\" — place saved"
             + (place is { } p ? $", settled at {p.LeftDip:0},{p.TopDip:0} dip" : "; nothing to settle at"));
 
-        if (place is { } settled)
-        {
-            RequestPosition(settled, scaling);
-        }
+        return place is not null;
     }
 
     /// <summary>
     /// What letting go of the panel means: the released place goes through the shared rule,
-    /// which snaps it to a nearby edge and stores it, and is read straight back so the window
-    /// and the stored place agree about where the panel now is.
+    /// which snaps it to a nearby edge and stores it, is read straight back so the window and
+    /// the stored place agree about where the panel now is, and is then asked of the window
+    /// manager through <paramref name="settling"/>.
     ///
-    /// <para>Static and arithmetic only, because this is the half of a drag that can be proven
-    /// without a compositor — <c>PanelDragTests</c> drives it directly. Everything around it
-    /// needs a window manager to produce a gesture, and CI has none.</para>
+    /// <para><b>The asking belongs here</b> rather than at the call site, because a settled place
+    /// the window was never actually moved to is the whole of Maximilian's fourth VM run: the log
+    /// had the right answer every time and the panel stayed where it was dropped. One method
+    /// means a release cannot decide a place without also asking for it.</para>
+    ///
+    /// <para>Static, and reaching the window only through <paramref name="settling"/>'s
+    /// callbacks, because this is the half of a drag that can be proven without a compositor —
+    /// <c>PanelDragTests</c> drives it against a stand-in window manager. Everything around it
+    /// needs a real one to produce a gesture, and CI has none.</para>
     /// </summary>
+    /// <param name="settling">
+    /// Where the settled place is asked for, or null to decide it and ask for nothing — which is
+    /// the arithmetic on its own.
+    /// </param>
     public static PanelPlacementMemory.Resolved? Settle(
         PanelPlacementMemory memory,
         string displayId,
@@ -581,10 +625,19 @@ public sealed class PanelWindow : Window
         double leftDip,
         double topDip,
         double widthDip,
-        double heightDip)
+        double heightDip,
+        PanelMoveSettling? settling = null,
+        double scaling = 1.0)
     {
         memory.Remember(displayId, leftDip, topDip, widthDip, heightDip, workArea);
-        return memory.Resolve(displayId, workArea, widthDip, heightDip);
+        var place = memory.Resolve(displayId, workArea, widthDip, heightDip);
+
+        if (place is { } settled)
+        {
+            settling?.Ask(ToPixels(settled, scaling));
+        }
+
+        return place;
     }
 
     // ── moving it from the keyboard ─────────────────────────────────────────────────
@@ -667,14 +720,24 @@ public sealed class PanelWindow : Window
         ClientPlacement placement, LinuxPanelPositionStore store) =>
         placement.Allowed ? store : null;
 
-    /// <summary>Asks for a DIP place in the device pixels <c>Position</c> is given in.</summary>
+    /// <summary>
+    /// Asks for a DIP place in the device pixels <c>Position</c> is given in, and leaves the
+    /// answer to the position handler above.
+    ///
+    /// <para>A drop does not come through here: it goes through <see cref="PanelMoveSettling"/>,
+    /// which reads the answer back itself rather than waiting for a position change that a
+    /// refused request never produces. An open and a nudge both move a panel the window manager
+    /// is not holding, so the change does arrive and the handler is enough.</para>
+    /// </summary>
     private void RequestPosition(PanelPlacementMemory.Resolved place, double scaling)
     {
-        _requestedPosition = new PixelPoint(
-            (int)Math.Round(place.LeftDip * scaling),
-            (int)Math.Round(place.TopDip * scaling));
+        _requestedPosition = ToPixels(place, scaling);
         Position = _requestedPosition.Value;
     }
+
+    private static PixelPoint ToPixels(PanelPlacementMemory.Resolved place, double scaling) => new(
+        (int)Math.Round(place.LeftDip * scaling),
+        (int)Math.Round(place.TopDip * scaling));
 
     private void RestartSettle()
     {
@@ -741,7 +804,9 @@ public sealed class PanelWindow : Window
 /// this window, so there is no release event to read. The end of a move is therefore the moment
 /// the positions stop arriving, and <see cref="SettleGrace"/> is how long that takes to be sure
 /// of. This is the one real difference from the Windows head, whose move loop blocks until the
-/// user lets go and so knows the moment exactly.</para>
+/// user lets go and so knows the moment exactly — and the reason the settled place has to be
+/// asked for more than once (<see cref="PanelMoveSettling"/>): the positions stop when the
+/// pointer stops, which can be well before the button comes up and the grab with it.</para>
 ///
 /// <para>The same figure covers the deactivation a move can take with it, for a plainer
 /// reason: the panel must not dismiss itself for losing focus to the manager's grab, nor to the
