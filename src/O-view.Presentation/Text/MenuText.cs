@@ -74,6 +74,10 @@ public static class MenuText
 
     public const string CopyDiagnosticsRow = "Copy diagnostics";
 
+    /// <summary>Clears a display's remembered panel position, once a head wires dragging up
+    /// to the shared placement rule. Neither head writes these words itself.</summary>
+    public const string ResetPanelPositionRow = "Reset panel position";
+
     /// <summary>Sits directly above exit, as issue #18 asks.</summary>
     public const string CheckForUpdatesRow = "Check for updates…";
 
