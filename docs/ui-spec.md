@@ -390,8 +390,9 @@ The right-click surface. Rebuilt as a **docked flyout window** ([GitHub issue #3
 > autostart file can fail (rule 6). It is re-read from disk whenever the panel opens, since
 > the file is the source of truth and the desktop's own settings may have changed it.
 >
-> A fourth row, **Resume usage refresh**, is built but kept hidden until the refresh has
-> stopped itself; a person sees three rows until there is something to undo.
+> A fifth row, **Resume usage refresh**, is built but kept hidden until the refresh has
+> stopped itself; a person sees four rows until there is something to undo — three on a
+> native Wayland session, where the reset row is absent.
 >
 > The notification, diagnostics and update rows are **not** on the Linux menu. Each has a
 > command-line equivalent instead (`--diagnose`, `--probe`, `--startup-status`), which is
@@ -429,7 +430,7 @@ Rows are `Button`s, so Tab/Space/Enter work; Up/Down is wired explicitly to matc
 
 **Verification hooks.** `--menu-samples <dir>` renders the flyout in both themes for visual review; `--show-menu` (with optional `--menu-pin`, `--menu-theme`) opens the real thing on the real desktop, which is the only way to check the docked placement against a live taskbar. Like `--diagnose`, `--menu-samples` is handled **before** the single-instance mutex, so it runs on a machine already running O-view.
 
-Measured on a 2560×1440 display, taskbar bottom-docked at `y=1392`: the flyout lands at `2276,1159–2548,1380` — 272×221, inside the work area, 12 px clear of the taskbar and 12 px from the screen edge.
+Measured on a 2560×1440 display, taskbar bottom-docked at `y=1392`, **before the Reset panel position row was added**: the flyout landed at `2276,1159–2548,1380` — 272×221, inside the work area, 12 px clear of the taskbar and 12 px from the screen edge. One row taller now; not re-measured.
 
 ---
 
