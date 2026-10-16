@@ -225,7 +225,9 @@ One hardware report exists (see *What this is* above) and it covers the tray ico
 ```
 O-view.slnx
 ├── src/
-│   ├── O-view.Core/          # net10.0        Providers, rollup store, window math — no UI, no Win32
+│   ├── O-view.Core/          # net10.0        Providers, rollup store, window math — no UI, no Win32.
+│   │                         #                PanelPositionFile is where a dragged panel's place is
+│   │                         #                kept on disk, one entry per display.
 │   ├── O-view.Presentation/  # net10.0        Wording, formatting and view models shared by both
 │   │                         #                heads — PanelText, BoostText, TokenText, OffPlanText,
 │   │                         #                a view model per panel section (PanelSections), and
@@ -239,7 +241,9 @@ O-view.slnx
 │   │                         #                shell tells a skin) through IUiDispatcher. PanelFit
 │   │                         #                answers the one question of how tall a panel's
 │   │                         #                window may be and whether its content must scroll,
-│   │                         #                for both heads.
+│   │                         #                for both heads. PanelPlacementMemory answers where a
+│   │                         #                dragged panel goes, over the IPanelPositionStore seam
+│   │                         #                each head's drag and keyboard wiring reads and writes.
 │   ├── O-view.Tray/          # net10.0-windows  WPF + WinForms NotifyIcon, icon rendering, popup —
 │   │                         #                  PopupScroll puts the sections in a scroll viewport
 │   │                         #                  once PanelFit says the panel has been capped.
