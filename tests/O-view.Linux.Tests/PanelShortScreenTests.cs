@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Media;
@@ -218,17 +219,172 @@ public class PanelShortScreenTests
 
         Assert.Equal(0, panel.Viewport.Offset.Y);
 
-        panel.Viewport.RaiseEvent(new PointerWheelEventArgs(
-            panel.Viewport,
+        panel.Viewport.RaiseEvent(Wheel(panel.Viewport, panel, deltaY: -3));
+
+        Assert.True(panel.Viewport.Offset.Y > 0, "a wheel turn away from the user did not scroll down");
+    }
+
+    /// <summary>
+    /// The turn a user actually makes: raised on the panel's own border, which is where a
+    /// pointer over the gap between two tiles, over a row of the Breakdown table or over the
+    /// panel's padding really lands.
+    ///
+    /// <para><b>This is the test the reported defect needed.</b> The wheel was left to the
+    /// viewport, which does answer a turn raised anywhere inside itself — so the test above
+    /// passed and the wheel was believed to work. But Avalonia hit-tests a point against drawn
+    /// content, and nothing between this panel's border and its sections paints any (the test
+    /// below pins that), so a real turn lands on the border instead: the viewport's
+    /// <i>parent</i>. The event bubbles outward from there, never reaching the viewport, and the
+    /// panel read as having no wheel at all (Maximilian's report of 2026-10-16).</para>
+    ///
+    /// <para>Both routes are checked to move the content by the same distance, so a turn over a
+    /// tile's fill and a turn over the gap beside it cannot feel different.</para>
+    /// </summary>
+    [Fact]
+    public void TheMouseWheelScrollsWhenTheTurnLandsOnThePanelsOwnBorder()
+    {
+        var panel = Capped(light: false, breakdown: false);
+
+        panel.RaiseEvent(Wheel(panel, panel, deltaY: -3));
+        var fromTheBorder = panel.Viewport.Offset.Y;
+
+        Assert.True(
+            fromTheBorder > 0,
+            "a wheel turn that landed on the panel's border did not scroll. Only a turn over a "
+            + "tile's fill or a line of glyphs reaches the viewport, and that is most of the "
+            + "panel's area answering nothing.");
+
+        panel.Viewport.Offset = default;
+        panel.Viewport.RaiseEvent(Wheel(panel.Viewport, panel, deltaY: -3));
+
+        Assert.Equal(panel.Viewport.Offset.Y, fromTheBorder, 3);
+    }
+
+    /// <summary>
+    /// Why the turn has to be answered on the border: of everything between it and the
+    /// sections — the frame grid, the viewport, the sections' stack — not one paints anything,
+    /// so not one of them can be hit-tested, and the border is the only thing left under the
+    /// pointer. Pinned because giving any of them a background would silently make the test
+    /// above pass for a different reason, and dropping the border's would silently break it.
+    /// </summary>
+    [Fact]
+    public void NothingBetweenThePanelsBorderAndItsSectionsPaintsAnything()
+    {
+        var panel = Capped(light: false, breakdown: false);
+
+        Assert.NotNull(panel.Background);
+
+        // The sections' stack, the viewport it sits in, and the frame grid that holds both.
+        var sections = panel.Viewport.Child!;
+
+        foreach (var between in sections.GetVisualAncestors()
+            .TakeWhile(a => !ReferenceEquals(a, panel))
+            .Prepend(sections))
+        {
+            var painted = between switch
+            {
+                Border border => border.Background,
+                Avalonia.Controls.Panel stack => stack.Background,
+                ContentPresenter presenter => presenter.Background,
+                _ => null,
+            };
+
+            Assert.True(
+                painted is null,
+                $"a {between.GetType().Name} between the panel's border and its sections paints "
+                + $"{painted}. That is not wrong in itself, but the wheel is answered on the "
+                + "border because nothing here could be hit-tested — so if this is now the "
+                + "thing under the pointer, say so where the wheel is wired.");
+        }
+    }
+
+    /// <summary>
+    /// A turn raised on a leaf deep inside a section — a tile's own text, and a cell of the
+    /// Breakdown table — moves the content both ways. These already worked, because a leaf is
+    /// below the viewport and bubbles up through it; they are here so that stays true now the
+    /// border answers the wheel too, and so neither route can double-scroll.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void AWheelTurnOnALeafInsideASectionScrollsBothWays(bool breakdown)
+    {
+        var panel = Capped(light: false, breakdown);
+        var leaf = breakdown ? BreakdownCell(panel) : TileText(panel);
+
+        leaf.RaiseEvent(Wheel(leaf, panel, deltaY: -3));
+        var down = panel.Viewport.Offset.Y;
+
+        Assert.True(down > 0, $"a turn on [{leaf.Text}] did not move the content down");
+
+        leaf.RaiseEvent(Wheel(leaf, panel, deltaY: 3));
+
+        Assert.True(
+            panel.Viewport.Offset.Y < down,
+            $"a turn on [{leaf.Text}] the other way did not bring the content back up");
+    }
+
+    /// <summary>
+    /// The wheel stops where the thumb stops: at the very top, and with the last section's foot
+    /// at the foot of the viewport. Turning past either end holds there rather than running the
+    /// offset off into content that does not exist.
+    /// </summary>
+    [Fact]
+    public void TheMouseWheelStopsAtTheTopAndAtTheFootAsTheThumbDoes()
+    {
+        var panel = Capped(light: false, breakdown: false);
+        var hidden = panel.Viewport.Extent.Height - panel.Viewport.Viewport.Height;
+
+        // Far more turns than the content has room for, in each direction in turn.
+        for (var turn = 0; turn < 40; turn++)
+        {
+            panel.RaiseEvent(Wheel(panel, panel, deltaY: -3));
+        }
+
+        Assert.Equal(hidden, panel.Viewport.Offset.Y, 3);
+
+        for (var turn = 0; turn < 40; turn++)
+        {
+            panel.RaiseEvent(Wheel(panel, panel, deltaY: 3));
+        }
+
+        Assert.Equal(0, panel.Viewport.Offset.Y, 3);
+    }
+
+    /// <summary>
+    /// One turn of a mouse wheel. A negative <paramref name="deltaY"/> moves the content toward
+    /// its foot, which is Avalonia's convention and the one the existing test above was written
+    /// against.
+    /// </summary>
+    private static PointerWheelEventArgs Wheel(Interactive source, Visual root, double deltaY) =>
+        new(source,
             new Pointer(1, PointerType.Mouse, isPrimary: true),
-            panel,
+            root,
             new Point(10, 10),
             timestamp: 0,
             new PointerPointProperties(RawInputModifiers.None, PointerUpdateKind.Other),
             KeyModifiers.None,
-            new Vector(0, -3)));
+            new Vector(0, deltaY));
 
-        Assert.True(panel.Viewport.Offset.Y > 0, "a wheel turn away from the user did not scroll down");
+    /// <summary>The first line of text inside a stat tile's card.</summary>
+    private static TextBlock TileText(PanelContent panel)
+    {
+        var tile = panel.GetVisualDescendants().OfType<Border>()
+            .First(b => b.Background is ISolidColorBrush fill
+                && fill.Color == Hex("TileBg", light: false)
+                && b.GetVisualDescendants().OfType<TextBlock>().Any());
+
+        return tile.GetVisualDescendants().OfType<TextBlock>().First();
+    }
+
+    /// <summary>A cell of the Breakdown table — its total row's label.</summary>
+    private static TextBlock BreakdownCell(PanelContent panel)
+    {
+        var table = panel.GetVisualDescendants().OfType<Grid>()
+            .First(g => g.ColumnDefinitions.Count == 5);
+
+        return table.GetVisualDescendants().OfType<TextBlock>()
+            .First(t => t.Text == TokenText.TokenBreakdownTotalLabel);
     }
 
     // ── the bar itself ──────────────────────────────────────────────────────────────
