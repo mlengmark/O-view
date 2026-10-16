@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Input;
@@ -150,6 +151,13 @@ public sealed class PanelContent : Border
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
             Background = Brushes.Transparent,
         };
+
+        // What a screen reader says the band is for. Set here, with the rest of what the header
+        // is, rather than in AddHeader: the words never change between opens, and the one thing
+        // the name must survive is the re-populate that refills the children. The move cursor
+        // says the same thing to everyone who can see it, and the wording is Presentation's so
+        // both heads say one name — PanelHeaderView.MoveName.
+        AutomationProperties.SetName(_header, PanelHeaderView.MoveName);
 
         _scrollThumb = new Border
         {

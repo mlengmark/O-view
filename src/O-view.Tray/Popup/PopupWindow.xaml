@@ -3,6 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:OView.Tray.Popup"
         xmlns:text="clr-namespace:OView.Presentation.Text;assembly=O-view.Presentation"
+        xmlns:panel="clr-namespace:OView.Presentation.Panel;assembly=O-view.Presentation"
         Width="400" SizeToContent="Height"
         WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False"
         Topmost="True" AllowsTransparency="True" Background="Transparent"
@@ -201,8 +202,15 @@
                  states: a panel with no background is not hit-testable in the gaps between its
                  children, so the handle would only respond on the words themselves. Cursor says
                  the band is draggable before the user tries it — there is no other affordance,
-                 since a borderless flyout has no title bar to imitate. -->
-            <Grid x:Name="PanelHeader" Background="Transparent" Cursor="SizeAll">
+                 since a borderless flyout has no title bar to imitate.
+
+                 And the name is what a screen reader says in place of that cursor: without it
+                 the band announces the app name, the freshness line and the account block, and
+                 never that it is the thing the panel is moved by. The words come from
+                 Presentation like every other word in the panel, so both heads say the same
+                 one. -->
+            <Grid x:Name="PanelHeader" Background="Transparent" Cursor="SizeAll"
+                  AutomationProperties.Name="{x:Static panel:PanelHeaderView.MoveName}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>

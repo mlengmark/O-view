@@ -31,6 +31,19 @@ public readonly record struct DipBox(double X, double Y, double Width, double He
 }
 
 /// <summary>
+/// Which way a keyboard nudge moves the panel. Four directions and nothing else: this is the
+/// arrow keys, not a vector, and a head that wanted to move the panel diagonally would be
+/// inventing a gesture neither platform offers.
+/// </summary>
+public enum NudgeDirection
+{
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
+/// <summary>
 /// Where a panel the user has dragged is allowed to sit, and the one place both heads ask
 /// that question through — the drag-position counterpart to <see cref="WorkAreaPlacement"/>'s
 /// auto-docked corner, decided for both heads together for the same reason WorkAreaPlacement
@@ -57,6 +70,22 @@ public sealed class PanelPlacementMemory(IPanelPositionStore store)
 {
     /// <summary>How close to an edge or corner, in DIP, a released place snaps flush to it.</summary>
     public const double SnapThresholdDip = 16;
+
+    /// <summary>
+    /// How far one arrow key moves the panel, in DIP — far enough to be worth a keystroke, and
+    /// a figure both heads are given rather than work out, so Alt and an arrow key cannot come
+    /// to mean two different distances.
+    ///
+    /// <para>Under <see cref="SnapThresholdDip"/> on purpose: a nudge that could jump the snap
+    /// distance in one press would step over the flush position rather than landing on it.</para>
+    /// </summary>
+    public const double NudgeStepDip = 10;
+
+    /// <summary>
+    /// The same key with Shift held: one unit, for placing the panel against something the eye
+    /// can see but <see cref="NudgeStepDip"/> steps past.
+    /// </summary>
+    public const double FineNudgeStepDip = 1;
 
     /// <summary>Where the panel's top-left corner goes, once the remembered place has been clamped into today's work area.</summary>
     public readonly record struct Resolved(double LeftDip, double TopDip);
@@ -124,6 +153,47 @@ public sealed class PanelPlacementMemory(IPanelPositionStore store)
         var offsetY = Snap(nearestTop ? distTop : distBottom);
 
         store.Save(displayId, new PanelPlace(corner, offsetX, offsetY));
+    }
+
+    /// <summary>
+    /// Moves a panel standing at <paramref name="leftDip"/>, <paramref name="topDip"/> one step
+    /// <paramref name="direction"/> — <see cref="NudgeStepDip"/>, or
+    /// <see cref="FineNudgeStepDip"/> when <paramref name="fine"/> — and answers where it now
+    /// goes, having stored that place.
+    ///
+    /// <para><b>A nudge is a release at the next place along.</b> The step is added to where the
+    /// panel is standing and the result goes through <see cref="Remember"/> and
+    /// <see cref="Resolve"/>, which is precisely what letting go of a drag does. So the keyboard
+    /// snaps to an edge, clamps into the work area and saves exactly as the pointer does, and
+    /// cannot put the panel anywhere a drag could not — not because the two agree today, but
+    /// because there is one path and this is it.</para>
+    ///
+    /// <para>Null means the same as everywhere else here: nothing to place against, so the
+    /// caller leaves the panel where it is. Only a panel that no longer fits the work area can
+    /// answer that, since the step has just been stored.</para>
+    /// </summary>
+    public Resolved? Nudge(
+        string displayId,
+        DipBox workArea,
+        double leftDip,
+        double topDip,
+        double widthDip,
+        double heightDip,
+        NudgeDirection direction,
+        bool fine)
+    {
+        var step = fine ? FineNudgeStepDip : NudgeStepDip;
+
+        var (dx, dy) = direction switch
+        {
+            NudgeDirection.Left => (-step, 0.0),
+            NudgeDirection.Right => (step, 0.0),
+            NudgeDirection.Up => (0.0, -step),
+            _ => (0.0, step),
+        };
+
+        Remember(displayId, leftDip + dx, topDip + dy, widthDip, heightDip, workArea);
+        return Resolve(displayId, workArea, widthDip, heightDip);
     }
 
     private static double Snap(double distanceDip) =>

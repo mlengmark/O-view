@@ -3,6 +3,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using OView.App.Rendering;
 using OView.Tray.Tray;
+using KeyEventArgs = System.Windows.Input.KeyEventArgs;
 using Point = System.Windows.Point;
 
 namespace OView.Tray.Popup;
@@ -207,6 +208,72 @@ internal sealed class DockedFlyout(Window host)
         PopupPositioner.Remember(
             PlacementMemory!, host.Left, host.Top, host.ActualWidth, host.ActualHeight);
         Redock(host.ActualWidth, host.ActualHeight);
+    }
+
+    /// <summary>
+    /// Moves the surface if <paramref name="e"/> is the keyboard asking it to: Alt and an arrow
+    /// key for a step, Alt and Shift and an arrow key for a fine one. Answers whether it did, so
+    /// the host can mark the press handled and leave every other key alone.
+    ///
+    /// <para><b>Here rather than on the host</b> for the reason <see cref="MakeDragHandle"/>
+    /// gives: moving the surface and saving where it ended up is one state machine, and the
+    /// keyboard is a second way into it rather than a second copy of it. A surface that cannot
+    /// be dragged cannot be nudged either, and the tray menu gets both answers from the one
+    /// <see cref="PlacementMemory"/> check below.</para>
+    ///
+    /// <para>Alt and an arrow key belongs to no Windows shortcut, but a window with no title bar
+    /// still has WPF's window menu bound to Alt, so an unhandled press would flash that instead
+    /// of moving anything.</para>
+    /// </summary>
+    public bool Nudge(KeyEventArgs e)
+    {
+        if ((e.KeyboardDevice.Modifiers & ModifierKeys.Alt) == 0)
+        {
+            return false;
+        }
+
+        // With Alt held, WPF reports every key as Key.System and puts the real one in SystemKey.
+        // Reading e.Key alone is the classic way an Alt shortcut silently never fires.
+        var direction = (e.Key == Key.System ? e.SystemKey : e.Key) switch
+        {
+            Key.Left => NudgeDirection.Left,
+            Key.Right => NudgeDirection.Right,
+            Key.Up => NudgeDirection.Up,
+            Key.Down => NudgeDirection.Down,
+            _ => (NudgeDirection?)null,
+        };
+
+        return direction is { } step
+            && Nudge(step, fine: (e.KeyboardDevice.Modifiers & ModifierKeys.Shift) != 0);
+    }
+
+    /// <summary>
+    /// One step <paramref name="direction"/>, or one fine step when <paramref name="fine"/>.
+    /// False for a surface with nowhere to remember a place to, which is one that cannot be
+    /// moved at all.
+    ///
+    /// <para><b>The same two calls the release of a drag makes</b>, in the same order: the shared
+    /// rule is handed the new place, and <see cref="Redock"/> reads it straight back out. So the
+    /// step, the snap to an edge and the clamp into the work area are decided once, for both the
+    /// pointer and the keyboard, and the surface ends up where the stored place says it is rather
+    /// than where the arithmetic hoped.</para>
+    ///
+    /// <para>Nothing is stepped while a drag is in flight: the system's move loop owns the
+    /// window's position until the user lets go, and a nudge landing inside it would be
+    /// overwritten by the next mouse movement anyway.</para>
+    /// </summary>
+    private bool Nudge(NudgeDirection direction, bool fine)
+    {
+        if (PlacementMemory is null || _dragging)
+        {
+            return false;
+        }
+
+        PopupPositioner.Nudge(
+            PlacementMemory, new WindowInteropHelper(host).Handle,
+            host.Left, host.Top, host.ActualWidth, host.ActualHeight, direction, fine);
+        Redock(host.ActualWidth, host.ActualHeight);
+        return true;
     }
 
     /// <summary>
