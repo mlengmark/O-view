@@ -193,7 +193,16 @@
         <StackPanel x:Name="PanelBody">
 
             <!-- Header: title + freshness left, account right (ui-spec.md) -->
-            <Grid>
+            <!-- Also the drag handle (DockedFlyout.MakeDragHandle). The header is the one band
+                 of the panel with nothing on it to click, so a press here can mean "move me"
+                 without taking a click away from anything.
+
+                 Background="Transparent" is load-bearing, for the reason CreditsSection below
+                 states: a panel with no background is not hit-testable in the gaps between its
+                 children, so the handle would only respond on the words themselves. Cursor says
+                 the band is draggable before the user tries it — there is no other affordance,
+                 since a borderless flyout has no title bar to imitate. -->
+            <Grid x:Name="PanelHeader" Background="Transparent" Cursor="SizeAll">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>

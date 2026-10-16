@@ -6,6 +6,7 @@ using OView.App;
 using OView.App.Diagnostics;
 using OView.App.Platform;
 using OView.App.Pricing;
+using OView.App.Rendering;
 using OView.App.Updates;
 using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
@@ -33,6 +34,14 @@ public partial class App : System.Windows.Application
     private ISingleInstanceGuard? _instance;
     private readonly IStartupRegistration _startup = new RegistryStartupRegistration();
     private readonly IThemeSource _theme = new RegistryThemeSource();
+
+    /// <summary>
+    /// Where the panel's dragged place is kept, and the rule that decides whether it may be
+    /// used. One per app rather than one per panel, because the panel is rebuilt on demand and
+    /// the file it reads is a fact about the machine either way.
+    /// </summary>
+    private readonly FilePanelPositionStore _panelPositions = new();
+
     private ShellHost? _host;
 
     /// <summary>The only thing this skin may ask of the shell; the host owns the rest.</summary>
@@ -221,7 +230,7 @@ public partial class App : System.Windows.Application
         // flow — exists by this point; what stays on this file is showing the flyout.
         _menuBuilder = new TrayMenuBuilder(
             _startup, _shell, _trayHost, _updateFlow,
-            new DiagnosticsClipboard(_trayHost, _shell), Shutdown);
+            new DiagnosticsClipboard(_trayHost, _shell), ResetPanelPosition, Shutdown);
 
         // Ticks arrive on the UI thread; the reading happens off it and comes back through
         // the dispatcher, so a first ingest over a large transcript history cannot hold the
@@ -376,7 +385,30 @@ public partial class App : System.Windows.Application
         return true;
     }
 
-    private PopupWindow EnsurePopup() => _popup ??= new PopupWindow();
+    private PopupWindow EnsurePopup() => _popup ??= new PopupWindow
+    {
+        // Set here and nowhere else: the offscreen sample renderers build their own panels
+        // without one, which is correct — they place no window, so a remembered place would be
+        // read for a position nothing ever applies.
+        PlacementMemory = new PanelPlacementMemory(_panelPositions),
+    };
+
+    /// <summary>
+    /// The menu's "Reset panel position" row: forget this display's saved place, then put an
+    /// open panel back at the tray corner.
+    ///
+    /// <para>Forgetting first, so the re-placement below reads a store with nothing in it and
+    /// reaches the corner rule by the ordinary route rather than being told where to go.</para>
+    /// </summary>
+    private void ResetPanelPosition()
+    {
+        if (PopupPositioner.CurrentDisplayId() is { } displayId)
+        {
+            _panelPositions.Forget(displayId);
+        }
+
+        _popup?.ReturnToCorner();
+    }
 
     /// <summary>
     /// Runs a tray-click action. Anything it throws arrives inside NotifyIcon's window

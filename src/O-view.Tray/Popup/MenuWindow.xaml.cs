@@ -93,6 +93,12 @@ public partial class MenuWindow : Window, IFlyout
     /// <summary>Raised when the user asks to undo a self-imposed usage-refresh block (issue #234).</summary>
     public event EventHandler? ResumeUsageRefreshRequested;
 
+    /// <summary>
+    /// Raised when the user asks for the panel back in the tray corner, forgetting wherever they
+    /// dragged it to.
+    /// </summary>
+    public event EventHandler? ResetPanelPositionRequested;
+
     public event EventHandler? CopyDiagnosticsRequested;
     public event EventHandler? CheckForUpdatesRequested;
     public event EventHandler? ExitRequested;
@@ -152,6 +158,7 @@ public partial class MenuWindow : Window, IFlyout
             };
         }
 
+        ResetPanelRow.Click += (_, _) => Dismiss(ResetPanelPositionRequested);
         WeeklyResetRow.Click += (_, _) => Dismiss(WeeklyResetRequested);
         ResumeRefreshRow.Click += (_, _) => Dismiss(ResumeUsageRefreshRequested);
         DiagnosticsRow.Click += (_, _) => Dismiss(CopyDiagnosticsRequested);
