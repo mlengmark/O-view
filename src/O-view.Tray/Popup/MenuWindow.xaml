@@ -159,6 +159,22 @@
                            VerticalAlignment="Center" Foreground="{DynamicResource TextMuted}"/>
             </Grid>
 
+            <!-- Top of the list: someone opening the menu for this has a panel sitting somewhere
+                 they cannot get it back from, so it must not be something to hunt for. There is
+                 no row above it to follow — the tray icon's own click is what opens the panel on
+                 this head.
+
+                 Always present, unlike the rows below that appear only when they have something
+                 to say: those state a condition ("the refresh has stopped itself") or a
+                 capability ("this build can self-install"), and a row claiming one it does not
+                 have would be a claim about the machine. This one is a command, like "Copy
+                 diagnostics" — it is a no-op with nothing saved, and hiding it until the panel
+                 has already been dragged hides it exactly until it is needed. -->
+            <Button x:Name="ResetPanelRow" Style="{StaticResource MenuRow}">
+                <TextBlock Text="{x:Static text:MenuText.ResetPanelPositionRow}"
+                           Style="{StaticResource RowLabel}" Margin="22,0,0,0"/>
+            </Button>
+
             <Button x:Name="StartupRow" Style="{StaticResource MenuRow}">
                 <Grid>
                     <Grid.ColumnDefinitions>

@@ -7,9 +7,9 @@ using OView.Tray.Tray;
 namespace OView.Tray.Popup;
 
 /// <summary>
-/// Assembles the right-click menu and owns what its rows do: the two settings toggles and
-/// the threshold, the weekly-reset entry, the refresh-resume undo, the support bundle, the
-/// interactive update check and Exit. <see cref="MenuWindow"/> draws the rows and
+/// Assembles the right-click menu and owns what its rows do: the panel-position reset, the two
+/// settings toggles and the threshold, the weekly-reset entry, the refresh-resume undo, the
+/// support bundle, the interactive update check and Exit. <see cref="MenuWindow"/> draws the rows and
 /// <see cref="MenuText"/> owns every word; this class is the wiring between them and the
 /// shell, the startup registration and the update flow.
 ///
@@ -24,14 +24,21 @@ public sealed class TrayMenuBuilder
     private readonly ITrayHost _trayHost;
     private readonly UpdateFlow _updateFlow;
     private readonly DiagnosticsClipboard _diagnostics;
+    private readonly Action _resetPanelPosition;
     private readonly Action _shutdown;
 
+    /// <param name="resetPanelPosition">
+    /// Forgets wherever the panel was dragged to and puts an open one back at the tray corner.
+    /// A callback for the same reason <paramref name="shutdown"/> is one: the panel's own
+    /// lifetime belongs to the app, and this class is the menu's wiring rather than its owner.
+    /// </param>
     public TrayMenuBuilder(
         IStartupRegistration startup,
         ISkinToShell shell,
         ITrayHost trayHost,
         UpdateFlow updateFlow,
         DiagnosticsClipboard diagnostics,
+        Action resetPanelPosition,
         Action shutdown)
     {
         _startup = startup;
@@ -39,6 +46,7 @@ public sealed class TrayMenuBuilder
         _trayHost = trayHost;
         _updateFlow = updateFlow;
         _diagnostics = diagnostics;
+        _resetPanelPosition = resetPanelPosition;
         _shutdown = shutdown;
     }
 
@@ -68,6 +76,8 @@ public sealed class TrayMenuBuilder
                 _shell.RefreshUsageCache(force: true);
             }
         };
+
+        menu.ResetPanelPositionRequested += (_, _) => _resetPanelPosition();
 
         // One-click support bundle: a blank panel is otherwise indistinguishable from
         // "Desktop missing", "unexpected file format", or "file unreadable", and asking

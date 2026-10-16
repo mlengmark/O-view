@@ -73,12 +73,29 @@ public partial class PopupWindow : Window, IFlyout
     /// <inheritdoc cref="DockedFlyout.ClosedByClickAway"/>
     public bool ClosedByClickAway => _flyout.ClosedByClickAway;
 
+    /// <summary>
+    /// Where the user last dragged the panel on each display. Null is the honest default
+    /// for a panel with nowhere to remember to — the offscreen verification renders, which place
+    /// no window at all — and leaves the panel opening at the tray corner exactly as it did
+    /// before dragging existed.
+    /// </summary>
+    public PanelPlacementMemory? PlacementMemory
+    {
+        get => _flyout.PlacementMemory;
+        set => _flyout.PlacementMemory = value;
+    }
+
     public PopupWindow()
     {
         InitializeComponent();
         _flyout = new DockedFlyout(this);
         Deactivated += (_, _) => _flyout.OnDeactivated();
         PreviewKeyDown += (_, e) => { if (e.Key == Key.Escape) _flyout.BeginClose(); };
+
+        // The header is the handle. Hooked here rather than in the markup because the
+        // threshold, the move loop and the save-on-release are one state machine, and it is the
+        // same one that decides the panel does not dismiss itself mid-drag.
+        _flyout.MakeDragHandle(PanelHeader);
 
         _scroll = new PopupScroll(PanelRoot, PanelBody);
 
@@ -164,6 +181,23 @@ public partial class PopupWindow : Window, IFlyout
     /// a click that arrives while the panel is already closing changes nothing.
     /// </summary>
     public void DismissNow() => _flyout.BeginClose();
+
+    /// <summary>
+    /// Puts an open panel back at the tray corner — the second half of the menu's "Reset panel
+    /// position" row, whose first half is forgetting the saved place.
+    ///
+    /// <para>Goes through the same re-placement a growing panel does, so the corner it lands at
+    /// is the shared rule's answer rather than a second one stated here. Does nothing when the
+    /// panel is not open: the next open will place it at the corner anyway, there being nothing
+    /// left to remember.</para>
+    /// </summary>
+    internal void ReturnToCorner()
+    {
+        if (IsVisible)
+        {
+            _flyout.Redock(ActualWidth, DockHeight);
+        }
+    }
 
     /// <summary>
     /// Why plan data is unavailable, surfaced when the figures read "unknown". Null skips

@@ -1,5 +1,7 @@
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Interop;
+using OView.App.Rendering;
 using OView.Tray.Tray;
 using Point = System.Windows.Point;
 
@@ -58,14 +60,49 @@ internal sealed class DockedFlyout(Window host)
     /// </summary>
     public static readonly TimeSpan ClickAwayGrace = TimeSpan.FromMilliseconds(400);
 
+    /// <summary>
+    /// How far the pointer must travel on the drag handle, in DIP, before a press becomes a
+    /// drag — so a click on the handle is still a click and not a one-pixel move.
+    ///
+    /// <para>Deliberately a little under Windows' own <c>SM_CXDRAG</c> of 4 px either side of
+    /// the press (so, 8 px across): the handle here is a panel header with nothing on it to
+    /// click, where the system figure guards against dragging a list item you meant to
+    /// select.</para>
+    /// </summary>
+    public const double DragThresholdDip = 4;
+
+    /// <summary>
+    /// How long after a drag a lost activation is still that drag settling rather than the user
+    /// clicking elsewhere.
+    ///
+    /// <para>Separate from <see cref="ClickAwayGrace"/> on purpose, even at the same length:
+    /// that one is a contract with the tray icon about a toggle, and this one is about the
+    /// release of a move. Tying them together would mean retuning the toggle's feel to fix a
+    /// panel that dismissed itself when let go.</para>
+    /// </summary>
+    public static readonly TimeSpan DragSettleGrace = TimeSpan.FromMilliseconds(400);
+
     private Point _dockOrigin = new(1, 1);
     private bool _closing;
     private DateTimeOffset _closedAt = DateTimeOffset.MinValue;
     private Action? _pendingAction;
     private bool _suppressDeactivate;
+    private bool _dragging;
+    private DateTimeOffset _draggedAt = DateTimeOffset.MinValue;
+    private Point? _pressedAt;
 
     /// <summary>Disables auto-hide for verification screenshots.</summary>
     public bool PinForVerification { get; set; }
+
+    /// <summary>
+    /// Where the user last dragged this surface, or null for one that cannot be dragged — the
+    /// tray menu, which has no handle and docks to the tray corner always.
+    ///
+    /// <para>Handed straight to <see cref="PopupPositioner.Place"/> on every placement, so a
+    /// remembered place is re-read and re-clamped each time rather than cached here: the work
+    /// area it has to fit inside can change between two opens.</para>
+    /// </summary>
+    public PanelPlacementMemory? PlacementMemory { get; set; }
 
     /// <summary>Whether a close transition is in flight — the state that made menu rows dead.</summary>
     public bool IsClosing => _closing;
@@ -79,10 +116,97 @@ internal sealed class DockedFlyout(Window host)
     /// <summary>Forward the host's <c>Deactivated</c> here.</summary>
     public void OnDeactivated()
     {
+        // A move takes the pointer off the surface and, while the system's own move loop is
+        // running, can take the activation with it — so without this the panel would dismiss
+        // itself the instant it was dragged, which is the whole feature failing. The grace
+        // covers the release: the click that ends a drag lands wherever the panel now is, and
+        // arrives after the loop has already given the activation back.
+        if (_dragging || DateTimeOffset.UtcNow - _draggedAt < DragSettleGrace)
+        {
+            return;
+        }
+
         if (!PinForVerification && !_suppressDeactivate)
         {
             BeginClose();
         }
+    }
+
+    /// <summary>
+    /// Makes <paramref name="handle"/> the surface's drag handle: the move cursor over it, and a
+    /// press that becomes a drag once the pointer has travelled <see cref="DragThresholdDip"/>.
+    /// On release the place goes through <see cref="PopupPositioner.Remember"/> and the surface
+    /// is re-placed from it, so a snap to an edge is visible the moment the user lets go.
+    ///
+    /// <para>Nothing is hooked unless <see cref="PlacementMemory"/> is set, so a surface with
+    /// nowhere to remember a place to cannot be dragged into one that is never saved.</para>
+    ///
+    /// <para><b>The threshold is what keeps the handle's own clicks.</b> WPF's
+    /// <c>DragMove</c> hands the press to the system's move loop and never gives it back, so
+    /// calling it on mouse-down would swallow every click on the handle. Waiting for movement
+    /// first means a press that does not move is a press the handle's content sees normally —
+    /// and the handlers are <c>Preview</c> only to see the press before a child does, never
+    /// marking it handled.</para>
+    /// </summary>
+    public void MakeDragHandle(FrameworkElement handle)
+    {
+        handle.PreviewMouseLeftButtonDown += (_, e) => _pressedAt = e.GetPosition(host);
+        handle.PreviewMouseLeftButtonUp += (_, _) => _pressedAt = null;
+        handle.MouseMove += (_, e) =>
+        {
+            if (e.LeftButton != MouseButtonState.Pressed)
+            {
+                _pressedAt = null;       // released outside the handle; the press is spent
+                return;
+            }
+
+            if (_dragging || PlacementMemory is null || _pressedAt is not { } origin)
+            {
+                return;
+            }
+
+            if ((e.GetPosition(host) - origin).Length < DragThresholdDip)
+            {
+                return;
+            }
+
+            _pressedAt = null;
+            Drag();
+        };
+    }
+
+    /// <summary>
+    /// Runs the system's move loop until the user lets go, then saves where the surface ended up
+    /// and re-places it from the saved value.
+    ///
+    /// <para><c>DragMove</c> refuses — <c>InvalidOperationException</c> — unless the left button
+    /// is still down, which it may no longer be by the time a queued move event is handled.
+    /// Nothing moved in that case, so there is nothing to save and the surface is left exactly
+    /// as it was rather than re-placed for no reason.</para>
+    /// </summary>
+    private void Drag()
+    {
+        _dragging = true;
+        try
+        {
+            host.DragMove();
+        }
+        catch (InvalidOperationException)
+        {
+            return;
+        }
+        finally
+        {
+            _dragging = false;
+            _draggedAt = DateTimeOffset.UtcNow;
+        }
+
+        // host.Left/Top are where the move loop left the window. The rule decides the corner
+        // and whether it snaps flush; Redock then reads the saved place straight back, so the
+        // snap is applied to the window rather than only to the file.
+        PopupPositioner.Remember(
+            PlacementMemory!, host.Left, host.Top, host.ActualWidth, host.ActualHeight);
+        Redock(host.ActualWidth, host.ActualHeight);
     }
 
     /// <summary>
@@ -118,7 +242,8 @@ internal sealed class DockedFlyout(Window host)
 
         afterLayout?.Invoke();
 
-        (host.Left, host.Top, _dockOrigin) = PopupPositioner.Place(host.ActualWidth, host.ActualHeight);
+        (host.Left, host.Top, _dockOrigin) =
+            PopupPositioner.Place(PlacementMemory, host.ActualWidth, host.ActualHeight);
         host.Activate();
 
         if (PinForVerification)
@@ -138,7 +263,8 @@ internal sealed class DockedFlyout(Window host)
     }
 
     /// <summary>
-    /// Re-places an already-open surface at the same corner for a new size.
+    /// Re-places an already-open surface for a new size — at the tray corner, or at the place it
+    /// was dragged to, whichever <see cref="PopupPositioner.Place"/> answers with.
     ///
     /// <para>For content that grows or shrinks while the flyout is open — the menu's threshold
     /// list. The card is <c>SizeToContent</c> and docked by its top-left, so growing it without
@@ -162,7 +288,7 @@ internal sealed class DockedFlyout(Window host)
         // event, so they live together rather than in two places one of which gets forgotten.
         FlyoutAnimation.FitClipToContent(host);
 
-        (host.Left, host.Top, _dockOrigin) = PopupPositioner.Place(widthDip, heightDip);
+        (host.Left, host.Top, _dockOrigin) = PopupPositioner.Place(PlacementMemory, widthDip, heightDip);
     }
 
     /// <summary>
