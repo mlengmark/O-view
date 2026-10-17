@@ -179,7 +179,7 @@ public class PanelPlacementMemoryTests
         Assert.Equal(0, resolved!.Value.TopDip);
     }
 
-    // ── moved from the keyboard (Done-when: 10 dip, 1 dip, and the same save) ──────
+    // ── moved from the keyboard (10 dip, 1 dip, stored exactly, clamped not snapped) ──
 
     /// <summary>
     /// One press of Alt and an arrow key, in each direction. Ten DIP, decided here so neither
@@ -220,10 +220,10 @@ public class PanelPlacementMemoryTests
     }
 
     /// <summary>
-    /// Held against an edge, the keyboard cannot push the panel off the work area — the same
-    /// clamp a drag release goes through, reached by the same call. Pressing again from where it
-    /// now stands leaves it exactly there, so holding the key down does not walk the stored
-    /// offset off into the distance.
+    /// Held against an edge, the keyboard cannot push the panel off the work area — the clamp is
+    /// what the step keeps of a release, and it is also how the keys reach flush at all.
+    /// Pressing again from where it now stands leaves it exactly there, so holding the key down
+    /// does not walk the stored offset off into the distance.
     /// </summary>
     [Theory]
     [InlineData(0, 300, NudgeDirection.Left)]       // flush against the left edge already
@@ -231,17 +231,23 @@ public class PanelPlacementMemoryTests
     public void AStepIntoAnEdgeLeavesThePanelFlushAgainstIt(
         double leftDip, double topDip, NudgeDirection direction)
     {
-        var memory = new PanelPlacementMemory(new FakePanelPositionStore());
+        var store = new FakePanelPositionStore();
+        var memory = new PanelPlacementMemory(store);
 
         var first = memory.Nudge(DisplayId, FullHd, leftDip, topDip, 300, 500, direction, fine: false);
         Assert.NotNull(first);
         Assert.Equal(leftDip, first!.Value.LeftDip, precision: 3);
         Assert.Equal(topDip, first.Value.TopDip, precision: 3);
 
+        var held = store.Read(DisplayId);
+
         var again = memory.Nudge(
             DisplayId, FullHd, first.Value.LeftDip, first.Value.TopDip, 300, 500, direction, fine: false);
         Assert.Equal(leftDip, again!.Value.LeftDip, precision: 3);
         Assert.Equal(topDip, again.Value.TopDip, precision: 3);
+
+        // Including what is stored: a held-down key must not walk the offset past the edge.
+        Assert.Equal(held, store.Read(DisplayId));
     }
 
     /// <summary>
@@ -261,28 +267,48 @@ public class PanelPlacementMemoryTests
     }
 
     /// <summary>
-    /// The Done-when in one assertion: what a nudge stores is what a release at the same place
-    /// stores. Not two rules that agree today — <c>Nudge</c> adds the step and then makes the
-    /// release's own two calls, so a nudge cannot reach a place a drag could not.
+    /// Inside the snap distance is where the two paths part: a release there is a near miss and
+    /// goes flush, while a step there is exactly where the key asked for. Both are asserted
+    /// together because the claim is the difference, not either half — a <c>Nudge</c> that went
+    /// back through <c>Remember</c> would make both columns read 0.
     /// </summary>
     [Theory]
-    [InlineData(500, 300)]       // open space
-    [InlineData(500, 8)]         // inside the snap distance of the top edge
-    [InlineData(4, 300)]         // and of the left edge
-    public void ANudgeSavesTheSameShapeAReleaseSaves(double leftDip, double topDip)
+    [InlineData(NudgeDirection.Right, 4, 300, 14, 300)]     // 4 dip off the left edge, stepping away
+    [InlineData(NudgeDirection.Left, 14, 300, 4, 300)]      // and back into it, still not flush
+    [InlineData(NudgeDirection.Down, 500, 2, 500, 12)]      // the top edge, both ways
+    [InlineData(NudgeDirection.Up, 500, 12, 500, 2)]
+    public void AStepInsideTheSnapDistanceLandsExactlyWhileAReleaseThereGoesFlush(
+        NudgeDirection direction, double leftDip, double topDip, double steppedX, double steppedY)
     {
-        var byKeyboard = new FakePanelPositionStore();
-        var byPointer = new FakePanelPositionStore();
+        var nudged = new PanelPlacementMemory(new FakePanelPositionStore())
+            .Nudge(DisplayId, FullHd, leftDip, topDip, 300, 500, direction, fine: false);
 
-        var nudged = new PanelPlacementMemory(byKeyboard)
-            .Nudge(DisplayId, FullHd, leftDip, topDip, 300, 500, NudgeDirection.Right, fine: false);
+        Assert.NotNull(nudged);
+        Assert.Equal(steppedX, nudged!.Value.LeftDip, precision: 3);
+        Assert.Equal(steppedY, nudged.Value.TopDip, precision: 3);
 
-        var released = new PanelPlacementMemory(byPointer);
-        released.Remember(
-            DisplayId, leftDip + PanelPlacementMemory.NudgeStepDip, topDip, 300, 500, FullHd);
+        var released = new PanelPlacementMemory(new FakePanelPositionStore());
+        released.Remember(DisplayId, steppedX, steppedY, 300, 500, FullHd);
+        var restored = released.Resolve(DisplayId, FullHd, 300, 500);
 
-        Assert.Equal(byPointer.Read(DisplayId), byKeyboard.Read(DisplayId));
-        Assert.Equal(released.Resolve(DisplayId, FullHd, 300, 500), nudged);
+        Assert.NotNull(restored);
+        Assert.NotEqual(nudged, restored);
+    }
+
+    /// <summary>
+    /// And the step is stored as it landed, not merely returned that way — the next open has to
+    /// put the panel back where the keys left it, which is the whole point of storing anything.
+    /// </summary>
+    [Fact]
+    public void TheStepThatWasTakenIsTheStepThatIsStored()
+    {
+        var store = new FakePanelPositionStore();
+        var memory = new PanelPlacementMemory(store);
+
+        var nudged = memory.Nudge(DisplayId, FullHd, 500, 2, 300, 500, NudgeDirection.Down, fine: false);
+
+        Assert.Equal(new PanelPlace(WorkAreaCorner.TopLeft, 500, 12), store.Read(DisplayId));
+        Assert.Equal(nudged, memory.Resolve(DisplayId, FullHd, 300, 500));
     }
 
     /// <summary>

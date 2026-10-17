@@ -68,7 +68,7 @@ public class WindowsPanelDragWiringTests
     [InlineData(".Remember(", "nothing snaps and stores a released place")]
     [InlineData("WorkAreaPlacement.Place(", "the tray-corner placement is gone")]
     [InlineData(".Nudge(", "the keyboard moves the panel without the shared rule, so a step "
-        + "skips the clamp, the snap and the save a release goes through")]
+        + "skips the clamp that keeps it on screen and the save that outlives the open")]
     public void ThePlacementFunnelAsksBothSharedRules(string required, string whatIsLost)
     {
         var source = ReadHeadFile(Positioner);
@@ -225,8 +225,8 @@ public class WindowsPanelDragWiringTests
         Assert.True(
             File.ReadAllText(files[0].Path).Contains("PopupPositioner.Nudge(", StringComparison.Ordinal),
             $"{files[0].Name} reads the arrow keys but never calls PopupPositioner.Nudge — a "
-            + "step that is not handed to the shared rule is never snapped, never clamped and "
-            + "never stored, so the panel is back at its old place at the next open");
+            + "step that is not handed to the shared rule is never clamped and never stored, so "
+            + "the panel can be pushed off screen and is back at its old place at the next open");
     }
 
     /// <summary>

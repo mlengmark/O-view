@@ -460,6 +460,45 @@ public class PanelDragTests
     }
 
     /// <summary>
+    /// The fourth run's own geometry, which is where the keys used not to move anything: a 712
+    /// dip panel in a 736 dip work area leaves 24 dip of room, so every 10 dip step lands inside
+    /// the 16 px snap distance of one edge or the other. Sending those steps through the
+    /// release's snap pulled the panel straight back to the edge it started against, and the
+    /// first assertion below is the press that did nothing.
+    ///
+    /// <para>Each press is exactly one step, so it takes as many presses back to return — which
+    /// is what the last two assertions walk, ending flush under the top bar.</para>
+    /// </summary>
+    [Fact]
+    public void OnAScreenThePanelFillsEachPressMovesItAStepAndBack()
+    {
+        var memory = new PanelPlacementMemory(new FakePositions());
+        var top = FourthRunWorkArea.Y;
+
+        double Press(NudgeDirection direction)
+        {
+            var nudged = memory.Nudge(
+                DisplayId, FourthRunWorkArea, 300, top, PanelWidth, FourthRunPanelHeight,
+                direction, fine: false);
+
+            Assert.NotNull(nudged);
+            return nudged!.Value.TopDip;
+        }
+
+        top = Press(NudgeDirection.Down);
+        Assert.Equal(FourthRunWorkArea.Y + 10, top, precision: 3);
+
+        top = Press(NudgeDirection.Down);
+        Assert.Equal(FourthRunWorkArea.Y + 20, top, precision: 3);
+
+        top = Press(NudgeDirection.Up);
+        Assert.Equal(FourthRunWorkArea.Y + 10, top, precision: 3);
+
+        top = Press(NudgeDirection.Up);
+        Assert.Equal(FourthRunWorkArea.Y, top, precision: 3);
+    }
+
+    /// <summary>
     /// Native Wayland takes the keyboard move away with the drag, and by the same gate: no
     /// store means no <c>PanelPlacementMemory</c>, which is what both the header handle and the
     /// arrow keys are hung on — see <see cref="NativeWaylandRemembersNothing"/> for the store

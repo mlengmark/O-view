@@ -59,8 +59,10 @@ App, behind an injected store — never per head:
 - **`PanelPlacementMemory`** (`src/O-view.App/Rendering/PanelPlacementMemory.cs`) owns the
   rule. `Resolve` answers where the panel opens, re-clamping a remembered place into the work
   area as it stands now; `Remember` answers what to store when the user lets go, snapping the
-  offset flush once it is within 16 px of an edge or corner. A keyboard nudge calls both in
-  sequence — it is a release at the next place along, not a second rule.
+  offset flush once it is within 16 px of an edge or corner. `Nudge` answers the same question
+  for a keyboard step: the same clamp and the same store, but the step is kept exactly rather
+  than snapped, since a panel that nearly fills its screen has less room either side of it than
+  the snap distance and every step would be pulled back to the edge it came from.
 - **`IPanelPositionStore`** (`src/O-view.App/Platform/IPanelPositionStore.cs`) is the seam
   between that rule and storage, so `PanelPlacementMemory`'s edge cases can be exercised
   against an in-memory fake instead of real file I/O.
@@ -71,8 +73,8 @@ App, behind an injected store — never per head:
   between the two is the file-backed `IPanelPositionStore` implementation's job.
 
 Each head only wires up the gesture that reaches these: a drag handle on the header and the
-Alt-arrow-key shortcuts, both of which end at the same `Remember`/`Resolve` pair a release
-goes through. Neither head clamps, snaps or reads the file itself ([ADR-0017](adr/0017-remembered-panel-position.md)).
+Alt-arrow-key shortcuts, ending at `Remember`/`Resolve` and at `Nudge` respectively. Neither
+head clamps, snaps, steps or reads the file itself ([ADR-0017](adr/0017-remembered-panel-position.md)).
 
 ## How data flows
 
