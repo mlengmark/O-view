@@ -59,6 +59,11 @@ public enum NudgeDirection
 /// snapping only ever touches a value about to be saved, a saved place and the current work
 /// area cannot actually disagree about which rule applies — there is nothing to order.</para>
 ///
+/// <para><b>Snapping is the pointer's, not the keyboard's.</b> <see cref="Nudge"/> stores the
+/// step exactly, clamped into the work area but never snapped — see its own remarks for why a
+/// keyboard move that went through <see cref="Remember"/> cannot work on a screen the panel
+/// nearly fills.</para>
+///
 /// <para><b>Falls back to null, not to a guess.</b> Nothing remembered, a display
 /// <paramref name="displayId"/> was never saved for, or a panel that no longer fits the work
 /// area at all — <see cref="Resolve"/> returns null in each case, and the caller uses
@@ -75,9 +80,6 @@ public sealed class PanelPlacementMemory(IPanelPositionStore store)
     /// How far one arrow key moves the panel, in DIP — far enough to be worth a keystroke, and
     /// a figure both heads are given rather than work out, so Alt and an arrow key cannot come
     /// to mean two different distances.
-    ///
-    /// <para>Under <see cref="SnapThresholdDip"/> on purpose: a nudge that could jump the snap
-    /// distance in one press would step over the flush position rather than landing on it.</para>
     /// </summary>
     public const double NudgeStepDip = 10;
 
@@ -133,26 +135,10 @@ public sealed class PanelPlacementMemory(IPanelPositionStore store)
     public void Remember(
         string displayId, double leftDip, double topDip, double widthDip, double heightDip, DipBox workArea)
     {
-        var distLeft = leftDip - workArea.X;
-        var distRight = workArea.Right - (leftDip + widthDip);
-        var distTop = topDip - workArea.Y;
-        var distBottom = workArea.Bottom - (topDip + heightDip);
+        var (corner, offsetX, offsetY) =
+            NearestCorner(leftDip, topDip, widthDip, heightDip, workArea);
 
-        var nearestLeft = distLeft <= distRight;
-        var nearestTop = distTop <= distBottom;
-
-        var corner = (nearestLeft, nearestTop) switch
-        {
-            (true, true) => WorkAreaCorner.TopLeft,
-            (false, true) => WorkAreaCorner.TopRight,
-            (true, false) => WorkAreaCorner.BottomLeft,
-            (false, false) => WorkAreaCorner.BottomRight,
-        };
-
-        var offsetX = Snap(nearestLeft ? distLeft : distRight);
-        var offsetY = Snap(nearestTop ? distTop : distBottom);
-
-        store.Save(displayId, new PanelPlace(corner, offsetX, offsetY));
+        store.Save(displayId, new PanelPlace(corner, Snap(offsetX), Snap(offsetY)));
     }
 
     /// <summary>
@@ -161,12 +147,19 @@ public sealed class PanelPlacementMemory(IPanelPositionStore store)
     /// <see cref="FineNudgeStepDip"/> when <paramref name="fine"/> — and answers where it now
     /// goes, having stored that place.
     ///
-    /// <para><b>A nudge is a release at the next place along.</b> The step is added to where the
-    /// panel is standing and the result goes through <see cref="Remember"/> and
-    /// <see cref="Resolve"/>, which is precisely what letting go of a drag does. So the keyboard
-    /// snaps to an edge, clamps into the work area and saves exactly as the pointer does, and
-    /// cannot put the panel anywhere a drag could not — not because the two agree today, but
-    /// because there is one path and this is it.</para>
+    /// <para><b>One press is exactly one step, and the step is clamped, never snapped.</b> The
+    /// panel moves by the step and that place is what gets stored, however close to an edge it
+    /// lands. It has to be: on a screen the panel all but fills there is less room above and
+    /// below it than <see cref="SnapThresholdDip"/>, so a step put through
+    /// <see cref="Remember"/> would be pulled straight back to the edge it started against and
+    /// the keys would move nothing at all. Snapping is for the pointer, where the user aimed by
+    /// hand and landing just shy of an edge is a near miss; a keystroke has no aim to miss
+    /// by.</para>
+    ///
+    /// <para>Clamping stays, and is how the keyboard still reaches flush: a press that would
+    /// cross an edge leaves the panel against it, and because the clamped place is what is
+    /// stored, pressing again from there changes neither the panel nor the store. Holding the
+    /// key down therefore cannot walk the stored offset outside the work area.</para>
     ///
     /// <para>Null means the same as everywhere else here: nothing to place against, so the
     /// caller leaves the panel where it is. Only a panel that no longer fits the work area can
@@ -192,8 +185,45 @@ public sealed class PanelPlacementMemory(IPanelPositionStore store)
             _ => (0.0, step),
         };
 
-        Remember(displayId, leftDip + dx, topDip + dy, widthDip, heightDip, workArea);
+        var left = Clamp(leftDip + dx, workArea.X, workArea.Right - widthDip);
+        var top = Clamp(topDip + dy, workArea.Y, workArea.Bottom - heightDip);
+
+        var (corner, offsetX, offsetY) = NearestCorner(left, top, widthDip, heightDip, workArea);
+
+        // A clamped panel is inside the work area, so neither distance can be negative unless
+        // the panel is larger than the work area on that axis — and then flush is the only
+        // place in it, which is also what Resolve's own fit check is about to answer null to.
+        store.Save(displayId, new PanelPlace(corner, Math.Max(0, offsetX), Math.Max(0, offsetY)));
+
         return Resolve(displayId, workArea, widthDip, heightDip);
+    }
+
+    /// <summary>
+    /// Which corner of <paramref name="workArea"/> a panel at <paramref name="leftDip"/>,
+    /// <paramref name="topDip"/> sits nearest, and how far its own matching corner is from that
+    /// one on each axis. The anchoring both stores share; what each does with the distance —
+    /// <see cref="Snap"/> it or keep it — is the only thing that differs.
+    /// </summary>
+    private static (WorkAreaCorner Corner, double OffsetXDip, double OffsetYDip) NearestCorner(
+        double leftDip, double topDip, double widthDip, double heightDip, DipBox workArea)
+    {
+        var distLeft = leftDip - workArea.X;
+        var distRight = workArea.Right - (leftDip + widthDip);
+        var distTop = topDip - workArea.Y;
+        var distBottom = workArea.Bottom - (topDip + heightDip);
+
+        var nearestLeft = distLeft <= distRight;
+        var nearestTop = distTop <= distBottom;
+
+        var corner = (nearestLeft, nearestTop) switch
+        {
+            (true, true) => WorkAreaCorner.TopLeft,
+            (false, true) => WorkAreaCorner.TopRight,
+            (true, false) => WorkAreaCorner.BottomLeft,
+            (false, false) => WorkAreaCorner.BottomRight,
+        };
+
+        return (corner, nearestLeft ? distLeft : distRight, nearestTop ? distTop : distBottom);
     }
 
     private static double Snap(double distanceDip) =>

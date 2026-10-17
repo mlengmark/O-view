@@ -112,9 +112,17 @@ opened one does. A display that was never dragged to, or a panel that no longer 
 all, opens at the work-area corner instead, same as it always has.
 
 **Alt and an arrow key moves the panel 10 dip; Alt+Shift and an arrow key moves it 1 dip** —
-through the same clamp, snap and save a drag's release goes through, because a keyboard nudge
-is nothing but a release at the next place along. A screen reader reaching the header
-announces "Move panel", naming what the drag and the nudge both do.
+exactly that, and that place is what is remembered, however close to an edge the panel lands.
+The keyboard is clamped like a release but never snapped like one: on a screen the panel all
+but fills there is less room above and below it than the 16 px snap distance, so a step that
+snapped would be pulled straight back to the edge it started against and the keys would move
+nothing at all. Snapping is for the pointer, which the user aimed by hand and can miss an edge
+narrowly with; a keystroke has no aim to miss by.
+
+The clamp is still how the keyboard reaches flush: a press that would cross an edge leaves the
+panel against it, and pressing again from there changes nothing — not the panel, and not what
+is stored. A screen reader reaching the header announces "Move panel", naming what the drag and
+the nudge both do.
 
 > **Linux: asking to place the window is a request, not a command.** A window manager is free
 > to ignore it, and a native Wayland compositor always will — a Wayland client can neither set
