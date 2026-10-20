@@ -2,7 +2,7 @@
 
 A notification-area (system tray) app that displays your Claude AI token usage and the time remaining until your next usage-limit reset.
 
-> **Status:** **Windows 11 and Linux are both supported as of [v0.6.0](https://github.com/mlengmark/O-view/releases/latest)**, which ships every platform's assets under one tag — Windows installer and portable exe, `.deb` for amd64 and arm64, and portable tarballs.
+> **Status:** **[v1.0.0](https://github.com/mlengmark/O-view/releases/latest)** is the current release, shipping Windows 11 and Linux assets under one tag — Windows installer and portable exe, `.deb` for amd64 and arm64, and portable tarballs. Linux has been a supported target since v0.6.0.
 >
 > Windows has been shipped and in daily use since v0.1.0. **Linux has now been run on a physical desktop twice** — an Arch-based system on KDE Plasma under Wayland, tarball install, reporting against v0.6.1 and again against v0.6.5. Between them those reports confirmed that O-view finds and reads Claude's data correctly and that the tray icon appears, and found three separate faults that made the app unusable past that point: the first left click deadlocked it, then — after that was fixed — crashed it outright. A fourth was found by reading the code. **None of the four has been re-tested on hardware, and nobody has opened the detail panel on a physical Linux desktop.** It has been opened on an Ubuntu 24.04 VM, GNOME on Wayland through XWayland, most recently on 2026-10-19: dragging it by its header, reopening where it was left, resetting its position, moving it with Alt and an arrow key, and a drop that lands off-screen, past an edge, or within 16 px of the dock being pulled back onto the work area or snapped flush while the panel stayed open all worked there. One defect was seen: the first Alt+arrow press right after clicking the header does nothing, and the presses after it work. Xorg has not been re-tested against any of these fixes — it was last run on 2026-10-15, against an earlier build. Everything else in [Platform support](#platform-support) is still marked *never observed* and stays that way until someone reports back. See [`docs/adr/`](docs/adr/) for the decisions behind both.
 
@@ -21,7 +21,7 @@ O-view sits in the notification area and answers three questions at a glance:
 | Tray icon | A **ring gauge** filled in proportion to 5-hour usage, with the brand "eye" pupil at its centre — no digits. Colour-coded green (<50%) → amber (50–69%) → red (≥70%). At a measured 0% the pupil fades out with the ring, so an empty gauge reads as one thing rather than a live dot inside an empty circle. A grey, unfilled ring with a solid pupil is different again: it means no authoritative data, rather than a fabricated 0%. Geometry scales to the icon size, and the palette switches for a light or dark taskbar. |
 | Tooltip | `5h: 47% · resets 16:32 · 7d: 61%` — the exact number lives here, since the icon carries no text. Degrades honestly: `(as of 14:05)` when the data is stale, `local estimate · usage % unknown` on fallback data, `no usage data` when there is none. |
 | Detail panel | Left-click. Account header, session/weekly bars with reset times, four clickable stat tiles, a 31-day usage graph, and an off-plan section. Details below. |
-| Menu | Right-click. Run at startup · Update automatically · notify-at-threshold, selectable between 70/80/90% · Copy diagnostics · Check for updates… · Exit. Rendered as an on-brand flyout docked to the taskbar corner, not a Win32 context menu, so it matches the panel. |
+| Menu | Right-click. Reset panel position · Run at startup · Update automatically · notify-at-threshold, selectable between 70/80/90% · Weekly reset… · Copy diagnostics · Check for updates… · Exit. (Also Resume usage refresh, but only while the background usage check has stopped itself.) Rendered as an on-brand flyout docked to the taskbar corner, not a Win32 context menu, so it matches the panel. |
 
 A balloon notification fires once per session window when usage crosses the threshold — **70% by default**, the point at which the gauge turns red, so out of the box the notification and the colour never disagree. Pick **80%** or **90%** from the menu row if you would rather be told later; the gauge still turns red at 70, because the colour bands and the notification are separate signals.
 
@@ -72,10 +72,10 @@ run Claude Desktop has nothing for O-view to read. **macOS is out of scope.** Se
 | Tray icon | ✅ | ✅ **seen working** on KDE Plasma / Wayland. **Needs a notification-area host** — GNOME ships none by default, see below |
 | Tooltip | ✅ | ⚠️ **not shown on GNOME.** The text reaches the bus, but as the item's `Title`, not as the `ToolTip` a panel draws on hover. **The exact figures are in the detail panel instead** — see below |
 | Detail panel | ✅ docked flyout at the taskbar corner | ⚠️ a **plain window in the work area's corner**, not docked to the icon — see below. *Never observed:* neither report could open it — the left click first deadlocked the app, then crashed it. Three separate causes fixed since, none re-tested, and the corner placement has never been seen on hardware either |
-| Right-click menu | ✅ full: Reset panel position, startup, automatic updates, notification threshold, diagnostics, update check, exit | ⚠️ **Show usage, Reset panel position, Run at startup and Exit.** Notifications, diagnostics and updates are not on the menu — `--diagnose` and `--probe` cover them from a terminal. *Rendering never observed on hardware;* took tens of seconds on the first report (fixed in v0.6.4, not re-tested). CI's `linux-runtime` reads the real four-row layout off the bus |
+| Right-click menu | ✅ full, in order: **Reset panel position, Run at startup, Update automatically** (installed copies only), **Notify at [70/80/90%] usage, Weekly reset…, Resume usage refresh** (only while the background usage check has stopped itself), **Copy diagnostics, Check for updates…, Exit O-view** | ⚠️ **Show usage, Reset panel position** (XWayland/X11 sessions only — absent on native Wayland)**, Run at startup, Resume usage refresh** (only while the background usage check has stopped itself)**, Exit O-view.** Notifications, diagnostics, updates and the weekly-reset entry are not on the menu — `--diagnose` and `--probe` cover diagnostics from a terminal. *Rendering never observed on hardware;* took tens of seconds on the first report (fixed in v0.6.4, not re-tested). CI's `linux-runtime` reads the real four-row layout off the bus (Show usage, Reset panel position, Run at startup, Exit O-view — the baseline with neither optional row showing) |
 | Notifications | ✅ balloon tip | ✅ freedesktop notifications, *never observed* |
 | Run at startup | ✅ registry `Run` key, toggled from the menu | ✅ XDG autostart `.desktop`, from the menu **or** `o-view --startup-on`, *menu rendering never observed* |
-| Light/dark theme | ✅ follows `AppsUseLightTheme` | ✅ XDG desktop portal, *never observed* — the portal read deadlocked the UI thread on the first report (fixed in v0.6.4, not re-tested) |
+| Light/dark theme | ✅ follows `AppsUseLightTheme` | ✅ XDG desktop portal — seen on the VM: dark on GNOME's default "no preference", light once the desktop explicitly prefers light, [a deliberate choice, not a defect](#why-the-panel-is-dark-on-gnomes-default-theme). The portal read once deadlocked the UI thread (fixed in v0.6.4, not re-tested since); *never observed on hardware* |
 | Auto-update | ✅ in-place, one confirmation — or none, if you turn on **Update automatically** (off by default) | ⚠️ **notifies only, by design** — tells you once per version, installs nothing ([ADR-0009](docs/adr/0009-auto-update.md)) |
 | Remembered position | ✅ drag the panel by its header, or Alt and an arrow key; it reopens where it was left | ⚠️ **XWayland and X11 only** — a native Wayland session cannot set or read its own position, so it keeps the work-area corner and has no reset row. **Run on the Ubuntu 24.04 VM, GNOME on Wayland through XWayland, 2026-10-19:** dragged by its header, reopening where it was left, and put back by "Reset panel position"; moved with Alt and an arrow key, stepping 10 px (1 px with Shift) and staying where it was put rather than snapping to an edge; and a drop landing off-screen, past an edge, or within 16 px of the dock, pulled back onto the work area or snapped flush while the panel was still open — all working as expected. **One defect seen:** the first Alt+arrow press right after clicking the header does nothing; the presses after it work. Xorg was not re-tested against any of this — last run 2026-10-15, against an earlier build, so it reads as not re-tested, never as verified. *Still never observed on a physical Linux desktop.* |
 
@@ -171,6 +171,19 @@ both the position it asked for and the one it was given, so `o-view --log` says 
 rather than leaving you to guess. Where the screen geometry cannot be read at all, the panel
 centres instead of guessing at coordinates — half off-screen reads as broken where centred
 does not.
+
+### Why the panel is dark on GNOME's default theme
+
+A fresh Ubuntu install reports **no colour preference** rather than "light" —
+`gsettings get org.gnome.desktop.interface color-scheme` reads `'default'` even though
+every other window on the desktop renders light. O-view treats that absence of a signal
+for the panel the same way it already did for the tray icon: it stays **dark**. Set the
+desktop to **prefer-light** instead and the panel follows it there.
+
+That is a **deliberate choice, not a defect** — decided on
+[#316](https://github.com/mlengmark/O-view/issues/316) and reconfirmed in the Ubuntu
+24.04 VM run of 2026-10-15: `'default'` stayed dark, `prefer-light` rendered light. It
+has not been observed on physical hardware.
 
 ### No Snap or Flatpak
 
