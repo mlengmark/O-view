@@ -13,7 +13,7 @@ Those two reports are the whole of what anyone has seen on hardware, and togethe
 - **Confirmed working:** data resolution (every path, 5,645 of 5,645 plan-history samples, Cowork logs, account tier) and the tray icon appearing.
 - **Fixed, four of them — two now re-tested live, two still not:** the first left click deadlocked the app (#124) and the menu took tens of seconds (#125), both found by the report and fixed in v0.6.4; CI's `linux-runtime` job now drives both end to end over a real session bus and a real notification area, under a virtual display and Avalonia 12.1.3, and both pass inside their budgets. Reading that code then turned up a third nobody had hit, the panel dismissing itself when a compositor refuses to focus it (#129), fixed in v0.6.5. A second report then found the left click **segfaulting** — Avalonia raises SNI callbacks on the D-Bus thread and the head built its window there (#143); the menu items had the same defect and were fixed with it. **#129 and #143 are still only reasoned from the code and guarded by structural tests — `linux-runtime` cannot retest either one:** it has no live case for a compositor refusing focus, and it cannot catch #143's defect because in that job the click already arrives on the UI thread, so there is no wrong-thread moment to catch. The mocked `BusCallbackTests` guard #143 instead, by choosing the thread themselves.
 - **Seen only on a VM:** the panel itself — blocked first behind the deadlock, then behind the crash — has since been opened five times on an Ubuntu 24.04 VM, GNOME on Wayland through XWayland, most recently on 2026-10-19: dragged by its header, reopening where it was left, reset by "Reset panel position", moved with Alt and an arrow key, and a drop pulled back onto the work area or snapped flush to the dock while the panel stayed open — all working as expected, with one defect seen, the first Alt+arrow press right after clicking the header does nothing and the presses after it work. Xorg was not re-tested against any of these fixes — last run 2026-10-15, against an earlier build — and reads as not re-tested, never as verified. **Nobody has opened it on a physical Linux desktop.**
-- **Still never observed at all:** the panel's work-area corner placement, added in #144 and never seen on a compositor; the tooltip, notifications, theme following, X11, GNOME without an AppIndicator extension, and the `.deb` on hardware.
+- **Still never observed at all:** the panel's work-area corner placement, added in #144 and never seen on a compositor; the tooltip, notifications, GNOME without an AppIndicator extension, and the `.deb` on hardware. **X11 has been drawn on** — through XWayland on the runs up to 2026-10-19, and on a native Xorg GNOME session on 2026-10-15. What has not been re-tested against the fixes made since is an Ubuntu-**on-Xorg** login session: last run 2026-10-15, against an earlier build. **Not theme following either** — the 2026-10-15 VM run saw GNOME's default "no preference" stay dark and `prefer-light` switch to light ([#316](https://github.com/mlengmark/O-view/issues/316), a deliberate choice, not a defect); an explicit `prefer-dark` setting and a live switch while the panel is open were not exercised.
 
 **Released is not the same as verified, and neither is fixed. Do not describe Linux panel or theme behaviour as working, and do not describe #124, #125, #129 or #143 as confirmed fixed** until a re-test lands. The README's support matrix carries these three states deliberately, and rule 6 applies to our own claims about our own app as much as to usage numbers.
 
@@ -215,7 +215,7 @@ Available: `git`, `gh` (authenticated as `mlengmark`), `dotnet` 10.0.302. Not av
 
 Older runtimes (3.1, 6.0) are also present on the machine. Ignore them. Target **`net10.0`** everywhere except `O-view.Tray`, which is WPF and must be `net10.0-windows`. Everything else carries nothing Windows-specific and must build on Linux; CI enforces that on `ubuntu-latest`.
 
-**The development machine is Windows, and no Linux hardware is available here.** The Linux head is therefore verified by unit tests, by offscreen render hooks (`--samples`, `--panel-samples`, `--probe`, `--diagnose` — all of which run with no display and no bus), and by container installs in the packaging workflow. None of that is a desktop.
+**The development machine is Windows, and no Linux hardware is available here.** The Linux head is therefore verified by unit tests, by offscreen render hooks (`--samples`, `--panel-samples`, `--probe`, `--diagnose` — all of which run with no display and no bus), and by container installs in the packaging workflow. None of that is a desktop session — unlike the Ubuntu 24.04 VM runs described in *What this is* above, which are, even though they are neither on hardware nor run from this machine either.
 
 The first of the two hardware reports (see *What this is* above) covers the tray icon and data resolution only. **Do not describe Linux panel or theme behaviour as verified on hardware, and do not treat the #124, #125, #129 or #143 fixes as confirmed on a desktop** — none of them has run on real hardware since. CI's `linux-runtime` job now drives #124's click and #125's menu over a real session bus and dispatcher, under a virtual display, and both pass; it does not retest #129 or #143 — see *What this is* above for exactly what it does and does not prove. The README's support matrix distinguishes *seen working* from *never observed* from *fixed but not re-tested* deliberately, and rule 6 applies to our own claims about our own app.
 
@@ -267,6 +267,16 @@ and that is the design working) rather than as figures to cite. If one matters t
 run the suite and use what it says; do not quote this block as evidence. The ADRs' own test
 counts are different and correctly so — those record what was true when each decision was
 taken.
+
+**Five source files are over 600 lines, measured on `main` at 2026-10-20:** the Windows
+sample renderer (`src/O-view.Tray/Diagnostics/SampleRenderer.cs`) 1,001; the Linux panel
+window (`src/O-view.Linux/Panel/PanelWindow.cs`) 933; the rollup store
+(`src/O-view.Core/Storage/RollupStore.cs`) 752; the Linux app (`src/O-view.Linux/LinuxApp.cs`)
+742; and the usage refresher (`src/O-view.Core/Providers/CachedUsage/ClaudeCliRefresher.cs`)
+608. The sample renderer stays over 600 even counting only lines that are neither blank nor
+a comment: 637. The under-600 expectation in [docs/architecture.md](docs/architecture.md)
+covers only the two files that assemble a whole panel, `PopupWindow.xaml.cs` and
+`PanelContent.cs` — both under it — and says nothing about these five.
 
 **Both heads are thin.** Anything a Linux user and a Windows user would expect to behave
 identically — what the countdown says, which release asset to offer, the tray icon's
