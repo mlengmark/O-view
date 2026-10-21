@@ -253,16 +253,16 @@ O-view.slnx
 │                             #                PanelContent.ScrollContent is the same response to
 │                             #                a PanelFit cap, with its own hand-drawn scroll bar.
 ├── tests/
-│   ├── O-view.Core.Tests/          # xUnit, 626
-│   ├── O-view.Presentation.Tests/  # xUnit, 249
-│   ├── O-view.App.Tests/           # xUnit, 312
-│   └── O-view.Linux.Tests/         # xUnit,  70
+│   ├── O-view.Core.Tests/          # xUnit, 689
+│   ├── O-view.Presentation.Tests/  # xUnit, 327
+│   ├── O-view.App.Tests/           # xUnit, 385
+│   └── O-view.Linux.Tests/         # xUnit, 174
 └── packaging/linux/build.sh  # .deb + tarball; the same script CI runs
 ```
 
 Those counts are a **snapshot, not a contract** — measured 2026-08-21, with #163 merged, and
-nothing enforces them. Re-measured 2026-08-28, and again 2026-10-14, after Phase B's shell/skin
-split. They are here for the shape they show (Core carries most of the logic,
+nothing enforces them. Re-measured 2026-08-28, 2026-10-14 after Phase B's shell/skin split, and
+again 2026-10-21. They are here for the shape they show (Core carries most of the logic,
 and that is the design working) rather than as figures to cite. If one matters to an argument,
 run the suite and use what it says; do not quote this block as evidence. The ADRs' own test
 counts are different and correctly so — those record what was true when each decision was

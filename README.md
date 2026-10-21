@@ -243,7 +243,7 @@ Only to its own directory — `%LOCALAPPDATA%\O-view\` on Windows, `~/.local/sha
 [latest release](https://github.com/mlengmark/O-view/releases/latest):
 
 ```bash
-sudo apt install ./o-view_0.6.8_amd64.deb
+sudo apt install ./o-view_1.0.0_amd64.deb
 ```
 
 Self-contained: no .NET runtime needed. It adds an application-menu entry, and deliberately
@@ -366,7 +366,7 @@ The Linux head, and the `.deb` and tarball around it — the same script CI runs
 build is the artefact, not an approximation of it:
 
 ```bash
-./packaging/linux/build.sh 0.6.8 linux-x64 dist
+./packaging/linux/build.sh 1.0.0 linux-x64 dist
 ```
 
 It needs `dpkg-deb`, so it runs on a Debian-family machine or in a container; `linux-arm64` is
@@ -377,12 +377,13 @@ the other supported RID.
 project. Everything else is portable:
 
 ```bash
-dotnet test tests/O-view.Core.Tests tests/O-view.App.Tests tests/O-view.Linux.Tests -c Release
+dotnet test tests/O-view.Core.Tests tests/O-view.App.Tests tests/O-view.Linux.Tests tests/O-view.Presentation.Tests -c Release
 ```
 
-That is precisely what the `ubuntu-latest` CI leg runs.
+The `ubuntu-latest` CI leg runs those same four projects as four separate `dotnet test`
+commands, one per project, rather than this one combined line.
 
-Requires the .NET 10 SDK (10.0.302+). The test suite is 613 xUnit tests across `O-view.Core` (407), `O-view.App` (166) and `O-view.Linux` (40); CI builds and tests on **both** windows-latest and ubuntu-latest on every push and pull request, and tagging `v*` publishes all six assets — the Windows installer and portable exe, both `.deb` architectures, and both tarballs — to a single GitHub release.
+Requires the .NET 10 SDK (10.0.302+). The test suite is 1,575 xUnit tests across `O-view.Core` (689), `O-view.App` (385), `O-view.Linux` (174) and `O-view.Presentation` (327); CI builds and tests on **both** windows-latest and ubuntu-latest on every push and pull request, and tagging `v*` publishes all six assets — the Windows installer and portable exe, both `.deb` architectures, and both tarballs — to a single GitHub release.
 
 Two verification hooks exist because unit tests genuinely cannot reach what they cover, and both write their findings to a file rather than to a screen you have to be watching:
 
