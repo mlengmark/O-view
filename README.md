@@ -377,11 +377,14 @@ the other supported RID.
 project. Everything else is portable:
 
 ```bash
-dotnet test tests/O-view.Core.Tests tests/O-view.App.Tests tests/O-view.Linux.Tests tests/O-view.Presentation.Tests -c Release
+dotnet test tests/O-view.Core.Tests -c Release
+dotnet test tests/O-view.App.Tests -c Release
+dotnet test tests/O-view.Linux.Tests -c Release
+dotnet test tests/O-view.Presentation.Tests -c Release
 ```
 
-The `ubuntu-latest` CI leg runs those same four projects as four separate `dotnet test`
-commands, one per project, rather than this one combined line.
+`dotnet test` accepts only one project at a time, so the `ubuntu-latest` CI leg runs these
+same four projects as four separate commands, one per project, in this order.
 
 Requires the .NET 10 SDK (10.0.302+). The test suite is 1,575 xUnit tests across `O-view.Core` (689), `O-view.App` (385), `O-view.Linux` (174) and `O-view.Presentation` (327); CI builds and tests on **both** windows-latest and ubuntu-latest on every push and pull request, and tagging `v*` publishes all six assets — the Windows installer and portable exe, both `.deb` architectures, and both tarballs — to a single GitHub release.
 
