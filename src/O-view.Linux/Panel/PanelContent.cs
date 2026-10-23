@@ -457,18 +457,6 @@ public sealed class PanelContent : Border
         _root.Children.Add(block);
     }
 
-    private void AddBanner(string title, string detail)
-    {
-        var stack = new StackPanel { Spacing = 2 };
-        stack.Children.Add(Text(title, 13, _theme["WarnText"], FontWeight.SemiBold));
-        stack.Children.Add(Text(detail, 11, _theme["WarnText"]));
-
-        _root.Children.Add(new Border
-        {
-            Background = _theme["WarnBg"],
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(NaturalTilePadding * Density.SpacingScale),
-            Child = stack,
-        });
-    }
+    private void AddBanner(string title, string detail) =>
+        _root.Children.Add(WarnCard(_theme, NaturalTilePadding * Density.SpacingScale, title, detail));
 }

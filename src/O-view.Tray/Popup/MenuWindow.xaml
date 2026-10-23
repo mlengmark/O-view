@@ -9,12 +9,11 @@
         TextOptions.TextFormattingMode="Display">
 
     <Window.Resources>
-        <!-- Brand arc gradient, lifted from brand/o-view-mark.svg so the flyout's mark
-             matches the tray icon and the exe icon rather than approximating them. -->
-        <LinearGradientBrush x:Key="BrandArc" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#F4A17A" Offset="0"/>
-            <GradientStop Color="#D9603A" Offset="1"/>
-        </LinearGradientBrush>
+        <ResourceDictionary>
+            <!-- The brand arc, shared with both dialogs (Brand.xaml). -->
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Brand.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
 
         <!-- One row = one Button. Buttons rather than bare Borders so rows keep keyboard
              focus, Space/Enter activation and the pressed state for free; the template
@@ -133,6 +132,7 @@
             <Setter Property="HorizontalAlignment" Value="Left"/>
             <Setter Property="Margin" Value="2,0,0,0"/>
         </Style>
+        </ResourceDictionary>
     </Window.Resources>
 
     <Border Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource PanelBorder}"
