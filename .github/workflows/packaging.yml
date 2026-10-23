@@ -22,7 +22,7 @@ on:
     inputs:
       version:
         description: "Version to stamp"
-        default: "0.6.0-dev"
+        default: "0.0.0-dev"
 
 # This workflow builds and install-tests packages; it publishes nothing. Without this block
 # it inherits whatever the repository default is, which on a repo that has not been switched
@@ -32,7 +32,7 @@ permissions:
   contents: read
 
 env:
-  VERSION: ${{ github.event.inputs.version || '0.6.0-dev' }}
+  VERSION: ${{ github.event.inputs.version || '0.0.0-dev' }}
 
 # Every job here is bounded. Without these, a step that wedges runs to the Actions default
 # of six hours: on 2026-08-19 four jobs across two runs sat on the Lintian step for over an
@@ -270,14 +270,17 @@ jobs:
             NEW_VERSION="$(dpkg-deb -f /dist/o-view_*_amd64.deb Version)"
             mkdir -p /tmp/prev
             dpkg-deb -R /dist/o-view_*_amd64.deb /tmp/prev
-            sed -i "s/^Version: .*/Version: 0.0.1-previous/" /tmp/prev/DEBIAN/control
+            # A tilde sorts below everything in dpkg version ordering, so 0.0.0~previous is older
+            # than any version the build can carry, including the 0.0.0-dev placeholder a
+            # manual run defaults to. A plain 0.0.1-previous made that default a downgrade.
+            sed -i "s/^Version: .*/Version: 0.0.0~previous/" /tmp/prev/DEBIAN/control
             # -Znone: this package is installed once and thrown away, so re-compressing a
             # self-contained .NET payload three times over would be the slowest step here for
             # no benefit.
             dpkg-deb -Znone --root-owner-group --build /tmp/prev /tmp/prev.deb
 
             apt-get install -y -qq /tmp/prev.deb
-            dpkg -s o-view | grep -qx "Version: 0.0.1-previous"
+            dpkg -s o-view | grep -qx "Version: 0.0.0~previous"
 
             # State a real install accrues. Written after the old version is in place, so the
             # upgrade meets them exactly as it would on a machine that has been running for

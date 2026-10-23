@@ -71,6 +71,5 @@ appsettings.*.local.json
 
 # Real transcripts may contain personal content — commit only scrubbed fixtures
 *.jsonl
-!tests/**/fixtures/*.jsonl
 # The smoke test's Claude home: hand-written, no real content (see its README)
 !tests/fixtures/claude-home/**/*.jsonl
