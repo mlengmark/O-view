@@ -66,8 +66,7 @@ public sealed record ModelSlice(
 /// </summary>
 public static class ModelDisplayName
 {
-    // No <synthetic> branch: Claude Code's marker for locally generated messages is
-    // dropped at parse time by TranscriptReader, so it never reaches a ModelSlice. The
-    // "Local" case that used to live here was unreachable (issue #57).
+    // No <synthetic> branch: TranscriptReader drops that marker at parse time, so it never
+    // reaches a ModelSlice (issue #57).
     public static string For(string model) => ModelCatalog.Find(model)?.DisplayName ?? model;
 }

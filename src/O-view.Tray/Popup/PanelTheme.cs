@@ -7,12 +7,12 @@ using ColorConverter = System.Windows.Media.ColorConverter;
 namespace OView.Tray.Popup;
 
 /// <summary>
-/// The single palette both flyout surfaces draw from â€” the detail panel and the tray
+/// The single palette both flyout surfaces draw from: the detail panel and the tray
 /// menu (issue #33). They are one product and open in the same corner, so a colour
 /// defined twice is a colour that eventually disagrees with itself; the menu was added
 /// against this shared set rather than a copy of the panel's.
 ///
-/// Theme follows <c>AppsUseLightTheme</c> â€” the app-window setting, which is distinct
+/// Theme follows <c>AppsUseLightTheme</c>, the app-window setting, which is distinct
 /// from the taskbar's <c>SystemUsesLightTheme</c> that the tray icon reads. It is
 /// re-read on every open, so switching theme never needs a restart.
 /// </summary>
@@ -52,7 +52,7 @@ internal static class PanelTheme
         resources[key] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(hex));
 
     /// <summary>
-    /// One palette entry, for code with no resource tree to resolve through â€” the sample
+    /// One palette entry, for code with no resource tree to resolve through: the sample
     /// renderers composite their cards onto a flat backdrop and need the same colour the
     /// app itself would paint there.
     ///

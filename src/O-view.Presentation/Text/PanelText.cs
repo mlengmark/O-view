@@ -235,11 +235,6 @@ public static class PanelText
     }
 
     /// <summary>
-    /// The weekly-reset line. Carries the weekday, because a reset a week out needs one,
-    /// and a <c>~</c> when the observation is only bracketed to within hours — showing an
-    /// exact minute O-view does not have would be a fabricated number.
-    /// </summary>
-    /// <summary>
     /// The weekly reset line. <b>Never approximate</b> — see below.
     ///
     /// <para>This took an <c>uncertainty</c> and could render a <c>~</c>, from when the weekly

@@ -35,7 +35,7 @@ public static class PanelPalette
         ["TileBg"] = light ? "#EFEFEF" : "#2B2B2B",
         ["BarTrack"] = light ? "#DDDDDD" : "#3A3A3A",
 
-        // Scroll bar, for content PanelFit decides must scroll (issue OVIAA-111). One pair
+        // Scroll bar, for content PanelFit decides must scroll. One pair
         // per theme so both heads draw the same bar instead of each choosing its own grey.
         // Thumb clears the WCAG 1.4.11 non-text 3:1 floor against both the track and the
         // panel behind it, since the thumb is the only part that has to read as clickable:

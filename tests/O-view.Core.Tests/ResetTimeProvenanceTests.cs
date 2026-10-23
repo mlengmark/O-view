@@ -7,7 +7,7 @@ namespace OView.Core.Tests;
 /// <summary>
 /// The same reset instant, fed through every Core path that can produce one, pins which
 /// source produced it and whether that source claims the result measured or modelled
-/// (OVIAA-81). Complements <see cref="UsageSnapshotStatusTests"/>, which checks each
+/// Complements <see cref="UsageSnapshotStatusTests"/>, which checks each
 /// provider's status defaults in isolation — this test's point is that two providers
 /// describing the <b>same</b> instant agree on it to the second, while disagreeing, exactly as
 /// designed, on how sure they are of it.

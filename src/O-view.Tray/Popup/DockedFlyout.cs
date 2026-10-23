@@ -108,8 +108,6 @@ internal sealed class DockedFlyout(Window host)
     /// <summary>Whether a close transition is in flight — the state that made menu rows dead.</summary>
     public bool IsClosing => _closing;
 
-    /// <summary>Corner the surface is docked to, so it grows from the tray rather than the middle.</summary>
-    public Point DockOrigin => _dockOrigin;
 
     /// <summary>See <see cref="ClickAwayGrace"/>.</summary>
     public bool ClosedByClickAway => DateTimeOffset.UtcNow - _closedAt < ClickAwayGrace;

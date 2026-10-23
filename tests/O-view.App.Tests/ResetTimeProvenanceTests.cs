@@ -7,7 +7,7 @@ namespace OView.App.Tests;
 /// <summary>
 /// <see cref="WeeklyResetCoordinator.WithWeeklyReset"/> fills the weekly reset from one of two
 /// places, and the two carry different claims about where the instant came from: a stored
-/// anchor came from Claude Code, a typed entry came from a person (OVIAA-81). Both are treated
+/// anchor came from Claude Code, a typed entry came from a person. Both are treated
 /// as exact (no uncertainty field survives on the weekly row at all), so both must claim
 /// <see cref="UsageValueStatus.Real"/> — but before this test existed, neither path set the
 /// status at all, so a snapshot that started <see cref="UsageValueStatus.Unavailable"/> (the

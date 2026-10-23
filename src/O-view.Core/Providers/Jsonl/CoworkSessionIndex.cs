@@ -55,8 +55,6 @@ public sealed class CoworkSessionIndex
     /// </param>
     public CoworkSessionIndex(IReadOnlyList<string> roots) => _roots = roots;
 
-    /// <summary>The real machine's registry roots, one per Claude data root.</summary>
-    public static CoworkSessionIndex ForThisMachine() => new(CoworkSessionReport.DefaultRoots);
 
     /// <summary>
     /// Session ids Cowork has registered — that is, the file names its transcripts are written

@@ -9,8 +9,7 @@ namespace OView.Tray.Tray;
 /// <summary>
 /// First-party NotifyIcon implementation (ADR-0005 — no third-party tray package).
 /// NotifyIcon owns the hidden message window and re-registers itself after Explorer
-/// restarts (TaskbarCreated), which ADR-0003 item 5 relies on and Phase 3 acceptance
-/// verifies explicitly.
+/// restarts (TaskbarCreated), which ADR-0003 item 5 relies on.
 /// </summary>
 public sealed class NotifyIconTrayHost : ITrayHost
 {

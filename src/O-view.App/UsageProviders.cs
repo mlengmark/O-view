@@ -99,7 +99,7 @@ public sealed class UsageProviders
         // none, and on a machine without Desktop the only source of the top two bars at all.
         //
         // Position here is a tie-break, not a precedence: the composite picks whichever
-        // snapshot reports the most meters, most recently. Desktop samples every ~5 minutes
+        // snapshot reports the most meters, most recently. Desktop samples every 15 minutes
         // while this refreshes on use, so neither is reliably the fresher one and neither
         // deserves a standing preference.
         //

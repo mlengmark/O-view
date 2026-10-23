@@ -495,15 +495,6 @@ public partial class PopupWindow : Window, IFlyout
     // Linux panel: it is a statement about how old the figures are, and two panels wording that
     // differently is the failure PanelText exists to prevent (issue #192).
 
-    /// <summary>
-    /// Coarsest-two-units countdown. The days branch exists for the weekly window: a
-    /// 7-day reset rendered in the hours format reads "163h 45m", which is technically
-    /// right and useless.
-    /// </summary>
-    // Duration wording lives in OView.Presentation.Text.PanelText, shared with the Linux panel so
-    // the two cannot describe the same reset differently. Kept as a local alias because it
-    // reads better unqualified at its call sites.
-    private static string FormatCountdown(TimeSpan t) => PanelText.Countdown(t);
 
     // Theming lives in PanelTheme, shared with the tray menu flyout (issue #33).
 }

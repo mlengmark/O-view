@@ -8,7 +8,7 @@ namespace OView.App;
 /// Everything <see cref="UsageEngine"/> needs that it does not own outright.
 ///
 /// <para>Every path is nullable and defaults to the real location, which is the same shape
-/// <see cref="RollupStore"/>, <see cref="WeeklyResetLog"/> and <see cref="Core.Models.TraySettings"/>
+/// <see cref="RollupStore"/>, <see cref="WeeklyResetAnchor"/> and <see cref="Core.Models.TraySettings"/>
 /// already use — so a test can point the whole engine at a temp directory without a
 /// filesystem mock, and production passes nothing.</para>
 /// </summary>
@@ -16,7 +16,7 @@ public sealed record UsageEngineOptions
 {
     /// <summary>
     /// Steady-state interval for the <b>full</b> poll — the one that walks the transcripts and
-    /// rebuilds the 31-day figures. 60 s by default (build-plan Phase 3).
+    /// rebuilds the 31-day figures. 60 s by default.
     /// </summary>
     public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(60);
 
@@ -30,9 +30,9 @@ public sealed record UsageEngineOptions
     /// covers <b>32 files and 92 MB</b>. Sharing one timer meant the numbers on the icon waited
     /// behind the ingest that froze the app on a large history (issue #125).</para>
     ///
-    /// <para><b>Why 20 s and not less.</b> Claude Desktop writes that file every ~5 minutes —
-    /// measured median 5.00 min across 1,828 consecutive gaps in a 30-day file — and no poll
-    /// rate can beat its source. Twenty seconds removes O-view's own contribution to staleness
+    /// <para><b>Why 20 s and not less.</b> Claude Desktop writes that file every 15 minutes
+    /// (measured; it was 5 minutes before 2026-08-10, see <c>PlanHistoryProvider</c>), and no
+    /// poll rate can beat its source. Twenty seconds removes O-view's own contribution to staleness
     /// without re-reading an unchanged file for nothing; going lower buys accuracy that does
     /// not exist.</para>
     /// </summary>

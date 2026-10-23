@@ -24,8 +24,8 @@ public sealed class CachedUtilizationProvider : IUsageProvider
     /// <see cref="DataSource.Live"/>.
     ///
     /// <para><b>Not a measured sampling interval, and deliberately not presented as one.</b>
-    /// Claude Desktop samples on a timer, so its 11-minute threshold came from 1,828 observed
-    /// gaps. This is a <i>cache</i>, refreshed when Claude Code talks to the API — there is no
+    /// Claude Desktop samples on a timer, so its freshness threshold came from measured gaps
+    /// (see <c>PlanHistoryProvider</c>). This is a <i>cache</i>, refreshed when Claude Code talks to the API — there is no
     /// cadence to measure, only usage. One refresh gap was observed here, at 10.1 minutes, and
     /// n=1 is an anecdote rather than a distribution.</para>
     ///

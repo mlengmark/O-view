@@ -4,7 +4,7 @@ using OView.Core.Models;
 namespace OView.App.Tests;
 
 /// <summary>
-/// Nothing reaches a skin except through its dispatcher (OVIAA-67).
+/// Nothing reaches a skin except through its dispatcher.
 ///
 /// <para>Both skins touch their tray icon straight from these calls, so a push that arrives
 /// on whichever thread happened to raise it is a thread-affinity fault in the skin — and one

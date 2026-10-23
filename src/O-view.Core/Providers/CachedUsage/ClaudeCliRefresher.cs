@@ -239,7 +239,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
 
     /// <summary>
     /// As above, but with the preferred directory named explicitly — the seam
-    /// <see cref="TranscriptScopeReportTests"/> uses to pin the null-when-on-the-fallback rule
+    /// <c>TranscriptScopeReportTests</c> uses to pin the null-when-on-the-fallback rule
     /// without depending on whether this machine's own <see cref="PreferredWorkingDirectory"/>
     /// happens to exist.
     /// </summary>

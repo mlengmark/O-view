@@ -2,7 +2,7 @@ using Avalonia;
 using Avalonia.Automation;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
-using Avalonia.Input;
+
 using Avalonia.Layout;
 using Avalonia.Media;
 using OView.App.Rendering;
@@ -484,37 +484,5 @@ public sealed class PanelContent : Border
             Padding = new Thickness(NaturalTilePadding * Density.SpacingScale),
             Child = stack,
         });
-    }
-
-    /// <summary>
-    /// A text disclosure that shows or hides <paramref name="body"/>. Avalonia has no
-    /// borderless text button by default, so this is a Button with its chrome stripped —
-    /// a Button rather than a clickable TextBlock so it keeps keyboard focus and Space/Enter
-    /// activation, matching the Windows head (which learned the same lesson in StatTile).
-    /// </summary>
-    private Button Disclosure(string label, Control body)
-    {
-        var chevron = Text("⌄", 11, _theme["TextMuted"]);
-        var content = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 5 };
-        content.Children.Add(Text(label, 11, _theme["TextMuted"]));
-        content.Children.Add(chevron);
-
-        var button = new Button
-        {
-            Content = content,
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Padding = new Thickness(0, 1),
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Cursor = new Cursor(StandardCursorType.Hand),
-        };
-
-        button.Click += (_, _) =>
-        {
-            body.IsVisible = !body.IsVisible;
-            chevron.Text = body.IsVisible ? "⌃" : "⌄";
-        };
-
-        return button;
     }
 }

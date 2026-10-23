@@ -245,7 +245,7 @@ public partial class App : System.Windows.Application
 
         if (args.ContainsKey("--test-notify"))
         {
-            _trayHost.ShowNotification("Claude usage", "Test notification (--test-notify).",
+            _trayHost.ShowNotification(NoticeText.ThresholdTitle, "Test notification (--test-notify).",
                 NotificationKind.Information);
         }
 

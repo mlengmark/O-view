@@ -209,8 +209,6 @@ public sealed record ClaudeWriteSurvey(IReadOnlyList<SurveyedRoot> Roots, TimeSp
         }
     }
 
-    private static IReadOnlyList<string> ByRecency(IReadOnlyList<string> files) =>
-        files.OrderByDescending(WrittenUtc).ToList();
 
     private static DateTimeOffset WrittenUtc(string file)
     {

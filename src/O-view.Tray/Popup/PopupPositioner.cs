@@ -322,7 +322,7 @@ internal sealed class FilePanelPositionStore(PanelPositionFile file) : IPanelPos
     /// corner is already the file's own reading of "nothing remembered" — its <c>Read</c> wants a
     /// non-empty one — so this is the file saying what it already says about a damaged entry,
     /// deliberately, and it survives a restart where a flag in memory would not. A <c>Forget</c>
-    /// on the file itself is the better shape; see the PR's Noticed.</para>
+    /// on the file itself is the better shape.</para>
     /// </summary>
     public void Forget(string displayId) =>
         file.Save(displayId, new PanelPositionFile.Place("", 0, 0));

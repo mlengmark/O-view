@@ -1,21 +1,6 @@
 namespace OView.Core.Providers.PlanHistory;
 
 /// <summary>
-/// A predicted weekly reset. <see cref="Uncertainty"/> survives because the session reset
-/// shares this shape and genuinely has one; for the weekly window it is always
-/// <see cref="TimeSpan.Zero"/> now that both sources are exact (ADR-0014).
-/// </summary>
-/// <param name="Period">
-/// The cadence this steps by. Carried on the forecast so anything drawing past boundaries —
-/// the usage graph's week gridlines — steps by the same cadence the countdown does instead of
-/// re-deriving it and drifting.
-/// </param>
-public sealed record WeeklyResetForecast(DateTimeOffset AtUtc, TimeSpan Uncertainty, TimeSpan Period)
-{
-    public bool IsPrecise => Uncertainty <= WeeklyWindow.PreciseBracket;
-}
-
-/// <summary>
 /// The weekly window's arithmetic — and, since ADR-0014, nothing else.
 ///
 /// <para>This replaces <c>WeeklyResetDetector</c>, which inferred the reset from drops in
