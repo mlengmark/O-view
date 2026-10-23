@@ -62,26 +62,22 @@ internal sealed class DockedFlyout(Window host)
     public static readonly TimeSpan ClickAwayGrace = TimeSpan.FromMilliseconds(400);
 
     /// <summary>
-    /// How far the pointer must travel on the drag handle, in DIP, before a press becomes a
-    /// drag — so a click on the handle is still a click and not a one-pixel move.
-    ///
-    /// <para>Deliberately a little under Windows' own <c>SM_CXDRAG</c> of 4 px either side of
-    /// the press (so, 8 px across): the handle here is a panel header with nothing on it to
-    /// click, where the system figure guards against dragging a list item you meant to
-    /// select.</para>
+    /// How far the pointer must travel on the drag handle before a press becomes a drag. The
+    /// figure is <see cref="PanelPlacementMemory.DragThresholdDip"/>, shared with the Linux head.
     /// </summary>
-    public const double DragThresholdDip = 4;
+    public const double DragThresholdDip = PanelPlacementMemory.DragThresholdDip;
 
     /// <summary>
     /// How long after a drag a lost activation is still that drag settling rather than the user
-    /// clicking elsewhere.
+    /// clicking elsewhere. The figure is <see cref="PanelPlacementMemory.DragSettleGrace"/>,
+    /// shared with the Linux head.
     ///
     /// <para>Separate from <see cref="ClickAwayGrace"/> on purpose, even at the same length:
     /// that one is a contract with the tray icon about a toggle, and this one is about the
     /// release of a move. Tying them together would mean retuning the toggle's feel to fix a
     /// panel that dismissed itself when let go.</para>
     /// </summary>
-    public static readonly TimeSpan DragSettleGrace = TimeSpan.FromMilliseconds(400);
+    public static readonly TimeSpan DragSettleGrace = PanelPlacementMemory.DragSettleGrace;
 
     private Point _dockOrigin = new(1, 1);
     private bool _closing;

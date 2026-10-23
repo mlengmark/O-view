@@ -329,5 +329,7 @@ public class PanelPlacementMemoryTests
         public PanelPlace? Read(string displayId) => throw new InvalidOperationException("read failed");
 
         public void Save(string displayId, PanelPlace place) { }
+
+        public void Forget(string displayId) { }
     }
 }

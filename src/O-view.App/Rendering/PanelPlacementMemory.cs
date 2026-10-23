@@ -77,6 +77,24 @@ public sealed class PanelPlacementMemory(IPanelPositionStore store)
     public const double SnapThresholdDip = 16;
 
     /// <summary>
+    /// How far the pointer must travel on the drag handle, in DIP, before a press becomes a
+    /// drag, so a click on the handle is still a click and not a one-pixel move.
+    ///
+    /// <para>Deliberately a little under Windows' own <c>SM_CXDRAG</c> of 4 px either side of
+    /// the press (so, 8 px across): the handle is a panel header with nothing on it to click,
+    /// where the system figure guards against dragging a list item you meant to select. Shared
+    /// by both heads so a drag starts at the same distance on either desktop.</para>
+    /// </summary>
+    public const double DragThresholdDip = 4;
+
+    /// <summary>
+    /// How long after a drag a lost activation is still that drag settling rather than the user
+    /// clicking elsewhere; on Linux, also how long without a new position before a move counts
+    /// as finished. One figure for both heads, so a drop settles the same way on either desktop.
+    /// </summary>
+    public static readonly TimeSpan DragSettleGrace = TimeSpan.FromMilliseconds(400);
+
+    /// <summary>
     /// How far one arrow key moves the panel, in DIP — far enough to be worth a keystroke, and
     /// a figure both heads are given rather than work out, so Alt and an arrow key cannot come
     /// to mean two different distances.

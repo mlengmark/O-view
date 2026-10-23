@@ -510,7 +510,7 @@ public class PanelDragTests
     {
         var placement = ClientPlacement.From("wayland", "wayland-0", x11Display: null);
 
-        Assert.Null(PanelWindow.StoreFor(placement, new LinuxPanelPositionStore()));
+        Assert.Null(PanelWindow.StoreFor(placement, new FilePanelPositionStore()));
         Assert.NotNull(PanelWindow.NudgeOf(Key.Left, KeyModifiers.Alt));
     }
 
@@ -524,7 +524,7 @@ public class PanelDragTests
     public void TheFileStoreRoundTripsAPlaceAndForgetsIt()
     {
         using var temp = new TempFile();
-        var store = new LinuxPanelPositionStore(new PanelPositionFile(temp.Path));
+        var store = new FilePanelPositionStore(new PanelPositionFile(temp.Path));
 
         store.Save(DisplayId, new PanelPlace(WorkAreaCorner.BottomRight, 24, 8));
 
@@ -553,7 +553,7 @@ public class PanelDragTests
         var file = new PanelPositionFile(temp.Path);
         file.Save(DisplayId, new PanelPositionFile.Place(corner, 10, 10));
 
-        Assert.Null(new LinuxPanelPositionStore(file).Read(DisplayId));
+        Assert.Null(new FilePanelPositionStore(file).Read(DisplayId));
     }
 
     // ── the session where none of this happens ──────────────────────────────────────
@@ -569,7 +569,7 @@ public class PanelDragTests
         var placement = ClientPlacement.From("wayland", "wayland-0", x11Display: null);
 
         Assert.False(placement.Allowed);
-        Assert.Null(PanelWindow.StoreFor(placement, new LinuxPanelPositionStore()));
+        Assert.Null(PanelWindow.StoreFor(placement, new FilePanelPositionStore()));
         Assert.Contains("native Wayland", placement.Reason, StringComparison.Ordinal);
     }
 
@@ -587,7 +587,7 @@ public class PanelDragTests
     public void EverySessionWithAnXServerCanRememberAPlaceAndSaysWhyInTheLog(
         string? sessionType, string? waylandDisplay, string? x11Display, string named)
     {
-        var store = new LinuxPanelPositionStore();
+        var store = new FilePanelPositionStore();
         var placement = ClientPlacement.From(sessionType, waylandDisplay, x11Display);
 
         Assert.True(placement.Allowed);
@@ -669,6 +669,8 @@ public class PanelDragTests
             _places.TryGetValue(displayId, out var place) ? place : null;
 
         public void Save(string displayId, PanelPlace place) => _places[displayId] = place;
+
+        public void Forget(string displayId) => _places.Remove(displayId);
     }
 
     /// <summary>A path in a directory of its own, removed with it.</summary>

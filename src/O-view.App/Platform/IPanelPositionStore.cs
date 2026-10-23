@@ -16,7 +16,7 @@ public readonly record struct PanelPlace(WorkAreaCorner Corner, double OffsetXDi
 /// other interfaces in this folder stand in for something a test should not have to do for
 /// real.
 ///
-/// <para>Each head constructs the file-backed implementation, which translates
+/// <para>Both heads construct <see cref="FilePanelPositionStore"/>, which translates
 /// <see cref="OView.Core.Storage.PanelPositionFile"/>'s bare-string corner to and from
 /// <see cref="WorkAreaCorner"/>.</para>
 /// </summary>
@@ -27,4 +27,11 @@ public interface IPanelPositionStore
 
     /// <summary>Remembers <paramref name="place"/> for <paramref name="displayId"/>.</summary>
     void Save(string displayId, PanelPlace place);
+
+    /// <summary>
+    /// Forgets <paramref name="displayId"/>'s place, so the next open goes back to the
+    /// work-area corner: the menu's "Reset panel position" row. Forgetting a display that was
+    /// never saved is not an error.
+    /// </summary>
+    void Forget(string displayId);
 }
