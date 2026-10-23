@@ -33,14 +33,6 @@ public static class OffPlanText
     public static string CreditModelsCaption { get; } = string.Join(
         ", ", CreditBilledModels.Models.Select(e => e.DisplayName.Replace(' ', NonBreakingSpace)));
 
-    // Token formatting lives in UsageFormatter, right beside this class. The sentence below
-    // that embeds a figure still duplicates its one-line rule rather than call it directly.
-    private static string FormatTokens(long tokens) => tokens switch
-    {
-        >= 1_000_000 => string.Create(CultureInfo.InvariantCulture, $"{tokens / 1_000_000.0:0.0}M"),
-        >= 1_000 => string.Create(CultureInfo.InvariantCulture, $"{tokens / 1_000.0:0.0}K"),
-        _ => tokens.ToString(CultureInfo.InvariantCulture),
-    };
 
     /// <summary>
     /// What the divergence banner says when local work is running past a meter that is not
@@ -58,7 +50,7 @@ public static class OffPlanText
     /// differently when the meter is the part at fault.</para>
     /// </summary>
     public static string DivergenceDetail(long outputTokens, int risePoints) =>
-        $"About {FormatTokens(outputTokens)} output tokens ran in this window while the "
+        $"About {UsageFormatter.Tokens(outputTokens)} output tokens ran in this window while the "
         + $"plan meter moved {risePoints} point{(risePoints == 1 ? "" : "s")}. Usage that a plan "
         + "meter does not account for is billed some other way — O-view cannot see your billing, "
         + "so check Settings → Usage in Claude for what it was.";

@@ -219,7 +219,7 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="O-view" FontSize="16" FontWeight="SemiBold"
+                    <TextBlock Text="{x:Static panel:PanelHeaderView.AppName}" FontSize="16" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextPrimary}"/>
                     <TextBlock x:Name="UpdatedText" FontSize="11" Margin="0,2,0,0"
                                Foreground="{DynamicResource TextMuted}"/>

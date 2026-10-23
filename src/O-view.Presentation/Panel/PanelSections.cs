@@ -1,6 +1,7 @@
 using System.Globalization;
 using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
+using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Presentation.Text;
 
@@ -34,6 +35,99 @@ public static class PanelSections
     /// </summary>
     public static bool IsAuthoritative(UsageSnapshot snapshot) =>
         snapshot.Source is DataSource.Live or DataSource.Stale;
+
+    /// <summary>
+    /// The "Tokens used" section (<see cref="PanelTokenBarsView"/>): what was billed, beside
+    /// tiles that headline only output (issue #253). Built once here; each head only lays it
+    /// out.
+    /// </summary>
+    /// <param name="scopeReport">What the transcript scan found, for the coverage line.</param>
+    public static PanelTokenBarsView TokenBars(PanelStatistics stats, TranscriptScopeReport scopeReport)
+    {
+        var today = stats.CompositionToday;
+        var window31 = stats.Composition31Days;
+
+        return new PanelTokenBarsView(
+            Show: today.HasTokens || window31.HasTokens,
+            Heading: TokenText.TokensUsedHeading,
+            BarsLabel: TokenText.TokenViewBarsLabel,
+            BreakdownLabel: TokenText.TokenViewBreakdownLabel,
+            Today: TokenBar(today, TokenText.TokensUsedTodayLabel, TokenText.TokenWindowToday),
+            Window31: TokenBar(window31, TokenText.TokensUsed31DaysLabel, TokenText.TokenWindow31Days),
+            Breakdown: Breakdown(today, window31),
+            CoverageLine: scopeReport.CoverageLine());
+    }
+
+    private static PanelTokenBarView TokenBar(TokenComposition composition, string heading, string window)
+    {
+        // Only the kinds with any tokens draw. The legend carries every exact figure the
+        // track's width floors cannot (see TokenBarGeometry), so it is not optional decoration.
+        var segments = composition.InDisplayOrder.Where(s => s.Tokens > 0).ToList();
+
+        return new PanelTokenBarView(
+            heading, window, UsageFormatter.Tokens(composition.Total), composition, segments,
+            segments.Select(s => new PanelTokenLegendEntry(
+                s.Kind, $"{TokenText.TokenKindLabel(s.Kind)} {UsageFormatter.Tokens(s.Tokens)}")).ToList());
+    }
+
+    /// <summary>
+    /// The breakdown table: one row per kind, with a share column per window. Two share
+    /// columns rather than one shared, because the windows have measurably different shapes:
+    /// cache write ran 10.3% of a day against 0.93% of the month on the machine this was
+    /// designed against, and one column between two token columns would be read against
+    /// whichever it sat nearer, which is the ambiguity issue #169 was reported about.
+    /// </summary>
+    private static IReadOnlyList<PanelTokenBreakdownRow> Breakdown(TokenComposition today, TokenComposition window31)
+    {
+        var rows = new List<PanelTokenBreakdownRow>
+        {
+            new(PanelTokenRowKind.Header, null,
+                TokenText.TokenBreakdownKindHeader, TokenText.TokenBreakdownTodayHeader,
+                TokenText.TokenBreakdownShareHeader, TokenText.TokenBreakdown31DaysHeader,
+                TokenText.TokenBreakdownShareHeader),
+        };
+
+        // Driven off today's order so both columns describe the same row, even where a kind
+        // is present in one window and absent from the other.
+        foreach (var slice in (today.HasTokens ? today : window31).InDisplayOrder)
+        {
+            var mine = today.InDisplayOrder.First(s => s.Kind == slice.Kind);
+            var other = window31.InDisplayOrder.First(s => s.Kind == slice.Kind);
+
+            rows.Add(new(PanelTokenRowKind.Kind, slice.Kind,
+                TokenText.TokenKindLabel(slice.Kind),
+                UsageFormatter.Tokens(mine.Tokens), TokenText.TokenShare(mine.Share),
+                UsageFormatter.Tokens(other.Tokens), TokenText.TokenShare(other.Share)));
+        }
+
+        rows.Add(new(PanelTokenRowKind.Total, null,
+            TokenText.TokenBreakdownTotalLabel,
+            UsageFormatter.Tokens(today.Total), TokenText.TokenShare(today.HasTokens ? 1 : 0),
+            UsageFormatter.Tokens(window31.Total), TokenText.TokenShare(window31.HasTokens ? 1 : 0)));
+
+        return rows;
+    }
+
+    /// <summary>
+    /// The note beneath the tiles when they read zero while the plan meters show real usage:
+    /// the tiles are measuring a source this user does not feed, not measuring zero usage, so
+    /// it says which source. Null when the note does not apply.
+    ///
+    /// <para>Derived from what the scan actually resolved, never a literal. It used to name a
+    /// hard-coded <c>%USERPROFILE%\.claude\projects</c> and only Claude Code, so a Cowork
+    /// user, whose transcripts are read, was told their source was not counted, and a
+    /// packaged Desktop install was pointed at a path O-view never searched (issue #58).</para>
+    ///
+    /// <para>Keyed on the token total, not on recorded days. Those meant the same thing while
+    /// recorded days counted days with usage; now that it counts days observed (issue #142),
+    /// a store older than the window reports full coverage while the tiles still read zero,
+    /// which is the exact case this note is for.</para>
+    /// </summary>
+    public static string? ScopeNote(PanelStatistics stats, UsageSnapshot snapshot, TranscriptScopeReport scopeReport) =>
+        stats.Tokens31Days == 0 && IsAuthoritative(snapshot) &&
+        snapshot.SessionPercentValue is { Status: not UsageValueStatus.Unavailable, Value: > 0 }
+            ? scopeReport.Explain()
+            : null;
 
     /// <summary>The header: app name, freshness, and the account block.</summary>
     public static PanelHeaderView Header(

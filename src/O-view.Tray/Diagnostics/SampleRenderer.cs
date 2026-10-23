@@ -42,19 +42,9 @@ namespace OView.Tray.Diagnostics;
 /// </summary>
 internal static class SampleRenderer
 {
-    /// <summary>
-    /// The work area of the display the panel was reported running off: a 1024×768 desktop,
-    /// less <see cref="WorkAreaPlacement.DefaultMarginPx"/> at each end. The Linux head
-    /// renders its short sample against the same figure, so the two pictures are comparable.
-    /// </summary>
-    private const double ShortWorkAreaDip = 712;
+    private const double ShortWorkAreaDip = SampleStates.ShortWorkAreaDip;
 
-    /// <summary>
-    /// The state rendered a second time for that display — the tallest one, which is what
-    /// this wants. Named rather than measured: a name chosen at run time would rename the
-    /// golden image the day some other state grows past it.
-    /// </summary>
-    private const string ShortState = "offplan-on";
+    private const string ShortState = SampleStates.ShortState;
 
     /// <summary>
     /// Renders the detail panel offscreen, in both themes, for every shared sample state
@@ -247,9 +237,7 @@ internal static class SampleRenderer
                         Text = name,
                         FontSize = 11,
                         Margin = new Thickness(0, 6, 0, 3),
-                        Foreground = new System.Windows.Media.SolidColorBrush(light
-                            ? System.Windows.Media.Color.FromRgb(0x33, 0x33, 0x33)
-                            : System.Windows.Media.Color.FromRgb(0xCC, 0xCC, 0xCC)),
+                        Foreground = PanelTheme.Brush("TextSecondary", light),
                     });
 
                     var pair = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
@@ -266,7 +254,7 @@ internal static class SampleRenderer
                     // breakdown view, and a sample that never shows one cannot catch it going
                     // missing (it did).
                     pending.Add((tokensTile, PanelSections.Tile(
-                        "Tokens · 31 days",
+                        TokenText.Tokens31DaysLabel,
                         UsageFormatter.Tokens(slices.Sum(s => s.Tokens)),
                         "8 of 31 days recorded",
                         slices, BreakdownMeasure.Tokens, colourOrder)));
@@ -282,9 +270,7 @@ internal static class SampleRenderer
                 var host = new Border
                 {
                     Child = rows,
-                    Background = new System.Windows.Media.SolidColorBrush(light
-                        ? System.Windows.Media.Color.FromRgb(0xF9, 0xF9, 0xF9)
-                        : System.Windows.Media.Color.FromRgb(0x20, 0x20, 0x20)),
+                    Background = PanelTheme.Brush("PanelBg", light),
                 };
                 PanelTheme.Apply(host.Resources, light);
 
@@ -449,16 +435,6 @@ internal static class SampleRenderer
 
     /// <summary>
     /// One icon state: the two meters as a source reported them, with no reset times, which
-    /// the icon does not draw.
-    /// </summary>
-    private static UsageSnapshot IconState(DataSource source, int? session, int? weekly) => new(
-        source,
-        UsageSnapshot.Percent(session),
-        UsageSnapshot.Percent(weekly),
-        UsageSnapshot.Instant(null),
-        UsageSnapshot.Instant(DateTimeOffset.UtcNow),
-        UsageSnapshot.Instant(null));
-
     private static StatTile NewSampleTile() =>
         new()
         {
@@ -473,21 +449,7 @@ internal static class SampleRenderer
     public static void RenderSamples(string dir)
     {
         Directory.CreateDirectory(dir);
-        var states = new (string Name, UsageSnapshot Snapshot)[]
-        {
-            // A measured zero. Its own case because it is the one state with no arc at all,
-            // where the pupil fades to the track — and nothing rendered it, which is how the
-            // bright-green-pupil-on-an-empty-ring icon shipped (issue #139).
-            ("live-00", IconState(DataSource.Live, 0, 0)),
-            ("live-06", IconState(DataSource.Live, 6, 1)),
-            ("live-47", IconState(DataSource.Live, 47, 20)),
-            ("live-58", IconState(DataSource.Live, 58, 30)),
-            ("live-72", IconState(DataSource.Live, 72, 40)),
-            ("live-91", IconState(DataSource.Live, 91, 60)),
-            ("live-100", IconState(DataSource.Live, 100, 80)),
-            ("estimate", IconState(DataSource.Estimate, null, null)),
-            ("none", UsageSnapshot.None),
-        };
+        var states = SampleStates.IconStates(DateTimeOffset.UtcNow);
 
         foreach (var size in new[] { 16, 24 })  // 100% and 150% scaling
         {
