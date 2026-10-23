@@ -11,6 +11,7 @@ using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Core.Storage;
+using OView.Presentation.Panel;
 
 namespace OView.Linux.Panel;
 
@@ -107,7 +108,7 @@ public sealed class PanelWindow : Window
         _settle = new DispatcherTimer { Interval = PanelDrag.SettleGrace };
         _settle.Tick += (_, _) => GraceElapsed();
 
-        Title = "O-view";
+        Title = PanelHeaderView.AppName;
         Content = _content;
         SizeToContent = SizeToContent.WidthAndHeight;
         CanResize = false;

@@ -87,5 +87,5 @@ public class MenuTextTests
     /// </summary>
     [Fact]
     public void TheExitRowNamesTheApp() =>
-        Assert.Contains(MenuText.AppName, MenuText.ExitRow, StringComparison.Ordinal);
+        Assert.Contains(OView.Presentation.Panel.PanelHeaderView.AppName, MenuText.ExitRow, StringComparison.Ordinal);
 }

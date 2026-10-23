@@ -334,24 +334,15 @@ public sealed class PanelContent : Border
         // never appears here. Plumbing them through is a change to this head's shell.
         AddBar(PanelSections.WeeklyMeter(snapshot, banner, null, boostNotices, utcNow, local));
 
+        var report = scopeReport ?? TranscriptScopeReport.Inspect();
         _tiles.AddTo(_root, stats, Density);
-        _tokenBars.AddTo(_root, stats, scopeReport);
+        _tokenBars.AddTo(_root, PanelSections.TokenBars(stats, report));
         _graph.AddTo(_root, PanelSections.Graph(stats, snapshot, local), Density);
         _offPlan.AddSectionTo(_root, offPlan);
 
-        // Nothing recorded at all while the plan meters show real usage: the tiles are
-        // measuring a source this user does not feed, not measuring zero. Say which source,
-        // so the 0 is interpretable rather than looking broken. Derived from what the scan
-        // actually resolved, never a literal (issue #58).
-        //
-        // Keyed on the token total, not on RecordedDays: those meant the same thing while
-        // RecordedDays counted days with usage, but it now counts days observed (issue #142),
-        // so a store older than the window reports full coverage while the tiles still read
-        // zero — the exact case this note is for.
-        if (stats.Tokens31Days == 0 && authoritative &&
-            snapshot.SessionPercentValue is { Status: not UsageValueStatus.Unavailable, Value: > 0 })
+        if (PanelSections.ScopeNote(stats, snapshot, report) is { } note)
         {
-            _root.Children.Add(Muted(_theme, (scopeReport ?? TranscriptScopeReport.Inspect()).Explain()));
+            _root.Children.Add(Muted(_theme, note));
         }
     }
 

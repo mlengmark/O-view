@@ -3,6 +3,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using OView.App.Rendering;
 using OView.Core.Models;
+using OView.Presentation.Panel;
 using OView.Presentation.Text;
 using Brush = System.Windows.Media.Brush;
 using Orientation = System.Windows.Controls.Orientation;
@@ -189,12 +190,9 @@ internal sealed class PopupTokenComposition
     /// <para>Collapsed on every Populate, deliberately: the panel is a transient view, not a
     /// setting, and StatTile resets its own expansion for the same reason.</para>
     /// </summary>
-    public void Populate(TokenComposition today, TokenComposition window31, string coverage)
+    public void Populate(PanelTokenBarsView view)
     {
-        // Today can be empty on a machine that has history but has not worked yet, so the
-        // section shows while EITHER window has something to say. Both empty means there is
-        // nothing to break down, and the scope note above already says considerably more.
-        var show = today.HasTokens || window31.HasTokens;
+        var show = view.Show;
         _section.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
 
         _barsView.Children.Clear();
@@ -206,16 +204,16 @@ internal sealed class PopupTokenComposition
             return;
         }
 
-        _heading.Text = TokenText.TokensUsedHeading;
-        _barsToggle.Content = TokenText.TokenViewBarsLabel;
-        _breakdownToggle.Content = TokenText.TokenViewBreakdownLabel;
+        _heading.Text = view.Heading;
+        _barsToggle.Content = view.BarsLabel;
+        _breakdownToggle.Content = view.BreakdownLabel;
 
-        AddBar(today, TokenText.TokensUsedTodayLabel, TokenText.TokenWindowToday, first: true);
-        AddBar(window31, TokenText.TokensUsed31DaysLabel, TokenText.TokenWindow31Days, first: false);
+        AddBar(view.Today, first: true);
+        AddBar(view.Window31, first: false);
 
-        _breakdownView.Children.Add(BuildBreakdown(today, window31));
+        _breakdownView.Children.Add(BuildBreakdown(view.Breakdown));
 
-        PopupText.SetLine(_coverageLine, coverage);
+        PopupText.SetLine(_coverageLine, view.CoverageLine);
 
         // Back to Bars on every open. The panel is a transient view, not a setting — the same
         // reason StatTile resets its own expansion.
@@ -226,7 +224,7 @@ internal sealed class PopupTokenComposition
     /// One composition bar: heading and billed total, the segmented track, and the legend
     /// that carries every exact figure the track's floors do not.
     /// </summary>
-    private void AddBar(TokenComposition composition, string headingText, string window, bool first)
+    private void AddBar(PanelTokenBarView bar, bool first)
     {
         var block = new StackPanel { Margin = new Thickness(0, first ? 0 : 9, 0, 0) };
 
@@ -236,7 +234,7 @@ internal sealed class PopupTokenComposition
 
         var title = new TextBlock
         {
-            Text = headingText,
+            Text = bar.Heading,
             FontSize = 10.5,
             VerticalAlignment = VerticalAlignment.Bottom,
             Foreground = (Brush)_owner.FindResource("TextSecondary"),
@@ -246,7 +244,7 @@ internal sealed class PopupTokenComposition
 
         var total = new TextBlock
         {
-            Text = FormatTokens(composition.Total),
+            Text = bar.Total,
             FontSize = 12,
             FontWeight = FontWeights.SemiBold,
             Foreground = (Brush)_owner.FindResource("TextPrimary"),
@@ -255,7 +253,7 @@ internal sealed class PopupTokenComposition
         head.Children.Add(total);
         block.Children.Add(head);
 
-        var segments = composition.InDisplayOrder.Where(s => s.Tokens > 0).ToList();
+        var segments = bar.Segments;
 
         // The track is measured, not assumed: the panel's content width moves with density
         // and DPI, and TokenBarGeometry's floor is expressed in pixels. Widths are therefore
@@ -276,27 +274,28 @@ internal sealed class PopupTokenComposition
                 CornerRadius = new CornerRadius(
                     i == 0 ? 3 : 0, i == segments.Count - 1 ? 3 : 0,
                     i == segments.Count - 1 ? 3 : 0, i == 0 ? 3 : 0),
-                ToolTip = SegmentCard(slice, window, swatch),
+                ToolTip = SegmentCard(slice, bar.Window, swatch),
             };
             HoverCard.ApplyTiming(piece);
             Grid.SetColumn(piece, i);
             track.Children.Add(piece);
         }
 
-        track.SizeChanged += (_, _) => LayOutSegments(track, composition);
+        track.SizeChanged += (_, _) => LayOutSegments(track, bar.Composition);
         block.Children.Add(track);
 
         // Every figure the bar cannot draw honestly. This is what makes the 3 px floor safe,
         // so it is not optional decoration — see TokenBarGeometry.
         var legend = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-        foreach (var slice in segments)
+        for (var i = 0; i < segments.Count; i++)
         {
+            var slice = segments[i];
             var swatch = KindBrush(slice.Kind);
             var entry = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
                 Margin = new Thickness(0, 0, 10, 0),
-                ToolTip = SegmentCard(slice, window, swatch),
+                ToolTip = SegmentCard(slice, bar.Window, swatch),
             };
             HoverCard.ApplyTiming(entry);
 
@@ -310,7 +309,7 @@ internal sealed class PopupTokenComposition
             });
             entry.Children.Add(new TextBlock
             {
-                Text = $"{TokenText.TokenKindLabel(slice.Kind)} {FormatTokens(slice.Tokens)}",
+                Text = bar.Legend[i].Text,
                 FontSize = 10.5,
                 Margin = new Thickness(5, 0, 0, 0),
                 VerticalAlignment = VerticalAlignment.Center,
@@ -357,15 +356,10 @@ internal sealed class PopupTokenComposition
         (Brush)_owner.FindResource(TokenBarGeometry.PaletteKey(kind));
 
     /// <summary>
-    /// The breakdown table: one row per kind, with <b>a share column per window</b>.
-    ///
-    /// <para>Two share columns rather than one shared, because the windows have measurably
-    /// different shapes — cache write ran 10.3% of a day against 0.93% of the month on the
-    /// machine this was designed against. One column between two token columns would be read
-    /// against whichever it sat nearer, which is the ambiguity issue #169 was reported about
-    /// in its original form.</para>
+    /// The breakdown table, laid out from the rows <see cref="PanelSections.TokenBars"/> built:
+    /// the header row muted and small, each kind's row with its colour chip, the total row bold.
     /// </summary>
-    private Grid BuildBreakdown(TokenComposition today, TokenComposition window31)
+    private Grid BuildBreakdown(IReadOnlyList<PanelTokenBreakdownRow> rows)
     {
         var table = new Grid();
         table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -378,32 +372,20 @@ internal sealed class PopupTokenComposition
         var secondary = (Brush)_owner.FindResource("TextSecondary");
         var primary = (Brush)_owner.FindResource("TextPrimary");
 
-        AddRow(table, 0, null,
-            TokenText.TokenBreakdownKindHeader, TokenText.TokenBreakdownTodayHeader,
-            TokenText.TokenBreakdownShareHeader, TokenText.TokenBreakdown31DaysHeader,
-            TokenText.TokenBreakdownShareHeader, muted, 9.5);
-
-        // Driven off today's order so both columns describe the same row, even where a kind
-        // is present in one window and absent from the other.
-        var kinds = today.HasTokens ? today.InDisplayOrder : window31.InDisplayOrder;
-        var row = 1;
-        foreach (var slice in kinds)
+        for (var i = 0; i < rows.Count; i++)
         {
-            var other = window31.InDisplayOrder.First(s => s.Kind == slice.Kind);
-            var mine = today.InDisplayOrder.First(s => s.Kind == slice.Kind);
+            var row = rows[i];
+            var (foreground, size, bold) = row.RowKind switch
+            {
+                PanelTokenRowKind.Header => (muted, 9.5, false),
+                PanelTokenRowKind.Total => (primary, 10.5, true),
+                _ => (secondary, 10.5, false),
+            };
 
-            AddRow(table, row++, KindBrush(slice.Kind),
-                TokenText.TokenKindLabel(slice.Kind),
-                FormatTokens(mine.Tokens), TokenText.TokenShare(mine.Share),
-                FormatTokens(other.Tokens), TokenText.TokenShare(other.Share),
-                secondary, 10.5);
+            AddRow(table, i, row.Kind is { } kind ? KindBrush(kind) : null,
+                row.Label, row.TodayTokens, row.TodayShare, row.WindowTokens, row.WindowShare,
+                foreground, size, bold);
         }
-
-        AddRow(table, row, null,
-            TokenText.TokenBreakdownTotalLabel,
-            FormatTokens(today.Total), TokenText.TokenShare(today.HasTokens ? 1 : 0),
-            FormatTokens(window31.Total), TokenText.TokenShare(window31.HasTokens ? 1 : 0),
-            primary, 10.5, bold: true);
 
         return table;
     }

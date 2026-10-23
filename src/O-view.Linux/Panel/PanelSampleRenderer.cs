@@ -24,21 +24,10 @@ namespace OView.Linux.Panel;
 /// </summary>
 public static class PanelSampleRenderer
 {
-    /// <summary>
-    /// The work area of the display the panel was reported cut off on: a 1024×768 desktop,
-    /// less <see cref="WorkAreaPlacement.DefaultMarginPx"/> at each end.
-    /// </summary>
-    private const double ShortWorkAreaDip = 712;
+    private const double ShortWorkAreaDip = SampleStates.ShortWorkAreaDip;
 
-    /// <summary>
-    /// The state rendered a second time for that display. Named rather than measured for:
-    /// the tallest state is what this wants, and it is one of the two off-plan states at 1008
-    /// DIP, but a name chosen at run time would rename the golden image the day some other
-    /// state grows past it. It is checked against the others in
-    /// <c>PanelShortScreenTests</c> instead, where being wrong is a failing test rather than
-    /// a quietly different picture.
-    /// </summary>
-    public const string ShortState = "offplan-on";
+    /// <summary>The state rendered a second time for the short display: <see cref="SampleStates.ShortState"/>.</summary>
+    public const string ShortState = SampleStates.ShortState;
 
     public static void RenderAll(string directory)
     {

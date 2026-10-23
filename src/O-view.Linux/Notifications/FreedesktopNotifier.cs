@@ -1,3 +1,4 @@
+using OView.Presentation.Panel;
 using Tmds.DBus.Protocol;
 
 namespace OView.Linux.Notifications;
@@ -49,7 +50,7 @@ public sealed class FreedesktopNotifier
                 signature: "susssasa{sv}i",
                 flags: MessageFlags.None);
 
-            writer.WriteString("O-view");        // app_name
+            writer.WriteString(PanelHeaderView.AppName);        // app_name
             writer.WriteUInt32(0);               // replaces_id — 0 means "a new one"
             writer.WriteString(IconName);        // app_icon
             writer.WriteString(title);           // summary

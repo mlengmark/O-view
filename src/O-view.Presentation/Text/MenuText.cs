@@ -1,4 +1,5 @@
 using System.Globalization;
+using OView.Presentation.Panel;
 
 namespace OView.Presentation.Text;
 
@@ -15,7 +16,7 @@ namespace OView.Presentation.Text;
 /// </summary>
 public static class MenuText
 {
-    public const string AppName = "O-view";
+
 
     public static string VersionLabel(string version) => $"v{version}";
 
@@ -83,5 +84,5 @@ public static class MenuText
 
     /// <summary>On both heads' menus. Names the app, because a bare "Exit" in a
     /// desktop-rendered menu does not say what it is exiting.</summary>
-    public const string ExitRow = "Exit " + AppName;
+    public const string ExitRow = "Exit " + PanelHeaderView.AppName;
 }

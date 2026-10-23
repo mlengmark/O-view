@@ -13,6 +13,7 @@ using OView.Core.Providers.CachedUsage;
 using OView.Linux.Platform;
 using OView.Linux.Rendering;
 using OView.Linux.Tray;
+using OView.Presentation.Samples;
 
 namespace OView.Linux;
 
@@ -341,21 +342,9 @@ internal static class Program
     {
         Directory.CreateDirectory(directory);
 
-        (string Name, UsageSnapshot Snapshot)[] states =
-        [
-            // A measured zero — the one state with no arc, where the pupil fades to the track
-            // (issue #139). Rendered here as well as on the Windows head, because the fade is
-            // a shared decision and this sheet is where a Linux drift would show.
-            ("live-00", IconState(DataSource.Live, 0, 0)),
-            ("live-06", IconState(DataSource.Live, 6, 1)),
-            ("live-47", IconState(DataSource.Live, 47, 20)),
-            ("live-58", IconState(DataSource.Live, 58, 30)),
-            ("live-72", IconState(DataSource.Live, 72, 40)),
-            ("live-91", IconState(DataSource.Live, 91, 60)),
-            ("live-100", IconState(DataSource.Live, 100, 80)),
-            ("estimate", IconState(DataSource.Estimate, null, null)),
-            ("none", UsageSnapshot.None),
-        ];
+        // The same states the Windows head renders, so this sheet is where a Linux drift in
+        // the shared icon geometry would show.
+        var states = SampleStates.IconStates(DateTimeOffset.UtcNow);
 
         foreach (var size in SkiaIconRenderer.CommonSizes)
         {
@@ -372,20 +361,8 @@ internal static class Program
         }
 
         Console.WriteLine(
-            $"wrote {SkiaIconRenderer.CommonSizes.Length * 2 * states.Length} PNGs to {Path.GetFullPath(directory)}");
+            $"wrote {SkiaIconRenderer.CommonSizes.Length * 2 * states.Count} PNGs to {Path.GetFullPath(directory)}");
     }
-
-    /// <summary>
-    /// One icon state: the two meters as a source reported them, with no reset times, which
-    /// the icon does not draw.
-    /// </summary>
-    private static UsageSnapshot IconState(DataSource source, int? session, int? weekly) => new(
-        source,
-        UsageSnapshot.Percent(session),
-        UsageSnapshot.Percent(weekly),
-        UsageSnapshot.Instant(null),
-        UsageSnapshot.Instant(DateTimeOffset.UtcNow),
-        UsageSnapshot.Instant(null));
 
     /// <summary>
     /// What only this head can tell the shared bundle. The tray-host line is the
