@@ -216,8 +216,8 @@ jobs:
   # The Linux head running for real: a virtual display (Xvfb) and a session bus, so tests
   # tagged LinuxRuntime can start the app and drive it the way a desktop would — the gap
   # behind #124 and #143, which shipped because no test could reach a live session bus and a
-  # dispatcher together. Phase 0b adds the tests that click the tray icon through a stand-in
-  # tray host; until then this proves the environment comes up.
+  # dispatcher together. The tests click the tray icon and open the menu through a stand-in
+  # tray host that owns the notification area on that bus.
   linux-runtime:
     runs-on: ubuntu-latest
     timeout-minutes: 15

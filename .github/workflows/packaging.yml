@@ -22,7 +22,7 @@ on:
     inputs:
       version:
         description: "Version to stamp"
-        default: "0.6.0-dev"
+        default: "0.0.0-dev"
 
 # This workflow builds and install-tests packages; it publishes nothing. Without this block
 # it inherits whatever the repository default is, which on a repo that has not been switched
@@ -32,7 +32,7 @@ permissions:
   contents: read
 
 env:
-  VERSION: ${{ github.event.inputs.version || '0.6.0-dev' }}
+  VERSION: ${{ github.event.inputs.version || '0.0.0-dev' }}
 
 # Every job here is bounded. Without these, a step that wedges runs to the Actions default
 # of six hours: on 2026-08-19 four jobs across two runs sat on the Lintian step for over an

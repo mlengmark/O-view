@@ -21,7 +21,7 @@ on:
       version:
         description: "Version to build (dry run — no release is created)"
         required: true
-        default: "0.6.0-dry"
+        default: "0.0.0-dry"
 
 # Read by default; only the job that actually publishes gets write. The build jobs run
 # third-party code — `choco install` fetches a community package, and the Linux job runs a
@@ -326,7 +326,7 @@ jobs:
       # be exercised before a real tag depends on it", and a step skipped on every dry run is
       # a step first exercised by the release that needs it to work. The permissions and the
       # action are exactly what a dry run should be proving. The cost is an attestation
-      # recorded against a throwaway 0.6.0-dry digest that no release ever publishes, which is
+      # recorded against a throwaway 0.0.0-dry digest that no release ever publishes, which is
       # inert — attestations are looked up by artifact digest, and nobody holds that artifact.
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
