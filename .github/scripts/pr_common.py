@@ -6,6 +6,7 @@ Reads the pull_request event GitHub hands every job, and parses the standard PR 
 import json
 import os
 import re
+import subprocess
 import sys
 
 SECTIONS = [
@@ -45,6 +46,23 @@ def pull_request():
 def is_dependabot(pr):
     """Dependabot writes its own PR format; its updates are judged by the test jobs alone."""
     return pr["user"]["login"] == "dependabot[bot]"
+
+
+def gate(not_applicable):
+    """The prologue every gate shares: the PR from the event, and an early pass for Dependabot.
+
+    `not_applicable` names the gate in the pass message, e.g. "format check not applicable".
+    """
+    pr = pull_request()
+    if is_dependabot(pr):
+        finish([], f"Dependabot PR: {not_applicable}.")
+    return pr
+
+
+def changed_files(base):
+    """The paths this PR changes, as `git diff --name-only <base> HEAD` lists them."""
+    return subprocess.run(["git", "diff", "--name-only", base, "HEAD"],
+                          capture_output=True, text=True, check=True).stdout.split()
 
 
 def sections(body):
