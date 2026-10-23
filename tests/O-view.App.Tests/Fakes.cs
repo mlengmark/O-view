@@ -219,6 +219,8 @@ public sealed class FakePanelPositionStore : IPanelPositionStore
         _places[displayId] = place;
         SaveCalls++;
     }
+
+    public void Forget(string displayId) => _places.Remove(displayId);
 }
 
 /// <summary>Captures log lines so a test can assert what was recorded without a file.</summary>

@@ -77,6 +77,23 @@ public sealed class PanelPositionFile
             OffsetYDip = place.OffsetYDip,
         };
 
+        return Write(displays);
+    }
+
+    /// <summary>
+    /// Removes <paramref name="displayId"/>'s entry, leaving every other display's untouched:
+    /// the menu's "Reset panel position" row. A display with no entry already reads as
+    /// "nothing remembered", so forgetting it again writes nothing and succeeds.
+    /// </summary>
+    /// <returns>Whether the write succeeded, or true when there was nothing to remove.</returns>
+    public bool Forget(string displayId)
+    {
+        var displays = ReadAll();
+        return !displays.Remove(displayId) || Write(displays);
+    }
+
+    private bool Write(Dictionary<string, Entry> displays)
+    {
         var file = new PositionFile { Version = 1, Displays = displays };
         var temp = _path + ".tmp";
         try

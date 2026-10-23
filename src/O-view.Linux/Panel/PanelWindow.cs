@@ -62,7 +62,7 @@ public sealed class PanelWindow : Window
     private readonly IAppLog? _log;
 
     /// <summary>Where a dragged place is kept, or null for a session that cannot read one back.</summary>
-    private readonly LinuxPanelPositionStore? _positions;
+    private readonly IPanelPositionStore? _positions;
 
     /// <summary>The shared rule over <see cref="_positions"/>. Null exactly when that is.</summary>
     private readonly PanelPlacementMemory? _memory;
@@ -94,7 +94,7 @@ public sealed class PanelWindow : Window
     /// </summary>
     private double _placedHeightDip;
 
-    public PanelWindow(LinuxPanelTheme theme, IAppLog? log = null, LinuxPanelPositionStore? positions = null)
+    public PanelWindow(LinuxPanelTheme theme, IAppLog? log = null, IPanelPositionStore? positions = null)
     {
         _content = new PanelContent(theme);
         _log = log;
@@ -716,8 +716,8 @@ public sealed class PanelWindow : Window
     /// no place can be read back. The single point the native-Wayland branch is applied at, so
     /// "nothing is saved there" is one decision rather than a condition at each use.
     /// </summary>
-    public static LinuxPanelPositionStore? StoreFor(
-        ClientPlacement placement, LinuxPanelPositionStore store) =>
+    public static IPanelPositionStore? StoreFor(
+        ClientPlacement placement, IPanelPositionStore store) =>
         placement.Allowed ? store : null;
 
     /// <summary>
@@ -820,16 +820,19 @@ public sealed class PanelWindow : Window
 public sealed class PanelDrag
 {
     /// <summary>
-    /// How far the pointer must travel on the header, in DIP, before a press becomes a move —
-    /// so a click on the header is still a click and not a one-pixel drag.
+    /// How far the pointer must travel on the header before a press becomes a move, so a click
+    /// on the header is still a click and not a one-pixel drag. The figure is
+    /// <see cref="PanelPlacementMemory.DragThresholdDip"/>, shared with the Windows head.
     /// </summary>
-    public const double ThresholdDip = 4;
+    public const double ThresholdDip = PanelPlacementMemory.DragThresholdDip;
 
     /// <summary>
     /// How long without a new position before a move counts as finished, and how long after
     /// that a lost activation is still the move settling rather than the user clicking away.
+    /// The figure is <see cref="PanelPlacementMemory.DragSettleGrace"/>, shared with the
+    /// Windows head.
     /// </summary>
-    public static readonly TimeSpan SettleGrace = TimeSpan.FromMilliseconds(400);
+    public static readonly TimeSpan SettleGrace = PanelPlacementMemory.DragSettleGrace;
 
     private Point? _pressedAt;
     private DateTimeOffset _endedAt = DateTimeOffset.MinValue;
@@ -888,46 +891,3 @@ public sealed class PanelDrag
     public bool SuppressesDismissal(DateTimeOffset now) => InFlight || now - _endedAt < SettleGrace;
 }
 
-/// <summary>
-/// The file-backed <see cref="IPanelPositionStore"/> this head hands the shared placement rule:
-/// <see cref="PanelPositionFile"/> plus the one translation Core cannot do for itself, between
-/// its bare-string corner and <see cref="WorkAreaCorner"/>.
-///
-/// <para>The file lands in O-view's own data folder — <c>~/.local/share/O-view</c>, which is
-/// where .NET maps <c>LocalApplicationData</c> on Linux — and never among Claude's files, which
-/// O-view only ever reads.</para>
-///
-/// <para>A corner the file does not name degrades to "nothing remembered", exactly as an
-/// unreadable file already does: a place O-view cannot interpret is not a place, and guessing a
-/// corner would put the panel somewhere the user never left it. <c>Enum.IsDefined</c> sits
-/// beside the parse because <c>TryParse</c> also accepts a bare number — <c>"7"</c> would hand
-/// back a corner that does not exist — and a hand-edited or half-written file is exactly where
-/// that comes from.</para>
-/// </summary>
-public sealed class LinuxPanelPositionStore(PanelPositionFile file) : IPanelPositionStore
-{
-    public LinuxPanelPositionStore() : this(new PanelPositionFile()) { }
-
-    public PanelPlace? Read(string displayId) =>
-        file.Read(displayId) is { } place
-        && Enum.TryParse<WorkAreaCorner>(place.Corner, out var corner) && Enum.IsDefined(corner)
-            ? new PanelPlace(corner, place.OffsetXDip, place.OffsetYDip)
-            : null;
-
-    public void Save(string displayId, PanelPlace place) =>
-        file.Save(displayId, new PanelPositionFile.Place(
-            place.Corner.ToString(), place.OffsetXDip, place.OffsetYDip));
-
-    /// <summary>
-    /// Forgets this display's place, so the panel opens at the work-area corner again — the
-    /// menu's "Reset panel position" row.
-    ///
-    /// <para>Written as an entry with no corner rather than deleted, because
-    /// <see cref="PanelPositionFile"/> has no delete and is not this slice's to change. An empty
-    /// corner is already that file's own reading of "nothing remembered" — its <c>Read</c> wants
-    /// a non-empty one — so this says deliberately what it already says about a damaged entry,
-    /// and it survives a restart where a flag in memory would not.</para>
-    /// </summary>
-    public void Forget(string displayId) =>
-        file.Save(displayId, new PanelPositionFile.Place("", 0, 0));
-}

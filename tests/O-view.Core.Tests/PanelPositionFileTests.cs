@@ -71,4 +71,28 @@ public class PanelPositionFileTests : IDisposable
         Assert.False(File.Exists(Path + ".tmp"));
         Assert.True(File.Exists(Path));
     }
+
+    [Fact]
+    public void ForgettingADisplay_RemovesOnlyItsEntry()
+    {
+        var file = new PanelPositionFile(Path);
+        file.Save("laptop-panel", new PanelPositionFile.Place("TopLeft", 1, 2));
+        file.Save("external-monitor", new PanelPositionFile.Place("BottomRight", 3, 4));
+
+        Assert.True(file.Forget("laptop-panel"));
+
+        Assert.Null(file.Read("laptop-panel"));
+        Assert.Equal(new PanelPositionFile.Place("BottomRight", 3, 4), file.Read("external-monitor"));
+    }
+
+    /// <summary>Forgetting a display that was never saved is the state the caller wanted, not a failure.</summary>
+    [Fact]
+    public void ForgettingADisplayNeverSavedTo_Succeeds()
+    {
+        var file = new PanelPositionFile(Path);
+
+        Assert.True(file.Forget("display-1"));
+        Assert.Null(file.Read("display-1"));
+        Assert.False(File.Exists(Path));
+    }
 }
