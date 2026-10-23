@@ -110,7 +110,7 @@ public static class UpdateCheck
             return UpdateCheckResult.Unknown;
         }
 
-        var tag = JsonFields.StringOrNull(root, "tag_name");
+        var tag = GetString(root, "tag_name");
         if (tag is null || !ReleaseVersion.TryParse(tag, out var latest))
         {
             return UpdateCheckResult.Unknown;
@@ -151,9 +151,9 @@ public static class UpdateCheck
 
         foreach (var asset in assets.EnumerateArray())
         {
-            if (JsonFields.StringOrNull(asset, "name") is { } name
+            if (GetString(asset, "name") is { } name
                 && matches(name)
-                && JsonFields.StringOrNull(asset, "browser_download_url") is { Length: > 0 } url)
+                && GetString(asset, "browser_download_url") is { Length: > 0 } url)
             {
                 return url;
             }
@@ -161,6 +161,10 @@ public static class UpdateCheck
         return null;
     }
 
+    private static string? GetString(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
 
     private static bool GetBool(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True;
