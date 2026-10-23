@@ -22,7 +22,7 @@
 #define AppUrl "https://github.com/mlengmark/O-view"
 #define AppExeName "O-view.Tray.exe"
 
-; Must match StartupRegistration in src/O-view.Tray/Tray/StartupRegistration.cs
+; Must match RegistryStartupRegistration in src/O-view.Tray/Tray/RegistryStartupRegistration.cs
 ; exactly — same Run value name and the same quoted-path data — so the installer
 ; and the app's "Run at startup" menu item manage one single registry value rather
 ; than two competing ones.
@@ -106,7 +106,7 @@ Name: "{group}\Uninstall {#AppName}"; Filename: "{uninstallexe}"
 [Registry]
 ; Run at startup, pointing at the installed (stable) path. Only written when the user
 ; ticks the Startup task; removed on uninstall. Same value name as the app's own
-; StartupRegistration, so the in-app "Run at startup" toggle stays authoritative.
+; RegistryStartupRegistration, so the in-app "Run at startup" toggle stays authoritative.
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; \
     ValueType: string; ValueName: "{#RunValueName}"; ValueData: """{app}\{#AppExeName}"""; \
     Tasks: startup; Flags: uninsdeletevalue
