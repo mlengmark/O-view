@@ -11,5 +11,6 @@
     <Project Path="tests/O-view.Core.Tests/O-view.Core.Tests.csproj" />
     <Project Path="tests/O-view.Linux.Tests/O-view.Linux.Tests.csproj" />
     <Project Path="tests/O-view.Presentation.Tests/O-view.Presentation.Tests.csproj" />
+    <Project Path="tests/O-view.TestSupport/O-view.TestSupport.csproj" />
   </Folder>
 </Solution>
