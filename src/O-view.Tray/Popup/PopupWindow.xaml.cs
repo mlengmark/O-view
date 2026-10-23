@@ -29,6 +29,9 @@ public partial class PopupWindow : Window, IFlyout
     /// <summary>Forces a theme for verification screenshots; null follows the OS.</summary>
     public bool? ThemeOverride { get; set; }
 
+    /// <summary>The theme the panel was last laid out in, for the parts that paint from the shared palette in code.</summary>
+    private bool _light;
+
     /// <summary>
     /// Pins the clock for verification renders; null reads the real one. Golden images are
     /// compared pixel for pixel, so a countdown that ticked between two renders would fail
@@ -266,7 +269,8 @@ public partial class PopupWindow : Window, IFlyout
 
     public void ShowNearTrayIcon(UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account)
     {
-        PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
+        _light = ThemeOverride ?? PanelTheme.IsAppsLight();
+        PanelTheme.Apply(Resources, _light);
         Populate(snapshot, stats, account);
 
         // The chart is a Canvas — its ActualWidth is only known after layout, so it is
@@ -306,7 +310,8 @@ public partial class PopupWindow : Window, IFlyout
         bool expandComposition = false, PanelDensity? density = null, double? compositionReveal = null,
         double? availableHeightDip = null)
     {
-        PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
+        _light = ThemeOverride ?? PanelTheme.IsAppsLight();
+        PanelTheme.Apply(Resources, _light);
         ApplyDensity(density ?? PanelDensity.Normal);
         Populate(snapshot, stats, account);
 
@@ -431,14 +436,14 @@ public partial class PopupWindow : Window, IFlyout
         }
 
         var session = PanelSections.SessionMeter(snapshot, banner, utcNow, local);
-        PopupMeter.Populate(SessionPctText, SessionBar, SessionBarFill, session);
+        PopupMeter.Populate(SessionPctText, SessionBar, SessionBarFill, session, _light);
         // The session line always has something to say — the unknown state is a sentence of its
         // own, not an absence — so SetLine's empty case is unreachable here.
         PopupText.SetLine(SessionResetText, session.ResetLine ?? "");
 
         var weekly = PanelSections.WeeklyMeter(
             snapshot, banner, _lastSettings, BoostNotices, utcNow, local);
-        PopupMeter.Populate(WeeklyPctText, WeeklyBar, WeeklyBarFill, weekly);
+        PopupMeter.Populate(WeeklyPctText, WeeklyBar, WeeklyBarFill, weekly, _light);
         _weeklyRow.Populate(weekly);
 
         var report = ScopeReport ?? TranscriptScopeReport.Inspect();
