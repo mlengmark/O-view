@@ -4,15 +4,12 @@ Every section present and in order; Merge order names Position, Depends on and T
 Checks says what guarded changes were made; a PR that changes golden images shows them.
 """
 import re
-import subprocess
 import sys
 
 sys.path.insert(0, ".github/scripts")
-from pr_common import SECTIONS, field, finish, is_dependabot, pull_request, sections  # noqa: E402
+from pr_common import SECTIONS, changed_files, field, finish, gate, sections  # noqa: E402
 
-pr = pull_request()
-if is_dependabot(pr):
-    finish([], "Dependabot PR: format check not applicable.")
+pr = gate("format check not applicable")
 
 problems = []
 found = sections(pr.get("body"))
@@ -36,10 +33,7 @@ if not field(found.get("Checks", ""), "Guarded changes"):
 if not re.search(r"\((?:[A-Z]+-\d+|Phase [0-9A-Za-z]+)\)\s*$", pr.get("title", "")):
     problems.append('title must end with the issue key, e.g. "(OVIAA-14)"')
 
-base = pr["base"]["sha"]
-changed = subprocess.run(["git", "diff", "--name-only", base, "HEAD"],
-                         capture_output=True, text=True, check=True).stdout.split()
-goldens = [p for p in changed if p.startswith("tests/golden/")]
+goldens = [p for p in changed_files(pr["base"]["sha"]) if p.startswith("tests/golden/")]
 if goldens and "![" not in found.get("Screenshots", ""):
     problems.append(f"{len(goldens)} golden image(s) changed but Screenshots shows none")
 
