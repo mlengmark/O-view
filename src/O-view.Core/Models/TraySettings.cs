@@ -66,10 +66,8 @@ public sealed record TraySettings(
     /// <summary>The user's entered reset, or null when unset or unreadable.</summary>
     public ManualWeeklyReset? WeeklyReset => ManualWeeklyReset.Parse(WeeklyResetDay, WeeklyResetTime);
 
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "O-view",
-        "settings.json");
+    /// <summary>Default location: <c>settings.json</c> under <see cref="OViewDataDirectory"/>.</summary>
+    public static string DefaultPath => OViewDataDirectory.File("settings.json");
 
     /// <summary>Load settings; defaults on any failure. Never throws.</summary>
     public static TraySettings Load(string? path = null)

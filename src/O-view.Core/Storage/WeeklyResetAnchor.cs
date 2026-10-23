@@ -28,11 +28,8 @@ namespace OView.Core.Storage;
 /// </summary>
 public sealed class WeeklyResetAnchor
 {
-    /// <summary>Default location: <c>%LOCALAPPDATA%\O-view\weekly-reset.json</c>.</summary>
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "O-view",
-        "weekly-reset.json");
+    /// <summary>Default location: <c>weekly-reset.json</c> under <see cref="OViewDataDirectory"/>.</summary>
+    public static string DefaultPath => OViewDataDirectory.File("weekly-reset.json");
 
     /// <summary>
     /// The observation log this supersedes. Deleted on first successful save rather than left
@@ -83,8 +80,7 @@ public sealed class WeeklyResetAnchor
             var file = JsonSerializer.Deserialize<AnchorFile>(stream, SerializerOptions);
 
             if (file?.AnchorUtc is not { Length: > 0 } text ||
-                !DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var anchor))
+                !UtcInstant.TryParse(text, out var anchor))
             {
                 return null;
             }

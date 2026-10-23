@@ -37,14 +37,6 @@ public sealed class UpdateService
     /// </summary>
     public static string CurrentVersion => ReleaseFeed.VersionOf(Assembly.GetExecutingAssembly());
 
-    /// <summary>
-    /// Whether this process is running from the per-user install location
-    /// (<c>%LOCALAPPDATA%\Programs\O-view</c>, ADR-0008). Only an installed build can be
-    /// replaced in place by re-running the installer; a portable exe is sent to the
-    /// releases page instead — the installer would create a parallel install rather than
-    /// update the loose exe, and a running single-file exe cannot overwrite itself.
-    /// </summary>
-    public static bool IsInstalled => CurrentInstallKind is InstallKind.WindowsInstaller;
 
     /// <summary>
     /// How this build arrived, which <see cref="UpdatePolicy"/> turns into what it may do.

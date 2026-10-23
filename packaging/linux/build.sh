@@ -3,7 +3,7 @@
 # Builds O-view's Linux artifacts for one architecture: a .deb and a portable tarball.
 #
 #   ./packaging/linux/build.sh <version> <rid> [output-dir]
-#   ./packaging/linux/build.sh 0.6.0 linux-x64 dist
+#   ./packaging/linux/build.sh 0.0.0 linux-x64 dist
 #
 # Must run on a Debian-family host: it uses dpkg-deb rather than assembling an ar/tar
 # archive by hand, so the result is a package lintian is willing to look at.
