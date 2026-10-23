@@ -29,22 +29,10 @@ internal sealed class PanelOffPlan(LinuxPanelTheme theme)
     /// with no way to follow it. The label still introduces it, because the sentence above
     /// ends by sending the reader somewhere and the address alone does not say where.</para>
     /// </summary>
-    public void AddBannerTo(StackPanel root, PanelOffPlanBannerView banner, PanelDensity density)
-    {
-        var stack = new StackPanel { Spacing = 2 };
-        stack.Children.Add(Text(banner.Title, 13, _theme["WarnText"], FontWeight.SemiBold));
-        stack.Children.Add(Text(banner.Detail, 11, _theme["WarnText"]));
-        stack.Children.Add(Text(
-            $"{banner.LinkLabel}: {banner.LinkUrl}", 11, _theme["WarnText"]));
-
-        root.Children.Add(new Border
-        {
-            Background = _theme["WarnBg"],
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(NaturalTilePadding * density.SpacingScale),
-            Child = stack,
-        });
-    }
+    public void AddBannerTo(StackPanel root, PanelOffPlanBannerView banner, PanelDensity density) =>
+        root.Children.Add(WarnCard(
+            _theme, NaturalTilePadding * density.SpacingScale,
+            banner.Title, banner.Detail, $"{banner.LinkLabel}: {banner.LinkUrl}"));
 
     /// <summary>
     /// The standing 31-day off-plan spend section (<see cref="PanelOffPlanView"/>): heading and
