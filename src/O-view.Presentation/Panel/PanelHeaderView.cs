@@ -18,12 +18,9 @@ public sealed record PanelHeaderView(
     string Tier)
 {
     /// <summary>
-    /// The app's own name, above the freshness line.
-    ///
-    /// <para>The Windows panel also carries it as a literal in <c>PopupWindow.xaml</c>, which
-    /// this does not replace — binding the markup to it is a change to a file this did not
-    /// touch. It is here so the Linux head stops authoring its own copy, and so the markup has
-    /// something to bind to when a slice next opens that file.</para>
+    /// The app's own name, above the freshness line, and the one place it is spelled: the
+    /// Windows panel and menu bind their markup to it, and the Linux window title, tray
+    /// tooltip and notifications read it too.
     /// </summary>
     public const string AppName = "O-view";
 

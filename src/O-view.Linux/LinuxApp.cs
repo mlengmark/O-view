@@ -17,6 +17,7 @@ using OView.Linux.Panel;
 using OView.Linux.Platform;
 using OView.Linux.Rendering;
 using OView.Linux.Tray;
+using OView.Presentation.Panel;
 using OView.Presentation.Text;
 
 namespace OView.Linux;
@@ -161,7 +162,7 @@ public sealed class LinuxApp : Application, IShellToSkin
         _tray = new TrayIcon
         {
             Icon = ToWindowIcon(UsageSnapshot.None),
-            ToolTipText = "O-view",
+            ToolTipText = PanelHeaderView.AppName,
             IsVisible = true,
             Menu = BuildMenu(host.Shell, _placement),
         };

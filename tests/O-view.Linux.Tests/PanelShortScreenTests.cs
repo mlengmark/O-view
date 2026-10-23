@@ -39,7 +39,7 @@ public class PanelShortScreenTests
     /// leaves once <see cref="WorkAreaPlacement.DefaultMarginPx"/> is taken at each end.</summary>
     private const double ScreenHeightDip = 768;
 
-    private const double ShortWorkAreaDip = 712;
+    private const double ShortWorkAreaDip = OView.Presentation.Samples.SampleStates.ShortWorkAreaDip;
 
     private const double PanelWidthDip = 400;
 

@@ -8,7 +8,6 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using OView.App.Rendering;
 using OView.Core.Models;
-using OView.Core.Providers.Jsonl;
 using OView.Presentation.Panel;
 using OView.Presentation.Text;
 using static OView.Linux.Panel.PanelPrimitives;
@@ -27,38 +26,32 @@ public sealed class PanelTokenBars(LinuxPanelTheme theme)
 {
     private readonly LinuxPanelTheme _theme = theme;
 
-    public void AddTo(StackPanel root, PanelStatistics stats, TranscriptScopeReport? scopeReport)
+    public void AddTo(StackPanel root, PanelTokenBarsView view)
     {
-        // What was billed, beside tiles that headline only output (issue #253). Omitted when
-        // there is nothing to break down — a composition of zero explains nothing.
-        var today = stats.CompositionToday;
-        var window31 = stats.Composition31Days;
-        if (!today.HasTokens && !window31.HasTokens)
+        if (!view.Show)
         {
             return;
         }
 
-        var breakdown = BuildBreakdown(today, window31);
+        var breakdown = BuildBreakdown(view.Breakdown);
 
         var header = new Grid
         {
             Margin = new Thickness(0, 12, 0, 0),
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
         };
-        header.Children.Add(Text(TokenText.TokensUsedHeading, 11, _theme["TextSecondary"]));
+        header.Children.Add(Text(view.Heading, 11, _theme["TextSecondary"]));
 
         var switcher = ViewSwitch(breakdown);
         Grid.SetColumn(switcher, 1);
         header.Children.Add(switcher);
         root.Children.Add(header);
 
-        root.Children.Add(TokenBar(today, TokenText.TokensUsedTodayLabel, TokenText.TokenWindowToday, 6));
-        root.Children.Add(TokenBar(window31, TokenText.TokensUsed31DaysLabel, TokenText.TokenWindow31Days, 9));
+        root.Children.Add(TokenBar(view.Today, 6));
+        root.Children.Add(TokenBar(view.Window31, 9));
         root.Children.Add(breakdown);
 
-        // Which surfaces these figures are made of. Empty when nothing was found at all —
-        // the scope note owns that state and says considerably more (issue #171).
-        if ((scopeReport ?? TranscriptScopeReport.Inspect()).CoverageLine() is { Length: > 0 } coverage)
+        if (view.CoverageLine is { Length: > 0 } coverage)
         {
             root.Children.Add(Muted(_theme, coverage));
         }
@@ -170,18 +163,18 @@ public sealed class PanelTokenBars(LinuxPanelTheme theme)
     /// because the segment order and the minimum width are measured decisions and two copies
     /// of a measured decision is how they drift.</para>
     /// </summary>
-    private Control TokenBar(TokenComposition composition, string heading, string window, double topMargin)
+    private Control TokenBar(PanelTokenBarView bar, double topMargin)
     {
         var block = new StackPanel { Spacing = 4, Margin = new Thickness(0, topMargin, 0, 0) };
 
         var head = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
-        head.Children.Add(Text(heading, 10.5, _theme["TextSecondary"]));
-        var total = Text(UsageFormatter.Tokens(composition.Total), 12, _theme["TextPrimary"], FontWeight.SemiBold);
+        head.Children.Add(Text(bar.Heading, 10.5, _theme["TextSecondary"]));
+        var total = Text(bar.Total, 12, _theme["TextPrimary"], FontWeight.SemiBold);
         Grid.SetColumn(total, 1);
         head.Children.Add(total);
         block.Children.Add(head);
 
-        var slices = composition.InDisplayOrder.Where(s => s.Tokens > 0).ToList();
+        var slices = bar.Segments;
 
         // Avalonia gives no laid-out width before the first arrange pass either, so the
         // widths are applied on size change against the track the bar actually got.
@@ -202,7 +195,7 @@ public sealed class PanelTokenBars(LinuxPanelTheme theme)
                     i == 0 ? 3 : 0, i == slices.Count - 1 ? 3 : 0,
                     i == slices.Count - 1 ? 3 : 0, i == 0 ? 3 : 0),
             };
-            ToolTip.SetTip(piece, SegmentTip(slice, window));
+            ToolTip.SetTip(piece, SegmentTip(slice, bar.Window));
             Grid.SetColumn(piece, i);
             track.Children.Add(piece);
             pieces.Add(piece);
@@ -210,7 +203,7 @@ public sealed class PanelTokenBars(LinuxPanelTheme theme)
 
         track.SizeChanged += (_, _) =>
         {
-            var segments = TokenBarGeometry.Segments(composition, track.Bounds.Width);
+            var segments = TokenBarGeometry.Segments(bar.Composition, track.Bounds.Width);
             if (segments.Count != track.ColumnDefinitions.Count)
             {
                 return;
@@ -225,8 +218,9 @@ public sealed class PanelTokenBars(LinuxPanelTheme theme)
 
         // Every figure the bar cannot draw honestly. Not decoration — see TokenBarGeometry.
         var legend = new WrapPanel();
-        foreach (var slice in slices)
+        for (var i = 0; i < slices.Count; i++)
         {
+            var slice = slices[i];
             var entry = new StackPanel
             {
                 Orientation = Orientation.Horizontal,
@@ -241,10 +235,8 @@ public sealed class PanelTokenBars(LinuxPanelTheme theme)
                 Background = KindBrush(slice.Kind),
                 VerticalAlignment = VerticalAlignment.Center,
             });
-            entry.Children.Add(Text(
-                $"{TokenText.TokenKindLabel(slice.Kind)} {UsageFormatter.Tokens(slice.Tokens)}",
-                10.5, _theme["TextSecondary"]));
-            ToolTip.SetTip(entry, SegmentTip(slice, window));
+            entry.Children.Add(Text(bar.Legend[i].Text, 10.5, _theme["TextSecondary"]));
+            ToolTip.SetTip(entry, SegmentTip(slice, bar.Window));
             legend.Children.Add(entry);
         }
 
@@ -259,11 +251,10 @@ public sealed class PanelTokenBars(LinuxPanelTheme theme)
     private IBrush KindBrush(TokenKind kind) => _theme[TokenBarGeometry.PaletteKey(kind)];
 
     /// <summary>
-    /// The breakdown table, with <b>a share column per window</b> — the two windows have
-    /// measurably different shapes, so one shared column would be read against whichever
-    /// token column it sat nearer.
+    /// The breakdown table, laid out from the rows <see cref="PanelSections.TokenBars"/> built:
+    /// the header row muted and small, each kind's row with its colour chip, the total row bold.
     /// </summary>
-    private Control BuildBreakdown(TokenComposition today, TokenComposition window31)
+    private Control BuildBreakdown(IReadOnlyList<PanelTokenBreakdownRow> rows)
     {
         var table = new Grid
         {
@@ -272,29 +263,20 @@ public sealed class PanelTokenBars(LinuxPanelTheme theme)
             ColumnDefinitions = new ColumnDefinitions("*,Auto,Auto,Auto,Auto"),
         };
 
-        AddBreakdownRow(table, 0, null,
-            TokenText.TokenBreakdownKindHeader, TokenText.TokenBreakdownTodayHeader,
-            TokenText.TokenBreakdownShareHeader, TokenText.TokenBreakdown31DaysHeader,
-            TokenText.TokenBreakdownShareHeader, _theme["TextMuted"], 9.5);
-
-        var row = 1;
-        foreach (var slice in (today.HasTokens ? today : window31).InDisplayOrder)
+        for (var i = 0; i < rows.Count; i++)
         {
-            var mine = today.InDisplayOrder.First(s => s.Kind == slice.Kind);
-            var other = window31.InDisplayOrder.First(s => s.Kind == slice.Kind);
+            var row = rows[i];
+            var (foreground, size, weight) = row.RowKind switch
+            {
+                PanelTokenRowKind.Header => (_theme["TextMuted"], 9.5, FontWeight.Normal),
+                PanelTokenRowKind.Total => (_theme["TextPrimary"], 10.5, FontWeight.SemiBold),
+                _ => (_theme["TextSecondary"], 10.5, FontWeight.Normal),
+            };
 
-            AddBreakdownRow(table, row++, KindBrush(slice.Kind),
-                TokenText.TokenKindLabel(slice.Kind),
-                UsageFormatter.Tokens(mine.Tokens), TokenText.TokenShare(mine.Share),
-                UsageFormatter.Tokens(other.Tokens), TokenText.TokenShare(other.Share),
-                _theme["TextSecondary"], 10.5);
+            AddBreakdownRow(table, i, row.Kind is { } kind ? KindBrush(kind) : null,
+                row.Label, row.TodayTokens, row.TodayShare, row.WindowTokens, row.WindowShare,
+                foreground, size, weight);
         }
-
-        AddBreakdownRow(table, row, null,
-            TokenText.TokenBreakdownTotalLabel,
-            UsageFormatter.Tokens(today.Total), TokenText.TokenShare(today.HasTokens ? 1 : 0),
-            UsageFormatter.Tokens(window31.Total), TokenText.TokenShare(window31.HasTokens ? 1 : 0),
-            _theme["TextPrimary"], 10.5, FontWeight.SemiBold);
 
         return table;
     }

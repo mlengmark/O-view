@@ -441,14 +441,9 @@ public partial class PopupWindow : Window, IFlyout
         PopupMeter.Populate(WeeklyPctText, WeeklyBar, WeeklyBarFill, weekly);
         _weeklyRow.Populate(weekly);
 
-        _tiles.Populate(
-            stats,
-            authoritative,
-            snapshot.SessionPercentValue is { Status: not UsageValueStatus.Unavailable, Value: > 0 },
-            ScopeReport);
-        _composition.Populate(
-            stats.CompositionToday, stats.Composition31Days,
-            (ScopeReport ?? TranscriptScopeReport.Inspect()).CoverageLine());
+        var report = ScopeReport ?? TranscriptScopeReport.Inspect();
+        _tiles.Populate(stats, PanelSections.ScopeNote(stats, snapshot, report));
+        _composition.Populate(PanelSections.TokenBars(stats, report));
         _divergence.Populate(stats, CachedUsage, utcNow, local);
 
         // Set here rather than in the markup so the day count is the window the bars below it

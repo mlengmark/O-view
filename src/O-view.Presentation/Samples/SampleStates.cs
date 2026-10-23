@@ -43,6 +43,51 @@ public static class SampleStates
     /// <summary>The zone every sample is rendered in, so a UTC CI runner and a CET desktop agree.</summary>
     public static readonly TimeZoneInfo Zone = TimeZoneInfo.Utc;
 
+    /// <summary>
+    /// The work area of the display the panel was reported running off: a 1024×768 desktop,
+    /// less <c>WorkAreaPlacement.DefaultMarginPx</c> at each end. Both heads render their short
+    /// sample against this figure, so the two pictures are comparable.
+    /// </summary>
+    public const double ShortWorkAreaDip = 712;
+
+    /// <summary>
+    /// The state rendered a second time for that display: the tallest one, which is what the
+    /// short sample wants. Named rather than measured, because a name chosen at run time would
+    /// rename the golden image the day some other state grows past it; the Linux head's
+    /// <c>PanelShortScreenTests</c> checks it against the others instead.
+    /// </summary>
+    public const string ShortState = "offplan-on";
+
+    /// <summary>
+    /// The icon's sample states, shared by both heads' <c>--samples</c> hooks: the two meters as
+    /// a source reported them, with no reset times, which the icon does not draw.
+    /// </summary>
+    /// <param name="capturedAtUtc">When the reading was taken; the icon does not draw that either.</param>
+    public static IReadOnlyList<(string Name, UsageSnapshot Snapshot)> IconStates(DateTimeOffset capturedAtUtc) =>
+    [
+        // A measured zero: the one state with no arc at all, where the pupil fades to the
+        // track. Nothing rendered it once, which is how the bright-green-pupil-on-an-empty-ring
+        // icon shipped (issue #139).
+        ("live-00", IconState(DataSource.Live, 0, 0, capturedAtUtc)),
+        ("live-06", IconState(DataSource.Live, 6, 1, capturedAtUtc)),
+        ("live-47", IconState(DataSource.Live, 47, 20, capturedAtUtc)),
+        ("live-58", IconState(DataSource.Live, 58, 30, capturedAtUtc)),
+        ("live-72", IconState(DataSource.Live, 72, 40, capturedAtUtc)),
+        ("live-91", IconState(DataSource.Live, 91, 60, capturedAtUtc)),
+        ("live-100", IconState(DataSource.Live, 100, 80, capturedAtUtc)),
+        ("estimate", IconState(DataSource.Estimate, null, null, capturedAtUtc)),
+        ("none", UsageSnapshot.None),
+    ];
+
+    private static UsageSnapshot IconState(DataSource source, int? session, int? weekly, DateTimeOffset capturedAtUtc) =>
+        new(
+            source,
+            UsageSnapshot.Percent(session),
+            UsageSnapshot.Percent(weekly),
+            UsageSnapshot.Instant(null),
+            UsageSnapshot.Instant(capturedAtUtc),
+            UsageSnapshot.Instant(null));
+
     private static readonly DateOnly Today = DateOnly.FromDateTime(Now.UtcDateTime);
 
     private static readonly ClaudeAccount Account = new("Sample User", "sample@example.com", "claude_pro", "sample-org");

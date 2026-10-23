@@ -11,18 +11,6 @@ namespace OView.Presentation.Text;
 /// </summary>
 public static class TokenText
 {
-    // Token and money formatting live in UsageFormatter, right beside this class. The handful
-    // of sentences below that embed a figure still duplicate its two one-line rules rather than
-    // call it directly.
-    private static string FormatTokens(long tokens) => tokens switch
-    {
-        >= 1_000_000 => string.Create(CultureInfo.InvariantCulture, $"{tokens / 1_000_000.0:0.0}M"),
-        >= 1_000 => string.Create(CultureInfo.InvariantCulture, $"{tokens / 1_000.0:0.0}K"),
-        _ => tokens.ToString(CultureInfo.InvariantCulture),
-    };
-
-    private static string FormatUsd(decimal usd) =>
-        "$" + usd.ToString("0.00", CultureInfo.InvariantCulture);
 
     /// <summary>
     /// The coverage caveat: how much of the 31-day window is actually recorded, or empty
@@ -74,7 +62,7 @@ public static class TokenText
 
         if (stats.TtlUnrecordedCacheWrites > 0)
         {
-            parts.Add($"{FormatTokens(stats.TtlUnrecordedCacheWrites)} cache writes "
+            parts.Add($"{UsageFormatter.Tokens(stats.TtlUnrecordedCacheWrites)} cache writes "
                       + "with no recorded duration, priced at the 5-minute rate");
         }
 
@@ -255,7 +243,7 @@ public static class TokenText
     /// </summary>
     public static string TokenCardCaption(TokenKind kind, double share, decimal? estUsd, string window)
     {
-        var value = estUsd is null ? "value unknown" : $"Est. {FormatUsd(estUsd.Value)}";
+        var value = estUsd is null ? "value unknown" : $"Est. {UsageFormatter.Usd(estUsd.Value)}";
         return $"{TokenKindLabel(kind)} · {TokenShare(share)} of {window} · {value}";
     }
 
@@ -308,7 +296,7 @@ public static class TokenText
     /// the hover cards rendered as proof — which is two chances for the proof to describe a
     /// card that is not the shipped one.</para>
     /// </summary>
-    public static string DayBarTokens(long tokens) => $"{FormatTokens(tokens)} tokens";
+    public static string DayBarTokens(long tokens) => $"{UsageFormatter.Tokens(tokens)} tokens";
 
     /// <summary>
     /// The caption under a model-breakdown chart: <c>by model</c>, or <c>excl. 2 unpriced</c>

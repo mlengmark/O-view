@@ -1,7 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
 using OView.Core.Models;
-using OView.Core.Providers.Jsonl;
 using OView.Presentation.Panel;
 using OView.Presentation.Text;
 
@@ -19,7 +18,11 @@ internal sealed class PopupTiles(
     TextBlock scopeLine, StatTile tokensToday, StatTile estToday, StatTile tokens31, StatTile est31,
     TextBlock scopeNote)
 {
-    public void Populate(PanelStatistics stats, bool authoritative, bool hasSessionPercent, TranscriptScopeReport? scopeReport)
+    /// <param name="note">
+    /// The scope note beneath the tiles, or null when it does not apply; decided in
+    /// <see cref="PanelSections.ScopeNote"/>.
+    /// </param>
+    public void Populate(PanelStatistics stats, string? note)
     {
         // Always shown, unlike the per-tile caveats. Partial history and an unpriced model are
         // conditions that pass; the tiles excluding chat and cloud sessions is the standing shape
@@ -37,24 +40,9 @@ internal sealed class PopupTiles(
         tokens31.Populate(tiles.Tokens31Days);
         est31.Populate(tiles.Est31Days);
 
-        // Nothing recorded at all, while the plan meters show real usage: the tiles are
-        // measuring a source this user does not feed, not measuring zero usage. Say which
-        // source, so the 0 is interpretable instead of looking broken.
-        //
-        // The text is derived from what the scan actually resolved, never a literal. It
-        // used to name a hard-coded %USERPROFILE%\.claude\projects and only Claude Code —
-        // so a Cowork user, whose transcripts ARE read, was told their source was not
-        // counted, and a packaged Desktop install was pointed at a path O-view never
-        // searched (issue #58; the mistake ClaudeDataRoots exists to prevent).
-        //
-        // Keyed on the token total, not on RecordedDays. Those meant the same thing while
-        // RecordedDays counted days with usage; now that it counts days observed (issue
-        // #142), a store older than the window reports full coverage while the tiles still
-        // read zero — the exact case this note is for. "The tiles show nothing" is what the
-        // note is about, so it is what the condition should say.
-        if (stats.Tokens31Days == 0 && authoritative && hasSessionPercent)
+        if (note is not null)
         {
-            scopeNote.Text = (scopeReport ?? TranscriptScopeReport.Inspect()).Explain();
+            scopeNote.Text = note;
             scopeNote.Visibility = Visibility.Visible;
         }
         else
