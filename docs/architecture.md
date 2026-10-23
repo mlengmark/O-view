@@ -27,6 +27,8 @@ References run one way: **skins → App → Presentation → Core**. A project m
 | Stat tiles, per-model breakdown | `PanelTileView`, `PanelTilesView`, `PanelTileSegmentView` |
 | 31-day graph, weekly-reset gridlines | `PanelGraphView`, `PanelGraphColumnView`, `PanelGraphBoundaryView` |
 | Off-plan banner and section | `PanelOffPlanView`, `PanelOffPlanBannerView` |
+| Tokens-used bars, legend and breakdown table | `PanelTokenBarsView`, `PanelTokenBarView`, `PanelTokenBreakdownRow` |
+| The scope note beneath the tiles | `PanelSections.ScopeNote` |
 
 A skin only lays the view model it is given out — it computes no figure, no band and no word. Windows does this in `src/O-view.Tray/Popup/` (`PopupWindow.xaml.cs`, plus `PopupMeter.cs`, `PopupTiles.cs`, `PopupGraph.cs`, `PopupDivergence.cs` and `PopupWeeklyRow.cs`); Linux does it in `src/O-view.Linux/Panel/` (`PanelContent.cs`, plus `PanelGraph.cs`, `PanelOffPlan.cs`, `PanelStatTiles.cs` and `PanelTokenBars.cs`). Both files that assemble a whole panel, `PopupWindow.xaml.cs` and `PanelContent.cs`, stay under 600 lines by design — a skin that grows past that is usually a skin that has started computing content again.
 
@@ -35,9 +37,13 @@ A skin only lays the view model it is given out — it computes no figure, no ba
 One rule answers how tall the flyout window may be, and whether its content has to scroll:
 `PanelFit.Resolve` (`src/O-view.App/Rendering/PanelFit.cs`) takes the content's own measured
 height and the space the display's work area leaves, and caps the window at whichever is
-smaller — the content's height if it fits, the available space if it doesn't, with
+smaller: the content's height if it fits, the available space if it doesn't, with
 `MustScroll` true exactly in the second case. It lives in App so both faces ask the one rule
-the same question, rather than each picking its own answer.
+the same question, rather than each picking its own answer. `PanelFit.Fit` runs the whole
+sequence around it (measure, pick a density, compact and measure again, cap) through two
+callbacks each head supplies, so neither head orders those steps itself. The layout numbers
+both heads draw with (panel width, scroll bar, tile bar and graph figures) are stated once in
+`PanelMetrics` beside it.
 
 - **Both faces measure the content, never the window.** A flyout is sized to its own content,
   so its frame is already capped by whatever the display granted before `PanelFit` is ever
@@ -70,7 +76,8 @@ App, behind an injected store — never per head:
   actually kept on disk — one entry per display, written atomically and read defensively,
   the same shape as `WeeklyResetAnchor`. It stores the work-area corner as a bare string,
   since Core may not name `PanelPlacementMemory`'s own `WorkAreaCorner` type; translating
-  between the two is the file-backed `IPanelPositionStore` implementation's job.
+  between the two is `FilePanelPositionStore`'s job, in App, and both heads construct that
+  one class.
 
 Each head only wires up the gesture that reaches these: a drag handle on the header and the
 Alt-arrow-key shortcuts, ending at `Remember`/`Resolve` and at `Nudge` respectively. Neither
@@ -126,6 +133,7 @@ It proves a real left click opens the panel end to end, and that the tray menu a
 - **A dispatch test:** `ShellToSkinDispatchTests` fails if any `IShellToSkin` push reaches a skin before `IUiDispatcher` has run it, including the three pushes that already arrive on the UI thread.
 - **Golden images:** every shared sample state is rendered for both skins and compared, pixel for pixel, with `tests/golden/` (`tools/check.ps1`, and CI's `visual` job).
 - **The smoke test:** the real engine runs against `tests/fixtures/claude-home`, so files on disk must reach the numbers the panel shows.
+- **Shared test fakes:** `tests/O-view.TestSupport` holds the fixed and throwing providers, the in-memory position store, the capturing log and the temp directory the test projects use, so a fake is written once.
 - **`docs/feature-checklist.md`:** each feature has a test or sample state that proves it.
 - **CI's `guard-ratchet` check:** no PR removes a required check, a feature, its proof or a test.
 - **CI's `merge-order` check:** parallel PRs never change the same files, and land in their planned order.
