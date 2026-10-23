@@ -107,29 +107,8 @@ public sealed record BoostNotices(DateTimeOffset FetchedAtUtc, IReadOnlyList<Boo
     /// <summary>
     /// The selection rule over an explicit candidate list, testable without a real profile.
     /// </summary>
-    public static BoostNotices? TryReadAny(IReadOnlyList<string> candidates)
-    {
-        BoostNotices? newest = null;
-
-        foreach (var candidate in candidates)
-        {
-            try
-            {
-                if (Parse(File.ReadAllText(candidate)) is { } parsed &&
-                    (newest is null || parsed.FetchedAtUtc > newest.FetchedAtUtc))
-                {
-                    newest = parsed;
-                }
-            }
-            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
-            {
-                // Unreadable or malformed: try the next candidate, and report nothing rather
-                // than a claim this cannot stand behind.
-            }
-        }
-
-        return newest;
-    }
+    public static BoostNotices? TryReadAny(IReadOnlyList<string> candidates) =>
+        CandidateFiles.Newest(candidates, Parse, n => n.FetchedAtUtc);
 
     /// <summary>
     /// Parses the notices out of a <c>.claude.json</c> document, or null when the block or its
@@ -181,8 +160,8 @@ public sealed record BoostNotices(DateTimeOffset FetchedAtUtc, IReadOnlyList<Boo
     private static BoostNotice? ReadNotice(JsonElement element, DateTimeOffset anchorUtc)
     {
         if (element.ValueKind != JsonValueKind.Object ||
-            ReadString(element, "bar") is not { } bar ||
-            ReadString(element, "text") is not { } text)
+            JsonFields.NonEmptyString(element, "bar") is not { } bar ||
+            JsonFields.NonEmptyString(element, "text") is not { } text)
         {
             return null;
         }
@@ -190,11 +169,6 @@ public sealed record BoostNotices(DateTimeOffset FetchedAtUtc, IReadOnlyList<Boo
         return new BoostNotice(bar, text, PromoText.Percent(text), PromoText.EndDate(text, anchorUtc));
     }
 
-    private static string? ReadString(JsonElement obj, string name) =>
-        obj.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String &&
-        v.GetString() is { Length: > 0 } s
-            ? s
-            : null;
 
     /// <summary>
     /// The notice to show against one meter, or null when there is none to show.

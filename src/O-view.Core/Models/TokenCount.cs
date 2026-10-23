@@ -21,4 +21,10 @@ public readonly record struct TokenCount(long? Value, UsageValueStatus Status)
 
     /// <summary>The trust status of <see cref="Value"/>.</summary>
     public UsageValueStatus Status { get; } = Status;
+
+    /// <summary>
+    /// A count read directly from recorded transcripts or rollups, so it is
+    /// <see cref="UsageValueStatus.Real"/>: the only status a counted figure can carry.
+    /// </summary>
+    public static TokenCount Measured(long value) => new(value, UsageValueStatus.Real);
 }

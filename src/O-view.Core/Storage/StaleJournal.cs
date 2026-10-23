@@ -163,7 +163,7 @@ public static class StaleJournal
 
             if (!TryReadWhileExclusive(dbPath, wal, out var lag, out var walBytes))
             {
-                return new StaleJournalCheck(StaleJournalVerdict.InUse, null, SizeOf(wal));
+                return new StaleJournalCheck(StaleJournalVerdict.InUse, null, FileSizes.Of(wal));
             }
 
             if (lag <= (maxLag ?? MaxLag))
@@ -273,15 +273,4 @@ public static class StaleJournal
         return failure;
     }
 
-    private static long SizeOf(string path)
-    {
-        try
-        {
-            return File.Exists(path) ? new FileInfo(path).Length : 0;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return 0;
-        }
-    }
 }

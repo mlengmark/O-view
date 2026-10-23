@@ -98,29 +98,8 @@ public sealed record CachedUtilization(
     /// The selection rule over an explicit candidate list, testable without a real profile —
     /// see <see cref="ClaudeAccount.TryReadAny"/> for why that separation exists.
     /// </summary>
-    public static CachedUtilization? TryReadAny(IReadOnlyList<string> candidates)
-    {
-        CachedUtilization? newest = null;
-
-        foreach (var candidate in candidates)
-        {
-            try
-            {
-                if (Parse(File.ReadAllText(candidate)) is { } parsed &&
-                    (newest is null || parsed.FetchedAtUtc > newest.FetchedAtUtc))
-                {
-                    newest = parsed;
-                }
-            }
-            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
-            {
-                // Unreadable or malformed: try the next candidate, and report nothing rather
-                // than a number this cannot stand behind.
-            }
-        }
-
-        return newest;
-    }
+    public static CachedUtilization? TryReadAny(IReadOnlyList<string> candidates) =>
+        CandidateFiles.Newest(candidates, Parse, u => u.FetchedAtUtc);
 
     /// <summary>
     /// Parses the block out of a <c>.claude.json</c> document, or null when it is absent or
@@ -150,7 +129,7 @@ public sealed record CachedUtilization(
 
         return new CachedUtilization(
             DateTimeOffset.FromUnixTimeMilliseconds(fetchedMs),
-            ReadString(block, "accountUuid"),
+            JsonFields.NonEmptyString(block, "accountUuid"),
             ReadBar(bars, "five_hour"),
             ReadBar(bars, "seven_day"))
         {
@@ -184,16 +163,6 @@ public sealed record CachedUtilization(
     /// <see cref="DateTime"/>, whose Kind would be lost on the way through.
     /// </summary>
     private static DateTimeOffset? ReadResetAt(JsonElement bar) =>
-        bar.TryGetProperty("resets_at", out var resets) &&
-        resets.ValueKind == JsonValueKind.String &&
-        DateTimeOffset.TryParse(resets.GetString(), CultureInfo.InvariantCulture,
-            DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var parsed)
-            ? parsed
-            : null;
+        UtcInstant.ParseOrNull(JsonFields.StringOrNull(bar, "resets_at"));
 
-    private static string? ReadString(JsonElement obj, string name) =>
-        obj.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String &&
-        v.GetString() is { Length: > 0 } s
-            ? s
-            : null;
 }

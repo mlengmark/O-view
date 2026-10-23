@@ -149,7 +149,7 @@ public static class TranscriptFileScan
     /// catch already handles and which is how a broken junction was made survivable in the
     /// first place (issue #44).</para>
     /// </summary>
-    private static string Canonical(string directory)
+    internal static string Canonical(string directory)
     {
         try
         {

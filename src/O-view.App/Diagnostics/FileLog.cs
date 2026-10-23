@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO;
+using OView.Core;
 
 namespace OView.App.Diagnostics;
 
@@ -48,11 +49,8 @@ public sealed class FileLog : IAppLog
     /// </summary>
     public static string DefaultPath => Path.Combine(DefaultDirectory, "oview.log");
 
-    /// <summary>The folder holding the live file and its rolled generations.</summary>
-    public static string DefaultDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "O-view",
-        "logs");
+    /// <summary>The folder holding the live file and its rolled generations: <c>logs</c> under <see cref="OViewDataDirectory"/>.</summary>
+    public static string DefaultDirectory => Path.Combine(OViewDataDirectory.Root, "logs");
 
     private readonly string _path;
     private readonly long _maxBytes;

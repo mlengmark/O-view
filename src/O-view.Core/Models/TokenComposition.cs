@@ -65,10 +65,10 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
     // empty rollup set) would also return, per From's own rule below — not a known zero.
     public static readonly TokenComposition Empty = new(0, 0, 0, 0)
     {
-        InputCount = Measured(0),
-        CacheCreationCount = Measured(0),
-        CacheReadCount = Measured(0),
-        OutputCount = Measured(0),
+        InputCount = TokenCount.Measured(0),
+        CacheCreationCount = TokenCount.Measured(0),
+        CacheReadCount = TokenCount.Measured(0),
+        OutputCount = TokenCount.Measured(0),
     };
 
     /// <summary>
@@ -96,16 +96,16 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
     /// composition built from counts alone read as "nothing was priced" rather than as a known
     /// zero — the distinction this type's own rule rests on.</para>
     /// </summary>
-    public EstimatedUsd InputValue { get; init; } = Priced(null);
+    public EstimatedUsd InputValue { get; init; } = EstimatedUsd.Priced(null);
 
     /// <inheritdoc cref="InputValue"/>
-    public EstimatedUsd CacheCreationValue { get; init; } = Priced(null);
+    public EstimatedUsd CacheCreationValue { get; init; } = EstimatedUsd.Priced(null);
 
     /// <inheritdoc cref="InputValue"/>
-    public EstimatedUsd CacheReadValue { get; init; } = Priced(null);
+    public EstimatedUsd CacheReadValue { get; init; } = EstimatedUsd.Priced(null);
 
     /// <inheritdoc cref="InputValue"/>
-    public EstimatedUsd OutputValue { get; init; } = Priced(null);
+    public EstimatedUsd OutputValue { get; init; } = EstimatedUsd.Priced(null);
 
     /// <summary>
     /// Everything billed in this window. No longer the tiles' headline (issue #253), and
@@ -203,29 +203,17 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
         // above already honour it. One bar segment, one figure.
         return new TokenComposition(total.Input, total.CacheWrite, total.CacheRead, total.Output)
         {
-            InputCount = Measured(total.Input),
-            CacheCreationCount = Measured(total.CacheWrite),
-            CacheReadCount = Measured(total.CacheRead),
-            OutputCount = Measured(total.Output),
-            InputValue = Priced(unknown ? null : inputUsd),
-            CacheCreationValue = Priced(unknown ? null : cacheCreationUsd),
-            CacheReadValue = Priced(unknown ? null : cacheReadUsd),
-            OutputValue = Priced(unknown ? null : outputUsd),
+            InputCount = TokenCount.Measured(total.Input),
+            CacheCreationCount = TokenCount.Measured(total.CacheWrite),
+            CacheReadCount = TokenCount.Measured(total.CacheRead),
+            OutputCount = TokenCount.Measured(total.Output),
+            InputValue = EstimatedUsd.Priced(unknown ? null : inputUsd),
+            CacheCreationValue = EstimatedUsd.Priced(unknown ? null : cacheCreationUsd),
+            CacheReadValue = EstimatedUsd.Priced(unknown ? null : cacheReadUsd),
+            OutputValue = EstimatedUsd.Priced(unknown ? null : outputUsd),
         };
     }
 
-    /// <summary>
-    /// Wraps a token count as <see cref="UsageValueStatus.Real"/> — every kind here is read
-    /// directly from the rollups, never modelled, so none of them can carry any other status.
-    /// </summary>
-    private static TokenCount Measured(long value) => new(value, UsageValueStatus.Real);
-
-    /// <summary>
-    /// Wraps a priced figure as <see cref="UsageValueStatus.Unavailable"/> when
-    /// <paramref name="value"/> is null, or <see cref="UsageValueStatus.Estimated"/> otherwise.
-    /// </summary>
-    private static EstimatedUsd Priced(decimal? value) =>
-        new(value, value is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated);
 
     /// <summary>
     /// The cache-write buckets alone, each keeping its own TTL so the segment's value is priced
