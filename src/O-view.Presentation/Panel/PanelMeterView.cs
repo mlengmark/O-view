@@ -23,9 +23,8 @@ namespace OView.Presentation.Panel;
 /// </param>
 /// <param name="Band">
 /// Which usage band the figure falls in (<see cref="UsageLevels"/>), or null with no figure.
-/// The band, not a colour: the two heads paint it from different palettes — the Windows panel
-/// from its own three, the Linux one from the tray icon's theme-aware pair — and a view model
-/// carrying either would have to carry a toolkit type.
+/// The band, not a colour: both heads paint it through the tray icon's theme-aware rule, and a
+/// view model carrying the colour would have to carry a toolkit type.
 /// </param>
 /// <param name="FillPercent">
 /// <see cref="Percent"/> clamped to 0–100 for drawing, or null when no fill is drawn. Clamped

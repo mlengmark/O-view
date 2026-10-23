@@ -111,17 +111,7 @@ public sealed class PanelStatTiles(LinuxPanelTheme theme)
         // Both faces of all four tiles, including the coverage and unpriced caveats.
         var tiles = PanelSections.Tiles(stats);
 
-        // The one caveat still decided here, and the only thing on these tiles that is: this
-        // head prints the off-plan note on today's TOKEN tile and the Windows panel never has.
-        // Presentation builds the Windows reading, so taking it as handed over would drop the
-        // line from six shipped Linux renders — a visual change this slice is explicitly not
-        // allowed to make. Which head is right is a question about what the user should see, so
-        // it is asked rather than settled here, and this goes when it is answered.
-        var tokensToday = stats.IsOffPlan
-            ? tiles.TokensToday with { Note = OffPlanText.OffPlanNote(true) }
-            : tiles.TokensToday;
-
-        root.Children.Add(TileRow(Tile(tokensToday), Tile(tiles.EstToday)));
+        root.Children.Add(TileRow(Tile(tiles.TokensToday), Tile(tiles.EstToday)));
 
         // A muted line naming the UTC day's boundary stood here for one release, because the
         // tiles were a UTC day and this head has no hover to put the caveat behind (issue

@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
 using System.Windows.Media;
+using OView.App.Rendering;
 using OView.Core.Models;
 using OView.Presentation.Panel;
 using Binding = System.Windows.Data.Binding;
@@ -12,16 +13,15 @@ namespace OView.Tray.Popup;
 
 /// <summary>
 /// Draws one usage meter (session or weekly): the figure's own words, the band it falls in,
-/// and how wide the fill runs. The panel's three colours are the only part of it that is this
-/// head's own.
+/// and how wide the fill runs. The band's colour comes from the tray icon's shared rule
+/// (<see cref="TrayIconGeometry.LevelColor"/>), theme-aware, exactly as the Linux panel's
+/// does; this head used to restate the dark-theme shades and so painted the same reading a
+/// different colour in the light theme.
 /// </summary>
 internal static class PopupMeter
 {
-    private static readonly Color Green = Color.FromRgb(64, 200, 110);
-    private static readonly Color Amber = Color.FromRgb(240, 170, 40);
-    private static readonly Color Red = Color.FromRgb(232, 72, 72);
-
-    public static void Populate(TextBlock pctText, Grid bar, Border fill, PanelMeterView meter)
+    /// <param name="light">Whether the panel is in its light theme, which takes the darker shades.</param>
+    public static void Populate(TextBlock pctText, Grid bar, Border fill, PanelMeterView meter, bool light)
     {
         BindingOperations.ClearBinding(fill, FrameworkElement.WidthProperty);
         pctText.Text = meter.Value;
@@ -32,12 +32,8 @@ internal static class PopupMeter
             return;
         }
 
-        fill.Background = new SolidColorBrush(meter.Band switch
-        {
-            UsageLevel.Critical => Red,
-            UsageLevel.Warning => Amber,
-            _ => Green,
-        });
+        var band = TrayIconGeometry.LevelColor(meter.Band ?? UsageLevel.Normal, lightTaskbar: light);
+        fill.Background = new SolidColorBrush(Color.FromArgb(band.A, band.R, band.G, band.B));
         // Fill width tracks the bar's laid-out width × percent.
         fill.SetBinding(FrameworkElement.WidthProperty, new Binding(nameof(bar.ActualWidth))
         {

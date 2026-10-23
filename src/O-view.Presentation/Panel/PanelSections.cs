@@ -256,9 +256,9 @@ public static class PanelSections
         return new PanelTilesView(
             // Today's token tile qualifies nothing. It carried a "(UTC)" hint for one release,
             // while the figure was a UTC day under a local-time header (issue #210); the figure
-            // is the reader's own day now. The Linux head also put the off-plan note here,
-            // which the Windows one never did — the mixture is what the value tiles are about,
-            // and a token count is the same count either way.
+            // is the reader's own day now. The off-plan note belongs to the value tiles alone:
+            // the mixture is what they are about, and a token count is the same count either
+            // way. The Linux head used to add it here too; both heads now show this reading.
             Tile(
                 TokenText.TokensTodayLabel,
                 UsageFormatter.Tokens(stats.TokensToday),
