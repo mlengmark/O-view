@@ -270,7 +270,7 @@ jobs:
             NEW_VERSION="$(dpkg-deb -f /dist/o-view_*_amd64.deb Version)"
             mkdir -p /tmp/prev
             dpkg-deb -R /dist/o-view_*_amd64.deb /tmp/prev
-            # A tilde sorts below everything in dpkg's ordering, so 0.0.0~previous is older
+            # A tilde sorts below everything in dpkg version ordering, so 0.0.0~previous is older
             # than any version the build can carry, including the 0.0.0-dev placeholder a
             # manual run defaults to. A plain 0.0.1-previous made that default a downgrade.
             sed -i "s/^Version: .*/Version: 0.0.0~previous/" /tmp/prev/DEBIAN/control
