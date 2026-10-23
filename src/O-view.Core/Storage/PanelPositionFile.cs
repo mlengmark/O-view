@@ -5,7 +5,7 @@ namespace OView.Core.Storage;
 
 /// <summary>
 /// Where the user last left the panel on each display, kept so the next open can put it back
-/// there (ADR-0017) — the storage half of the shared placement rule in
+/// there (ADR-0017), the storage half of the shared placement rule in
 /// <c>OView.App.Rendering.PanelPlacementMemory</c>, which this cannot reference: Core may use
 /// only the BCL, and <c>PanelPlacementMemory</c>'s own corner type lives above it.
 ///
@@ -16,7 +16,7 @@ namespace OView.Core.Storage;
 /// <para><b>Per display, not one slot.</b> A laptop's external monitor is not always attached,
 /// and overwriting its remembered spot with the laptop panel's own would be wrong the next
 /// time both are back. Each display keeps its own entry, keyed by whatever id the caller
-/// supplies — this file knows nothing about what makes two displays the same one.</para>
+/// supplies, this file knows nothing about what makes two displays the same one.</para>
 /// </summary>
 public sealed class PanelPositionFile
 {
@@ -26,7 +26,7 @@ public sealed class PanelPositionFile
     /// <summary>
     /// A remembered place, in device-independent units: the name of the work-area corner it
     /// was left nearest to, and the offset inward from that corner. The corner is a bare
-    /// string here, not an enum — Core may not name the type <c>PanelPlacementMemory</c>
+    /// string here, not an enum, Core may not name the type <c>PanelPlacementMemory</c>
     /// defines, so the translation is the caller's job.
     /// </summary>
     public readonly record struct Place(string Corner, double OffsetXDip, double OffsetYDip);
@@ -41,7 +41,7 @@ public sealed class PanelPositionFile
 
     /// <summary>
     /// Where a failed write is recorded. A delegate rather than a log interface, so Core keeps
-    /// knowing nothing about how the app logs — the same seam <see cref="WeeklyResetAnchor.Log"/> uses.
+    /// knowing nothing about how the app logs, the same seam <see cref="WeeklyResetAnchor.Log"/> uses.
     /// </summary>
     public Action<string>? Log { get; init; }
 

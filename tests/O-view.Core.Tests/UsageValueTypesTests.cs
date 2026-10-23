@@ -86,8 +86,8 @@ public class UsageValueTypesTests
     public void NoWithExpressionOrInitializerCanSetValueOrStatus(Type type)
     {
         // A `with` expression or object initializer compiles only against a settable
-        // (init or set) property. With neither accessor, the constructor — which checks the
-        // rule — is the only way to put a value and a status into an instance, and no
+        // (init or set) property. With neither accessor, the constructor, which checks the
+        // rule, is the only way to put a value and a status into an instance, and no
         // assignment order inside a `with` can bypass it.
         foreach (var name in new[] { "Value", "Status" })
         {

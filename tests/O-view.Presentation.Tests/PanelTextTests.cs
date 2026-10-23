@@ -11,7 +11,7 @@ namespace OView.Presentation.Tests;
 ///
 /// <para>These assert the <b>exact strings the Windows panel produced before the
 /// extraction</b>, character for character. The panel's own offscreen renders cannot serve
-/// as the check — they embed a live clock and countdowns, so two renders of an unchanged
+/// as the check, they embed a live clock and countdowns, so two renders of an unchanged
 /// build a minute apart already differ. Comparing them would have looked like a
 /// verification while proving nothing.</para>
 /// </summary>
@@ -54,7 +54,7 @@ public class PanelTextTests
         Assert.Equal("As of now", PanelText.Freshness(Snapshot(DataSource.Live, Now), Now, Utc));
 
     /// <summary>
-    /// Thirty seconds old, but on the other side of the minute — a past log, and stamped as
+    /// Thirty seconds old, but on the other side of the minute, a past log, and stamped as
     /// one. This is the case the issue names: once the minute has passed the reading stops
     /// being "now", so the stamp can never read as the current clock minute either.
     /// </summary>
@@ -106,7 +106,7 @@ public class PanelTextTests
     /// <summary>
     /// <see cref="PanelText.Freshness"/> reads <c>CapturedAtUtcValue</c> rather than the plain
     /// nullable member, but the tier it reports (<c>As of</c> vs <c>Local estimate</c>) still
-    /// comes from the snapshot's <see cref="DataSource"/>, not from this status — a status can
+    /// comes from the snapshot's <see cref="DataSource"/>, not from this status, a status can
     /// read Estimated under a Live snapshot (a provider can mark one figure modelled without
     /// changing the snapshot's own tier) and the stamp must not disappear because of it.
     /// </summary>
@@ -171,7 +171,7 @@ public class PanelTextTests
 
     /// <summary>
     /// Before any drop is observed the reset time is genuinely unknown. Saying so beats
-    /// guessing, and beats rendering nothing — which is indistinguishable from a bug
+    /// guessing, and beats rendering nothing, which is indistinguishable from a bug
     /// (ADR-0011, rule 6).
     /// </summary>
     [Fact]
@@ -262,7 +262,7 @@ public class PanelTextTests
         Assert.Equal("3 of 31 days recorded", TokenText.Caveat(Stats(3)));
 
     /// <summary>
-    /// An unpriced model is named rather than silently dropped — and must not void the
+    /// An unpriced model is named rather than silently dropped, and must not void the
     /// total. One newly released Claude once blanked both Est. tiles entirely.
     /// </summary>
     [Fact]
@@ -300,7 +300,7 @@ public class PanelTextTests
 
     /// <summary>
     /// The rate table's age reaches the tiles past a threshold, naming its source as well as its
-    /// date — a figure derived from rates a reader cannot trace is a figure they cannot check.
+    /// date, a figure derived from rates a reader cannot trace is a figure they cannot check.
     /// </summary>
     [Fact]
     public void AStaleRateTableIsNamedBesideTheFiguresItPriced()
@@ -326,8 +326,8 @@ public class PanelTextTests
 
     /// <summary>
     /// The banner reports two numbers and names no cause. It used to end "that work is billing
-    /// elsewhere — most likely extra-usage credits", which is a claim about the reader's billing
-    /// that O-view cannot see — and on the machine that reported it (2026-08-24) was false: the
+    /// elsewhere, most likely extra-usage credits", which is a claim about the reader's billing
+    /// that O-view cannot see, and on the machine that reported it (2026-08-24) was false: the
     /// account had extra usage switched off, which Claude Code's own cache records in
     /// <c>extra_usage.user_disabled</c>. A figure O-view cannot check is not a figure it states.
     /// </summary>
@@ -368,18 +368,18 @@ public class PanelTextTests
         new(DivergenceState.Diverging, 126_900, 0);
 
     /// <summary>
-    /// The heading the issue was raised about. "Plan limit reached — usage is billing beyond
+    /// The heading the issue was raised about. "Plan limit reached, usage is billing beyond
     /// your plan" was shown to every reader whose 5-hour window ran out, including the ones who
-    /// had extra usage switched off and therefore could not be billed anything — a claim about
+    /// had extra usage switched off and therefore could not be billed anything, a claim about
     /// their money that was both alarming and false (issue #259).
     /// </summary>
     [Fact]
     public void TheExhaustedWindowHeadingClaimsAChargeOnlyWhereTheAccountAllowsOne()
     {
-        Assert.Equal("Plan limit reached — further work bills as extra usage",
+        Assert.Equal("Plan limit reached, further work bills as extra usage",
             OffPlanText.OffPlanTitle(DivergenceState.PlanLimitReached, ExtraUsageState.Enabled));
 
-        Assert.Equal("Plan limit reached — extra usage is switched off",
+        Assert.Equal("Plan limit reached, extra usage is switched off",
             OffPlanText.OffPlanTitle(DivergenceState.PlanLimitReached, ExtraUsageState.Disabled));
 
         // Unknown states the observation and nothing else. It is the state a machine with no
@@ -407,8 +407,8 @@ public class PanelTextTests
 
     /// <summary>
     /// The diverging heading never asserted a charge and does not gain one. The meter not
-    /// moving may not be about billing at all — a Cowork session in a cloud container leaves no
-    /// local record either (rule 9) — so the account setting changes the detail, not the claim.
+    /// moving may not be about billing at all, a Cowork session in a cloud container leaves no
+    /// local record either (rule 9), so the account setting changes the detail, not the claim.
     /// </summary>
     [Theory]
     [InlineData(ExtraUsageState.Unknown)]
@@ -454,7 +454,7 @@ public class PanelTextTests
     }
 
     /// <summary>
-    /// Nothing read means nothing claimed, in both directions — and specifically not a stamp on
+    /// Nothing read means nothing claimed, in both directions, and specifically not a stamp on
     /// a reading that never happened. A null fetch time is treated as no answer even if a state
     /// was somehow supplied alongside it.
     /// </summary>
@@ -472,7 +472,7 @@ public class PanelTextTests
     }
 
     /// <summary>
-    /// The diverging detail keeps its two numbers when the setting is known — the setting is
+    /// The diverging detail keeps its two numbers when the setting is known, the setting is
     /// added to the observation, not substituted for it.
     /// </summary>
     [Fact]
@@ -517,7 +517,7 @@ public class PanelTextTests
     /// The "(UTC)" qualifier carried by both today tiles for one release comes back off with
     /// the thing it described (issues #210, #211). It is asserted rather than merely deleted:
     /// the figure is the reader's own day now, so re-adding the suffix would mislabel it in
-    /// the opposite direction — which is the same rule-6 failure, not its cure.
+    /// the opposite direction, which is the same rule-6 failure, not its cure.
     /// </summary>
     [Fact]
     public void NeitherTodayLabelStillClaimsAUtcDay()
@@ -529,7 +529,7 @@ public class PanelTextTests
 
     /// <summary>
     /// Divergence is detected for the current session window only, so the 31-day heading
-    /// must NOT flip — that would extend a claim over 30 days it was never measured against.
+    /// must NOT flip, that would extend a claim over 30 days it was never measured against.
     /// </summary>
     [Fact]
     public void The31DayLabelDoesNotFlip() =>
@@ -545,7 +545,7 @@ public class PanelTextTests
     /// <summary>
     /// The off-plan explanation moved from standing text to a hover card (issue #181), and
     /// the risk in that move is losing the caveat rather than relocating it. Both wordings
-    /// must still say the figure is not what was charged — an "Est." number presented without
+    /// must still say the figure is not what was charged, an "Est." number presented without
     /// that reads as money taken (rule 6).
     /// </summary>
     [Fact]
@@ -684,7 +684,7 @@ public class PanelTextTests
 
     /// <summary>
     /// The hint names both routes and neither is chosen for the reader. Which one applies
-    /// depends on whether this machine has a usable Claude Code — and on the machine that
+    /// depends on whether this machine has a usable Claude Code, and on the machine that
     /// prompted this, O-view's own refresher was running and producing nothing, so a branch
     /// would assert a cause nobody has established (rule 6 turned on ourselves).
     /// </summary>
@@ -735,7 +735,7 @@ public class PanelTextTests
 
     /// <summary>
     /// The chart heading counts the window it describes. Both panels read it from the same
-    /// place now, and the Windows one no longer carries a 31 typed into its markup — which
+    /// place now, and the Windows one no longer carries a 31 typed into its markup, which
     /// would have gone on claiming 31 days over a chart of some other length.
     /// </summary>
     [Fact]
@@ -778,7 +778,7 @@ public class PanelTextTests
     /// The digits are the app's, not the desktop's.
     ///
     /// <para>The literal this member replaced in the Linux panel interpolated the percentage
-    /// under the ambient culture, which renders Arabic-Indic digits under <c>ar-EG</c> — a panel
+    /// under the ambient culture, which renders Arabic-Indic digits under <c>ar-EG</c>, a panel
     /// whose figure beside the gauge does not match the one in its own tray tooltip. The member
     /// pins <see cref="CultureInfo.InvariantCulture"/>, so this is the behaviour that moving the
     /// Linux figure here bought, and the one a future tidy-up of the <c>string.Create</c> call

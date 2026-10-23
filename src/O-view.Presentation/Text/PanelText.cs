@@ -9,14 +9,14 @@ namespace OView.Presentation.Text;
 ///
 /// <para><b>Why this is shared rather than written per platform.</b> Every string here is a
 /// <i>statement about the user's usage</i>, and several exist specifically to stop a number
-/// being misread — the coverage caveat that keeps a short history from looking like low
+/// being misread, the coverage caveat that keeps a short history from looking like low
 /// usage (ADR-0006), the <c>~</c> that marks a reset time O-view only knows to within
 /// hours (ADR-0011), the label that flips when spend stops being hypothetical. Two panels
 /// wording those differently is the same failure as two panels computing them differently,
 /// and issues #55 and #56 were both exactly that.</para>
 ///
 /// <para>Layout, colour and interaction stay with each platform's panel. Only the sentences
-/// live here. This class keeps the panel's rows — the section labels, freshness, countdowns,
+/// live here. This class keeps the panel's rows, the section labels, freshness, countdowns,
 /// resets, hints, the chart's week markers and the off-plan badge.
 /// The boost chip and card live in <see cref="BoostText"/>, the token labels and captions in
 /// <see cref="TokenText"/>, and the off-plan headings and details in
@@ -37,7 +37,7 @@ public static class PanelText
     /// The figure beside a meter: <c>47% used</c>.
     ///
     /// <para><b>"used", never the bare percentage.</b> A plan meter reading <c>47%</c> says
-    /// nothing about which direction it runs — a reader who takes it for headroom has the
+    /// nothing about which direction it runs, a reader who takes it for headroom has the
     /// number exactly backwards, and the one that matters most is the one nearest 100. Both
     /// panels already spelled the suffix out themselves, in the one place where dropping it
     /// would not look like a mistake.</para>
@@ -81,7 +81,7 @@ public static class PanelText
     ///
     /// <para><b>It disclaims the line it is attached to.</b> A dashed boundary drawn across a
     /// usage chart reads as the plan's week whatever its origin, so the fallback has to say
-    /// outright that it is a calendar reference — otherwise the chart asserts a boundary O-view
+    /// outright that it is a calendar reference, otherwise the chart asserts a boundary O-view
     /// has no evidence for, which is a fabricated number wearing a gridline (rule 6).</para>
     ///
     /// <para>The Windows panel carried this sentence twice, once for the live chart and once
@@ -114,7 +114,7 @@ public static class PanelText
     public const string CreditBadgeNoneRecorded = "none recorded";
 
     /// <summary>
-    /// The label on the credit figure. <b>"Est." stays on both branches</b> — O-view prices
+    /// The label on the credit figure. <b>"Est." stays on both branches</b>, O-view prices
     /// credit usage from the same public rates as everything else, so it is a valuation of what
     /// was billed rather than the charge itself, and the zero case is no less an estimate for
     /// being zero.
@@ -131,7 +131,7 @@ public static class PanelText
     /// halves overstated: O-view holds whatever the last poll returned, and the source itself
     /// samples on its own schedule, so the figures on screen are always a log of a past
     /// moment (GitHub issue #192). The time shown is now
-    /// <see cref="UsageSnapshot.CapturedAtUtcValue"/> — when the sample was actually taken.</para>
+    /// <see cref="UsageSnapshot.CapturedAtUtcValue"/>, when the sample was actually taken.</para>
     ///
     /// <para>"now" is claimed only for a reading captured within the current clock minute;
     /// once that minute has passed the reading is a past log and is stamped with its own
@@ -141,7 +141,7 @@ public static class PanelText
     /// <para>The <see cref="DataSource"/> tiers collapse here on purpose: a capture time says
     /// how old a reading is far more precisely than the Live/Stale split it replaces, and
     /// both tiers are authoritative figures either way. What does <b>not</b> collapse is
-    /// <see cref="DataSource.Estimate"/> — a JSONL-derived figure must still say it is a local
+    /// <see cref="DataSource.Estimate"/>, a JSONL-derived figure must still say it is a local
     /// estimate (rule 6, ADR-0002), with its age beside it rather than instead of it.</para>
     /// </summary>
     public static string Freshness(UsageSnapshot snapshot, DateTimeOffset utcNow, TimeZoneInfo local)
@@ -157,8 +157,8 @@ public static class PanelText
     }
 
     /// <summary>
-    /// Said when an authoritative figure arrived without a capture time. Rare — every shipped
-    /// provider stamps one — but the alternative is stamping it with the repaint clock, which
+    /// Said when an authoritative figure arrived without a capture time. Rare, every shipped
+    /// provider stamps one, but the alternative is stamping it with the repaint clock, which
     /// is the bug this line was rewritten to remove.
     /// </summary>
     public const string CaptureTimeUnknown = "Reading time unknown";
@@ -181,7 +181,7 @@ public static class PanelText
         // reading "now" across a minute boundary, which is the past log the issue asks to be
         // stamped; the clock-minute check alone misreads the DST fall-back hour, where an
         // instant 40 minutes ago carries a *later* local minute than now. A capture in the
-        // future is a clock adjustment, not a prediction — report it as now rather than
+        // future is a clock adjustment, not a prediction, report it as now rather than
         // stamping the panel with a time that has not happened.
         var elapsed = utcNow - at;
         var withinThisMinute = elapsed < TimeSpan.FromMinutes(1)
@@ -200,7 +200,7 @@ public static class PanelText
     /// <c>under a minute</c>.
     ///
     /// <para>The units step down with the magnitude so the line stays short and never
-    /// implies precision it does not have — a reset six days away is not usefully described
+    /// implies precision it does not have, a reset six days away is not usefully described
     /// to the minute.</para>
     /// </summary>
     public static string Countdown(TimeSpan t) => t.TotalMinutes < 1
@@ -215,8 +215,8 @@ public static class PanelText
     /// The session-reset line. Before a window start has been observed the reset time is
     /// genuinely unknown, and says so rather than guessing (ADR-0011, rule 6).
     ///
-    /// <para>Carries the same <c>~</c> as the weekly line when the start was only bracketed
-    /// — which is every start inferred across a sampling gap, because Desktop was closed when
+    /// <para>Carries the same <c>~</c> as the weekly line when the start was only bracketed,
+    /// which is every start inferred across a sampling gap, because Desktop was closed when
     /// the window actually began. Printing <c>22:47</c> to the minute for a boundary known to
     /// a quarter of an hour is the shape of the bug this line was reported for (issue
     /// #180).</para>
@@ -235,7 +235,7 @@ public static class PanelText
     }
 
     /// <summary>
-    /// The weekly reset line. <b>Never approximate</b> — see below.
+    /// The weekly reset line. <b>Never approximate</b>, see below.
     ///
     /// <para>This took an <c>uncertainty</c> and could render a <c>~</c>, from when the weekly
     /// reset was inferred from a drop in Claude Desktop's sampled series and could only be
@@ -266,7 +266,7 @@ public static class PanelText
 
     /// <summary>
     /// Marks a weekly reset the user entered rather than one O-view inferred (issue #186).
-    /// Short, because it sits beside the time rather than under it — the reasoning belongs in
+    /// Short, because it sits beside the time rather than under it, the reasoning belongs in
     /// <see cref="WeeklyResetUserSuppliedHint"/>.
     /// </summary>
     public const string WeeklyResetUserSupplied = "you set this";
@@ -282,8 +282,8 @@ public static class PanelText
     ///
     /// <para>Says what was observed and what to do, and does not decide for them which is
     /// wrong: a plan change, a typo and a genuine schedule change all look identical from
-    /// here. The entry has already been set aside in favour of the observation — a number
-    /// O-view has evidence against must not stay on screen (rule 6) — so this explains a
+    /// here. The entry has already been set aside in favour of the observation, a number
+    /// O-view has evidence against must not stay on screen (rule 6), so this explains a
     /// change that has already happened rather than asking permission for one.</para>
     /// </summary>
     public static string WeeklyResetConflict(DateTimeOffset reportedUtc, TimeZoneInfo local)
@@ -307,7 +307,7 @@ public static class PanelText
     /// longer exists.</b> That copy is ADR-0011's, from when the reset was derived by watching
     /// the weekly percentage fall; ADR-0014 deleted the derivation, so nothing was watching and
     /// the promised fill-in could never arrive. A row that names a wait nobody is serving is the
-    /// blank row's defect — indistinguishable from a bug — wearing an explanation.</para>
+    /// blank row's defect, indistinguishable from a bug, wearing an explanation.</para>
     ///
     /// <para>It states the fact instead, and the hint carries the one action that ends it. The
     /// action only has to work once: the reset is a fixed weekly grid and O-view keeps the
@@ -316,7 +316,7 @@ public static class PanelText
     public const string WeeklyResetUnknown = "Weekly reset time not known";
 
     /// <summary>
-    /// What to do about it — both routes, in one string.
+    /// What to do about it, both routes, in one string.
     ///
     /// <para>Claude Code writes the exact instant only when <c>/usage</c> runs: not on startup,
     /// not on an ordinary prompt
@@ -326,7 +326,7 @@ public static class PanelText
     /// because the user has to type that exact string.</para>
     ///
     /// <para><b>Both routes, deliberately, rather than one chosen for the reader.</b> Choosing
-    /// would mean deciding whether this machine has a usable Claude Code — and on the machine
+    /// would mean deciding whether this machine has a usable Claude Code, and on the machine
     /// that prompted this, O-view's own refresher was running, reporting <c>Unchanged</c>, and
     /// producing no block at all. Until that is understood, a branch would be the app asserting
     /// a cause it has not established, which is rule 6 pointed at ourselves. Two sentences cost
@@ -334,8 +334,8 @@ public static class PanelText
     /// </summary>
     public const string WeeklyResetUnknownHint =
         "Claude reports the exact weekly reset only when /usage runs in Claude Code. O-view asks "
-        + "it to periodically; if this stays blank, run /usage in a Claude Code session yourself "
-        + "— once is enough, because the reset is a fixed weekly time O-view then remembers. "
+        + "it to periodically; if this stays blank, run /usage in a Claude Code session yourself; "
+        + "once is enough, because the reset is a fixed weekly time O-view then remembers. "
         + "With no Claude Code, enter it from Menu → Weekly reset…: Claude shows the time under "
         + "Settings → Usage.";
 
@@ -355,7 +355,7 @@ public static class PanelText
     /// session started while a refresh ran looks exactly like a billed one.</para>
     ///
     /// <para><b>The row has to exist at all, or the trade is wrong.</b> Erring toward stopping is
-    /// only correct while stopping can be reversed — a latch with no way out turns a rare race
+    /// only correct while stopping can be reversed, a latch with no way out turns a rare race
     /// into a permanent, unexplained loss of the plan bars on machines with no Claude Desktop.</para>
     /// </summary>
     public const string UsageRefreshBlockedRow = "Resume usage refresh";
@@ -366,7 +366,7 @@ public static class PanelText
     /// </summary>
     public static string UsageRefreshBlockedHint(string reason) =>
         $"O-view stopped refreshing Claude Code's usage figures because {reason}. "
-        + "That check is deliberately cautious — a Claude Code session started while the refresh "
+        + "That check is deliberately cautious, a Claude Code session started while the refresh "
         + "ran looks the same as a billed one. Resume if you think that is what happened.";
 
     /// <summary>

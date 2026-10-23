@@ -10,7 +10,7 @@ internal static class NativeMethods
     /// <summary>
     /// Bitmap.GetHicon() allocates an unmanaged GDI handle that Icon does NOT own.
     /// Every icon refresh must pair with a DestroyIcon or the process leaks one
-    /// handle per update — a slow leak in an app designed to run for days
+    /// handle per update, a slow leak in an app designed to run for days
     /// (CLAUDE.md rule 5; ADR-0005 consequences).
     /// </summary>
     [DllImport("user32.dll")]
@@ -45,7 +45,7 @@ internal static class NativeMethods
     /// SetForegroundWindow is not guaranteed: Windows only grants the foreground to a
     /// process that already holds it or received the last input event, and refuses
     /// otherwise. A menu that loses that race stays on screen with no way to dismiss it,
-    /// which is <em>worse</em> than the clipping issue #33 set out to fix — verified by
+    /// which is <em>worse</em> than the clipping issue #33 set out to fix, verified by
     /// reproducing it. AttachThreadInput to the current foreground thread makes the two
     /// threads share an input queue, at which point the grant succeeds; detach again
     /// immediately. The documented workaround for exactly this case.

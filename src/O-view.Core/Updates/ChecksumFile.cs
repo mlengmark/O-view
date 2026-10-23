@@ -4,11 +4,11 @@ namespace OView.Core.Updates;
 /// The <c>SHA256SUMS</c> file published with every release, parsed.
 ///
 /// <para>Kept in Core with no IO so the parsing is unit-testable without a network or a
-/// download — the same reason <see cref="UpdateCheck"/> lives here. The head supplies the
+/// download, the same reason <see cref="UpdateCheck"/> lives here. The head supplies the
 /// text and the bytes; this decides what the file claims.</para>
 ///
 /// <para><b>Every failure is "no answer", never a wrong one.</b> A malformed line, a
-/// duplicate name, a truncated file — each yields a lookup that fails rather than a hash
+/// duplicate name, a truncated file, each yields a lookup that fails rather than a hash
 /// that might match by accident. The caller treats "no answer" as "do not install", so
 /// leniency here would quietly become permission there (CLAUDE.md rule 6).</para>
 /// </summary>
@@ -23,7 +23,7 @@ public static class ChecksumFile
     ///
     /// <para>Accepts the shapes <c>sha256sum</c> actually writes: two spaces between digest
     /// and name, a <c>*</c> marking binary mode, and a <c>./</c> prefix on the name. It does
-    /// not accept a path — a name with a directory separator in it is a malformed entry for
+    /// not accept a path, a name with a directory separator in it is a malformed entry for
     /// this purpose, and treating one as a match would let the file speak about something
     /// other than the asset that was downloaded.</para>
     /// </summary>
@@ -93,8 +93,8 @@ public static class ChecksumFile
     }
 
     /// <summary>
-    /// Whether a computed digest matches a recorded one. Hex casing differs between tools —
-    /// <c>sha256sum</c> writes lowercase, .NET's <c>Convert.ToHexString</c> uppercase — so
+    /// Whether a computed digest matches a recorded one. Hex casing differs between tools,
+    /// <c>sha256sum</c> writes lowercase, .NET's <c>Convert.ToHexString</c> uppercase, so
     /// the comparison is case-insensitive over a fixed alphabet, which carries no culture
     /// sensitivity.
     /// </summary>

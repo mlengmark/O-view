@@ -7,7 +7,7 @@ namespace OView.Presentation.Tests;
 /// <summary>
 /// The words on the boost chip and in the card behind it (issue #254).
 ///
-/// <para>Shared copy, so both heads say the same thing — the reason
+/// <para>Shared copy, so both heads say the same thing, the reason
 /// <see cref="BoostText"/> exists at all.</para>
 /// </summary>
 public class BoostChipTextTests
@@ -28,7 +28,7 @@ public class BoostChipTextTests
     /// <summary>
     /// The shape the panel actually shows today: figure first, word immediately after, then the
     /// date and the countdown. The figure leads because the same row carries utilisation a
-    /// hundred pixels to the right — a level, where this is a delta — and the word between them
+    /// hundred pixels to the right, a level, where this is a delta, and the word between them
     /// is what keeps the two from reading as the same kind of number.
     /// </summary>
     [Fact]
@@ -52,7 +52,7 @@ public class BoostChipTextTests
     }
 
     /// <summary>
-    /// The floor. With neither figure the chip is one word — and the hover card still relays
+    /// The floor. With neither figure the chip is one word, and the hover card still relays
     /// Claude's sentence, which is the part that never depended on parsing.
     /// </summary>
     [Theory]
@@ -71,7 +71,7 @@ public class BoostChipTextTests
     [InlineData(0, 0, 14, "14h")]
     [InlineData(0, 4, 3, "4d 3h")]
     [InlineData(2, 4, 14, "2w 4d 14h")]
-    // Once a larger unit is present the smaller ones stay, zero or not — "2w 0d 0h" reads as a
+    // Once a larger unit is present the smaller ones stay, zero or not, "2w 0d 0h" reads as a
     // precise two weeks, where "2w" alone invites the reader to wonder what was rounded away.
     [InlineData(3, 0, 0, "3w 0d 0h")]
     public void CountsDownInWeeksDaysAndHours(int weeks, int days, int hours, string expected)
@@ -95,7 +95,7 @@ public class BoostChipTextTests
     }
 
     /// <summary>
-    /// The promo runs to the end of its last day in the reader's own zone, not to its start —
+    /// The promo runs to the end of its last day in the reader's own zone, not to its start,
     /// a chip reading "ends in 0h" all through the final day would be wrong every hour of it.
     /// </summary>
     [Fact]
@@ -110,8 +110,8 @@ public class BoostChipTextTests
 
     /// <summary>
     /// The card carries Claude's sentence unedited, then says who reported it and when O-view
-    /// read it. O-view cannot verify that this account is boosted — the payload is a
-    /// feature-flag cache — so the provenance is what makes relaying it honest (rule 6).
+    /// read it. O-view cannot verify that this account is boosted, the payload is a
+    /// feature-flag cache, so the provenance is what makes relaying it honest (rule 6).
     /// </summary>
     [Fact]
     public void TheCardRelaysTheMessageAndAttributesIt()

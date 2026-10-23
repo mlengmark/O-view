@@ -4,7 +4,7 @@ namespace OView.Linux.Tests.Runtime;
 
 /// <summary>
 /// The app started on the virtual display with the session bus being written down, so the one
-/// question nothing else can answer — which side gave up on the tray icon — has an answer that
+/// question nothing else can answer, which side gave up on the tray icon, has an answer that
 /// can be read after the run.
 ///
 /// <para><b>Evidence, not a verdict.</b> The icon does not reach the notification area
@@ -17,7 +17,7 @@ namespace OView.Linux.Tests.Runtime;
 /// <para>Runs in the <c>linux-runtime</c> job, which provides the display
 /// (<c>xvfb-run</c>), the bus (<c>dbus-run-session</c>) and <c>OVIEW_LINUX_RUNTIME=1</c>.
 /// Elsewhere there is nothing to record, so each test returns early the way
-/// <see cref="LinuxRuntimeEnvironmentTests"/> does — except the last one, which is about what
+/// <see cref="LinuxRuntimeEnvironmentTests"/> does, except the last one, which is about what
 /// the recorder does when there is no bus and so runs everywhere.</para>
 /// </summary>
 public class BusTrafficRuntimeTests(ITestOutputHelper output)
@@ -33,12 +33,12 @@ public class BusTrafficRuntimeTests(ITestOutputHelper output)
     /// <summary>
     /// How long the capture is left running after the app has drawn its gauge. The toolkit
     /// publishes its item around that point, so without a pause the recording could stop
-    /// between the icon being drawn and the registration it should be followed by — and a
+    /// between the icon being drawn and the registration it should be followed by, and a
     /// capture that ends too early looks exactly like one where nothing was attempted.
     /// </summary>
     private static readonly TimeSpan Settle = TimeSpan.FromSeconds(3);
 
-    /// <summary>Messages reported per fragment. Enough to read, not the whole capture — that is saved whole.</summary>
+    /// <summary>Messages reported per fragment. Enough to read, not the whole capture, that is saved whole.</summary>
     private const int ReportedMessages = 5;
 
     /// <summary>
@@ -84,7 +84,7 @@ public class BusTrafficRuntimeTests(ITestOutputHelper output)
 
         // Reported, never asserted: whether the name appears is the finding the capture
         // carries, and waiting for it is also how everything after the render gets a window
-        // to arrive in — it ends early if the name does turn up.
+        // to arrive in, it ends early if the name does turn up.
         var itemName = await traffic.WaitForMentionAsync(BusTraffic.ItemNamePrefix, Settle);
 
         output.WriteLine($"a {BusTraffic.ItemNamePrefix}… name was asked for: {itemName}");
@@ -93,7 +93,7 @@ public class BusTrafficRuntimeTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// The capture reaches the folder the job uploads on a passing run too — the run this slice
+    /// The capture reaches the folder the job uploads on a passing run too, the run this slice
     /// exists for, where nothing failed and the recording is the only thing worth keeping.
     /// </summary>
     [Trait("Category", "LinuxRuntime")]
@@ -144,7 +144,7 @@ public class BusTrafficRuntimeTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// With no session bus — the ordinary test job, and a developer's own machine — there is
+    /// With no session bus, the ordinary test job, and a developer's own machine, there is
     /// nothing to record, and asking for a recording is quietly nothing rather than a failure.
     /// </summary>
     [Fact]
@@ -156,7 +156,7 @@ public class BusTrafficRuntimeTests(ITestOutputHelper output)
         try
         {
             // Both cleared rather than assumed unset, so this says the same thing wherever it
-            // runs — and with no artifacts folder, nothing can be written anywhere either.
+            // runs, and with no artifacts folder, nothing can be written anywhere either.
             Environment.SetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS", null);
             Environment.SetEnvironmentVariable("OVIEW_RUNTIME_ARTIFACTS", null);
 

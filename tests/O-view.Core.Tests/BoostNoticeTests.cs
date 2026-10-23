@@ -11,7 +11,7 @@ namespace OView.Core.Tests;
 /// </summary>
 public class BoostNoticeTests
 {
-    /// <summary>2026-08-31T08:24:24Z — the real <c>cachedGrowthBookFeaturesAt</c> that day.</summary>
+    /// <summary>2026-08-31T08:24:24Z, the real <c>cachedGrowthBookFeaturesAt</c> that day.</summary>
     private static readonly DateTimeOffset Fetched = new(2026, 8, 31, 8, 24, 24, TimeSpan.Zero);
 
     private static readonly DateOnly Today = new(2026, 8, 31);
@@ -50,7 +50,7 @@ public class BoostNoticeTests
     }
 
     /// <summary>
-    /// The message is carried through exactly as written — it is the one part of this feature
+    /// The message is carried through exactly as written, it is the one part of this feature
     /// that never depends on parsing, and the hover card shows it unedited.
     /// </summary>
     [Fact]
@@ -77,7 +77,7 @@ public class BoostNoticeTests
     }
 
     /// <summary>
-    /// A file with the timestamp but no notices is a valid, empty answer — the ordinary state
+    /// A file with the timestamp but no notices is a valid, empty answer, the ordinary state
     /// when no promo is running. It must read as "none", not as "unreadable", or every machine
     /// without a promo would look broken.
     /// </summary>
@@ -126,7 +126,7 @@ public class BoostNoticeTests
 
     /// <summary>
     /// The whole point of extracting a date: on the day after the promo ends, the chip goes away
-    /// because the machine's own calendar says so — not because Claude Code stopped running.
+    /// because the machine's own calendar says so, not because Claude Code stopped running.
     /// </summary>
     [Fact]
     public void HidesAPromoOnceItsLastDayHasPassed()
@@ -157,7 +157,7 @@ public class BoostNoticeTests
 
     /// <summary>
     /// A notice is never shown against a bar it did not name. That covers the model-scoped keys
-    /// (<c>seven_day_opus</c> and friends) — none has ever been observed populated, and drawing
+    /// (<c>seven_day_opus</c> and friends), none has ever been observed populated, and drawing
     /// one on the weekly gauge would put a model's promo on an account-wide meter.
     /// </summary>
     [Theory]
@@ -201,7 +201,7 @@ public class BoostNoticeTests
 
     /// <summary>
     /// An unreadable or malformed candidate must not take the panel down, and must not blank a
-    /// good one beside it — the contract every reader in this layer follows.
+    /// good one beside it, the contract every reader in this layer follows.
     /// </summary>
     [Fact]
     public void AMalformedOrMissingCandidateIsSkipped()

@@ -4,7 +4,7 @@ namespace OView.Core.Models;
 /// Edge-triggered threshold detection: notify exactly once when session usage
 /// crosses from below the threshold to at-or-above it, re-arming when it drops
 /// below (a window reset) or goes unknown. Level-triggered logic would fire on
-/// every poll while above threshold — one notification per crossing is the
+/// every poll while above threshold, one notification per crossing is the
 /// contract.
 /// </summary>
 public sealed class ThresholdWatcher(int thresholdPercent)
@@ -22,7 +22,7 @@ public sealed class ThresholdWatcher(int thresholdPercent)
 
         if (_above)
         {
-            return false;     // still above — already notified for this crossing
+            return false;     // still above, already notified for this crossing
         }
 
         _above = true;

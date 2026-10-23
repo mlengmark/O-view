@@ -10,7 +10,7 @@ namespace OView.Core.Tests;
 ///
 /// <para>The store could report how many rows it held and nothing whatever about their source.
 /// On the machine that prompted this, 98.5% of the transcript bytes were Cowork and the bundle's
-/// two facts — "36 Cowork files, 58 MB" and "407 ledger rows" — could not be read against each
+/// two facts, "36 Cowork files, 58 MB" and "407 ledger rows", could not be read against each
 /// other by anyone, including the person who wrote both lines.</para>
 /// </summary>
 public class IngestAttributionTests : IDisposable
@@ -69,7 +69,7 @@ public class IngestAttributionTests : IDisposable
 
     /// <summary>
     /// <b>The line the whole change exists for.</b> Both surfaces ingest, and the ledger says
-    /// which rows are whose — so "58 MB of Cowork transcripts" and "407 rows" stop being two
+    /// which rows are whose, so "58 MB of Cowork transcripts" and "407 rows" stop being two
     /// unrelated numbers in the same report.
     /// </summary>
     [Fact]
@@ -98,7 +98,7 @@ public class IngestAttributionTests : IDisposable
 
     /// <summary>
     /// <b>The attribution that was inverted.</b> Cowork runs its sessions through Claude Code,
-    /// so its transcripts land under the Claude Code root — and labelling by locator therefore
+    /// so its transcripts land under the Claude Code root, and labelling by locator therefore
     /// stamped every one of them "Claude Code". Measured on the development machine: 28 of 30
     /// files there, 107.7 MB of 107.9 MB, belonged to registered Cowork sessions while the
     /// bundle reported <c>Cowork: 0 rows</c>.
@@ -133,7 +133,7 @@ public class IngestAttributionTests : IDisposable
     }
 
     /// <summary>
-    /// The match is on the session id, not on where the file sits — so it survives Claude Code
+    /// The match is on the session id, not on where the file sits, so it survives Claude Code
     /// moving transcripts again, which is the change that broke the previous rule.
     /// </summary>
     [Fact]
@@ -160,7 +160,7 @@ public class IngestAttributionTests : IDisposable
 
     /// <summary>
     /// No registry named means nothing is reclassified. A provider that reached for a machine
-    /// default here would attribute a test's fixtures from this developer's own sessions — the
+    /// default here would attribute a test's fixtures from this developer's own sessions, the
     /// hazard issue #212 was about.
     /// </summary>
     [Fact]
@@ -177,7 +177,7 @@ public class IngestAttributionTests : IDisposable
 
         Assert.Equal(1, bySource.Single(s => s.Source == TranscriptSources.ClaudeCode).Rows);
 
-        // A surface that contributed nothing has no row here at all — the report supplies the
+        // A surface that contributed nothing has no row here at all, the report supplies the
         // zero when it prints, so its absence is the same statement.
         Assert.DoesNotContain(bySource, s => s.Source == TranscriptSources.Cowork);
     }
@@ -197,7 +197,7 @@ public class IngestAttributionTests : IDisposable
 
     /// <summary>
     /// A surface with no rows is printed, not omitted. "Cowork 0 row(s)" beside 36 Cowork files
-    /// in the section above is the entire report — and it cannot be seen if a zero means the
+    /// in the section above is the entire report, and it cannot be seen if a zero means the
     /// line is skipped. Same reasoning as <see cref="TranscriptScopeReport.CoverageLine"/>
     /// naming an absent surface rather than listing only what was found (issue #44).
     /// </summary>
@@ -217,7 +217,7 @@ public class IngestAttributionTests : IDisposable
     }
 
     /// <summary>
-    /// Rows written before the column existed are <c>unattributed</c> — never folded into the
+    /// Rows written before the column existed are <c>unattributed</c>, never folded into the
     /// likelier surface. Every existing install carries a whole ledger of them, and a report
     /// that quietly called them Claude Code would be a fabricated number in the one document a
     /// person reads when they already doubt the figures (rule 6).
@@ -286,7 +286,7 @@ public class IngestAttributionTests : IDisposable
     [Fact]
     public void AFileReadWholeThatStoredNothingIsCounted()
     {
-        // Parses cleanly and carries no assistant record — the same shape a file whose records
+        // Parses cleanly and carries no assistant record, the same shape a file whose records
         // the reader cannot understand would leave behind.
         var (projects, cowork) = BuildLayout(
             "{\"type\":\"user\",\"timestamp\":\"2026-08-20T10:00:00Z\"}\n", cowork: null);
@@ -310,7 +310,7 @@ public class IngestAttributionTests : IDisposable
     /// <summary>
     /// A watermark inherited from a build that recorded no counting window is reported as
     /// unknown, not as silent. "Nothing since we started looking" is not evidence that nothing
-    /// was ever stored, and the file is never re-read to find out — which is exactly why
+    /// was ever stored, and the file is never re-read to find out, which is exactly why
     /// <see cref="IngestAuditReport"/> exists.
     /// </summary>
     [Fact]

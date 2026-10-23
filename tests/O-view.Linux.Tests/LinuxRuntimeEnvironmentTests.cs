@@ -6,7 +6,7 @@ namespace OView.Linux.Tests;
 /// the way a desktop would. Phase 0b adds the tests that click the tray icon through a
 /// stand-in tray host; this one proves the environment those tests need actually comes up.
 ///
-/// <para>Elsewhere — Windows, or the ordinary test job — there is no display or bus to check,
+/// <para>Elsewhere, Windows, or the ordinary test job, there is no display or bus to check,
 /// so it returns early. The job sets <c>OVIEW_LINUX_RUNTIME=1</c>.</para>
 /// </summary>
 [Trait("Category", "LinuxRuntime")]

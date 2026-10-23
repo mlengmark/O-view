@@ -8,15 +8,15 @@ namespace OView.Tray.Popup;
 
 /// <summary>
 /// Manual popup placement (ADR-0003 item 2: no NSPopover equivalent exists). The
-/// popup docks to a FIXED corner of the work area adjacent to the taskbar — the
-/// same placement model as the system flyouts (volume, network, calendar) — so it
+/// popup docks to a FIXED corner of the work area adjacent to the taskbar, the
+/// same placement model as the system flyouts (volume, network, calendar), so it
 /// always opens in the same place regardless of exact click position. The cursor
 /// is used only to select the monitor (the one whose tray was clicked); the
 /// taskbar edge is derived from where the work area is inset relative to the
 /// monitor rect. DIP conversion uses that monitor's effective DPI (PerMonitorV2).
 ///
 /// <para><b>Which corner, and the margin, now live in
-/// <see cref="WorkAreaPlacement"/></b> — shared with the Linux head, which needed the same
+/// <see cref="WorkAreaPlacement"/></b>, shared with the Linux head, which needed the same
 /// answer for its panel (issue #144). What stays here is the Windows-only half: asking
 /// <c>GetMonitorInfoW</c> for the two rectangles and converting between pixels and DIPs.
 /// The arithmetic moved so there is one copy of it rather than two that drift (issues #55,
@@ -26,7 +26,7 @@ namespace OView.Tray.Popup;
 /// <para>The placement is unchanged bar one deliberate difference: the surface's size is
 /// rounded to whole device pixels before the corner is computed, where it used to be carried
 /// as a fraction. It moves a flyout by at most half a pixel on a fractional-scale display,
-/// and a window lands on a pixel boundary regardless — the shared rule works in whole pixels
+/// and a window lands on a pixel boundary regardless, the shared rule works in whole pixels
 /// because a work area is only ever reported in them.</para>
 ///
 /// <para><b>Every position this head gives a window comes out of <see cref="Place"/>, and
@@ -34,7 +34,7 @@ namespace OView.Tray.Popup;
 /// the user has dragged, and <see cref="WorkAreaPlacement"/> for one that has not.</b> Both are
 /// shared with the Linux head, so neither the clamping a remembered place needs nor the snapping
 /// a released one needs can be reasoned about twice. <c>WindowsPanelDragWiringTests</c> reads
-/// this head's source and fails if a position reaches a window from anywhere else — no test
+/// this head's source and fails if a position reaches a window from anywhere else, no test
 /// project references this head, so that scan is the only automatic proof there is.</para>
 /// </summary>
 internal static class PopupPositioner
@@ -45,10 +45,10 @@ internal static class PopupPositioner
     ///
     /// The corner is returned because the open/close animation has to grow FROM the
     /// docked edge to read as a flyout rather than as a window fading in the middle of
-    /// nowhere — and only this method knows which edge that is.
+    /// nowhere, and only this method knows which edge that is.
     /// </summary>
     /// <param name="memory">
-    /// Where the user last dragged this surface, or null for a surface that cannot be dragged —
+    /// Where the user last dragged this surface, or null for a surface that cannot be dragged,
     /// the tray menu. Given one, a remembered place for this display wins over the tray corner,
     /// re-clamped by the rule into the work area as it stands now; with nothing remembered the
     /// rule answers null and the corner placement below runs exactly as it did before dragging
@@ -100,7 +100,7 @@ internal static class PopupPositioner
 
     /// <summary>
     /// Moves a surface standing at <paramref name="leftDip"/>, <paramref name="topDip"/> one
-    /// keyboard step and stores where it lands, so the next <see cref="Place"/> puts it there —
+    /// keyboard step and stores where it lands, so the next <see cref="Place"/> puts it there,
     /// the keyboard's half of <see cref="Remember"/>, and the same shared rule decides the step,
     /// the snap and the clamp.
     ///
@@ -137,13 +137,13 @@ internal static class PopupPositioner
     }
 
     /// <summary>
-    /// The display the pointer is on, as the remembered place is keyed — or null when the
+    /// The display the pointer is on, as the remembered place is keyed, or null when the
     /// monitor query fails, which <see cref="Remember"/> treats as "do not remember".
     /// </summary>
     public static string? CurrentDisplayId() => CurrentMonitor().DisplayId;
 
     /// <summary>
-    /// Height available to a flyout on the monitor it is about to open on, in DIPs — the
+    /// Height available to a flyout on the monitor it is about to open on, in DIPs, the
     /// figure <see cref="PanelDensity.For"/> measures the panel against.
     ///
     /// <para>Per-monitor, not per-desktop: a laptop beside an external display can differ in
@@ -160,7 +160,7 @@ internal static class PopupPositioner
     /// The monitor the pointer is on, its work area, its effective scale, and the name the
     /// remembered place is keyed by.
     ///
-    /// <para>The cursor selects the monitor and nothing else — an undragged flyout docks to a
+    /// <para>The cursor selects the monitor and nothing else, an undragged flyout docks to a
     /// corner rather than following the pointer, and a dragged one is placed by where it was
     /// left. Falls back to a plausible 1080p work area when the query fails, because a flyout
     /// placed slightly wrong beats one not shown; the display id has no such fallback, because
@@ -171,7 +171,7 @@ internal static class PopupPositioner
     /// survive by being re-clamped rather than forgotten.</para>
     /// </summary>
     /// <param name="window">
-    /// The surface being placed, for the one caller that must not use the cursor — see
+    /// The surface being placed, for the one caller that must not use the cursor, see
     /// <see cref="Nudge"/>. Null is the cursor, which is every other caller.
     /// </param>
     private static (RECT Monitor, RECT Work, double Scale, string? DisplayId) CurrentMonitor(
@@ -212,7 +212,7 @@ internal static class PopupPositioner
     private static PixelBox ToBox(RECT r) => new(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top);
 
     /// <summary>
-    /// The same rectangle in device-independent units — what the placement rule works in, since
+    /// The same rectangle in device-independent units, what the placement rule works in, since
     /// a remembered place is a physical spot on a display rather than a pixel count
     /// (<see cref="DipBox"/>).
     /// </summary>
@@ -222,7 +222,7 @@ internal static class PopupPositioner
     /// <summary>
     /// Growth origin for a restored place: the work-area half the panel sits in. A panel dragged
     /// to the top-left has to grow down and right, or the open transition travels away from
-    /// where it was left — the same reason the docked corner is returned at all.
+    /// where it was left, the same reason the docked corner is returned at all.
     /// </summary>
     private static Point RememberedOrigin(
         PanelPlacementMemory.Resolved place, double widthDip, double heightDip, DipBox work) => new(
@@ -250,7 +250,7 @@ internal static class PopupPositioner
     private struct RECT { public int Left, Top, Right, Bottom; }
 
     /// <summary>
-    /// The EX form, for <c>szDevice</c> — the display name the remembered place is keyed by.
+    /// The EX form, for <c>szDevice</c>, the display name the remembered place is keyed by.
     /// <c>GetMonitorInfoW</c> fills whichever of the two <c>cbSize</c> names, so there is no
     /// reason to keep the shorter one beside it.
     /// </summary>

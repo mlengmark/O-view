@@ -8,7 +8,7 @@ namespace OView.Core.Tests;
 /// The same reset instant, fed through every Core path that can produce one, pins which
 /// source produced it and whether that source claims the result measured or modelled
 /// Complements <see cref="UsageSnapshotStatusTests"/>, which checks each
-/// provider's status defaults in isolation — this test's point is that two providers
+/// provider's status defaults in isolation, this test's point is that two providers
 /// describing the <b>same</b> instant agree on it to the second, while disagreeing, exactly as
 /// designed, on how sure they are of it.
 /// </summary>
@@ -31,7 +31,7 @@ public class ResetTimeProvenanceTests : IDisposable
 
     /// <summary>
     /// Plan history <b>models</b> the session reset: it watches the meter rise from zero and
-    /// predicts five hours on from that instant (ADR-0007) — never reported, only ever
+    /// predicts five hours on from that instant (ADR-0007), never reported, only ever
     /// inferred from a drop it happened to observe.
     /// </summary>
     [Fact]
@@ -47,7 +47,7 @@ public class ResetTimeProvenanceTests : IDisposable
     }
 
     /// <summary>
-    /// Plan history never predicts a weekly reset at all (ADR-0014) — the detector that used
+    /// Plan history never predicts a weekly reset at all (ADR-0014), the detector that used
     /// to infer one from <c>sd</c> drops is deleted, not merely unused here.
     /// </summary>
     [Fact]
@@ -66,7 +66,7 @@ public class ResetTimeProvenanceTests : IDisposable
     /// instant outright, so there is nothing here to model and nothing here to bracket.
     ///
     /// <para>The session instant is the same one <see cref="PlanHistory_PredictsTheSessionReset_AndClaimsItModelled"/>
-    /// derives above, to the second — pinning that a modelled prediction and a reported fact
+    /// derives above, to the second, pinning that a modelled prediction and a reported fact
     /// can describe the identical moment while still carrying different claims about how it
     /// was obtained.</para>
     /// </summary>

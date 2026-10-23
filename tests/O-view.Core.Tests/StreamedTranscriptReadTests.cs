@@ -7,7 +7,7 @@ namespace OView.Core.Tests;
 /// <summary>
 /// <see cref="TranscriptReader.ReadFrom"/> streams rather than reading each file whole
 /// (issue #125). The records and the resumption offset must be byte-for-byte what the
-/// slurping implementation produced — the change was made for allocation, not behaviour,
+/// slurping implementation produced, the change was made for allocation, not behaviour,
 /// and a difference here is the kind that silently loses or double-counts tokens.
 ///
 /// <para>The cases that matter are the ones a whole-file read could not get wrong by
@@ -78,7 +78,7 @@ public class StreamedTranscriptReadTests : IDisposable
 
     /// <summary>
     /// The half-written final line. Claude appends while O-view reads, so this is the
-    /// normal case, not the exotic one — and the offset must stay behind it so the next
+    /// normal case, not the exotic one, and the offset must stay behind it so the next
     /// poll re-reads the record whole rather than skipping it.
     /// </summary>
     [Fact]
@@ -101,7 +101,7 @@ public class StreamedTranscriptReadTests : IDisposable
     }
 
     /// <summary>
-    /// A file that is nothing but an unterminated line yields no records and no advance —
+    /// A file that is nothing but an unterminated line yields no records and no advance,
     /// the case the old implementation spelled as "no newline found, return the offset
     /// unchanged".
     /// </summary>
@@ -142,14 +142,14 @@ public class StreamedTranscriptReadTests : IDisposable
         // Three ASCII padding characters replaced by text that is 2, 3 and 4 bytes per
         // character, so the line's byte length and its character length cannot agree.
         var multibyte = Line("req_A", 10, padding: 3)
-            .Replace("xxx", "ü—🙂", StringComparison.Ordinal);
+            .Replace("xxx", "ü→🙂", StringComparison.Ordinal);
         var path = WriteRaw("utf8.jsonl", multibyte + "\n" + Line("req_B", 20) + "\n");
 
         var (records, offset) = TranscriptReader.ReadFrom(path, 0);
 
         Assert.Equal(2, records.Count);
         Assert.True(new FileInfo(path).Length > multibyte.Length + Line("req_B", 20).Length + 2,
-            "the fixture is not actually multi-byte — the test would pass on a character count");
+            "the fixture is not actually multi-byte, the test would pass on a character count");
         Assert.Equal(new FileInfo(path).Length, offset);
 
         var (none, again) = TranscriptReader.ReadFrom(path, offset);

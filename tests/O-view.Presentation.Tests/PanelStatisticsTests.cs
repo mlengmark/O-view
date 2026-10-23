@@ -15,7 +15,7 @@ public class PanelStatisticsTests : IDisposable
     ///
     /// <para><b>Named, never <see cref="TimeZoneInfo.Local"/>.</b> These assertions are about
     /// which day a figure lands on, so a suite that read the machine's zone would pass or fail
-    /// by where it ran — and would pass vacuously on a CI runner sitting in UTC, which is
+    /// by where it ran, and would pass vacuously on a CI runner sitting in UTC, which is
     /// where every one of them would run (issue #211, and the hazard of issue #212).</para>
     /// </summary>
     private static readonly TimeZoneInfo Utc = TimeZoneInfo.Utc;
@@ -41,7 +41,7 @@ public class PanelStatisticsTests : IDisposable
         Directory.Delete(_dir, recursive: true);
     }
 
-    /// <summary>A fresh, independent store — for cases that need several first-recorded days.</summary>
+    /// <summary>A fresh, independent store, for cases that need several first-recorded days.</summary>
     private RollupStore NewStore()
     {
         var store = new RollupStore(Path.Combine(_dir, $"usage-{_stores.Count}.db"));
@@ -70,7 +70,7 @@ public class PanelStatisticsTests : IDisposable
         // Days before 2026-07-19 have NO data; days from it onward are the recorded era.
         Assert.All(stats.DailySeries.Where(d => d.Date < new DateOnly(2026, 7, 19)), d => Assert.True(d.PreInstall));
         Assert.All(stats.DailySeries.Where(d => d.Date >= new DateOnly(2026, 7, 19)), d => Assert.False(d.PreInstall));
-        // 2026-07-20 is inside the recorded era with no usage — a genuine zero.
+        // 2026-07-20 is inside the recorded era with no usage, a genuine zero.
         var idle = stats.DailySeries.Single(d => d.Date == new DateOnly(2026, 7, 20));
         Assert.False(idle.PreInstall);
         Assert.Equal(0, idle.OutputTokens);
@@ -90,14 +90,14 @@ public class PanelStatisticsTests : IDisposable
     /// Coverage counts days O-view has data <b>for</b>, not days with usage on them.
     ///
     /// <para>Seeded on the 18th, 20th and 21st: three days carry usage, but the 19th is a day
-    /// inside the recorded era that the user simply did not use Claude — a genuine zero. The
+    /// inside the recorded era that the user simply did not use Claude, a genuine zero. The
     /// window is covered from the 18th onward, which is four days.</para>
     /// </summary>
     [Fact]
     public void Coverage_CountsDaysObservedNotDaysWithUsage()
     {
         Seed("r1", "2026-07-18", 10);
-        // nothing on 2026-07-19 — an idle day, not a missing one
+        // nothing on 2026-07-19, an idle day, not a missing one
         Seed("r2", "2026-07-20", 20);
         Seed("r3", "2026-07-21", 30);
 
@@ -111,14 +111,14 @@ public class PanelStatisticsTests : IDisposable
     /// <summary>
     /// The reported case (issue #142): a gap in the middle of the window is not missing
     /// history. Before the fix this said "2 of 31 days recorded" at a user whose history
-    /// covered the whole span — reading as short history when usage was merely low, which
+    /// covered the whole span, reading as short history when usage was merely low, which
     /// inverts the caveat ADR-0006 requires.
     /// </summary>
     [Fact]
     public void Coverage_AGapInTheMiddleIsNotMissingHistory()
     {
         Seed("r1", "2026-06-21", 10);   // the first day of the 31-day window
-        Seed("r2", "2026-07-21", 20);   // today — nothing at all in between
+        Seed("r2", "2026-07-21", 20);   // today, nothing at all in between
 
         var stats = PanelStatistics.Build(_store, Now, Utc);
 
@@ -147,7 +147,7 @@ public class PanelStatisticsTests : IDisposable
     }
 
     /// <summary>
-    /// History older than the window means the window is fully covered — and, with the caveat
+    /// History older than the window means the window is fully covered, and, with the caveat
     /// suppressed, the 31-day figure stands on its own. That is the correct outcome: the
     /// caveat is for short history, and this history is not short.
     /// </summary>
@@ -191,7 +191,7 @@ public class PanelStatisticsTests : IDisposable
     {
         // Supersedes the original "any unpriced model ⇒ null" rule. That rule blanked
         // both Est. tiles the moment one unrecognised model id appeared (claude-opus-5,
-        // in the real report) — the user saw "unknown" with no way to know why. The
+        // in the real report), the user saw "unknown" with no way to know why. The
         // principle behind rule 6 is "don't mislead", which a partial sum satisfies as
         // long as the exclusion is stated: UnpricedModels drives that caption.
         Seed("r1", "2026-07-21", 1_000_000);
@@ -218,9 +218,9 @@ public class PanelStatisticsTests : IDisposable
     [Fact]
     public void Credit31Days_CountsOnlyCreditBilledModels()
     {
-        Seed("r1", "2026-07-21", 1_000_000, "claude-opus-4-8");   // plan model — excluded
-        Seed("r2", "2026-07-21", 1_000_000, "claude-fable-5");    // credit-billed — counted
-        Seed("r3", "2026-07-15", 500_000, "claude-fable-5");      // earlier in window — counted
+        Seed("r1", "2026-07-21", 1_000_000, "claude-opus-4-8");   // plan model, excluded
+        Seed("r2", "2026-07-21", 1_000_000, "claude-fable-5");    // credit-billed, counted
+        Seed("r3", "2026-07-15", 500_000, "claude-fable-5");      // earlier in window, counted
 
         var stats = PanelStatistics.Build(_store, Now, Utc);
 
@@ -282,15 +282,15 @@ public class PanelStatisticsTests : IDisposable
             $"{partial.RecordedDays} of {partial.WindowDays} days recorded",
             TokenText.CoverageNote(partial));
 
-        // Complete coverage says nothing — an empty note is what collapses the label.
+        // Complete coverage says nothing, an empty note is what collapses the label.
         var complete = partial with { RecordedDays = partial.WindowDays };
         Assert.False(complete.HasPartialHistory);
         Assert.Equal("", TokenText.CoverageNote(complete));
     }
 
     // A "<synthetic> does not count as unpriced" test used to sit here. It seeded the
-    // store with that model id directly — a state ingestion cannot produce, because
-    // TranscriptReader drops those records at parse time — so it pinned the behaviour of
+    // store with that model id directly, a state ingestion cannot produce, because
+    // TranscriptReader drops those records at parse time, so it pinned the behaviour of
     // a branch no user could reach. The real guarantee is end-to-end and now lives in
     // JsonlIngestionTests.SyntheticRecords_NeverReachTheStore_... (GitHub issue #57).
 
@@ -317,7 +317,7 @@ public class PanelStatisticsTests : IDisposable
         Assert.Equal(new DateOnly(2026, 8, 26), stats.DailySeries[^1].Date);
         Assert.Equal(400, stats.TokensToday);
 
-        // The tokens are not lost — they are on the bar for the day the reader had them.
+        // The tokens are not lost, they are on the bar for the day the reader had them.
         Assert.Equal(100, stats.DailySeries.Single(d => d.Date == new DateOnly(2026, 8, 25)).OutputTokens);
         Assert.Equal(500, stats.Tokens31Days);
     }
@@ -333,7 +333,7 @@ public class PanelStatisticsTests : IDisposable
         var minusEight = TimeZoneInfo.CreateCustomTimeZone(
             "test-minus-8", TimeSpan.FromHours(-8), "UTC-8", "UTC-8");
 
-        // 2026-08-26T03:00Z is 19:00 on the 25th at UTC-8 — the reader's evening, which the
+        // 2026-08-26T03:00Z is 19:00 on the 25th at UTC-8, the reader's evening, which the
         // UTC bucket called tomorrow.
         var readingUtc = new DateTimeOffset(2026, 8, 26, 4, 0, 0, TimeSpan.Zero);
         SeedAt("their-evening", "2026-08-26T03:00:00Z", 250);
@@ -345,7 +345,7 @@ public class PanelStatisticsTests : IDisposable
     }
 
     /// <summary>
-    /// The window is 31 <b>local</b> days across a DST transition in both directions — not 31
+    /// The window is 31 <b>local</b> days across a DST transition in both directions, not 31
     /// × 24 hours, which is what stepping back from midnight in fixed blocks would give.
     ///
     /// <para>Europe/London is used because its transitions are at 01:00 local, so the days
@@ -353,8 +353,8 @@ public class PanelStatisticsTests : IDisposable
     /// which is the point: the reader's calendar does not skip or repeat a day.</para>
     /// </summary>
     [Theory]
-    [InlineData("2026-03-29T12:00:00Z")]   // spring forward — a 23-hour day inside the window
-    [InlineData("2026-10-25T12:00:00Z")]   // fall back — a 25-hour one
+    [InlineData("2026-03-29T12:00:00Z")]   // spring forward, a 23-hour day inside the window
+    [InlineData("2026-10-25T12:00:00Z")]   // fall back, a 25-hour one
     public void Window_Is31LocalDays_AcrossDstInBothDirections(string readingUtc)
     {
         var london = TimeZoneInfo.FindSystemTimeZoneById(
@@ -367,7 +367,7 @@ public class PanelStatisticsTests : IDisposable
         Assert.Equal(LocalDays.DateOf(now, london), stats.DailySeries[^1].Date);
         Assert.Equal(stats.DailySeries[^1].Date.AddDays(-30), stats.DailySeries[0].Date);
 
-        // Consecutive calendar days throughout — no repeat, no gap at the transition.
+        // Consecutive calendar days throughout, no repeat, no gap at the transition.
         for (var i = 1; i < stats.DailySeries.Count; i++)
         {
             Assert.Equal(stats.DailySeries[i - 1].Date.AddDays(1), stats.DailySeries[i].Date);
@@ -376,7 +376,7 @@ public class PanelStatisticsTests : IDisposable
 
     /// <summary>
     /// The 25-hour day holds 25 hours of usage. Stepping day boundaries back in fixed 24-hour
-    /// blocks puts the extra hour on the neighbouring bar instead — a silent move, which is
+    /// blocks puts the extra hour on the neighbouring bar instead, a silent move, which is
     /// why it is asserted on a figure rather than on a date.
     /// </summary>
     [Fact]
@@ -400,7 +400,7 @@ public class PanelStatisticsTests : IDisposable
     [Fact]
     public void NothingPriceable_IsStillUnknown_NotZero()
     {
-        // If not one row can be priced there is no basis for a figure — show unknown
+        // If not one row can be priced there is no basis for a figure, show unknown
         // rather than a $0.00 that reads as "you spent nothing" (rule 6).
         Seed("a", "2026-07-21", 1_000_000, "claude-brand-new-9");
 

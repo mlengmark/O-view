@@ -6,7 +6,7 @@ namespace OView.Presentation.Panel;
 ///
 /// <para>Everything here is already decided. <see cref="Email"/> is null rather than empty
 /// when there is none, because "hide the row" and "draw an empty row" are different layouts
-/// and the choice between them was the kind of thing each head used to make for itself —
+/// and the choice between them was the kind of thing each head used to make for itself,
 /// <see cref="AccountName"/> and <see cref="Tier"/> are never null for the same reason, since
 /// their absence is a stand-in sentence rather than a missing row.</para>
 /// </summary>
@@ -31,7 +31,7 @@ public sealed record PanelHeaderView(
     ///
     /// <para>Here rather than in either head for the plain reason all the panel's wording is:
     /// two heads authoring it separately is two spoken names for one band, and the drag and the
-    /// keyboard nudge are the same affordance on both. It is a name, not a sentence — the words
+    /// keyboard nudge are the same affordance on both. It is a name, not a sentence, the words
     /// a reader puts in front of its own "grouping"/"pane" role noun.</para>
     /// </summary>
     public const string MoveName = "Move panel";

@@ -4,7 +4,7 @@ using System.Windows.Controls;
 namespace OView.Tray.Popup;
 
 /// <summary>
-/// Moves the panel's sections into a scrolling viewport, and back out again — the response to
+/// Moves the panel's sections into a scrolling viewport, and back out again, the response to
 /// a display too short for them even packed tight.
 ///
 /// <para>Asked for exactly when <see cref="OView.App.Rendering.PanelFit"/> has had to cap the
@@ -16,7 +16,7 @@ namespace OView.Tray.Popup;
 ///
 /// <para><b>Why a panel with room does not simply always have one.</b> A viewport clips to its
 /// own bounds and takes its own measure of what is inside it, so a panel laid out through one
-/// is not pixel for pixel the panel laid out without one — and that would be a change to how
+/// is not pixel for pixel the panel laid out without one, and that would be a change to how
 /// the panel looks on every display that already fits, arriving inside a change about the ones
 /// that do not. The Linux head found the same thing one golden at a time. So a panel with room
 /// keeps exactly the tree it has always had, and every existing render is unmoved.</para>
@@ -75,7 +75,7 @@ internal sealed class PopupScroll
 
     /// <summary>
     /// Back to the top. A re-populate is a fresh open or a re-layout at a new density, and
-    /// either way the header is where the panel should start — not wherever the reader had
+    /// either way the header is where the panel should start, not wherever the reader had
     /// scrolled to the last time it was open.
     /// </summary>
     public void ScrollToTop() => _viewport.ScrollToTop();

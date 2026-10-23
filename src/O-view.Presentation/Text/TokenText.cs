@@ -18,13 +18,13 @@ public static class TokenText
     ///
     /// <para>ADR-0006 makes this text a requirement rather than a nicety: a small 31-day
     /// figure without it reads as low usage rather than as short history. That makes it
-    /// exactly the kind of string that should have one definition — it was built by hand
+    /// exactly the kind of string that should have one definition, it was built by hand
     /// in two separate places in the panel, which is two places to forget it.</para>
     ///
     /// <para>Built from <see cref="PanelStatistics.RecordedDays"/> and
     /// <see cref="PanelStatistics.WindowDays"/> rather than read off the model, because the
     /// sentence is panel copy and Core's job stops at reporting the two numbers (GitHub issue
-    /// #142 — <see cref="PanelStatistics.HasPartialHistory"/> carries the reasoning on why
+    /// #142, <see cref="PanelStatistics.HasPartialHistory"/> carries the reasoning on why
     /// those numbers, not this one, are the ones that must stay exact).</para>
     /// </summary>
     public static string CoverageNote(PanelStatistics stats) =>
@@ -35,7 +35,7 @@ public static class TokenText
     /// models were left out of the money figures, what O-view assumed about cache writes it
     /// could not attribute, and how old the rates behind the figures are.
     ///
-    /// <para>All four are the same class of statement — the total is real but qualified — and
+    /// <para>All four are the same class of statement, the total is real but qualified, and
     /// omitting any of them lets a figure read as the whole picture. An unpriced model must be
     /// named rather than silently dropped, and must not void the total (a single newly
     /// released Claude once blanked both Est. tiles entirely).</para>
@@ -43,7 +43,7 @@ public static class TokenText
     /// <para><b>The last two are conditions that clear.</b> The TTL note applies only to rows a
     /// build before GitHub issue #255 ingested and that are out of reach of the re-ingest, so it
     /// disappears as that history ages out of the window. The rate age appears only past
-    /// <see cref="RateCard.StaleAfter"/> — a caveat that is always on says nothing, and the
+    /// <see cref="RateCard.StaleAfter"/>, a caveat that is always on says nothing, and the
     /// figures are not less true for being priced at a rate that has not changed.</para>
     /// </summary>
     public static string Caveat(PanelStatistics stats)
@@ -80,7 +80,7 @@ public static class TokenText
     /// <para><b>The source is named as well as the date</b>, because the two answer different
     /// halves of "can I check this figure". A date says how likely the table is to have moved;
     /// a source says whose table it is. Only <see cref="RateCardSource.Bundled"/> exists today,
-    /// and the line is written to carry the other from the day it does — a user-editable
+    /// and the line is written to carry the other from the day it does, a user-editable
     /// pricing file with no provenance on screen is a fabricated-number vector (issue #255).</para>
     /// </summary>
     public static string RateAge(RateCard card) => string.Create(
@@ -97,8 +97,8 @@ public static class TokenText
     /// the whole tile block.</para>
     ///
     /// <para><b>The plan bars are account-wide; these tiles are not.</b> Cloud-container Cowork
-    /// sessions and Claude chat leave no transcript on this machine — measured directly on
-    /// 2026-08-28, a cloud Cowork session wrote no registration and no transcript at all — so the
+    /// sessions and Claude chat leave no transcript on this machine, measured directly on
+    /// 2026-08-28, a cloud Cowork session wrote no registration and no transcript at all, so the
     /// bars include that work and the tiles cannot. The machine that reported
     /// [#218](https://github.com/mlengmark/O-view/issues/218) sat at 100% on the plan meter with a
     /// two-day-old local record, which is that pairing in its most alarming form.</para>
@@ -117,7 +117,7 @@ public static class TokenText
     public const string TokenScopeCaveat = "chat and cloud sessions not counted";
 
     /// <summary>
-    /// Tile headings for estimated money. <b>"Est." is never dropped</b> — within plan
+    /// Tile headings for estimated money. <b>"Est." is never dropped</b>, within plan
     /// limits the marginal cost is £0 and these price tokens at public API rates, so the
     /// figure is a valuation, not a charge.
     ///
@@ -126,7 +126,7 @@ public static class TokenText
     ///
     /// <para>It read "(UTC)" for one release, because the figure was bucketed by UTC date and
     /// had to say so (issue #210). The suffix is off again now the bucket is the reader's own
-    /// day — a qualifier that is no longer true is not a safe thing to leave on.</para>
+    /// day, a qualifier that is no longer true is not a safe thing to leave on.</para>
     /// </summary>
     public static string EstTodayLabel(bool offPlan) => offPlan ? "Est. spend today" : "Est. value today";
 
@@ -143,12 +143,12 @@ public static class TokenText
     ///
     /// <para>They read "Tokens today" alone until a user reported the figure as inflated:
     /// <c>235.6M</c> beside the thousands Claude's own UI shows (issue #169). The sum was
-    /// right — roughly 90% of it is cached prompt re-reads, which are billed and counted —
+    /// right, roughly 90% of it is cached prompt re-reads, which are billed and counted,
     /// but an unqualified "Tokens today" invites the comparison that makes it look like a
     /// 1000× over-count. #169 answered that by qualifying the heading: <c>incl. cache</c>.</para>
     ///
     /// <para><b>Issue #253 changed the figure instead.</b> The qualifier was correct and
-    /// still left the panel leading with a number nobody reads — at a stable ~89% cache-read
+    /// still left the panel leading with a number nobody reads, at a stable ~89% cache-read
     /// share, output never exceeds about 1.5% of the total, so the one quantity that tracks
     /// work done was buried in a figure dominated by conversation re-sends. The tiles now
     /// headline output alone and say so. The composition moved beneath them
@@ -185,7 +185,7 @@ public static class TokenText
     /// <summary>
     /// One token kind's name.
     ///
-    /// <para>"Cache write" rather than "cache creation" because the pair reads as a pair — a
+    /// <para>"Cache write" rather than "cache creation" because the pair reads as a pair, a
     /// reader scanning the legend needs to see at once that two of the four entries are cache
     /// traffic, which is the whole point of showing the split.</para>
     /// </summary>
@@ -201,8 +201,8 @@ public static class TokenText
     /// <summary>
     /// A kind's share of its own window, to two decimals.
     ///
-    /// <para>Built rather than formatted with <c>"P2"</c>, which renders "1.08 %" — with a
-    /// space — under the INVARIANT culture as well as most European ones. The panel states
+    /// <para>Built rather than formatted with <c>"P2"</c>, which renders "1.08 %", with a
+    /// space, under the INVARIANT culture as well as most European ones. The panel states
     /// its own figures rather than inheriting the desktop's, and invariant alone does not get
     /// there here.</para>
     ///
@@ -228,8 +228,8 @@ public static class TokenText
     /// The identifying line under a segment card's token figure:
     /// <c>cache write · 10.30% of today · Est. $0.87</c>.
     ///
-    /// <para>Built as one caption rather than as a third hover-card shape. The panel has two —
-    /// a figure with a caption, and a sentence — and <c>HoverCard</c> says to reuse them; a
+    /// <para>Built as one caption rather than as a third hover-card shape. The panel has two,
+    /// a figure with a caption, and a sentence, and <c>HoverCard</c> says to reuse them; a
     /// per-kind card is a figure with a caption, so it is one.</para>
     ///
     /// <para><b>"Est." is never dropped here either.</b> A hover card is not an exemption from
@@ -237,9 +237,9 @@ public static class TokenText
     /// as money spent. An unpriced window says so outright rather than showing <c>$0.00</c>,
     /// which would read as "this cost nothing" (rule 6).</para>
     ///
-    /// <para>The window is named because <b>the two bars have measurably different shapes</b> —
+    /// <para>The window is named because <b>the two bars have measurably different shapes</b>,
     /// cache write ran 10.3% of a day against 0.93% of the month on the machine this was
-    /// designed against — so a share with no window attached can be read against the wrong bar.</para>
+    /// designed against, so a share with no window attached can be read against the wrong bar.</para>
     /// </summary>
     public static string TokenCardCaption(TokenKind kind, double share, decimal? estUsd, string window)
     {
@@ -258,8 +258,8 @@ public static class TokenText
 
     /// <summary>
     /// Heading for a share column. <b>There is one per window, not one shared.</b> The two
-    /// windows have measurably different shapes — cache write ran 10.3% of a day against
-    /// 0.93% of the month on the machine this was designed against — so a single share column
+    /// windows have measurably different shapes, cache write ran 10.3% of a day against
+    /// 0.93% of the month on the machine this was designed against, so a single share column
     /// beside two token columns would be read against whichever one it sat nearer.
     /// </summary>
     public const string TokenBreakdownShareHeader = "Share";
@@ -287,13 +287,13 @@ public static class TokenText
     /// The figure on a usage-chart column's hover card: <c>234.8M tokens</c>.
     ///
     /// <para><b>The unit is named because the column does not name it.</b> A bar chart with no
-    /// axis labels — which is what fits in the panel — leaves the hover card as the only place
+    /// axis labels, which is what fits in the panel, leaves the hover card as the only place
     /// the reader learns what the height measures, and <c>234.8M</c> alone could as easily be
     /// money. The figure counts output tokens, the same quantity
     /// <see cref="TokensTodayLabel"/> headlines, so the two can be read against each other.</para>
     ///
-    /// <para>The Windows panel built this suffix twice — once for the live chart and once for
-    /// the hover cards rendered as proof — which is two chances for the proof to describe a
+    /// <para>The Windows panel built this suffix twice, once for the live chart and once for
+    /// the hover cards rendered as proof, which is two chances for the proof to describe a
     /// card that is not the shipped one.</para>
     /// </summary>
     public static string DayBarTokens(long tokens) => $"{UsageFormatter.Tokens(tokens)} tokens";
@@ -304,8 +304,8 @@ public static class TokenText
     ///
     /// <para><b>Counted, not listed.</b> A raw model id is longer than the caption's room and
     /// would either overflow the tile or crowd out the total; the count carries the part rule 6
-    /// requires — that something is missing from a figure the chart would otherwise imply is
-    /// complete — and <see cref="UnpricedModelsHint"/> names them exactly.</para>
+    /// requires, that something is missing from a figure the chart would otherwise imply is
+    /// complete, and <see cref="UnpricedModelsHint"/> names them exactly.</para>
     ///
     /// <para>One member rather than two constants and a branch in each panel. The branch is the
     /// copy: which of the two captions a chart shows is the same decision as what it says, and a
@@ -319,11 +319,11 @@ public static class TokenText
     ///
     /// <para>It says what the total <i>is</i> rather than only what is missing from it: an
     /// unpriced model's worth is unknown, not zero, so the honest reading of the chart is that
-    /// it shows the priced part — and a reader told only "2 excluded" will still take the
+    /// it shows the priced part, and a reader told only "2 excluded" will still take the
     /// total for the whole.</para>
     /// </summary>
     public static string UnpricedModelsHint(IReadOnlyList<string> models) =>
-        $"No published rate for {string.Join(", ", models)} — excluded from this "
+        $"No published rate for {string.Join(", ", models)}, excluded from this "
         + "chart, so the total shown is only the part O-view can price.";
 
     /// <summary>Labels for the two views of the composition.</summary>

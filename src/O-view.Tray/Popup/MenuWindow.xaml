@@ -76,7 +76,7 @@
 
         <!-- The threshold selector, sitting inline on the Notify row. A pill rather than a
              system ComboBox: a ComboBox drops a Popup, and a Popup lives in its own HWND
-             outside this window's visual tree — so it would appear in no menu-samples render
+             outside this window's visual tree, so it would appear in no menu-samples render
              at all, and the surface with the app's worst regression record would be the one
              surface that could not be verified from an image. -->
         <Style x:Key="SelectorPill" TargetType="Button">
@@ -162,14 +162,14 @@
 
             <!-- Top of the list: someone opening the menu for this has a panel sitting somewhere
                  they cannot get it back from, so it must not be something to hunt for. There is
-                 no row above it to follow — the tray icon's own click is what opens the panel on
+                 no row above it to follow, the tray icon's own click is what opens the panel on
                  this head.
 
                  Always present, unlike the rows below that appear only when they have something
                  to say: those state a condition ("the refresh has stopped itself") or a
                  capability ("this build can self-install"), and a row claiming one it does not
                  have would be a claim about the machine. This one is a command, like "Copy
-                 diagnostics" — it is a no-op with nothing saved, and hiding it until the panel
+                 diagnostics", it is a no-op with nothing saved, and hiding it until the panel
                  has already been dragged hides it exactly until it is needed. -->
             <Button x:Name="ResetPanelRow" Style="{StaticResource MenuRow}">
                 <TextBlock Text="{x:Static text:MenuText.ResetPanelPositionRow}"
@@ -244,7 +244,7 @@
             <!-- The opened list. Inline in the card rather than a floating Popup, so it is
                  part of the visual tree the verification renders capture, and so nothing can
                  take activation away from the flyout and dismiss it mid-choice (issue #11).
-                 The card is SizeToContent, so opening this grows it — MenuWindow re-docks
+                 The card is SizeToContent, so opening this grows it, MenuWindow re-docks
                  afterwards, which is what keeps the group clear of the taskbar. -->
             <StackPanel x:Name="ThresholdOptions" Visibility="Collapsed" Margin="0,1,0,3">
                 <Button x:Name="Threshold70" Style="{StaticResource OptionRow}" Tag="70">

@@ -5,8 +5,8 @@ using Xunit.Sdk;
 
 // Every runtime test that needs a notification area owns org.kde.StatusNotifierWatcher, and a
 // bus name can only have one owner: two test classes doing it at once means one of them fails
-// on a collision rather than on anything it was testing. xunit runs collections — and so
-// classes — in parallel by default, so without this the stand-in host's own tests and this
+// on a collision rather than on anything it was testing. xunit runs collections, and so
+// classes, in parallel by default, so without this the stand-in host's own tests and this
 // file's would race. The rest of the assembly is unit tests measured in milliseconds, so
 // serialising the whole thing costs nothing worth having.
 //
@@ -22,7 +22,7 @@ namespace OView.Linux.Tests.Runtime;
 ///
 /// <para>This is the first test anywhere that runs the real head. Up to now the Linux skin
 /// was proved by unit tests over its pieces, which is why every tray defect that reached a
-/// desktop — a first click that deadlocked (#124), a menu that took tens of seconds (#125) —
+/// desktop, a first click that deadlocked (#124), a menu that took tens of seconds (#125),
 /// got through: all of them needed the toolkit, the dispatcher and the bus together. The
 /// click and the menu are tested in their own slices; what is proved here is the thing they
 /// both stand on, that the app comes up, its icon arrives, and it stays up.</para>
@@ -57,7 +57,7 @@ public class LinuxAppStartRuntimeTests(ITestOutputHelper output)
     /// <para>Three things in one pass, because they are three stages of one start-up and a
     /// failure at any of them is the same report ("it doesn't work on Linux"): the app finds
     /// the notification area on the bus before the toolkit starts, it gets far enough to draw
-    /// its gauge — which needs the toolkit, the engine and the dispatcher between them — and
+    /// its gauge, which needs the toolkit, the engine and the dispatcher between them, and
     /// it is still running once it has. A head that renders once and dies is the failure this
     /// job exists to catch, and nothing short of a real process could see it.</para>
     /// </summary>
@@ -67,7 +67,7 @@ public class LinuxAppStartRuntimeTests(ITestOutputHelper output)
         if (!InRuntimeJob) return;
 
         // The host first, deliberately: the app asks the bus for a notification area once,
-        // before the toolkit starts, so one started afterwards would be a different case —
+        // before the toolkit starts, so one started afterwards would be a different case,
         // the one TheIconReachesAHostThatAppearedAfterTheApp covers.
         await using var host = await StandInTrayHost.StartAsync();
         await using var app = await LinuxAppProcess.StartAsync(output, nameof(TheAppStartsOnTheVirtualDisplayAndCarriesOnRunning));
@@ -94,7 +94,7 @@ public class LinuxAppStartRuntimeTests(ITestOutputHelper output)
 
         // The host first, deliberately: the app asks the bus for a notification area once,
         // before the toolkit starts, and one started afterwards would be found by the retry
-        // path instead — a different thing from the one under test.
+        // path instead, a different thing from the one under test.
         await using var host = await StandInTrayHost.StartAsync();
         await using var app = await LinuxAppProcess.StartAsync(output, nameof(TheIconReachesTheStandInHostAndTheAppCarriesOnRunning));
 
@@ -120,7 +120,7 @@ public class LinuxAppStartRuntimeTests(ITestOutputHelper output)
     /// <para>Here to tell two failures apart. The icon not arriving says nothing about why;
     /// the icon not arriving when the area was there first but arriving when it appeared
     /// afterwards says the tray backend only ever acts on the name changing hands, and never
-    /// on finding it already owned — which is the ordinary case on every desktop that ships a
+    /// on finding it already owned, which is the ordinary case on every desktop that ships a
     /// notification area.</para>
     /// </summary>
     [Fact]
@@ -159,8 +159,8 @@ public class LinuxAppStartRuntimeTests(ITestOutputHelper output)
 
         // Killed from outside, as a crash would take it. Without this check the harness is
         // trustworthy only when it passes: a later slice waiting five seconds for a panel from
-        // an app that died on its first click would report a timeout, and the real failure —
-        // and the log line naming it — would be thrown away.
+        // an app that died on its first click would report a timeout, and the real failure,
+        // and the log line naming it, would be thrown away.
         using (var victim = Process.GetProcessById(app.ProcessId))
         {
             victim.Kill();

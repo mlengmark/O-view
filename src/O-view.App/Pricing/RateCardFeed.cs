@@ -15,14 +15,14 @@ namespace OView.App.Pricing;
 /// money (GitHub issue #257).</para>
 ///
 /// <para><b>Modelled on <see cref="Updates.ReleaseFeed"/> deliberately.</b> Same client shape,
-/// same short timeout, same swallow-and-report-unknown failure handling, same split — the IO
+/// same short timeout, same swallow-and-report-unknown failure handling, same split, the IO
 /// lives here and the comparison lives in Core's <see cref="PublishedRates"/>, so both heads
 /// ask the same URL and neither grows the logic.</para>
 ///
 /// <para><b>The network bar is the release feed's, not a new one.</b> This is an
 /// unauthenticated GET of a public documentation page: no credential, no user data, nothing
 /// sent about this machine. ADR-0016 records that as an amendment to ADR-0009 rather than a new
-/// class of decision, and SECURITY.md names the host. Rule 3 is untouched — it governs
+/// class of decision, and SECURITY.md names the host. Rule 3 is untouched, it governs
 /// subscription credentials, and none is involved.</para>
 /// </summary>
 public sealed class RateCardFeed
@@ -43,13 +43,13 @@ public sealed class RateCardFeed
     /// <summary>
     /// Compares the published table against <paramref name="card"/>.
     ///
-    /// <para>Null on any failure — offline, timeout, non-success status, or a page that did not
+    /// <para>Null on any failure, offline, timeout, non-success status, or a page that did not
     /// parse. An honest "did not check", never a silent pass: reporting agreement because the
     /// request failed is the one outcome that would make this mechanism worse than not having
     /// it (CLAUDE.md rule 6).</para>
     ///
     /// <para>Nothing is persisted. The result is re-derivable in one request, and a
-    /// last-checked timestamp buys nothing that the weekly timer does not already give —
+    /// last-checked timestamp buys nothing that the weekly timer does not already give,
     /// unlike an observed weekly reset, which costs a week to see again.</para>
     /// </summary>
     public async Task<RateCardDrift?> CheckAsync(RateCard card, CancellationToken cancellation = default)
@@ -66,12 +66,12 @@ public sealed class RateCardFeed
             var drift = PublishedRates.Compare(
                 card, markdown, DateOnly.FromDateTime(_utcNow().UtcDateTime));
 
-            _log?.Write(drift?.Describe() ?? "rate check failed — published table did not parse");
+            _log?.Write(drift?.Describe() ?? "rate check failed, published table did not parse");
             return drift;
         }
         // OperationCanceledException, not TaskCanceledException: the latter derives from the
         // former, so naming the derived type alone lets a plain cancellation escape. This runs
-        // fire-and-forget from both heads, where an escape is an unobserved task exception —
+        // fire-and-forget from both heads, where an escape is an unobserved task exception,
         // silent, and invisible in the log that is the whole output of this check.
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or IOException)
         {
@@ -85,7 +85,7 @@ public sealed class RateCardFeed
         var client = new HttpClient
         {
             Timeout = TimeSpan.FromSeconds(15),
-            // The timeout bounds how LONG the read may take, not how MUCH it may read — fifteen
+            // The timeout bounds how LONG the read may take, not how MUCH it may read, fifteen
             // seconds on a fast link is a great deal of memory in a process designed to run for
             // days. The published page measured ~50 KB; this leaves about eighty times that and
             // still caps what a compromised host could make us buffer. Past it HttpClient throws

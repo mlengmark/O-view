@@ -6,7 +6,7 @@ namespace OView.Core.Tests;
 /// <summary>
 /// The catalog replaced three hand-maintained tables keyed on the same prefixes
 /// (GitHub issue #56). These tests pin the properties that made keeping them in sync a
-/// manual job — a row that is half-filled, or a caption that names a different set than
+/// manual job, a row that is half-filled, or a caption that names a different set than
 /// the classifier matches, must fail here rather than in front of a user.
 /// </summary>
 public class ModelCatalogTests
@@ -90,6 +90,6 @@ public class ModelCatalogTests
         }
     }
 
-    // CreditDisplayList_* moved to PanelTextTests.cs — the caption they check is built in
+    // CreditDisplayList_* moved to PanelTextTests.cs, the caption they check is built in
     // Presentation now, from CreditBilledModels.Models.
 }

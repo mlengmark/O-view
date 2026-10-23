@@ -7,7 +7,7 @@ namespace OView.Core.Providers.CachedUsage;
 /// <summary>One meter: a percentage, and when the window behind it rolls over.</summary>
 /// <param name="Percent">Utilisation 0–100, as Claude Code received it.</param>
 /// <param name="ResetsAtUtc">
-/// Exact reset instant, or null when this bar carries none. <b>Reported, not derived</b> —
+/// Exact reset instant, or null when this bar carries none. <b>Reported, not derived</b>,
 /// which is what makes it worth more than everything else O-view knows about reset times.
 /// </param>
 public sealed record UtilizationBar(int Percent, DateTimeOffset? ResetsAtUtc);
@@ -17,12 +17,12 @@ public sealed record UtilizationBar(int Percent, DateTimeOffset? ResetsAtUtc);
 ///
 /// <para>This is the same data <c>/status</c> → Usage renders, written to disk as a side effect
 /// of fetching it: session and weekly percentages <b>and exact reset timestamps</b>, for anyone
-/// who has run Claude Code — CLI or hosted in Desktop. No token, no network, no credential
+/// who has run Claude Code, CLI or hosted in Desktop. No token, no network, no credential
 /// handling (CLAUDE.md rule 3): a local JSON file, read-only, like the plan-history file.</para>
 ///
 /// <para><b>Why this matters more than the percentages alone.</b> Every other reset time in
 /// O-view is <i>inferred</i> from a drop in a sampled series, so its precision is capped by the
-/// sampling gap — about half an interval for the five-hour window, and roughly ten hours for the
+/// sampling gap, about half an interval for the five-hour window, and roughly ten hours for the
 /// weekly one, whose resets land overnight while Desktop is closed (ADR-0011). These timestamps
 /// are reported by the source. They are exact, and they are the only exact reset times O-view
 /// has ever had.</para>
@@ -40,7 +40,7 @@ public sealed record UtilizationBar(int Percent, DateTimeOffset? ResetsAtUtc);
 /// </param>
 /// <param name="AccountUuid">
 /// Account the figures belong to. Note this is the <i>account</i> uuid, which is not the
-/// organization uuid the plan-history file keys on — they are different identifiers on the same
+/// organization uuid the plan-history file keys on, they are different identifiers on the same
 /// machine, so do not match one against the other.
 /// </param>
 /// <param name="FiveHour">The rolling five-hour session meter.</param>
@@ -60,7 +60,7 @@ public sealed record CachedUtilization(
     ///
     /// <para>An <c>init</c> property rather than a sixth positional parameter, deliberately.
     /// The four above are a fixed positional list that a new entry in the middle would
-    /// silently re-point — the hazard issue #248 hit on <see cref="UsageSnapshot"/>, whose
+    /// silently re-point, the hazard issue #248 hit on <see cref="UsageSnapshot"/>, whose
     /// trailing arguments are named from that point on for the same reason.</para>
     ///
     /// <para><b>Not gated on freshness here.</b> A percentage stops describing anything once
@@ -72,7 +72,7 @@ public sealed record CachedUtilization(
     public ExtraUsageStatus ExtraUsage { get; init; } = ExtraUsageStatus.Unknown;
 
     /// <summary>
-    /// Where to look — the same candidates as the account badge, so the two can never disagree
+    /// Where to look, the same candidates as the account badge, so the two can never disagree
     /// about which <c>.claude.json</c> is in effect, and so this follows
     /// <c>CLAUDE_CONFIG_DIR</c> for free (<see cref="ClaudeAccount.Candidates"/>).
     /// </summary>
@@ -95,7 +95,7 @@ public sealed record CachedUtilization(
         TryReadAny(path is null ? Candidates() : [path]);
 
     /// <summary>
-    /// The selection rule over an explicit candidate list, testable without a real profile —
+    /// The selection rule over an explicit candidate list, testable without a real profile,
     /// see <see cref="ClaudeAccount.TryReadAny"/> for why that separation exists.
     /// </summary>
     public static CachedUtilization? TryReadAny(IReadOnlyList<string> candidates) =>
@@ -138,7 +138,7 @@ public sealed record CachedUtilization(
     }
 
     /// <summary>
-    /// One bar, or null when absent or explicitly null — which is the normal state of most of
+    /// One bar, or null when absent or explicitly null, which is the normal state of most of
     /// them (<c>seven_day_opus</c>, <c>seven_day_cowork</c> and the rest read null on a plan
     /// that has no separate meter for them).
     /// </summary>
@@ -159,7 +159,7 @@ public sealed record CachedUtilization(
 
     /// <summary>
     /// The reset instant, normalised to UTC. The source writes an offset-qualified timestamp
-    /// (<c>2026-08-24T00:00:00.046735+00:00</c>), so parse it as one and convert — never
+    /// (<c>2026-08-24T00:00:00.046735+00:00</c>), so parse it as one and convert, never
     /// <see cref="DateTime"/>, whose Kind would be lost on the way through.
     /// </summary>
     private static DateTimeOffset? ReadResetAt(JsonElement bar) =>

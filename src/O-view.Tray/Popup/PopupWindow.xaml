@@ -108,7 +108,7 @@
                 <!-- MinWidth as well as Width: the stock vertical bar sets a MinWidth of the
                      system scroll-bar width, and a minimum outranks a width whatever the style
                      precedence says. Without this the bar comes out at the Windows default of
-                     17 DIP — nearly three times the Linux one, in the one place on the panel
+                     17 DIP, nearly three times the Linux one, in the one place on the panel
                      where width is scarce. -->
                 <Setter Property="MinWidth" Value="{x:Static rendering:PanelMetrics.ScrollBarWidthDip}"/>
                 <!-- The left margin is PanelMetrics.ScrollBarGapDip; a Thickness cannot be
@@ -204,7 +204,7 @@
                  Background="Transparent" is load-bearing, for the reason CreditsSection below
                  states: a panel with no background is not hit-testable in the gaps between its
                  children, so the handle would only respond on the words themselves. Cursor says
-                 the band is draggable before the user tries it — there is no other affordance,
+                 the band is draggable before the user tries it, there is no other affordance,
                  since a borderless flyout has no title bar to imitate.
 
                  And the name is what a screen reader says in place of that cursor: without it
@@ -252,8 +252,8 @@
                          click rather than a place to navigate to by hand. -->
                     <!-- WarnText, not the brand accent: AccentText is white, chosen for legibility
                          ON AccentBg, and this link sits on WarnBg. WarnText is the pair already
-                         measured against this background — it is what the title above is drawn
-                         in — and the underline means the affordance does not rest on colour. -->
+                         measured against this background, it is what the title above is drawn
+                         in, and the underline means the affordance does not rest on colour. -->
                     <TextBlock x:Name="DivergenceLink" FontSize="11" Margin="0,5,0,0" TextWrapping="Wrap">
                         <Hyperlink x:Name="DivergenceLinkAnchor"
                                    Foreground="{DynamicResource WarnText}"
@@ -294,7 +294,7 @@
                  Auto column so it reserves its width, and the chip sits in the star column
                  between them: the label and the figure both keep their space whatever the
                  chip says, and an over-long chip is trimmed rather than drawn over the
-                 figure. Note the figure reads "51% used", not "51%" — a chip budget worked
+                 figure. Note the figure reads "51% used", not "51%", a chip budget worked
                  out against the shorter string is about 30px too generous. -->
             <Grid x:Name="WeeklyHeading" Margin="0,12,0,0">
                 <Grid.ColumnDefinitions>
@@ -325,7 +325,7 @@
             <TextBlock x:Name="WeeklyResetText" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
 
             <!-- Stats tiles 2×2. Each flips to a per-model breakdown on click (issue
-                 #37) — see StatTile; the four were four copies of the same markup, so
+                 #37), see StatTile; the four were four copies of the same markup, so
                  they are one control now rather than four places to keep in step. -->
             <UniformGrid x:Name="TileGrid" Columns="2" Margin="0,14,0,0">
                 <local:StatTile x:Name="TileTokensToday" Margin="0,0,4,4"/>
@@ -340,7 +340,7 @@
                  than on a tile: it is true of all four, and the per-tile caveat channel
                  would print it twice on the 31-day pair and never on today's.
 
-                 Not the line issue #232 removed — that one sat under the session BAR,
+                 Not the line issue #232 removed, that one sat under the session BAR,
                  described the session window alone, and carried a disclosure. -->
             <TextBlock x:Name="TokenScopeLine" FontSize="11" TextWrapping="Wrap" Margin="0,6,0,0"
                        Foreground="{DynamicResource TextMuted}"/>
@@ -354,7 +354,7 @@
                  This replaces the one-line split and its "Why so large?" disclosure. The
                  disclosure answered a question the panel no longer prompts: nothing on
                  screen is unexpectedly large any more. Collapsed entirely when there is
-                 nothing to break down — a composition of zero explains nothing. -->
+                 nothing to break down, a composition of zero explains nothing. -->
             <StackPanel x:Name="TokensUsedSection" Margin="0,12,0,0" Visibility="Collapsed">
 
                 <Grid>
@@ -388,7 +388,7 @@
                 <!-- The breakdown FOLDS in beneath the bars rather than replacing them, which
                      is the one place this departs from the mockup and does so deliberately.
                      Switching views changes the panel's height, and a panel that fits one way
-                     and not the other is clipped by the taskbar — the exact failure the
+                     and not the other is clipped by the taskbar, the exact failure the
                      disclosure's re-dock path was built to prevent, and the reason the
                      fold-check harness exists. Reusing it is worth more than the pixels replacing the
                      bars would save, and keeping the shape on screen while reading the figures
@@ -396,7 +396,7 @@
 
                      ClipToBounds is required, not cosmetic: the fold animates this panel's
                      Height, and without it the table is drawn at full size outside the height
-                     it has been given — over the section below and past the panel's border. -->
+                     it has been given, over the section below and past the panel's border. -->
                 <StackPanel x:Name="TokenBreakdownView" Margin="0,6,0,0"
                             Visibility="Collapsed" ClipToBounds="True"/>
 
@@ -430,12 +430,12 @@
             <!-- The whole block is the hover target (issue #181): the caveat used to sit
                  below as two or three permanent lines, which is a lot of standing text for
                  something most users read once. It moves to a hover card covering both the
-                 heading and the spend figure — the two places a reader's eye actually lands
+                 heading and the spend figure, the two places a reader's eye actually lands
                  when asking "what is this number?".
 
                  Background="Transparent" is load-bearing. A panel with no background has no
                  hit-testing in the gaps between its children, so the tooltip would appear
-                 over the text and nowhere else — which is exactly the fiddly behaviour the
+                 over the text and nowhere else, which is exactly the fiddly behaviour the
                  issue is trying to get away from. -->
             <StackPanel x:Name="CreditsSection" Background="Transparent">
                 <Grid>
@@ -454,8 +454,8 @@
                                HorizontalAlignment="Right" Foreground="{DynamicResource TextPrimary}"/>
                 </Grid>
                 <!-- The coverage caveat STAYS on screen. It qualifies the figure directly
-                     above it — "30 of 31 days recorded" is the difference between a real
-                     total and a partial one — and rule 6 makes that a requirement rather
+                     above it, "30 of 31 days recorded" is the difference between a real
+                     total and a partial one, and rule 6 makes that a requirement rather
                      than a nicety. Only the explanatory prose moves to hover. -->
                 <TextBlock x:Name="CreditsCoverage" FontSize="10" Margin="0,2,0,0"
                            Foreground="{DynamicResource WarnText}"/>

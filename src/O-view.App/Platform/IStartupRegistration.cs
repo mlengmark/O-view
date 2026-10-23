@@ -6,7 +6,7 @@ namespace OView.App.Platform;
 /// <para>Each platform has one per-user mechanism that needs no elevation: the
 /// <c>HKCU\...\CurrentVersion\Run</c> key on Windows (ADR-0003 item 6), an XDG autostart
 /// <c>.desktop</c> file on Linux. In both cases <b>that mechanism is the single source of
-/// truth</b> — the state is never duplicated into <c>settings.json</c>, so the two can
+/// truth</b>, the state is never duplicated into <c>settings.json</c>, so the two can
 /// never disagree, and an external editor (Task Manager's startup page, or deleting the
 /// desktop file) stays authoritative.</para>
 /// </summary>

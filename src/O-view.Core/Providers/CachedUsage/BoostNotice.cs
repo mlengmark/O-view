@@ -7,13 +7,13 @@ namespace OView.Core.Providers.CachedUsage;
 /// One promo notice as Claude Code caches it, with whatever the sentence yielded.
 /// </summary>
 /// <param name="Bar">
-/// The meter the notice belongs to — the same key space as
+/// The meter the notice belongs to, the same key space as
 /// <c>cachedUsageUtilization.utilization</c>, so <c>seven_day</c> is the weekly gauge.
 /// <b>A notice is never shown against a bar it did not name.</b>
 /// </param>
 /// <param name="Text">The message, exactly as written. Always displayed unaltered.</param>
-/// <param name="Percent">How much bigger the limit is, or null — see <see cref="PromoText.Percent"/>.</param>
-/// <param name="EndsOn">The promo's last day, or null — see <see cref="PromoText.EndDate"/>.</param>
+/// <param name="Percent">How much bigger the limit is, or null, see <see cref="PromoText.Percent"/>.</param>
+/// <param name="EndsOn">The promo's last day, or null, see <see cref="PromoText.EndDate"/>.</param>
 public sealed record BoostNotice(string Bar, string Text, int? Percent, DateOnly? EndsOn)
 {
     /// <summary>The weekly meter's key, and the only bar any notice has ever named.</summary>
@@ -21,7 +21,7 @@ public sealed record BoostNotice(string Bar, string Text, int? Percent, DateOnly
 
 
     /// <summary>
-    /// Whether the promo's last day is behind us. False when no date resolved — an unknown
+    /// Whether the promo's last day is behind us. False when no date resolved, an unknown
     /// expiry is not an expiry, and that case is handled by the freshness backstop instead
     /// (<see cref="BoostNotices.UndatedFreshness"/>).
     /// </summary>
@@ -41,12 +41,12 @@ public sealed record BoostNotice(string Bar, string Text, int? Percent, DateOnly
 /// <para><b>Freshness comes from its own key, and must not be taken from the usage block's.</b>
 /// <c>cachedGrowthBookFeaturesAt</c> is refreshed when Claude Code <i>starts</i>;
 /// <c>cachedUsageUtilization.fetchedAtMs</c> only when <c>/usage</c> runs. Measured 2026-08-31 on
-/// the development machine, 08:24:24Z against 08:19:30Z — close that morning, but driven by
+/// the development machine, 08:24:24Z against 08:19:30Z, close that morning, but driven by
 /// different triggers, so a notice can be current beside a percentage that is days old. Labelling
 /// either from the other's timestamp would be a fabricated claim about age.</para>
 ///
 /// <para><b>This is a feature-flag cache, not an entitlement.</b> Whether the payload is targeted
-/// at this account is unproven — the evaluation happens server-side and "consistent with
+/// at this account is unproven, the evaluation happens server-side and "consistent with
 /// targeting" is not an observation. So the panel relays it, attributed and dated, and never
 /// states that the user's limits are boosted in O-view's own voice.</para>
 ///
@@ -73,7 +73,7 @@ public sealed record BoostNotices(DateTimeOffset FetchedAtUtc, IReadOnlyList<Boo
     /// check cannot cover: a sentence with no readable date, where the sole remaining evidence
     /// that a promo is still running is that Claude Code recently agreed it was. The flag cache
     /// refreshes on Claude Code startup, so a threshold of minutes would hide the notice on any
-    /// machine where nobody had opened Claude Code that morning — which may be most of them.
+    /// machine where nobody had opened Claude Code that morning, which may be most of them.
     /// A day is long enough not to do that and short enough that a machine which has stopped
     /// running Claude Code altogether stops making the claim.</para>
     ///
@@ -85,7 +85,7 @@ public sealed record BoostNotices(DateTimeOffset FetchedAtUtc, IReadOnlyList<Boo
     public static readonly TimeSpan UndatedFreshness = TimeSpan.FromDays(1);
 
     /// <summary>
-    /// Where to look — the same candidates as the account badge and the usage cache, so the
+    /// Where to look, the same candidates as the account badge and the usage cache, so the
     /// three can never disagree about which <c>.claude.json</c> is in effect, and so this
     /// follows <c>CLAUDE_CONFIG_DIR</c> for free.
     /// </summary>
@@ -98,7 +98,7 @@ public sealed record BoostNotices(DateTimeOffset FetchedAtUtc, IReadOnlyList<Boo
     /// <para>Not the first file that <i>exists</i>, for the reason
     /// <see cref="CachedUtilization.TryReadAny"/> sets out at length: Claude Code's state
     /// migration leaves a stub behind, and a stub resolved by existence beats a populated file.
-    /// Measured 2026-08-31 — <c>~/.claude.json</c> carried the array and
+    /// Measured 2026-08-31, <c>~/.claude.json</c> carried the array and
     /// <c>~/.claude/.claude.json</c> carried neither it nor the timestamp.</para>
     /// </summary>
     public static BoostNotices? TryRead(string? path = null) =>
@@ -117,7 +117,7 @@ public sealed record BoostNotices(DateTimeOffset FetchedAtUtc, IReadOnlyList<Boo
     /// <para>The timestamp is required for the same reason
     /// <see cref="CachedUtilization.Parse"/> requires its own: an undated claim of unknown age is
     /// exactly the confidently-wrong statement rule 6 exists to prevent. Every other field is
-    /// optional — this is another application's private feature-flag cache, it carries no
+    /// optional, this is another application's private feature-flag cache, it carries no
     /// stability contract, and it has already gained and lost keys.</para>
     /// </summary>
     public static BoostNotices? Parse(string json)
@@ -153,7 +153,7 @@ public sealed record BoostNotices(DateTimeOffset FetchedAtUtc, IReadOnlyList<Boo
     }
 
     /// <summary>
-    /// One array entry. Both <c>bar</c> and <c>text</c> are required — a notice with no message
+    /// One array entry. Both <c>bar</c> and <c>text</c> are required, a notice with no message
     /// has nothing to relay, and one with no bar has nowhere to go, and guessing "weekly"
     /// would attach a claim to a meter the source never named.
     /// </summary>
@@ -177,13 +177,13 @@ public sealed record BoostNotices(DateTimeOffset FetchedAtUtc, IReadOnlyList<Boo
     /// oversight:</para>
     ///
     /// <list type="number">
-    /// <item><b>No notice names this bar.</b> Includes every bar key not recognised here —
+    /// <item><b>No notice names this bar.</b> Includes every bar key not recognised here,
     /// model-scoped forms such as <c>seven_day_opus</c> among them. None has ever been observed
     /// populated, and rendering one against the weekly gauge would attach a model's promo to an
     /// account-wide meter.</item>
     /// <item><b>The promo's last day has passed</b>, by the machine's own calendar.</item>
     /// <item><b>No date resolved and the flag cache has gone stale.</b> Nothing left says the
-    /// promo is still running — see <see cref="UndatedFreshness"/>.</item>
+    /// promo is still running, see <see cref="UndatedFreshness"/>.</item>
     /// </list>
     /// </summary>
     /// <param name="bar">The meter's key, e.g. <see cref="BoostNotice.WeeklyBar"/>.</param>

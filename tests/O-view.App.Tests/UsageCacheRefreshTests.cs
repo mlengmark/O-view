@@ -7,7 +7,7 @@ namespace OView.App.Tests;
 /// #234).
 ///
 /// <para><see cref="Core.Tests"/> owns whether an invocation was billed; this owns the half that
-/// decides how often the other half runs — the floor, the gate, and the latch that stops it
+/// decides how often the other half runs, the floor, the gate, and the latch that stops it
 /// altogether. The latch is the part worth testing hardest, because it is the one that can
 /// silently cost the user a feature.</para>
 /// </summary>
@@ -80,7 +80,7 @@ public class UsageCacheRefreshTests
     }
 
     /// <summary>
-    /// The background beat does not. Cost is not the constraint — the refresh is free — but it
+    /// The background beat does not. Cost is not the constraint, the refresh is free, but it
     /// spends Claude Code's own rate-limit budget, and a 429 would land on the user's CLI work.
     /// </summary>
     [Fact]
@@ -135,7 +135,7 @@ public class UsageCacheRefreshTests
     }
 
     /// <summary>
-    /// The counter records attempts that <i>started</i>, not calls that were made — most calls
+    /// The counter records attempts that <i>started</i>, not calls that were made, most calls
     /// are turned away by the floor, the freshness gate or the latch.
     ///
     /// <para>It exists so the <c>--popup-check</c> hook can assert the panel-open path reached
@@ -154,7 +154,7 @@ public class UsageCacheRefreshTests
         engine.RefreshUsageCache(force: true);
         Assert.Equal(1, engine.UsageRefreshAttempts);
 
-        // Turned away by the floor — a call, but not an attempt.
+        // Turned away by the floor, a call, but not an attempt.
         engine.RefreshUsageCache();
         Assert.Equal(1, engine.UsageRefreshAttempts);
     }
@@ -294,9 +294,9 @@ public class UsageCacheRefreshTests
     }
 
     /// <summary>
-    /// <b>The latch must be undoable.</b> The guard behind it errs toward reporting a charge — a
+    /// <b>The latch must be undoable.</b> The guard behind it errs toward reporting a charge, a
     /// Claude Code session started during the seconds a refresh runs is indistinguishable from a
-    /// billed one — and that direction is only correct while the user can reverse it. Without
+    /// billed one, and that direction is only correct while the user can reverse it. Without
     /// this the trade is the wrong way round: a rare race would permanently remove a feature.
     /// </summary>
     [Fact]
@@ -373,7 +373,7 @@ public class UsageCacheRefreshTests
 
     /// <summary>
     /// Outcomes short of a charge are ordinary and must not latch: a machine where Claude Code is
-    /// absent, or logged out, or simply slow, has to keep trying — those states resolve
+    /// absent, or logged out, or simply slow, has to keep trying, those states resolve
     /// themselves and are the common case.
     /// </summary>
     [Theory]

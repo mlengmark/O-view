@@ -11,14 +11,14 @@ namespace OView.Tray.Popup;
 /// <para>It used to be a <c>Visibility</c> flip: the body appeared whole, the
 /// <c>SizeToContent</c> window jumped to its new height in one frame, and the re-dock moved
 /// it to a new position in the same frame. Three simultaneous discontinuities in a surface
-/// whose entrance is a 230 ms geometric reveal — the panel is the one thing on screen that
+/// whose entrance is a 230 ms geometric reveal, the panel is the one thing on screen that
 /// had already been tuned against a frame-by-frame trace of the platform, and the disclosure
 /// ignored all of it.</para>
 ///
 /// <para><b>The motion is inherited, not invented.</b> Both the curve and the timing come
 /// from <see cref="FlyoutAnimation"/>, whose numbers were fitted to a recording of Windows'
 /// own Quick Settings flyout. The fold travels a fraction of the distance the entrance does,
-/// so the durations are <b>scaled</b> from it — <see cref="Scale"/> — rather than picked by
+/// so the durations are <b>scaled</b> from it, <see cref="Scale"/>, rather than picked by
 /// feel, which keeps the platform's in : out ratio and stops the app growing a second,
 /// slightly different idea of "smooth".</para>
 ///
@@ -31,7 +31,7 @@ namespace OView.Tray.Popup;
 ///
 /// <para><b>Re-docking per frame is load-bearing.</b> The window is <c>SizeToContent</c> and
 /// docked by its top-left, so a fold that grows it without re-placing it pushes the new
-/// content down into the taskbar (issue #33) — for the whole length of the animation rather
+/// content down into the taskbar (issue #33), for the whole length of the animation rather
 /// than for the single frame the instant version was exposed to. Tracking
 /// <c>SizeChanged</c> is what makes the fold read as the panel growing <i>upward</i> out of
 /// the docked corner, which is the same direction its entrance travels.</para>
@@ -40,10 +40,10 @@ namespace OView.Tray.Popup;
 /// <param name="body">The folding content. Must clip to its bounds, or it spills mid-fold.</param>
 /// <param name="chevron">
 /// The disclosure arrow's rotation, turned by the same curve. <b>Null where the control
-/// carries no arrow</b> — the Bars/Breakdown switch (issue #253) shows its state by which
+/// carries no arrow</b>, the Bars/Breakdown switch (issue #253) shows its state by which
 /// segment is lit, so a chevron there would be a second, redundant indicator.
 /// </param>
-/// <param name="reposition">Re-docks the host — called on every frame the height changes.</param>
+/// <param name="reposition">Re-docks the host, called on every frame the height changes.</param>
 internal sealed class DisclosureAnimation(
     Window host, FrameworkElement body, RotateTransform? chevron, Action reposition)
 {
@@ -53,7 +53,7 @@ internal sealed class DisclosureAnimation(
     /// over a twelfth of its distance reads as hesitation rather than as motion.
     ///
     /// <para>Applied to both durations, so the fold keeps the traced 230 : 150 ratio between
-    /// opening and closing — out is quicker than in, because getting out of the way is not a
+    /// opening and closing, out is quicker than in, because getting out of the way is not a
     /// gesture anyone waits to watch.</para>
     /// </summary>
     private const double Scale = 0.83;
@@ -82,13 +82,13 @@ internal sealed class DisclosureAnimation(
     /// <summary>
     /// Puts the fold in its finished state immediately, with nothing left animating.
     ///
-    /// <para>This is the state setter the non-interactive paths use — <c>Populate</c> resets
+    /// <para>This is the state setter the non-interactive paths use, <c>Populate</c> resets
     /// the disclosure on every open, and the verification renders need a still rather than a
     /// frame from the middle of a transition.</para>
     ///
     /// <para><b>Clearing the animations first is mandatory, not tidiness.</b>
     /// <c>BeginAnimation</c> holds its end value over the local one for as long as it is
-    /// attached, and this window is reused across opens — so without the release, assigning
+    /// attached, and this window is reused across opens, so without the release, assigning
     /// <c>Height</c> or <c>Angle</c> here is silently ignored and the panel opens still
     /// wearing the last fold's geometry.</para>
     /// </summary>
@@ -129,8 +129,8 @@ internal sealed class DisclosureAnimation(
     /// fold.</b> Showing the body at its natural height and animating from zero afterwards
     /// looks identical in the visual tree and is not: the intervening layout resizes the
     /// window, which is docked by its top-left, and the compositor presents that HWND before
-    /// the re-dock catches up. <c>--fold-check</c>'s screen grabs caught the resulting frame —
-    /// a full-height panel 72 px down, its bottom inside the taskbar — which is the exact
+    /// the re-dock catches up. <c>--fold-check</c>'s screen grabs caught the resulting frame,
+    /// a full-height panel 72 px down, its bottom inside the taskbar, which is the exact
     /// failure the docked placement exists to prevent, and it is invisible to any offscreen
     /// render because the visual tree is perfect in it.</para>
     /// </summary>
@@ -145,7 +145,7 @@ internal sealed class DisclosureAnimation(
     /// The body's height when fully open, measured without letting the window grow to it.
     ///
     /// <para>A child <c>Measure</c> updates that child's <c>DesiredSize</c> and nothing else,
-    /// so the answer arrives without a window layout pass — see <see cref="Prepare"/> for why
+    /// so the answer arrives without a window layout pass, see <see cref="Prepare"/> for why
     /// that distinction is the whole point.</para>
     /// </summary>
     public double MeasureNatural(double availableWidth)
@@ -167,7 +167,7 @@ internal sealed class DisclosureAnimation(
     /// Folds to <paramref name="expanded"/>, starting from where the fold currently is.
     /// </summary>
     /// <param name="toHeight">
-    /// The body's height when open, measured by the caller — it has already laid the panel
+    /// The body's height when open, measured by the caller, it has already laid the panel
     /// out at its final size to re-decide the density, so measuring again here would be a
     /// second full layout pass for a number it is holding.
     /// </param>
@@ -192,7 +192,7 @@ internal sealed class DisclosureAnimation(
 
         // Completed MUST be attached before BeginAnimation. WPF takes its own copy of the
         // timeline when the animation starts, so a handler added afterwards is attached to an
-        // object nothing will ever raise — the exact mistake that once left the flyout
+        // object nothing will ever raise, the exact mistake that once left the flyout
         // visible at zero opacity with a dead tray icon (see FlyoutAnimation.Close).
         height.Completed += (_, _) => Finish(expanded);
         body.BeginAnimation(FrameworkElement.HeightProperty, height);
@@ -203,7 +203,7 @@ internal sealed class DisclosureAnimation(
         // Backstop, for the same reason the close transition has one: the symptom of a missed
         // completion here is a panel stuck at a fixed height that no longer grows with its
         // own content, and a SizeChanged handler re-docking the window for the rest of the
-        // session. Firing twice is harmless — Finish is idempotent.
+        // session. Firing twice is harmless, Finish is idempotent.
         _guard = new DispatcherTimer
         {
             Interval = duration.TimeSpan + TimeSpan.FromMilliseconds(150),
@@ -222,19 +222,19 @@ internal sealed class DisclosureAnimation(
         _running = false;
 
         // Releases the animations and restores auto height, so the body goes back to sizing
-        // itself — a panel whose text later rewraps to three lines must not stay pinned to
+        // itself, a panel whose text later rewraps to three lines must not stay pinned to
         // the height this fold happened to end on.
         Apply(expanded);
 
         // Laid out before it is re-docked, so the dock is computed from the height the panel
-        // has FINISHED at rather than from the last animated frame — the fold's last step is
+        // has FINISHED at rather than from the last animated frame, the fold's last step is
         // its largest on the way out, so a stale one leaves the panel visibly off its edge.
         host.UpdateLayout();
         reposition();
 
         // And again once the layout that Apply just invalidated has actually run. A
         // SizeToContent window's ActualHeight trails the pass that produced it, so the
-        // re-dock above places the panel for the height it had a frame ago — measured, not
+        // re-dock above places the panel for the height it had a frame ago, measured, not
         // supposed: --fold-check caught a collapse settling 13 px above its docked edge and
         // staying there, because the last fold frame was the number the dock was computed
         // from. Loaded priority is the first point after layout, and re-docking an

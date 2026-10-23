@@ -5,8 +5,8 @@ on:
     branches: [main]
   pull_request:
 
-# Least privilege. This workflow only ever reads the repository — it publishes nothing and
-# comments nowhere — so it does not need the write-capable token a repository default may
+# Least privilege. This workflow only ever reads the repository, it publishes nothing and
+# comments nowhere, so it does not need the write-capable token a repository default may
 # hand it. Declared rather than inherited, because the default is a repository setting that
 # can change without any change to this file.
 permissions:
@@ -14,8 +14,8 @@ permissions:
 
 jobs:
   # release.yml is parsed by GitHub only when a tag is pushed or the workflow is dispatched.
-  # A syntax error in it therefore passes every PR and surfaces at the worst possible moment
-  # — when you are trying to cut a release. That is not hypothetical: it is how this job came
+  # A syntax error in it therefore passes every PR and surfaces at the worst possible moment,
+  # when you are trying to cut a release. That is not hypothetical: it is how this job came
   # to exist. A comment written inside a run: block, explaining that the workflow avoids
   # inline expression syntax, contained the empty two-brace token as an example. A run: block
   # is a block scalar, so its '#' lines are part of the script string rather than comments,
@@ -29,7 +29,7 @@ jobs:
   # timeout so much as the absence of one: on 2026-08-19 four packaging jobs wedged on a
   # single step and, because a job's logs cannot be read while it is in progress, showed
   # nothing but a step name until they were cancelled by hand (#131). These bounds are ten
-  # to twenty times the observed durations — they cap a hang, not a slow runner.
+  # to twenty times the observed durations, they cap a hang, not a slow runner.
   workflows:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -67,7 +67,7 @@ jobs:
               for match in EXPRESSION.finditer(text):
                   if not match.group(1).strip():
                       line = text[:match.start()].count("\n") + 1
-                      print(f"{path}:{line}: empty expression — Actions rejects the whole file")
+                      print(f"{path}:{line}: empty expression, Actions rejects the whole file")
                       failed = True
 
               print(f"ok  {path}")
@@ -82,14 +82,14 @@ jobs:
   # (commit 3f7cc2f), and scrubbing them from the working tree did not remove them from
   # GitHub: the objects survive in unreachable commits and refs/pull/*, where they are
   # still fetchable today. An org UUID cannot be rotated the way a leaked token can, so
-  # there is no clean recovery — only prevention. Nothing was watching, which is the gap
+  # there is no clean recovery, only prevention. Nothing was watching, which is the gap
   # this closes.
   #
   # ALLOWLIST, NEVER DENYLIST. The obvious design is "fail if you see <the real UUID>",
   # and it is precisely wrong: this file is public, so writing the value here would
   # republish the thing being protected. Instead every identifier the repository is
   # *allowed* to contain is listed, and anything else fails. A new placeholder means one
-  # deliberate line here, which is the point — adding an identifier should be a decision.
+  # deliberate line here, which is the point, adding an identifier should be a decision.
   identifiers:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -106,7 +106,7 @@ jobs:
               # The all-zero placeholder that replaced the real org UUID in 3f7cc2f.
               "00000000-0000-0000-0000-000000000000",
               # Inno Setup's AppId. Application identity, not a secret, and installer/O-view.iss
-              # says never to change it — doing so breaks upgrades and the uninstall entry.
+              # says never to change it, doing so breaks upgrades and the uninstall entry.
               "9e5f2b7a-3c4d-4e8a-9f1b-6d2a7c0e4b31",
               # RFC 4122's own example UUID, used as a fixture in RedactTests.
               "3f2504e0-4f89-11d3-9a0c-0305e82c3301",
@@ -144,13 +144,13 @@ jobs:
               for match in UUID.finditer(text):
                   if match.group(0).lower() not in ALLOWED_UUIDS:
                       found.append((match.start(),
-                          f"unexpected UUID {match.group(0)[:8]}… — if this is a placeholder, "
+                          f"unexpected UUID {match.group(0)[:8]}…, if this is a placeholder, "
                           "add it to ALLOWED_UUIDS in .github/workflows/ci.yml with a reason"))
 
               for match in REQUEST_ID.finditer(text):
                   if match.group(0) not in ALLOWED_REQUEST_IDS:
                       found.append((match.start(),
-                          f"unexpected request id {match.group(0)[:10]}… — use the "
+                          f"unexpected request id {match.group(0)[:10]}…, use the "
                           "documented placeholder instead"))
 
               for label, pattern in CREDENTIALS:
@@ -172,7 +172,7 @@ jobs:
                   print(f"{path}:{text[:offset].count(chr(10)) + 1}: {message}")
                   failed = True
 
-          # A detector that cannot fail is not a detector — the same reasoning as the
+          # A detector that cannot fail is not a detector, the same reasoning as the
           # tampered-byte control on a release: prove it rejects something before trusting
           # a pass. The control UUID is assembled at runtime rather than written whole,
           # because a known-bad literal in this file would be found by the scan above and
@@ -187,8 +187,8 @@ jobs:
           CHECK
 
   # Golden images: both panels rendered from the shared sample states and compared pixel by
-  # pixel with tests/golden (tools/check.ps1). This runner's renders are the authority — the
-  # goldens are made here — so a desktop with different fonts can preview a change but never
+  # pixel with tests/golden (tools/check.ps1). This runner's renders are the authority, the
+  # goldens are made here, so a desktop with different fonts can preview a change but never
   # decide one. Renders and diff images are uploaded whatever the outcome, so a failure can be
   # looked at rather than guessed at.
   visual:
@@ -214,7 +214,7 @@ jobs:
           retention-days: 14
 
   # The Linux head running for real: a virtual display (Xvfb) and a session bus, so tests
-  # tagged LinuxRuntime can start the app and drive it the way a desktop would — the gap
+  # tagged LinuxRuntime can start the app and drive it the way a desktop would, the gap
   # behind #124 and #143, which shipped because no test could reach a live session bus and a
   # dispatcher together. The tests click the tray icon and open the menu through a stand-in
   # tray host that owns the notification area on that bus.
@@ -263,7 +263,7 @@ jobs:
   test:
     strategy:
       # Deliberately not fail-fast. When a change breaks portability you want to see the
-      # Windows job finish green alongside the red Linux one — that contrast is the signal
+      # Windows job finish green alongside the red Linux one, that contrast is the signal
       # that says "this is a Linux-only break", and cancelling it throws the signal away.
       fail-fast: false
       matrix:
@@ -297,7 +297,7 @@ jobs:
 
       # Linux builds only what is platform-neutral. src/O-view.Tray is WPF and will never
       # build here, so the projects are named explicitly rather than filtered out of a
-      # solution-wide build — it stays obvious to a reader why this job builds less.
+      # solution-wide build, it stays obvious to a reader why this job builds less.
       # The test projects pull in src/O-view.Core and src/O-view.App transitively, and those
       # two are the thing being guarded: they must stay free of Win32, System.Drawing and
       # Microsoft.Win32 (ADR-0012). Without this job nothing enforces that, and the next PR

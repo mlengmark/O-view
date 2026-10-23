@@ -1,16 +1,16 @@
 namespace OView.Core;
 
 /// <summary>
-/// Whether two paths name the same thing — a question with a different answer on each
+/// Whether two paths name the same thing, a question with a different answer on each
 /// platform, so it is asked in exactly one place.
 ///
 /// <para>Windows filesystems are case-insensitive: <c>Alpha</c> and <c>alpha</c> are one
 /// directory, and treating them as two would scan it twice. Linux filesystems are
 /// case-sensitive: they are two directories, and treating them as one <b>silently drops
-/// the second</b> — no error, no warning, just missing usage.</para>
+/// the second</b>, no error, no warning, just missing usage.</para>
 ///
 /// <para><b>This is only for path <i>identity</i>.</b> Plenty of other comparisons in this
-/// codebase are correctly case-insensitive on every platform — model ids, org UUIDs, the
+/// codebase are correctly case-insensitive on every platform, model ids, org UUIDs, the
 /// vendor name inside a package directory, the frozen Windows asset name. Those are text
 /// matching and must not be routed through here; changing them would break real
 /// behaviour.</para>
@@ -23,7 +23,7 @@ namespace OView.Core;
 public static class PathIdentity
 {
     /// <summary>
-    /// The comparer for de-duplicating or looking up paths. Resolved once — the platform
+    /// The comparer for de-duplicating or looking up paths. Resolved once, the platform
     /// does not change while the process runs.
     /// </summary>
     public static StringComparer Comparer { get; } =

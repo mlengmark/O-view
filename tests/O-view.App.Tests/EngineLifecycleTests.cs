@@ -43,7 +43,7 @@ public class EngineLifecycleTests
     }
 
     /// <summary>
-    /// A missing or unreadable settings file must yield defaults rather than throwing — a
+    /// A missing or unreadable settings file must yield defaults rather than throwing, a
     /// lost preference must never stop the app starting.
     /// </summary>
     [Fact]
@@ -59,7 +59,7 @@ public class EngineLifecycleTests
 
     /// <summary>
     /// A brand-new install has no rollup DB and no legacy table content. Construction must
-    /// still succeed — this is the common case, not an edge one.
+    /// still succeed, this is the common case, not an edge one.
     /// </summary>
     [Fact]
     public void StartsCleanlyWithNoExistingState()
@@ -76,7 +76,7 @@ public class EngineLifecycleTests
 
     /// <summary>
     /// <see cref="UsageEngine.BuildStatistics"/> must return something usable on an empty
-    /// store rather than throwing — the panel opens on a fresh install too.
+    /// store rather than throwing, the panel opens on a fresh install too.
     /// </summary>
     [Fact]
     public void BuildStatisticsWorksOnAnEmptyStore()

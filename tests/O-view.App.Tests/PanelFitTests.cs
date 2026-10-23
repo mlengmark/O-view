@@ -4,7 +4,7 @@ namespace OView.App.Tests;
 
 /// <summary>
 /// <see cref="PanelFit"/> is the shared answer to "how tall may the window be, and must its
-/// content scroll" — the question each head used to ask the work area alone and stop at,
+/// content scroll", the question each head used to ask the work area alone and stop at,
 /// which on a 1024×768 desktop left the Linux panel running off the bottom of the screen
 /// (seen on the Ubuntu 24.04 VM run of 2026-10-15).
 /// </summary>
@@ -56,10 +56,10 @@ public class PanelFitTests
     //
     // Content heights measured from the goldens on 2026-10-15: Linux 710-1008 DIP, Windows
     // 696-906 DIP (Windows renders at scale 2; these are already converted to DIP). Work
-    // areas: 712 DIP (a 1024x768 desktop — Maximilian's B13 run), 830 DIP (1080p at 125%)
+    // areas: 712 DIP (a 1024x768 desktop, Maximilian's B13 run), 830 DIP (1080p at 125%)
     // and 1032 DIP (1080p at 100%). PanelDensity.Compact saves about 94 DIP off the natural
     // height measured here; applying that approximation is what turns "the content is this
-    // tall" into "the content is still this tall once each head has already compacted" —
+    // tall" into "the content is still this tall once each head has already compacted",
     // the fact the two head slices (18, 19) build their window sizing on.
 
     private const double CompactSavingDip = 94;

@@ -25,7 +25,7 @@ public enum FlyoutCorner
 ///
 /// <para><b>This is a shared decision, not a per-platform detail.</b> Which corner, how much
 /// margin, and how a too-large surface is clamped are answers a Windows user and a Linux user
-/// would expect to be the same — the rule CLAUDE.md's *Intended structure* section states, and
+/// would expect to be the same, the rule CLAUDE.md's *Intended structure* section states, and
 /// the one issues #55 and #56 exist to enforce. It was Win32-only arithmetic inside
 /// <c>PopupPositioner</c>; the Linux head needed the same answer (issue #144), and copying it
 /// is exactly how the two would drift.</para>
@@ -46,13 +46,13 @@ public static class WorkAreaPlacement
     ///
     /// <para>Pixels rather than DIPs, matching the Windows head's long-standing behaviour: the
     /// gap is therefore visually tighter on a HiDPI display. That is pre-existing and shared
-    /// deliberately — changing it here would silently retune the shipped Windows flyouts,
+    /// deliberately, changing it here would silently retune the shipped Windows flyouts,
     /// which is a separate decision from giving Linux a corner at all.</para>
     /// </summary>
     public const int DefaultMarginPx = 12;
 
     /// <summary>
-    /// How much height a flyout actually has, once both margins are taken — what
+    /// How much height a flyout actually has, once both margins are taken, what
     /// <see cref="PanelDensity.For"/> measures the panel against.
     ///
     /// <para>It does not cap anything. <see cref="Place"/> already handles a surface too
@@ -76,7 +76,7 @@ public static class WorkAreaPlacement
     ///
     /// <para><paramref name="monitor"/> is the whole display and <paramref name="work"/> is
     /// what is left after the taskbar or panel. The bar's edge is inferred from where the two
-    /// differ, because <b>neither platform will say where the tray icon was drawn</b> — Windows
+    /// differ, because <b>neither platform will say where the tray icon was drawn</b>, Windows
     /// has <c>Shell_NotifyIconGetRect</c> but the flyout deliberately does not follow the
     /// cursor, and StatusNotifierItem has no equivalent at all.</para>
     /// </summary>
@@ -114,7 +114,7 @@ public static class WorkAreaPlacement
     /// <summary>
     /// Clamp that yields to <paramref name="min"/> when the range inverts.
     ///
-    /// <para>It inverts whenever the flyout is taller or wider than the work area allows — a
+    /// <para>It inverts whenever the flyout is taller or wider than the work area allows, a
     /// short screen, a large panel, or a scale factor that grew both. Pinning to the
     /// top-left corner keeps the surface's <i>start</i> on screen, which is where the header
     /// and the numbers are; the alternative pushes those off the top and leaves the user

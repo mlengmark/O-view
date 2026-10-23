@@ -11,7 +11,7 @@ public enum UpdateOutcome
     /// <summary>A newer release exists; <see cref="UpdateCheckResult.Available"/> is populated.</summary>
     UpdateAvailable,
 
-    /// <summary>The feed could not be understood — no usable tag, or malformed JSON.</summary>
+    /// <summary>The feed could not be understood, no usable tag, or malformed JSON.</summary>
     Unknown,
 
     /// <summary>
@@ -21,7 +21,7 @@ public enum UpdateOutcome
     /// they have different causes, different remedies and different durations, and spelling
     /// them the same told a throttled user their network was at fault (GitHub issue #176).
     /// The limit is 60/hour <b>per IP</b> for unauthenticated callers, so a machine sharing
-    /// an address — an office, a VPN exit node — can hit it without this user having made a
+    /// an address, an office, a VPN exit node, can hit it without this user having made a
     /// single request.</para>
     /// </summary>
     RateLimited,
@@ -30,7 +30,7 @@ public enum UpdateOutcome
 /// <summary>A newer release and the installer asset to fetch it from.</summary>
 /// <param name="ChecksumsUrl">
 /// Where the release's <c>SHA256SUMS</c> lives, or null when the release does not publish
-/// one. Null is not "skip the check" — a build that verifies treats it as "cannot verify,
+/// one. Null is not "skip the check", a build that verifies treats it as "cannot verify,
 /// therefore do not install", and says so. It is nullable because releases cut before
 /// checksums existed genuinely have none, and because detection must keep working for the
 /// platforms that download nothing at all.
@@ -44,7 +44,7 @@ public sealed record AvailableUpdate(
 /// <summary>The outcome of comparing the current build against the latest release.</summary>
 /// <param name="RetryAfterUtc">
 /// When the rate limit resets, for <see cref="UpdateOutcome.RateLimited"/> only. Null on
-/// every other outcome, and null even here when GitHub sent no usable reset header — the
+/// every other outcome, and null even here when GitHub sent no usable reset header, the
 /// caller then knows it was throttled but not for how long, which is still more than the
 /// old "could not reach GitHub" said.
 /// </param>
@@ -71,7 +71,7 @@ public static class UpdateCheck
     /// <summary>
     /// Evaluates the latest-release JSON against <paramref name="currentVersion"/>. A newer tag
     /// only becomes <see cref="UpdateOutcome.UpdateAvailable"/> when an asset <paramref name="asset"/>
-    /// recognises is also present with a download URL — otherwise there is nothing to update *to*,
+    /// recognises is also present with a download URL, otherwise there is nothing to update *to*,
     /// so it reports <see cref="UpdateOutcome.Unknown"/> rather than dangling an offer it cannot
     /// fulfil. A draft or prerelease is treated as no update. Never throws on malformed input.
     ///

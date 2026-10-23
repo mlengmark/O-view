@@ -5,15 +5,15 @@ namespace OView.Tray.Tray;
 
 /// <summary>
 /// Light/dark taskbar detection. The taskbar does not restyle icons on theme change
-/// (ADR-0003 item 4), so the renderer reads this on every refresh — a registry read
-/// is cheap at a 60 s cadence — and picks contrast-appropriate shades.
+/// (ADR-0003 item 4), so the renderer reads this on every refresh, a registry read
+/// is cheap at a 60 s cadence, and picks contrast-appropriate shades.
 /// </summary>
 public static class TaskbarTheme
 {
     /// <summary>
     /// True when the taskbar uses the light theme. SystemUsesLightTheme governs the
     /// taskbar/tray; AppsUseLightTheme (a different value) governs app windows.
-    /// Defaults to dark — the Windows 11 default — when unreadable.
+    /// Defaults to dark, the Windows 11 default, when unreadable.
     /// </summary>
     public static bool IsLight()
     {

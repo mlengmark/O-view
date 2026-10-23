@@ -14,13 +14,13 @@ namespace OView.Tray.Popup;
 /// <summary>
 /// The detail panel (ui-spec.md). Times convert to local here, at the display edge.
 /// Dismisses on Esc and on deactivation (click-outside). Theme follows
-/// AppsUseLightTheme — the app-window setting, distinct from the taskbar's — and is
+/// AppsUseLightTheme, the app-window setting, distinct from the taskbar's, and is
 /// re-read on every open so a theme switch never needs a restart.
 ///
-/// <para>What the panel draws lives in one piece per thing drawn —
+/// <para>What the panel draws lives in one piece per thing drawn,
 /// <see cref="PopupTiles"/>, <see cref="PopupWeeklyRow"/>, <see cref="PopupMeter"/>,
 /// <see cref="PopupDivergence"/>, <see cref="PopupGraph"/> and
-/// <see cref="PopupTokenComposition"/> — each reading exactly the section view model
+/// <see cref="PopupTokenComposition"/>, each reading exactly the section view model
 /// <see cref="PanelSections"/> already built, and placing it. This file is left with
 /// the window's own lifecycle, layout and verification hooks.</para>
 /// </summary>
@@ -48,7 +48,7 @@ public partial class PopupWindow : Window, IFlyout
     private TimeZoneInfo LocalZone => FixedZone ?? TimeZoneInfo.Local;
 
     /// <summary>
-    /// Docking, the open/close transitions and the toggle grace window — shared with the
+    /// Docking, the open/close transitions and the toggle grace window, shared with the
     /// tray menu rather than reimplemented here (issue #54).
     /// </summary>
     private readonly DockedFlyout _flyout;
@@ -60,7 +60,7 @@ public partial class PopupWindow : Window, IFlyout
     private readonly PopupScroll _scroll;
 
     /// <summary>
-    /// The window's height-fitting block — the density, the work-area cap and the scroll
+    /// The window's height-fitting block, the density, the work-area cap and the scroll
     /// decision (<see cref="PopupFit"/>).
     /// </summary>
     private readonly PopupFit _fit;
@@ -83,8 +83,8 @@ public partial class PopupWindow : Window, IFlyout
 
     /// <summary>
     /// Where the user last dragged the panel on each display. Null is the honest default
-    /// for a panel with nowhere to remember to — the offscreen verification renders, which place
-    /// no window at all — and leaves the panel opening at the tray corner exactly as it did
+    /// for a panel with nowhere to remember to, the offscreen verification renders, which place
+    /// no window at all, and leaves the panel opening at the tray corner exactly as it did
     /// before dragging existed.
     /// </summary>
     public PanelPlacementMemory? PlacementMemory
@@ -107,8 +107,8 @@ public partial class PopupWindow : Window, IFlyout
             }
 
             // Alt and an arrow key moves the panel. Marked handled only when it actually moved,
-            // so every other key — and the same press on a panel with nowhere to save a place
-            // to — reaches the content exactly as it did before.
+            // so every other key, and the same press on a panel with nowhere to save a place
+            // to, reaches the content exactly as it did before.
             if (_flyout.Nudge(e))
             {
                 e.Handled = true;
@@ -136,7 +136,7 @@ public partial class PopupWindow : Window, IFlyout
             this, TokenBreakdownView, null,
             // Re-dock, exactly as the menu does when its threshold list opens (issue #33).
             // The panel is docked by its top-left and is SizeToContent, so growing it without
-            // this pushes the new content down into the taskbar — which is the failure the
+            // this pushes the new content down into the taskbar, which is the failure the
             // docked placement was introduced to avoid, reintroduced the moment the panel
             // gained something that could grow. It also re-fits the open animation's clip,
             // without which the window is the right size and the card inside it is not.
@@ -155,7 +155,7 @@ public partial class PopupWindow : Window, IFlyout
     ///
     /// <para>A <c>SizeToContent</c> window's <c>ActualHeight</c> trails the layout pass that
     /// produced it by a frame, and the fold changes that height sixty times a second. Docking
-    /// against the trailing number places the panel for the height it had a frame ago — which
+    /// against the trailing number places the panel for the height it had a frame ago, which
     /// <c>--fold-check</c> caught twice: 72 px out for one frame when the fold starts, and a
     /// collapse settling 13 px above its docked edge and staying there. <c>DesiredSize</c> is
     /// the measure that the window's own size is about to follow.</para>
@@ -172,13 +172,13 @@ public partial class PopupWindow : Window, IFlyout
     internal double DisclosureScreenTop => _composition.ScreenTop;
 
     /// <summary>
-    /// The folding body's current height — what <c>--fold-check</c> samples.
+    /// The folding body's current height, what <c>--fold-check</c> samples.
     /// </summary>
     internal double DisclosureHeight => _composition.Height;
 
     /// <summary>
     /// Opens the breakdown for a verification render. The view resets to Bars on every
-    /// Populate, so a sample of the expanded state cannot be produced any other way — and an
+    /// Populate, so a sample of the expanded state cannot be produced any other way, and an
     /// unrendered state is how the no-data banner spent its whole life saying the wrong
     /// thing (issues #58, #170).
     /// </summary>
@@ -194,20 +194,20 @@ public partial class PopupWindow : Window, IFlyout
     /// <summary>
     /// Freezes the disclosure partway open for a verification render. On a real desktop this
     /// state exists for about a tenth of a second, which is long enough to look wrong and far
-    /// too short to inspect — and the failure it guards against, content drawn outside the
+    /// too short to inspect, and the failure it guards against, content drawn outside the
     /// height it has been given, is invisible at both ends of the fold.
     /// </summary>
     /// <param name="fraction">How far open, 0–1.</param>
     internal void RevealCompositionForVerification(double fraction) => _composition.RevealForVerification(fraction);
 
     /// <summary>
-    /// Closes the panel from outside — the tray icon completing a toggle. Idempotent, so
+    /// Closes the panel from outside, the tray icon completing a toggle. Idempotent, so
     /// a click that arrives while the panel is already closing changes nothing.
     /// </summary>
     public void DismissNow() => _flyout.BeginClose();
 
     /// <summary>
-    /// Puts an open panel back at the tray corner — the second half of the menu's "Reset panel
+    /// Puts an open panel back at the tray corner, the second half of the menu's "Reset panel
     /// position" row, whose first half is forgetting the saved place.
     ///
     /// <para>Goes through the same re-placement a growing panel does, so the corner it lands at
@@ -232,7 +232,7 @@ public partial class PopupWindow : Window, IFlyout
     /// <summary>
     /// Where the local token counts were read from, for the scope note beneath the tiles.
     /// Inspected on open like <see cref="DataReport"/>, so it reflects the machine as it is
-    /// now. Null falls back to inspecting on demand — which keeps the verification renders
+    /// now. Null falls back to inspecting on demand, which keeps the verification renders
     /// honest rather than letting them show a note no real run would produce.
     /// </summary>
     public TranscriptScopeReport? ScopeReport { get; set; }
@@ -260,7 +260,7 @@ public partial class PopupWindow : Window, IFlyout
     /// extra usage is switched on for this account, and when that was last read (issue #259).
     ///
     /// <para>Set on open from the engine, which owns the read. Null renders the banner's
-    /// unknown wording — the same thing a machine with no Claude Code gets, and correctly so.
+    /// unknown wording, the same thing a machine with no Claude Code gets, and correctly so.
     /// </para>
     /// </summary>
     public CachedUtilization? CachedUsage { get; set; }
@@ -273,20 +273,20 @@ public partial class PopupWindow : Window, IFlyout
         PanelTheme.Apply(Resources, _light);
         Populate(snapshot, stats, account);
 
-        // The chart is a Canvas — its ActualWidth is only known after layout, so it is
+        // The chart is a Canvas, its ActualWidth is only known after layout, so it is
         // drawn between the flyout's layout pass and its placement rather than in Populate.
         // FitToWorkArea does that drawing, because choosing a density resizes the canvas.
         _flyout.Show(afterLayout: () => _fit.FitToWorkArea(stats, snapshot));
     }
 
     /// <summary>
-    /// Renders the panel to a bitmap without showing it — the detail panel's equivalent of
+    /// Renders the panel to a bitmap without showing it, the detail panel's equivalent of
     /// <see cref="MenuWindow.RenderToBitmap"/>, driving the same <see cref="Populate"/> and
     /// <see cref="PopupFit.FitToWorkArea"/> the live path does.
     ///
     /// <para>It exists because the panel is otherwise only inspectable by opening it on a
     /// real desktop, which needs the single-instance mutex, puts a window over whatever the
-    /// user is doing, and simply fails when something is running fullscreen — the case that
+    /// user is doing, and simply fails when something is running fullscreen, the case that
     /// blocked verifying the graph's week gridlines. Rendering offscreen also reaches the
     /// states this machine's real data may never produce, exactly as
     /// <c>--tile-samples</c> does for the tiles.</para>
@@ -296,13 +296,13 @@ public partial class PopupWindow : Window, IFlyout
     /// out once; the live path gets that from <c>Show()</c> + <c>UpdateLayout()</c> before
     /// drawing the graph. Drawing the graph before the first pass silently
     /// falls back to the hard-coded default width and the gridlines land in the wrong
-    /// places — which is precisely what this hook is meant to catch.</para>
+    /// places, which is precisely what this hook is meant to catch.</para>
     /// </summary>
     /// <param name="availableHeightDip">
     /// The work area to fit the render into, for the short-display sample; null renders the
     /// panel at whatever height it wants, as every other sample does. Given one, this does
-    /// what <see cref="PopupFit.FitToWorkArea"/> does on that display — caps the content and scrolls
-    /// it — with the figure pinned by the caller, because an offscreen tree has no window and
+    /// what <see cref="PopupFit.FitToWorkArea"/> does on that display, caps the content and scrolls
+    /// it, with the figure pinned by the caller, because an offscreen tree has no window and
     /// no monitor to be granted one by.
     /// </param>
     internal System.Windows.Media.Imaging.BitmapSource RenderToBitmap(
@@ -322,7 +322,7 @@ public partial class PopupWindow : Window, IFlyout
             _fit.ApplyFit(PanelFit.Resolve(_fit.NaturalHeightDip(), available), available);
         }
 
-        // The second layout pass is the whole reason betweenPasses exists — see the
+        // The second layout pass is the whole reason betweenPasses exists, see the
         // remarks above and on VisualRenderer.RenderContent. The disclosure is opened here
         // rather than before it, because Populate resets it.
         return VisualRenderer.RenderContent(this, scale, betweenPasses: () =>
@@ -342,8 +342,8 @@ public partial class PopupWindow : Window, IFlyout
 
     /// <summary>
     /// The graph's hover cards, built standalone for verification. They cannot appear in a
-    /// render of the panel — a <c>ToolTip</c> throws if given a parent, so it can neither be
-    /// laid out inside one nor screenshotted with it — and hover is the only way to reach
+    /// render of the panel, a <c>ToolTip</c> throws if given a parent, so it can neither be
+    /// laid out inside one nor screenshotted with it, and hover is the only way to reach
     /// them in the running app, so without this they are unverifiable.
     ///
     /// <para>The wording comes from the same place the live cards read it from, or the render
@@ -361,7 +361,7 @@ public partial class PopupWindow : Window, IFlyout
     }
 
     /// <summary>
-    /// Lays the panel out at the given density (<see cref="PanelDensity"/>) — the response to
+    /// Lays the panel out at the given density (<see cref="PanelDensity"/>), the response to
     /// a display too short for the natural size.
     ///
     /// <para>Only spacing moves. Every figure, caveat and section is present at either
@@ -369,7 +369,7 @@ public partial class PopupWindow : Window, IFlyout
     /// which reads as a number that is zero (rule 6).</para>
     ///
     /// <para>The graph canvas is the one non-spacing change, and it is the reason this is
-    /// worth doing at all — 86 px of hard-coded height that never asked how much room
+    /// worth doing at all, 86 px of hard-coded height that never asked how much room
     /// existed. Callers must redraw the chart after this: its bars are laid out against the
     /// canvas height, so a canvas that changed size leaves the previous drawing behind.</para>
     /// </summary>
@@ -387,7 +387,7 @@ public partial class PopupWindow : Window, IFlyout
             0, density.GraphHeadingTop, 0, density.GraphHeadingBottom);
         GraphHost.Height = density.GraphHeight;
 
-        // Four arguments: WPF's Thickness has no (horizontal, vertical) overload — that is
+        // Four arguments: WPF's Thickness has no (horizontal, vertical) overload, that is
         // Avalonia's, and the two heads sit close enough together to invite the mistake.
         var tilePadding = new Thickness(
             density.TilePaddingX, density.TilePaddingY, density.TilePaddingX, density.TilePaddingY);
@@ -421,7 +421,7 @@ public partial class PopupWindow : Window, IFlyout
 
         // Explain a blank panel rather than leaving the user to guess (rule 6: if data is
         // unavailable, say so). Only shown when the figures are actually unavailable, and
-        // worded from both reports together — a missing plan file beside working transcripts
+        // worded from both reports together, a missing plan file beside working transcripts
         // is a CLI-only user, not a fault (issue #170).
         var banner = PanelBanner.Resolve(authoritative, DataReport, ScopeReport, stats.Tokens31Days);
         if (banner is not null)
@@ -437,8 +437,8 @@ public partial class PopupWindow : Window, IFlyout
 
         var session = PanelSections.SessionMeter(snapshot, banner, utcNow, local);
         PopupMeter.Populate(SessionPctText, SessionBar, SessionBarFill, session, _light);
-        // The session line always has something to say — the unknown state is a sentence of its
-        // own, not an absence — so SetLine's empty case is unreachable here.
+        // The session line always has something to say, the unknown state is a sentence of its
+        // own, not an absence, so SetLine's empty case is unreachable here.
         PopupText.SetLine(SessionResetText, session.ResetLine ?? "");
 
         var weekly = PanelSections.WeeklyMeter(
@@ -461,7 +461,7 @@ public partial class PopupWindow : Window, IFlyout
     /// <summary>
     /// Opens the off-plan banner's link in the user's browser (issue #259).
     ///
-    /// <para><c>UseShellExecute</c> because the target is a URL rather than an executable —
+    /// <para><c>UseShellExecute</c> because the target is a URL rather than an executable,
     /// the same call <see cref="OView.Tray.Updates.UpdateService.OpenInBrowser"/> makes, and
     /// the only form that hands a URL to the default handler rather than trying to run it.</para>
     ///

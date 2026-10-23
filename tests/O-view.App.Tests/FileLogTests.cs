@@ -22,7 +22,7 @@ public class FileLogTests : IDisposable
     private string Generation(int n) => _dir.File($"oview.{n}.log");
 
     /// <summary>
-    /// Beside the rollup store and the weekly-reset log, not in the install directory — which
+    /// Beside the rollup store and the weekly-reset log, not in the install directory, which
     /// on Windows is per-user and replaced wholesale by every update, so a log kept there
     /// would be destroyed by the upgrade a user installs to fix the problem they are logging.
     /// </summary>
@@ -79,7 +79,7 @@ public class FileLogTests : IDisposable
 
     /// <summary>
     /// It is called from the poll's own failure handlers. An exception here would replace a
-    /// recorded failure with an unrecorded one — strictly worse than not logging at all.
+    /// recorded failure with an unrecorded one, strictly worse than not logging at all.
     /// </summary>
     [Fact]
     public void AnUnwritableTargetIsSwallowedRatherThanThrown()
@@ -135,7 +135,7 @@ public class FileLogTests : IDisposable
 
     /// <summary>
     /// A rolling log outlives the process, so "which lines belong to this launch" has to be
-    /// answerable — a stall that survives a restart looks identical to one that does not
+    /// answerable, a stall that survives a restart looks identical to one that does not
     /// until the restarts are visible.
     /// </summary>
     [Fact]

@@ -8,7 +8,7 @@
 # Must run on a Debian-family host: it uses dpkg-deb rather than assembling an ar/tar
 # archive by hand, so the result is a package lintian is willing to look at.
 #
-# Reproducible from a clean checkout — the release workflow calls exactly this, so a
+# Reproducible from a clean checkout, the release workflow calls exactly this, so a
 # package built locally and one built by CI come out of the same code path.
 set -euo pipefail
 
@@ -46,7 +46,7 @@ dotnet publish "$ROOT/src/O-view.Linux" \
   --output "$APP"
 
 # .NET publish leaves everything 0744, which makes every .dll look like an executable and
-# every .so like an executable shared library — 17 lintian errors and 400-odd warnings.
+# every .so like an executable shared library, 17 lintian errors and 400-odd warnings.
 # Normalise: nothing is executable except the two things that actually are.
 find "$APP" -type f -exec chmod 0644 {} +
 find "$APP" -type d -exec chmod 0755 {} +
@@ -63,7 +63,7 @@ exec /usr/lib/o-view/o-view "$@"
 SHIM
 chmod 0755 "$STAGE/usr/bin/o-view"
 
-# Desktop entry. This is the APPLICATION entry, describing O-view to the launcher — it is
+# Desktop entry. This is the APPLICATION entry, describing O-view to the launcher, it is
 # root-owned and must never be edited by a settings toggle. Run-at-startup is a separate,
 # per-user file in ~/.config/autostart (XdgAutostartRegistration).
 mkdir -p "$STAGE/usr/share/applications"
@@ -116,11 +116,11 @@ gzip -9n "$STAGE/usr/share/doc/o-view/changelog.Debian"
 # Two lintian tags are inherent to shipping a self-contained .NET application, and are
 # overridden rather than "fixed" because the fixes would be wrong:
 #
-#   embedded-library — libSkiaSharp statically links zlib, libpng, libjpeg and freetype.
+#   embedded-library, libSkiaSharp statically links zlib, libpng, libjpeg and freetype.
 #     That is how SkiaSharp is built upstream. Unbundling would mean building Skia
 #     ourselves against system libraries, which is a project, not a packaging tweak.
 #
-#   unstripped-binary-or-object — the native libraries come prebuilt from NuGet. Stripping
+#   unstripped-binary-or-object, the native libraries come prebuilt from NuGet. Stripping
 #     third-party binaries we did not compile risks breaking them for a size saving that
 #     matters little in a 100 MB self-contained payload.
 #
@@ -171,7 +171,7 @@ CONTROL
 # O-view's state lives in ~/.local/share/O-view, which is per-user. A root-run maintainer
 # script cannot know which users have it, and guessing at home directories to delete files
 # is exactly the kind of thing that goes wrong loudly. Removal therefore leaves settings,
-# the rollup store and — most importantly — the weekly-reset log alone. That log is
+# the rollup store and, most importantly, the weekly-reset log alone. That log is
 # unrebuildable and costs a week to re-observe (ADR-0011).
 
 # ── build ───────────────────────────────────────────────────────────────────────────
@@ -182,7 +182,7 @@ dpkg-deb --root-owner-group --build "$STAGE" "$DEB"
 
 # ── tarball ─────────────────────────────────────────────────────────────────────────
 #
-# For distributions the .deb does not target — the same set Claude Desktop for Linux does
+# For distributions the .deb does not target, the same set Claude Desktop for Linux does
 # not support either. Extract and run; no installation, no auto-update.
 TARDIR="$STAGE/tar/o-view-${VERSION}-${RID}"
 mkdir -p "$TARDIR"

@@ -17,7 +17,7 @@ public enum RefreshOutcome
     /// Claude Code ran and exited cleanly, and there is <b>still no cached block at all</b>.
     ///
     /// <para><b>Distinct from <see cref="Unchanged"/> because it is not the same event.</b>
-    /// Unchanged means a block exists and did not advance, which is ordinary — Claude Code keeps
+    /// Unchanged means a block exists and did not advance, which is ordinary, Claude Code keeps
     /// its own freshness window and serves a cached answer to a second ask
     /// ([findings/cli-usage-refresh.md](../../../../docs/findings/cli-usage-refresh.md)). This
     /// means the one thing the refresh exists to produce was not produced, on a machine that has
@@ -29,17 +29,17 @@ public enum RefreshOutcome
     /// that had never once worked logged exactly like a healthy no-op. Observed on a user's
     /// machine reporting v0.9.1: <c>usage refresh unchanged</c> on repeat against a
     /// <c>~/.claude.json</c> carrying no block, weekly reset unknown, and no indication anywhere
-    /// that anything was wrong — until they ran <c>/usage</c> by hand and it filled in at once.
+    /// that anything was wrong, until they ran <c>/usage</c> by hand and it filled in at once.
     /// </para>
     ///
-    /// <para><b>Not fatal, and deliberately not.</b> The cause is not established — an old Claude
+    /// <para><b>Not fatal, and deliberately not.</b> The cause is not established, an old Claude
     /// Code, a trust prompt on the working directory, and a login that exits quietly all produce
-    /// it — so this reports what was seen and lets the caller decide. Stopping the feature on a
+    /// it, so this reports what was seen and lets the caller decide. Stopping the feature on a
     /// state whose cause is unknown would trade a silent no-op for a silent latch.</para>
     /// </summary>
     NoBlockProduced,
 
-    /// <summary>No <c>claude</c> on PATH. Not an error — most machines do not have one.</summary>
+    /// <summary>No <c>claude</c> on PATH. Not an error, most machines do not have one.</summary>
     NotFound,
 
     /// <summary>Killed at the timeout. Usually a login prompt waiting on input nobody will give.</summary>
@@ -51,7 +51,7 @@ public enum RefreshOutcome
     /// <summary>
     /// <b>The invocation was billed.</b> A transcript carrying a <c>requestId</c> appeared, which
     /// means the argument reached the model instead of being handled as a slash command. The
-    /// feature must stop permanently rather than retry — see <see cref="ClaudeCliRefresher"/>.
+    /// feature must stop permanently rather than retry, see <see cref="ClaudeCliRefresher"/>.
     /// </summary>
     Billed,
 }
@@ -66,8 +66,8 @@ public sealed record ClaudeCliRefreshResult(RefreshOutcome Outcome, string? Deta
     /// Whether this outcome must stop the feature rather than back it off.
     ///
     /// <para><b>The latch this feeds has to be resettable.</b> The guard behind it errs toward
-    /// reporting a charge — an unrelated session started during the seconds a refresh runs looks
-    /// the same as a billed one — and that trade is only correct while the user can undo it. A
+    /// reporting a charge, an unrelated session started during the seconds a refresh runs looks
+    /// the same as a billed one, and that trade is only correct while the user can undo it. A
     /// permanent, unexplained disable would make it the wrong way round.</para>
     /// </summary>
     public bool IsFatal => Outcome == RefreshOutcome.Billed;
@@ -91,11 +91,11 @@ public interface IUsageCacheRefresher
 ///
 /// <para><b>Why this exists.</b> <see cref="CachedUtilizationProvider"/> was added so a machine
 /// with no Claude Desktop could still fill the two plan bars. It cannot, because Claude Code
-/// refreshes <c>cachedUsageUtilization</c> only when <c>/usage</c> runs — not on startup, not on
+/// refreshes <c>cachedUsageUtilization</c> only when <c>/usage</c> runs, not on startup, not on
 /// <c>--version</c>, <c>--help</c> or <c>doctor</c>, and not on an ordinary <c>-p</c> prompt.
 /// Measured on the development machine on 2026-08-28: the block was <b>4.43 days old</b> while
 /// <c>~/.claude.json</c> had been written twelve minutes earlier, both <c>resets_at</c> had
-/// passed, and the panel therefore showed <i>unknown</i> — which is the normal state for exactly
+/// passed, and the panel therefore showed <i>unknown</i>, which is the normal state for exactly
 /// the population that provider exists to serve.
 /// ([findings/cli-usage-refresh.md](../../../../docs/findings/cli-usage-refresh.md))</para>
 ///
@@ -108,7 +108,7 @@ public interface IUsageCacheRefresher
 /// <para><b>The output is discarded on purpose.</b> <c>/usage</c> prints more than the cached
 /// block carries, and parsing it would couple O-view to another application's terminal
 /// formatting. The structured block is already parsed by <see cref="CachedUtilization"/>, so this
-/// spawns to <i>refresh</i> and reads the <i>file</i> — one parser, and no dependency on text
+/// spawns to <i>refresh</i> and reads the <i>file</i>, one parser, and no dependency on text
 /// layout that changes without notice.</para>
 ///
 /// <para><b>The cost guard is not optional.</b> <c>/usage</c> is handled locally and costs
@@ -118,7 +118,7 @@ public interface IUsageCacheRefresher
 /// cache-write + 97,456 cache-read + 470 output</b> tokens for one trivial exchange, because
 /// Claude Code rebuilds its entire context per invocation. If a future release stops treating
 /// <c>/usage</c> as a slash command, the string reaches the model and every refresh costs roughly
-/// 50K tokens — several million a day on any sane cadence, spent to report usage. So the charge
+/// 50K tokens, several million a day on any sane cadence, spent to report usage. So the charge
 /// is <i>detected</i> rather than assumed absent, and <see cref="RefreshOutcome.Billed"/> stops
 /// the feature rather than backing it off.</para>
 ///
@@ -134,7 +134,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     public const string ExecutableName = "claude";
 
     /// <summary>
-    /// The only argument. Exactly this string and nothing else — anything Claude Code does not
+    /// The only argument. Exactly this string and nothing else, anything Claude Code does not
     /// recognise as a slash command becomes a billed prompt.
     /// </summary>
     public const string UsageArgument = "/usage";
@@ -147,16 +147,16 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     /// wrote its own.
     ///
     /// <para><b>Only added when spawning from <see cref="OwnProjectFolder"/>'s preferred
-    /// directory</b> — see <see cref="Spawn"/>. While running from the user-profile fallback
+    /// directory</b>, see <see cref="Spawn"/>. While running from the user-profile fallback
     /// instead, "the most recent conversation in this directory" could be a real conversation of
     /// the user's own, and resuming it on their behalf, unasked, is not this feature's to do.</para>
     ///
-    /// <para>Free on its own, same as <see cref="UsageArgument"/> — measured, repeated
+    /// <para>Free on its own, same as <see cref="UsageArgument"/>, measured, repeated
     /// invocations added no request id. But it moves the one thing
     /// <see cref="TranscriptCostGuard"/> relies on: that a charge always lands in a transcript
     /// that did not exist before the invocation. A continued session is the opposite of that by
     /// design, so <see cref="Refresh"/> carries a second, file-content check for exactly this
-    /// file — see <see cref="SafeFindBilledInContinuedTranscript"/>.</para>
+    /// file, see <see cref="SafeFindBilledInContinuedTranscript"/>.</para>
     /// </summary>
     public const string ContinueArgument = "--continue";
 
@@ -184,7 +184,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     /// <para><b>Claude Code files its transcript under a slug derived from the process's working
     /// directory</b>, so whatever O-view happens to be running in becomes a folder in the user's
     /// project list. Measured: a run from a temp path produced
-    /// <c>C--Users-…-Temp-claude-…-spawncheck</c> — a directory that means nothing to anyone who
+    /// <c>C--Users-…-Temp-claude-…-spawncheck</c>, a directory that means nothing to anyone who
     /// finds it, in another application's data.</para>
     ///
     /// <para>Inheriting is therefore not neutral. The installed app's working directory is
@@ -194,7 +194,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     ///
     /// <para>O-view's own data directory is used instead: it already exists, it is the same place
     /// on both platforms via <see cref="Environment.SpecialFolder.LocalApplicationData"/>, and
-    /// the slug it produces <i>names O-view</i> — so a user who finds the folder can tell what
+    /// the slug it produces <i>names O-view</i>, so a user who finds the folder can tell what
     /// made it. Deliberately not the user profile, which would scatter these into the project
     /// slug their real home-directory sessions already use.</para>
     /// </summary>
@@ -206,7 +206,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     /// The preferred directory when it exists, otherwise the fallback.
     ///
     /// <para>A working directory that does not exist makes <see cref="Process.Start(ProcessStartInfo)"/>
-    /// throw, and that would surface as <see cref="RefreshOutcome.NotFound"/> — reporting "no
+    /// throw, and that would surface as <see cref="RefreshOutcome.NotFound"/>, reporting "no
     /// Claude Code on this machine" because of a missing folder of our own. O-view creates its
     /// data directory when the rollup store opens, but this must not depend on that ordering.</para>
     /// </summary>
@@ -214,7 +214,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
         Directory.Exists(preferred) ? preferred : fallback;
 
     /// <summary>
-    /// The project folder Claude Code files this refresher's own transcript under — the one
+    /// The project folder Claude Code files this refresher's own transcript under, the one
     /// place this is worked out, from <see cref="PreferredWorkingDirectory"/> rather than from
     /// <see cref="WorkingDirectory"/>. Null while that preferred directory does not exist and
     /// the refresher is actually spawning out of the user-profile fallback instead.
@@ -223,21 +223,21 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     /// its file count and its byte count, so a machine whose only transcripts are the ones
     /// this refresher created reports "no transcripts" rather than "that is unexpected".
     /// Ingestion is untouched: it still reads this folder like any other, so nothing is
-    /// excluded from the store — only from that one report.</para>
+    /// excluded from the store, only from that one report.</para>
     ///
     /// <para><b>Null rather than the fallback's own mangled folder.</b> The fallback is the
-    /// user profile — not O-view's own directory, but the same home directory their real
+    /// user profile, not O-view's own directory, but the same home directory their real
     /// sessions already use (first run, a fresh install, or a cleared data folder all hit it,
     /// since O-view only creates that folder when the rollup store opens). Excluding it would
     /// drop every genuine transcript the user has, which is issue #313 the other way round:
-    /// the user's own usage reported as absent. Nothing can be excluded in that case anyway —
+    /// the user's own usage reported as absent. Nothing can be excluded in that case anyway,
     /// the refresher's own transcript and the user's real ones would sit in the exact same
     /// folder, and no folder-level rule can tell them apart.</para>
     /// </summary>
     public static string? OwnProjectFolder => ResolveOwnProjectFolder(PreferredWorkingDirectory);
 
     /// <summary>
-    /// As above, but with the preferred directory named explicitly — the seam
+    /// As above, but with the preferred directory named explicitly, the seam
     /// <c>TranscriptScopeReportTests</c> uses to pin the null-when-on-the-fallback rule
     /// without depending on whether this machine's own <see cref="PreferredWorkingDirectory"/>
     /// happens to exist.
@@ -254,7 +254,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     /// refresher has never run).
     ///
     /// <para>Walked with <see cref="TranscriptFileScan"/> rather than a hand-rolled
-    /// <see cref="Directory.GetFiles(string, string)"/> — the reason is the same one CLAUDE.md
+    /// <see cref="Directory.GetFiles(string, string)"/>, the reason is the same one CLAUDE.md
     /// rule 9 gives for every other walk of a Claude Code tree: a single unreadable node must not
     /// turn into "no transcripts" for the whole folder.</para>
     /// </summary>
@@ -278,11 +278,11 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     /// slash and backslash are handled so the result is meaningful on either platform.
     ///
     /// <para><b>That finding is incomplete: Claude Code also maps <c>.</c> and <c>_</c> to
-    /// <c>-</c>.</b> Observed against this machine's own real project folder —
+    /// <c>-</c>.</b> Observed against this machine's own real project folder,
     /// <c>C:\Users\Maximilian\.paperclip\...\_default</c> is filed as
     /// <c>C--Users-Maximilian--paperclip-...--default</c>, where the <c>.</c> and the <c>_</c>
-    /// each became a second <c>-</c>. Missing either one leaves <c>~/.local/share/O-view</c> —
-    /// Linux's <see cref="WorkingDirectory"/> — mangled to <c>-home-user-.local-share-O-view</c>
+    /// each became a second <c>-</c>. Missing either one leaves <c>~/.local/share/O-view</c>,
+    /// Linux's <see cref="WorkingDirectory"/>, mangled to <c>-home-user-.local-share-O-view</c>
     /// while Claude Code itself writes <c>-home-user--local-share-O-view</c>, so
     /// <see cref="OwnProjectFolder"/> never matches on Linux at all, and the same silent miss
     /// hits Windows whenever the user name holds a <c>.</c> or <c>_</c> (issue #313).</para>
@@ -342,7 +342,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     ///
     /// <para><b>The cost guard runs on every path out of a started process</b>, including a
     /// timeout and a non-zero exit. A run that was billed and then failed is still a run that
-    /// was billed, and the charge is what decides whether this may ever run again — so it is
+    /// was billed, and the charge is what decides whether this may ever run again, so it is
     /// checked before the outcome is reported, not instead of it.</para>
     /// </summary>
     public ClaudeCliRefreshResult Refresh()
@@ -351,7 +351,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
 
         // Taken before the process starts, and by identity rather than by timestamp. A session
         // already running writes its transcript continuously and carries request ids on every
-        // line, so any "changed since" filter reports a charge that never happened — see
+        // line, so any "changed since" filter reports a charge that never happened, see
         // TranscriptCostGuard.
         IReadOnlySet<string> existing;
         try
@@ -362,13 +362,13 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
         {
             // Nothing has run yet, so nothing can have been billed. A guard that cannot take a
             // baseline cannot judge the result either, so the refresh is abandoned rather than
-            // run unguarded — the one thing that must never happen is spawning with no way to
+            // run unguarded, the one thing that must never happen is spawning with no way to
             // detect a charge.
             return new ClaudeCliRefreshResult(RefreshOutcome.Failed, $"guard baseline ({ex.GetType().Name})");
         }
 
         // The guard above is keyed on file identity, so it is blind to a charge appended to a
-        // file that already existed — exactly what ContinueArgument causes on purpose. This is
+        // file that already existed, exactly what ContinueArgument causes on purpose. This is
         // the other half: the one file this invocation can continue, read for a request id
         // before the process runs so the same read after can tell "already there" from "new".
         string? continuedFile;
@@ -397,7 +397,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
 
         if (!run.Started)
         {
-            // No claude on PATH. Not a failure — most machines do not have one, and saying so
+            // No claude on PATH. Not a failure, most machines do not have one, and saying so
             // is what lets the caller distinguish "not installed" from "installed and broken"
             // (ADR-0010: never assert something about the machine O-view has not observed).
             return new ClaudeCliRefreshResult(RefreshOutcome.NotFound, run.Failure);
@@ -437,7 +437,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
         // ordinary, and this is the absence of the thing the run exists to create.
         //
         // Gated on the read having SUCCEEDED, not merely on it returning nothing. A file that
-        // could not be opened — locked, mid-write, permissions — is unknown, and reporting it
+        // could not be opened, locked, mid-write, permissions, is unknown, and reporting it
         // as "nothing was produced" would turn a transient into a standing accusation about the
         // machine (rule 6). Unknown stays Unchanged, which claims nothing either way.
         return new ClaudeCliRefreshResult(
@@ -468,7 +468,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     }
 
     /// <summary>
-    /// A guard that throws must not be read as "nothing was billed" — that is the one direction
+    /// A guard that throws must not be read as "nothing was billed", that is the one direction
     /// this check may not fail in. An unreadable transcript tree is reported as a charge, which
     /// stops the feature until someone looks; the alternative is a silent 50K-token-per-poll leak
     /// behind a swallowed <see cref="IOException"/>.
@@ -488,7 +488,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     /// <summary>
     /// The other half of the cost guard: whether the file <see cref="ContinueArgument"/> might
     /// have just appended to now carries a request id that was not there a moment ago. Mirrors
-    /// <see cref="SafeFindBilled"/>'s direction — a read that cannot be trusted must not be read
+    /// <see cref="SafeFindBilled"/>'s direction, a read that cannot be trusted must not be read
     /// as "nothing was billed".
     /// </summary>
     private static string? SafeFindBilledInContinuedTranscript(string? path, bool hadRequestIdBefore)
@@ -527,11 +527,11 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
             RedirectStandardError = true,
             RedirectStandardInput = true,
 
-            // Chosen, not inherited — Claude Code names the transcript's folder after it.
+            // Chosen, not inherited, Claude Code names the transcript's folder after it.
             WorkingDirectory = WorkingDirectory,
         };
 
-        // Only while spawning from O-view's own data directory — see ContinueArgument. While
+        // Only while spawning from O-view's own data directory, see ContinueArgument. While
         // running from the user-profile fallback instead, "the most recent conversation here"
         // could be a real one of the user's own.
         if (OwnProjectFolder is not null)
@@ -566,7 +566,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
             }
 
             // Bounded: the process is gone, so the pipes are closed and this completes. A faulted
-            // read is swallowed deliberately — the output is discarded either way, and letting it
+            // read is swallowed deliberately, the output is discarded either way, and letting it
             // surface as an AggregateException would report a failure for a run that succeeded.
             try
             {

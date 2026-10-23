@@ -16,14 +16,14 @@ namespace OView.Tray.Popup;
 /// Draws the 31-day usage chart on the Canvas (issues #4, #5): one bar per day,
 /// coloured light→dark blue by its intensity within its own plan week, dotted
 /// gridlines at the weekly resets, vertical date labels, and a per-bar hover
-/// tooltip. Pre-install days are blank columns (no bar) — with the date axis, an
+/// tooltip. Pre-install days are blank columns (no bar), with the date axis, an
 /// empty column reads as "no data" without needing the old caption.
 ///
 /// <para>Every one of those is read from <see cref="PanelSections.Graph"/>, which the
 /// Linux chart draws from too. What is left here is turning fractions into pixels against
 /// this canvas, and the hover cards' chrome. The week bands, the boundary placement and
 /// the card wording used to live in this file, where the other head could not reach
-/// them — so it drew flat bars and no gridlines at all.</para>
+/// them, so it drew flat bars and no gridlines at all.</para>
 ///
 /// Bar and label are both placed from <see cref="BarCentre"/> (issue #31) so a date
 /// always sits under the bar it describes; with 31 columns in ~344 px a few pixels
@@ -48,7 +48,7 @@ internal sealed class PopupGraph(FrameworkElement owner, Canvas host)
         var width = host.ActualWidth > 0 ? host.ActualWidth : 344;
 
         // Derived from the canvas rather than fixed at 52. The canvas height is no longer a
-        // constant — a display too short for the panel gets a shorter one (PanelDensity) —
+        // constant, a display too short for the panel gets a shorter one (PanelDensity),
         // and a fixed bar area meant the rotated date labels below it simply ran off the
         // bottom and collided with the next section. Caught by rendering it; the constants
         // alone look fine. At the normal 86 px canvas this is 52, exactly as before.
@@ -64,7 +64,7 @@ internal sealed class PopupGraph(FrameworkElement owner, Canvas host)
             var column = graph.Columns[i];
             var x = i * col;
 
-            // Bar — height by absolute tokens, colour by within-week intensity.
+            // Bar, height by absolute tokens, colour by within-week intensity.
             if (column.HasBar)
             {
                 var height = Math.Max(PanelMetrics.GraphMinBarHeightDip, barAreaHeight * column.Height);
@@ -76,7 +76,7 @@ internal sealed class PopupGraph(FrameworkElement owner, Canvas host)
                     Fill = new SolidColorBrush(Lerp(GraphBlueLo, GraphBlueHi, column.Intensity)),
                     RadiusX = 1,
                     RadiusY = 1,
-                    // Figure first, date beneath — the panel's shared hover card, not the
+                    // Figure first, date beneath, the panel's shared hover card, not the
                     // raw string this used to be. A bare `ToolTip = "…"` renders as system
                     // chrome: a pale rectangle with a hard border, on a panel that is
                     // otherwise entirely rounded cards on one palette.
@@ -98,7 +98,7 @@ internal sealed class PopupGraph(FrameworkElement owner, Canvas host)
             // entirely: at 90° the box [0,w]×[0,h] maps to [-h,0]×[0,w], i.e. the label
             // hangs to the LEFT of its anchor by one line height. The old code
             // compensated with a constant +3, which stood in for half a line and was ~2 px
-            // short of an 8 pt one — a fifth of a column at 31 days, and what made the
+            // short of an 8 pt one, a fifth of a column at 31 days, and what made the
             // dates read as offset from their bars.
             //
             // Ask the transform for the rendered bounds rather than re-deriving them: the
@@ -128,7 +128,7 @@ internal sealed class PopupGraph(FrameworkElement owner, Canvas host)
     /// The week-boundary gridlines, drawn <em>last</em> so they sit above the bars.
     ///
     /// <para>A Canvas paints in child order, so these used to be added first and were
-    /// overdrawn by every bar they crossed — which is most of them in a busy week, leaving
+    /// overdrawn by every bar they crossed, which is most of them in a busy week, leaving
     /// the boundary visible only in the gaps. A reset line that disappears exactly where
     /// the usage is heaviest is missing the moment it exists to mark.</para>
     ///
@@ -139,7 +139,7 @@ internal sealed class PopupGraph(FrameworkElement owner, Canvas host)
     ///
     /// <para>Placement is unchanged, and now decided above this head: a plan reset happens at
     /// an instant, not at midnight, so the line sits at its true fractional position inside
-    /// the day it falls in — snapping to the nearest column edge would claim a boundary the
+    /// the day it falls in, snapping to the nearest column edge would claim a boundary the
     /// data does not have. The calendar-week fallback lands on a column edge because midnight
     /// is one.</para>
     /// </summary>
@@ -170,7 +170,7 @@ internal sealed class PopupGraph(FrameworkElement owner, Canvas host)
 
     /// <summary>
     /// Horizontal centre of the column starting at <paramref name="x"/>. The single
-    /// anchor the bar and its date label are both placed from (issue #31) — the label
+    /// anchor the bar and its date label are both placed from (issue #31), the label
     /// was previously offset by a constant that no longer matched the bar.
     /// </summary>
     private static double BarCentre(double x, double col) => x + col / 2;

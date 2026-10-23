@@ -7,8 +7,8 @@ namespace OView.Core.Models;
 /// <para><b>Why two.</b> Claude Desktop writes <c>plan-usage-history.json</c> on a 15-minute
 /// timer and Claude Code writes <c>~/.claude.json</c> whenever it talks to the API. The series
 /// comes from the first, so the detector's view of the meter can be a quarter of an hour behind
-/// a reading O-view has already read, already trusted, and is already displaying in the gauge
-/// — which is how issue #268 produced a banner saying the meter had not moved beside a gauge
+/// a reading O-view has already read, already trusted, and is already displaying in the gauge,
+/// which is how issue #268 produced a banner saying the meter had not moved beside a gauge
 /// showing where it had moved to (5% at 16:07, 24% at 16:13, banner at 16:13).</para>
 ///
 /// <para>Folding the second in is not a new source or a new trust decision. It is the same
@@ -33,7 +33,7 @@ public static class MeterSeries
     /// An older reading would also land out of time order at the end of a series the detector
     /// reads positionally.</item>
     /// <item><b>Not below the newest sample.</b> Within a window the meter only rises, so a
-    /// lower reading is evidence of a boundary between the two — the one thing the series must
+    /// lower reading is evidence of a boundary between the two, the one thing the series must
     /// never span. The honest response is to leave the series alone rather than manufacture a
     /// negative rise, which <see cref="DivergenceDetector.FlatRiseTolerance"/> would read as
     /// flat and report as divergence.</item>
@@ -45,7 +45,7 @@ public static class MeterSeries
     ///
     /// <para>Everything the caller passes is already filtered by
     /// <c>CachedUtilizationProvider</c>: a percentage whose <c>resets_at</c> has passed, and an
-    /// aged zero, both arrive here as null. This method adds no freshness rule of its own —
+    /// aged zero, both arrive here as null. This method adds no freshness rule of its own,
     /// the age it returns is handed to the detector, which owns that question.</para>
     /// </remarks>
     /// <param name="percents">Plan-history samples across the window, in time order.</param>

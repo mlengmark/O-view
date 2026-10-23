@@ -9,7 +9,7 @@ public class UsageLevelTests
     [InlineData(49, UsageLevel.Normal)]
     [InlineData(50, UsageLevel.Warning)]   // band boundary (issue #2)
     [InlineData(69, UsageLevel.Warning)]
-    [InlineData(70, UsageLevel.Critical)]  // band boundary — also the notify default
+    [InlineData(70, UsageLevel.Critical)]  // band boundary, also the notify default
     [InlineData(100, UsageLevel.Critical)]
     public void Classify_MapsToIssue2Bands(int percent, UsageLevel expected)
     {

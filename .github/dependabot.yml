@@ -1,14 +1,14 @@
 # Dependency updates.
 #
 # Two ecosystems, because both ship in the product. NuGet packages are compiled into the
-# self-contained payload — SkiaSharp and SQLitePCLRaw carry prebuilt native libraries, so a
+# self-contained payload, SkiaSharp and SQLitePCLRaw carry prebuilt native libraries, so a
 # CVE in one of those reaches users inside the binary. Actions are not shipped, but they run
 # in the job that builds and publishes the installer, which is the same blast radius by a
 # different route.
 #
 # Both are grouped into one PR per ecosystem per week. Ungrouped, five NuGet packages and
 # five pinned actions produce enough PR noise on a solo project that the important ones stop
-# being read — which is the failure this file exists to prevent.
+# being read, which is the failure this file exists to prevent.
 version: 2
 
 updates:

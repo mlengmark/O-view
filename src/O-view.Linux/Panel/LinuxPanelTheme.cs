@@ -7,7 +7,7 @@ namespace OView.Linux.Panel;
 /// The shared panel palette as Avalonia brushes.
 ///
 /// <para>Values and the reasoning behind them live in
-/// <see cref="PanelPalette"/> — the accent's contrast ratios and the categorical series'
+/// <see cref="PanelPalette"/>, the accent's contrast ratios and the categorical series'
 /// colour-vision separation figures are recorded there, shared with the WPF panel. This
 /// class only converts. Restating a hex here would carry the colour but not the constraint
 /// that produced it.</para>
@@ -25,7 +25,7 @@ public sealed class LinuxPanelTheme
 
     public bool IsLight { get; }
 
-    /// <summary>A palette brush. Throws on an unknown key — a missing colour renders as
+    /// <summary>A palette brush. Throws on an unknown key, a missing colour renders as
     /// transparent, which is far harder to notice than a crash.</summary>
     public IBrush this[string key] => _brushes.TryGetValue(key, out var brush)
         ? brush
@@ -38,7 +38,7 @@ public sealed class LinuxPanelTheme
     /// <para>Which slot a model takes is decided in Presentation, once for the whole panel, so
     /// a model keeps one colour across every tile and both heads
     /// (<see cref="OView.Presentation.Panel.PanelTileSegmentView.Slot"/>). This only looks the
-    /// palette up — the separation figures behind those three hues, and the reason a fourth
+    /// palette up, the separation figures behind those three hues, and the reason a fourth
     /// chromatic slot does not exist, are recorded in <see cref="PanelPalette"/>.</para>
     /// </summary>
     public IBrush Series(int slot) => this[slot switch

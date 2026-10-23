@@ -18,7 +18,7 @@ public class PollingCadenceTests
     }
 
     [Theory]
-    [InlineData(DataSource.None)]      // nothing yet — Desktop not sampling
+    [InlineData(DataSource.None)]      // nothing yet, Desktop not sampling
     [InlineData(DataSource.Estimate)]  // only the JSONL fallback; plan bars still blank
     public void Without_authoritative_data_inside_the_window_polls_fast(DataSource source)
     {

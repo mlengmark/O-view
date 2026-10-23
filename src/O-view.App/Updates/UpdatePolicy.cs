@@ -39,7 +39,7 @@ public enum UpdateAction
 /// <para><b>Why an apt install must not self-update.</b> Anthropic's own Claude Desktop for
 /// Linux does not, and the convention exists for a good reason: files installed by dpkg are
 /// owned by dpkg. An app that overwrites them is silently reverted by the next
-/// <c>apt upgrade</c> — or leaves the package database describing a version that is no longer
+/// <c>apt upgrade</c>, or leaves the package database describing a version that is no longer
 /// on disk. Telling the user is the correct behaviour, not a lesser one.</para>
 ///
 /// <para>A build that cannot self-install still <i>checks</i>, so it can say a newer version
@@ -58,7 +58,7 @@ public static class UpdatePolicy
 
     /// <summary>
     /// Whether this build may download an asset and run it. False for anything the user or a
-    /// package manager owns — the property acceptance criteria are written against.
+    /// package manager owns, the property acceptance criteria are written against.
     /// </summary>
     public static bool MayDownloadAndRun(InstallKind kind) =>
         ActionFor(kind) is UpdateAction.InstallInPlace;
@@ -68,7 +68,7 @@ public static class UpdatePolicy
     ///
     /// <para><b>Detection is not permission, and conflating them silently disabled the
     /// Linux notice.</b> An apt build was handed <see cref="ReleaseAssets.None"/> on the
-    /// reasoning that it must never install anything — but
+    /// reasoning that it must never install anything, but
     /// <see cref="UpdateCheck.Evaluate"/> only reports <c>UpdateAvailable</c> when the
     /// selector matches something, so a selector matching nothing meant an apt build could
     /// never report an update <i>at all</i>. It returned <c>Unknown</c> forever. ADR-0009
@@ -76,7 +76,7 @@ public static class UpdatePolicy
     /// recognise, it could not do the first half.</para>
     ///
     /// <para>So detection uses the asset that build would actually install, and
-    /// <see cref="MayDownloadAndRun"/> — unchanged — remains the only thing that decides
+    /// <see cref="MayDownloadAndRun"/>, unchanged, remains the only thing that decides
     /// whether anything is downloaded or executed. A <c>.deb</c> build now recognises the
     /// <c>.deb</c>, says so, and still touches nothing.</para>
     ///

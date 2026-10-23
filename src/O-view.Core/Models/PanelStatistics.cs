@@ -10,12 +10,12 @@ namespace OView.Core.Models;
 /// year; the boundaries come from <see cref="LocalDays"/> rather than from 24-hour steps.
 /// </param>
 /// <param name="PreInstall">
-/// True for days before the first recorded day. These have NO data, not zero data —
+/// True for days before the first recorded day. These have NO data, not zero data,
 /// the UI renders them as an explicit empty region, never zero-height bars
 /// (ADR-0006; CLAUDE.md rule 6).
 /// </param>
 /// <param name="OutputTokens">
-/// Output tokens for the day — <b>not</b> everything billed on it (issue #253). Named for
+/// Output tokens for the day, <b>not</b> everything billed on it (issue #253). Named for
 /// what it holds: the field was <c>TotalTokens</c>, and a bar sized by output under a name
 /// promising a total is the mislabelling issue #210 was about, pointed at the graph.
 /// </param>
@@ -23,18 +23,18 @@ public sealed record DayUsage(DateOnly Date, long OutputTokens, bool PreInstall)
 
 /// <summary>
 /// Everything the popup's tiles and graph need, computed from the rollup store.
-/// "Est." values price tokens at public API rates — not money charged; the UI must
+/// "Est." values price tokens at public API rates, not money charged; the UI must
 /// keep the Est. prefix. An <see cref="UsageValueStatus.Unavailable"/> estimate means an
 /// unpriced model was involved and the tile shows unknown rather than a partial sum presented
 /// as a total.
 /// </summary>
 /// <param name="RecordedDays">
-/// How many days of the window O-view has data <b>for</b> — every day from the first day it
+/// How many days of the window O-view has data <b>for</b>, every day from the first day it
 /// ever recorded onward, whether or not there was usage on it.
 ///
 /// <para>A day inside that era with no usage is a <i>genuine zero</i> and counts. Only days
 /// before the store began are missing, which is the same line
-/// <see cref="DayUsage.PreInstall"/> draws for the graph — deliberately, so the caveat and
+/// <see cref="DayUsage.PreInstall"/> draws for the graph, deliberately, so the caveat and
 /// the chart beneath it cannot say different things (issue #142).</para>
 /// </param>
 public sealed record PanelStatistics(
@@ -49,7 +49,7 @@ public sealed record PanelStatistics(
     /// <summary>
     /// <see cref="TokensToday"/>, paired with its <see cref="UsageValueStatus"/>. Token counts
     /// in this app are always read from recorded transcripts, never modelled, so this is
-    /// <see cref="UsageValueStatus.Real"/> whenever <see cref="Build"/> sets it — an unpriced
+    /// <see cref="UsageValueStatus.Real"/> whenever <see cref="Build"/> sets it, an unpriced
     /// model changes what can be said about the money beside it, never about the count itself.
     /// </summary>
     public TokenCount TokensTodayCount { get; init; }
@@ -57,7 +57,7 @@ public sealed record PanelStatistics(
     /// <summary>
     /// What today's tokens would have cost at published API rates:
     /// <see cref="UsageValueStatus.Unavailable"/> when nothing in the window could be priced,
-    /// <see cref="UsageValueStatus.Estimated"/> otherwise — the same split
+    /// <see cref="UsageValueStatus.Estimated"/> otherwise, the same split
     /// <see cref="EstimateTotal"/> already returns, carried onto the figure itself rather than
     /// left for a reader to re-derive from a null.
     ///
@@ -81,7 +81,7 @@ public sealed record PanelStatistics(
     /// <summary>
     /// What the current session window's off-plan work would have cost.
     /// <see cref="UsageValueStatus.Unavailable"/> both when the window turned out not to be
-    /// off-plan (nothing was priced, by design — see <see cref="WithDivergence"/>) and when it
+    /// off-plan (nothing was priced, by design, see <see cref="WithDivergence"/>) and when it
     /// is off-plan but nothing in it could be priced; a reader of this figure already has to
     /// check <see cref="IsOffPlan"/> before it means anything, so the two cases need no further
     /// distinction here.
@@ -93,7 +93,7 @@ public sealed record PanelStatistics(
 
     /// <summary>
     /// Model IDs seen in the window that have no published rate, so their tokens are
-    /// excluded from the Est. figures. Surfaced in the UI rather than silently dropped —
+    /// excluded from the Est. figures. Surfaced in the UI rather than silently dropped,
     /// and, crucially, they no longer void the whole total: a single unrecognised model
     /// (a newly released Claude, say) used to blank both "Est. value" tiles entirely.
     /// </summary>
@@ -102,7 +102,7 @@ public sealed record PanelStatistics(
     /// <summary>
     /// Per-model split behind <see cref="TokensToday"/> and <see cref="EstTodayValue"/>
     /// (GitHub issue #37). The rollups already arrive at (date × model) grain, so this
-    /// costs one extra grouping over figures in hand — no second query, and nothing to
+    /// costs one extra grouping over figures in hand, no second query, and nothing to
     /// fetch when a tile is clicked.
     /// </summary>
     public IReadOnlyList<ModelSlice> ModelsToday { get; init; } = [];
@@ -111,13 +111,13 @@ public sealed record PanelStatistics(
     public IReadOnlyList<ModelSlice> Models31Days { get; init; } = [];
 
     /// <summary>
-    /// Everything billed today, split by token kind — the whole
+    /// Everything billed today, split by token kind, the whole
     /// <see cref="TokenComposition.Output"/> of which is <see cref="TokensToday"/>.
     ///
     /// <para><b>This is a superset of the tile above it, not a decomposition of it</b>
     /// (issue #253). The tile headlines output; this says what else was billed alongside it,
     /// which on a Claude Code workload is roughly nine times as much again in cached prompt
-    /// re-reads. The panel labels the two differently for that reason — see
+    /// re-reads. The panel labels the two differently for that reason, see
     /// <c>PanelText.TokensUsedTodayLabel</c> in Presentation.</para>
     /// </summary>
     public TokenComposition CompositionToday { get; init; } = TokenComposition.Empty;
@@ -126,7 +126,7 @@ public sealed record PanelStatistics(
     public TokenComposition Composition31Days { get; init; } = TokenComposition.Empty;
 
     /// <summary>
-    /// Which models get their own colour, in slot order — one answer for the whole panel
+    /// Which models get their own colour, in slot order, one answer for the whole panel
     /// so a model wears the same colour on every tile. Derived from the 31-day window
     /// because it is the superset the other tiles draw from.
     /// </summary>
@@ -143,7 +143,7 @@ public sealed record PanelStatistics(
     /// worth saying so beside them (<see cref="RateCard.StaleAfter"/>).
     ///
     /// <para>Decided in <see cref="Build"/>, which is the only place that knows both the card
-    /// and the reader's own today — so the caveat cannot be rendered against a different day
+    /// and the reader's own today, so the caveat cannot be rendered against a different day
     /// from the figures it qualifies.</para>
     /// </summary>
     public bool RatesAreStale { get; init; }
@@ -163,14 +163,14 @@ public sealed record PanelStatistics(
     /// Whether the window is only partially covered by recorded history.
     ///
     /// <para>ADR-0006 makes the panel state this: a small 31-day figure with no caveat
-    /// reads as low usage rather than as short history. The sentence itself — "3 of 31
-    /// days recorded" — is built from <see cref="RecordedDays"/> and <see cref="WindowDays"/>
+    /// reads as low usage rather than as short history. The sentence itself, "3 of 31
+    /// days recorded", is built from <see cref="RecordedDays"/> and <see cref="WindowDays"/>
     /// in Presentation's TokenText.CoverageNote, which is panel copy and not this type's
     /// concern; this property only reports the fact the sentence is about.</para>
     ///
     /// <para><b><see cref="RecordedDays"/> counts days O-view has data <i>for</i>, not days
     /// with usage on them</b> (GitHub issue #142). Counting the latter inverted the caveat's
-    /// whole purpose: a user who took a week off was told "18 of 31 days recorded" — their
+    /// whole purpose: a user who took a week off was told "18 of 31 days recorded", their
     /// history read as short when it was complete and their usage was simply low, which is
     /// precisely the misreading ADR-0006 wrote this label to prevent.</para>
     /// </summary>
@@ -185,12 +185,12 @@ public sealed record PanelStatistics(
     /// <summary>
     /// Adds divergence analysis for the current session window. Kept separate from
     /// <see cref="Build"/> because it needs the plan-meter series, which lives in the
-    /// provider layer — Core stays free of file-format knowledge here.
+    /// provider layer, Core stays free of file-format knowledge here.
     /// </summary>
     /// <param name="meterAge">
     /// Age of the newest sample in <paramref name="planPercentsInWindow"/>. A series that has
     /// stopped being written is flat whatever the user is doing, so it is passed through rather
-    /// than assumed current — see <see cref="DivergenceDetector.MaxMeterAge"/>.
+    /// than assumed current, see <see cref="DivergenceDetector.MaxMeterAge"/>.
     /// </param>
     public PanelStatistics WithDivergence(
         RollupStore store, DateTimeOffset windowStartUtc, IReadOnlyList<int> planPercentsInWindow,
@@ -212,7 +212,7 @@ public sealed record PanelStatistics(
     }
 
     /// <param name="zone">
-    /// The timezone the window is measured in — <b>always passed, never defaulted</b>.
+    /// The timezone the window is measured in, <b>always passed, never defaulted</b>.
     /// Reaching for <see cref="TimeZoneInfo.Local"/> in here would make every figure depend on
     /// whichever machine ran the code, which in the test suite means assertions that pass or
     /// fail by geography (the hazard issue #212 is about). The heads and
@@ -231,7 +231,7 @@ public sealed record PanelStatistics(
             LocalDays.StartUtc(windowStart, zone), LocalDays.EndUtc(today, zone), zone);
         var todayRollups = rollups.Where(r => r.Date == today).ToList();
 
-        // Where recorded history begins, read as an instant and dated here — a store older
+        // Where recorded history begins, read as an instant and dated here, a store older
         // than the window means no day in the window is pre-install. Asking the ledger for its
         // oldest row replaces re-aggregating all of history to take the minimum of it.
         var firstRecorded = store.EarliestActivityUtc() is { } earliest
@@ -254,19 +254,19 @@ public sealed record PanelStatistics(
 
         // Coverage is derived from the series rather than counted again in SQL (issue #142).
         // The store could only ever answer "how many days had usage", which is a different
-        // question and the wrong one — and it disagreed with the graph rendered directly
+        // question and the wrong one, and it disagreed with the graph rendered directly
         // beneath the label, from this same data. One derivation cannot disagree with itself.
         var recordedDays = series.Count(d => !d.PreInstall);
 
         // 31-day credit spend (GitHub issue #3): the estimated API-rate value of usage
         // on models that bill as extra usage rather than drawing from the plan window.
-        // A retroactive per-model estimate — see CreditBilledModels for why this is
+        // A retroactive per-model estimate, see CreditBilledModels for why this is
         // inferred, not read, and what it can miss.
         var creditRollups = rollups.Where(r => CreditBilledModels.IsCreditBilled(r.Model)).ToList();
 
         var est31 = EstimateTotal(rollups, out var unpriced);
 
-        // Each figure is computed once here and wrapped once below — never two separate
+        // Each figure is computed once here and wrapped once below, never two separate
         // computations of the same thing, which is exactly the trap a second, independent
         // typed path would be.
         var tokensToday = todayRollups.Sum(r => r.Tokens.Output);
@@ -277,7 +277,7 @@ public sealed record PanelStatistics(
         var ttlUnrecordedCacheWrites = rollups.Sum(r => r.Tokens.CacheWriteTtlUnrecorded);
 
         // Output tokens throughout (issue #253). The Est. figures beside them are unchanged
-        // and still price ALL four kinds — the token tile answers "what did I produce", the
+        // and still price ALL four kinds, the token tile answers "what did I produce", the
         // value tile answers "what would this have cost", and they are allowed to be built
         // from different inputs precisely because each one names what it is.
         return new PanelStatistics(
@@ -299,7 +299,7 @@ public sealed record PanelStatistics(
             Models31Days = SliceByModel(rollups),
             ModelColourOrder = ModelBreakdown.ColourOrder(SliceByModel(rollups)),
             // Same rollups the totals above are summed from, split by token kind rather
-            // than by model — so the composition cannot disagree with the figure it explains.
+            // than by model, so the composition cannot disagree with the figure it explains.
             CompositionToday = TokenComposition.From(todayRollups),
             Composition31Days = TokenComposition.From(rollups),
             TokensTodayCount = TokenCount.Measured(tokensToday),
@@ -314,7 +314,7 @@ public sealed record PanelStatistics(
 
     /// <summary>
     /// Collapses rollups to one row per model. The store's grain is already (date ×
-    /// model), so this only drops the date — the model dimension was being discarded
+    /// model), so this only drops the date, the model dimension was being discarded
     /// at the very last step, not missing.
     ///
     /// A model's estimate is unavailable only when NOTHING of its usage could be priced, which
@@ -340,7 +340,7 @@ public sealed record PanelStatistics(
 
     /// <summary>
     /// Sums the priced rollups. Null only when there was something to price and NOTHING
-    /// could be priced — an honest "unknown". Otherwise it returns the priced subtotal and
+    /// could be priced, an honest "unknown". Otherwise it returns the priced subtotal and
     /// reports the excluded models via <paramref name="unpriced"/>, so the UI can state the
     /// gap instead of blanking. Previously any single unpriced model returned null, which
     /// meant one unrecognised model id voided both Est. tiles even when 99% of the tokens

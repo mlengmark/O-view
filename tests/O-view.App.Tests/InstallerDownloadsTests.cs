@@ -5,7 +5,7 @@ namespace OView.App.Tests;
 /// <summary>
 /// The temp-directory sweep (issue #159).
 ///
-/// <para>What was actually wrong was not a bug in any one line — every line did what it said.
+/// <para>What was actually wrong was not a bug in any one line, every line did what it said.
 /// It was that the success path had no owner for the file it left behind, and could not have
 /// one: the app hands the installer to another process and exits so its exe can be replaced.
 /// Measured on a machine updating since v0.4.6, that came to 20 files and 1.33 GB.</para>
@@ -63,7 +63,7 @@ public class InstallerDownloadsTests
 
     /// <summary>
     /// The guarantee that makes the sweep safe to put in front of a download: a file that
-    /// cannot be deleted — realistically an installer still running from a previous attempt —
+    /// cannot be deleted, realistically an installer still running from a previous attempt,
     /// is skipped, the rest still go, and nothing propagates to the caller. Failing an update
     /// because a stale file was locked would trade a disk leak for a machine stranded on an
     /// old version, which is the worse of the two.
@@ -92,7 +92,7 @@ public class InstallerDownloadsTests
 
     /// <summary>
     /// The same guarantee against a real lock rather than a stand-in. Only Windows holds an
-    /// open file against deletion, and this is a Windows-only code path anyway — on Linux the
+    /// open file against deletion, and this is a Windows-only code path anyway, on Linux the
     /// unlink succeeds, which is not a failure of the sweep, so the assertion is that it
     /// worked rather than that it was skipped.
     /// </summary>
@@ -115,7 +115,7 @@ public class InstallerDownloadsTests
     }
 
     /// <summary>
-    /// A first run has no directory yet. That is nothing to sweep, not a failure — and the
+    /// A first run has no directory yet. That is nothing to sweep, not a failure, and the
     /// caller creates it on the next line regardless.
     /// </summary>
     [Fact]

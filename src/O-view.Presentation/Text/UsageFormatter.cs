@@ -5,11 +5,11 @@ namespace OView.Presentation.Text;
 /// <summary>
 /// Display formatting for token counts and estimated values.
 ///
-/// <para>Beside the rest of the panel's wording rather than in Core — <see
+/// <para>Beside the rest of the panel's wording rather than in Core, <see
 /// cref="TooltipFormatter"/> has already made that move. <see
 /// cref="OView.Core.Models.PanelText"/> has not yet, and still carries a private copy of these
 /// two rules until it does. These two methods previously existed as four copies across a
-/// <c>Window</c> code-behind and an <c>Application</c> subclass — <c>FormatTokens</c>
+/// <c>Window</c> code-behind and an <c>Application</c> subclass, <c>FormatTokens</c>
 /// byte-identical in two places, and money written two different ways (GitHub issue
 /// #55). The off-plan balloon composed <c>"$" + "0.00"</c> in one place and asked ICU
 /// for the <c>"C"</c> pattern under a pinned <c>en-US</c> in another; they agree today,
@@ -22,7 +22,7 @@ namespace OView.Presentation.Text;
 public static class UsageFormatter
 {
     /// <summary>
-    /// Token counts, abbreviated at thousands and millions to one decimal — the tiles are
+    /// Token counts, abbreviated at thousands and millions to one decimal, the tiles are
     /// ~180px wide and a raw nine-digit figure does not fit beside its label.
     /// </summary>
     public static string Tokens(long tokens) => tokens switch

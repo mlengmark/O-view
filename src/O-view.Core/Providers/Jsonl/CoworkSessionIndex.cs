@@ -4,11 +4,11 @@ namespace OView.Core.Providers.Jsonl;
 /// Which transcripts Cowork wrote, according to Cowork (GitHub issue #218).
 ///
 /// <para><b>The problem this exists to fix.</b> Ingestion labelled a record by <i>which locator
-/// found the file</i> — anything under <c>~/.claude/projects</c> was "Claude Code", anything
+/// found the file</i>, anything under <c>~/.claude/projects</c> was "Claude Code", anything
 /// named <c>audit.jsonl</c> was "Cowork". That was true when it was written and is not true now:
 /// Cowork runs its sessions through Claude Code and its transcripts land in the Claude Code
-/// location. Measured on the development machine, <b>28 of 30 transcripts there — 107.7 MB of
-/// 107.9 MB — belong to registered Cowork sessions</b>, and the support bundle reported
+/// location. Measured on the development machine, <b>28 of 30 transcripts there, 107.7 MB of
+/// 107.9 MB, belong to registered Cowork sessions</b>, and the support bundle reported
 /// <c>Cowork: 0 rows</c> on a machine where Cowork was essentially the only source. A label
 /// derived from a path is a statement about where a file is, dressed up as a statement about
 /// what wrote it.</para>
@@ -27,7 +27,7 @@ namespace OView.Core.Providers.Jsonl;
 ///
 /// <para><b>It relabels nothing already stored.</b> A row carries the source it was ingested
 /// under, and transcripts already consumed are never re-read, so history keeps whatever label it
-/// was given. The breakdown corrects itself as new records arrive rather than retroactively —
+/// was given. The breakdown corrects itself as new records arrive rather than retroactively,
 /// which is the honest behaviour, since rewriting the past would require re-reading every
 /// transcript to establish what it should have said.</para>
 /// </summary>
@@ -50,14 +50,14 @@ public sealed class CoworkSessionIndex
 
     /// <param name="roots">
     /// The <c>claude-code-sessions</c> directories to read. An empty list indexes nothing and
-    /// reclassifies nothing — stated rather than defaulted, so a caller that does not name a
+    /// reclassifies nothing, stated rather than defaulted, so a caller that does not name a
     /// registry cannot silently pick up this developer's own (the hazard of issue #212).
     /// </param>
     public CoworkSessionIndex(IReadOnlyList<string> roots) => _roots = roots;
 
 
     /// <summary>
-    /// Session ids Cowork has registered — that is, the file names its transcripts are written
+    /// Session ids Cowork has registered, that is, the file names its transcripts are written
     /// under. Case-insensitive, because it is compared against file names.
     /// </summary>
     public IReadOnlySet<string> SessionIds => _ids;

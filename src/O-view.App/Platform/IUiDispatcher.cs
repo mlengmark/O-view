@@ -4,7 +4,7 @@ namespace OView.App.Platform;
 /// Hands a piece of work back to the thread the head draws on.
 ///
 /// <para><b>Why the engine needs one.</b> A poll is file discovery, JSON parsing and SQLite
-/// writes, and its cost scales with the size of the user's transcript history — the first
+/// writes, and its cost scales with the size of the user's transcript history, the first
 /// machine to arrive with 563 MB of it spent that whole ingest with a frozen tray icon and
 /// an unresponsive menu, because the poll ran on the dispatcher (issue #125). So the read
 /// moves to the thread pool, and this is how the result comes home.</para>
@@ -12,7 +12,7 @@ namespace OView.App.Platform;
 /// <para><b>It is not optional dressing on the timers.</b> <see cref="ITimerFactory"/>
 /// already exists so ticks <i>arrive</i> on the UI thread; this exists so results
 /// <i>return</i> to it. Both heads wire their event handlers straight to the engine's
-/// events and touch UI from them — <c>TrayController.Render</c> is a direct subscriber —
+/// events and touch UI from them, <c>TrayController.Render</c> is a direct subscriber,
 /// so anything raised off the UI thread would be a thread-affinity violation at best and a
 /// silent corruption at worst.</para>
 ///

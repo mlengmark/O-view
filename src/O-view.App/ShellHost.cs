@@ -8,13 +8,13 @@ namespace OView.App;
 /// the hop that puts every push to the skin on the skin's own thread.
 ///
 /// <para>A skin asks through <see cref="ISkinToShell"/> and is told through
-/// <see cref="IShellToSkin"/>, so what the shell is made of — the engine, its providers, its
-/// timers — stays the shell's business and no skin names any of it (ADR-0012,
+/// <see cref="IShellToSkin"/>, so what the shell is made of, the engine, its providers, its
+/// timers, stays the shell's business and no skin names any of it (ADR-0012,
 /// docs/architecture.md).</para>
 ///
 /// <para><b>Every push goes through the dispatcher, including the ones that already arrive on
 /// the UI thread.</b> A skin that may assume the UI thread on three callbacks and has to check
-/// on the fourth is the thread-affinity bug waiting to be written — and both skins touch their
+/// on the fourth is the thread-affinity bug waiting to be written, and both skins touch their
 /// tray icon straight from these calls. One rule for all four is the only one a skin can
 /// actually rely on (issue #125).</para>
 /// </summary>
@@ -24,7 +24,7 @@ public sealed class ShellHost : IDisposable
     private readonly IShellToSkin _skin;
     private readonly IUiDispatcher _dispatcher;
 
-    /// <param name="options">What the engine is composed of — the shell's own business.</param>
+    /// <param name="options">What the engine is composed of, the shell's own business.</param>
     /// <param name="dispatcher">
     /// The skin's thread. Construct this on that thread: the WPF implementation captures the
     /// dispatcher it is created on.
@@ -74,7 +74,7 @@ public sealed class ShellHost : IDisposable
     private void PostRateCheckDue() => _dispatcher.Post(_skin.RateCheckDue);
 
     /// <summary>
-    /// Stops every timer and closes the rollup store. The four handlers go with the engine —
+    /// Stops every timer and closes the rollup store. The four handlers go with the engine,
     /// nothing outside this class holds them.
     /// </summary>
     public void Dispose() => _engine.Dispose();

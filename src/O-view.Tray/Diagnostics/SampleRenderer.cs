@@ -29,7 +29,7 @@ namespace OView.Tray.Diagnostics;
 /// menu through repeated open/activate/close cycles.
 ///
 /// <para>All of this used to live in <c>App</c>, where it was roughly 560 of that class's
-/// 1,295 lines — tooling compiled into every shipped build and sitting on top of the
+/// 1,295 lines, tooling compiled into every shipped build and sitting on top of the
 /// startup path, the tray wiring, the update flow and the off-plan watcher (GitHub issue
 /// #52). None of it runs in normal operation; each entry point is reached only by an
 /// explicit <c>--*-samples</c> or <c>--menu-check</c> argument.</para>
@@ -38,7 +38,7 @@ namespace OView.Tray.Diagnostics;
 /// <c>SavePng</c> (five verbatim copies) and <c>ComposeOnBackdrop</c> (two). The backdrop
 /// colours were hard-coded literals restating values <see cref="PanelTheme"/> already
 /// owns, so a palette change would have silently stopped the verification images matching
-/// what ships — which defeats the point of having them. They resolve from the theme now.</para>
+/// what ships, which defeats the point of having them. They resolve from the theme now.</para>
 /// </summary>
 internal static class SampleRenderer
 {
@@ -129,7 +129,7 @@ internal static class SampleRenderer
     /// <summary>
     /// Renders the tray-menu flyout in both themes, with the toggles on and off, over a
     /// desktop-ish backdrop so the rounded card and its border are actually visible
-    /// (issue #33). Visual verification only — nothing here runs in normal operation.
+    /// (issue #33). Visual verification only, nothing here runs in normal operation.
     /// </summary>
     public static void RenderMenuSamples(string dir)
     {
@@ -153,14 +153,14 @@ internal static class SampleRenderer
             ("threshold-open-90", State(true, true, 90), true),
             ("threshold-90", State(true, true, 90), false),
             // A hand-edited settings.json value that is none of the three offered. It must
-            // render honestly rather than snap to the nearest option — TraySettings accepts
+            // render honestly rather than snap to the nearest option, TraySettings accepts
             // any 1-100 value, and a pill reading "80%" over a stored 75 would be the menu
             // asserting something untrue about the machine.
             ("threshold-unlisted-75", State(true, true, 75), true),
 
             // The automatic-update row (issue #140), in all three states it can be in. The
             // third is the one worth a sample: a build that cannot self-install must drop the
-            // row entirely, leaving no gap under "Run at startup" — and "a row that is not
+            // row entirely, leaving no gap under "Run at startup", and "a row that is not
             // there" is precisely what no assertion elsewhere looks at.
             ("update-auto-on", State(true, true, 70, auto: true), false),
             ("update-auto-off", State(true, true, 70), false),
@@ -185,8 +185,8 @@ internal static class SampleRenderer
 
     /// <summary>
     /// Renders the stat tiles across the model counts that change the chart's shape,
-    /// in both themes and both views (issue #37). The cases that matter — a folded
-    /// "Other", an unpriced model — are ones a given machine's real data may never
+    /// in both themes and both views (issue #37). The cases that matter, a folded
+    /// "Other", an unpriced model, are ones a given machine's real data may never
     /// produce, so they are constructed rather than waited for.
     /// </summary>
     public static void RenderTileSamples(string dir)
@@ -204,7 +204,7 @@ internal static class SampleRenderer
         // the reported case: "today" contains ONLY Opus 5, which used to make Opus 5 the
         // first segment there and therefore blue, while the 31-day tile ranked Opus 4.8
         // first and painted Opus 5 orange. One colour order, derived from the window,
-        // is what stops that — so the samples share one, exactly as the panel does.
+        // is what stops that, so the samples share one, exactly as the panel does.
         ModelSlice[] window =
         [
             S("claude-opus-4-8", 350_000_000, 250.00m),
@@ -216,8 +216,8 @@ internal static class SampleRenderer
 
         var cases = new (string Name, ModelSlice[] Slices)[]
         {
-            ("today — Opus 5 only (was blue here, orange below)", [S("claude-opus-5", 155_400_000, 91.44m)]),
-            ("31 days — all four models", window),
+            ("today, Opus 5 only (was blue here, orange below)", [S("claude-opus-5", 155_400_000, 91.44m)]),
+            ("31 days, all four models", window),
             ("two of the window's models", [window[0], window[2]]),
             ("three models, no remainder", [.. window.Take(3)]),
             ("unpriced model present",
@@ -276,7 +276,7 @@ internal static class SampleRenderer
 
                 // Only now: the breakdown resolves its series colours through the
                 // logical tree, so a tile populated before it is parented and themed has
-                // nowhere to find them. The real panel gets this ordering for free — its
+                // nowhere to find them. The real panel gets this ordering for free, its
                 // tiles are declared in XAML and the theme is applied before Populate.
                 foreach (var (tile, view) in pending)
                 {
@@ -304,12 +304,12 @@ internal static class SampleRenderer
                         $"tiles-{(expanded ? "breakdown" : "summary")}-{(light ? "light" : "dark")}.png"));
 
                 // Hover timing cannot be seen in a still, and the part that can silently
-                // break is the inheritance from the control down to the segments — a
+                // break is the inheritance from the control down to the segments, a
                 // segment that missed it would fall back to WPF's defaults and look
                 // identical. Report the resolved values so they are checked, not assumed.
                 if (expanded && pending.FirstOrDefault().Tile?.ResolvedHoverTiming() is { } timing)
                 {
-                    // Intended values only — no "framework default" annotations. The
+                    // Intended values only, no "framework default" annotations. The
                     // unset baseline measured on the dev machine (1000 / 100 /
                     // int.MaxValue) did not match the documented defaults, so printing
                     // documented figures beside measured ones would assert something
@@ -325,7 +325,7 @@ internal static class SampleRenderer
     }
 
     /// <summary>
-    /// Renders the update dialog in both themes and both variants — the installed path
+    /// Renders the update dialog in both themes and both variants, the installed path
     /// ("Update now", with the relaunch note) and the portable one ("Open page").
     /// </summary>
     public static void RenderDialogSamples(string dir)
@@ -362,7 +362,7 @@ internal static class SampleRenderer
 
             // The weekly-reset entry (issue #186). Rendered because it is the first surface
             // in the app carrying input controls, and WPF's stock TextBox and ComboBox come
-            // with system chrome that no unit test can see — a white field on a dark panel
+            // with system chrome that no unit test can see, a white field on a dark panel
             // looks like a different program and is invisible in the source.
             foreach (var (name, entry, error) in new (string, ManualWeeklyReset?, string?)[]
                      {
@@ -381,7 +381,7 @@ internal static class SampleRenderer
 
     /// <summary>
     /// Renders the hover cards to their own PNG. They need their own pass because a
-    /// ToolTip cannot be given a parent — it throws — so it can neither be laid out
+    /// ToolTip cannot be given a parent, it throws, so it can neither be laid out
     /// inside the sample panel nor appear in a screenshot of the panel itself. Measured,
     /// arranged and rendered standalone instead, with the palette written into each
     /// card's own resources so its DynamicResource lookups resolve without a tree above
@@ -480,7 +480,7 @@ internal static class SampleRenderer
     /// <summary>
     /// Composites a transparent-cornered card over a flat backdrop, so its corner radius
     /// and border read the way they will on screen. Existed twice, identically bar the
-    /// variable names — the menu and dialog samples.
+    /// variable names, the menu and dialog samples.
     ///
     /// <para>The backdrop is a desktop stand-in rather than a panel surface, so it is one
     /// step outside the palette in each theme: light greys down, dark greys up. Taken from
@@ -509,14 +509,14 @@ internal static class SampleRenderer
     /// <para>Motion is the one thing an offscreen render cannot show: <c>--popup-samples</c>
     /// freezes one mid-fold frame, which proves the geometry clips correctly and says nothing
     /// about whether the transition <i>runs</i>. What can go wrong here is not a wrong pixel,
-    /// it is a missed completion — this app has shipped one, and the symptom was a surface
+    /// it is a missed completion, this app has shipped one, and the symptom was a surface
     /// left visible at zero opacity with a dead tray icon (<see cref="FlyoutAnimation"/>).
     /// The fold's equivalent is a body pinned at whatever height the animation stopped on,
     /// no longer growing with its own content, and a <c>SizeChanged</c> handler re-docking
     /// the window for the rest of the session.</para>
     ///
     /// <para>So the trace records, every 40 ms: the body's height, the window's height, and
-    /// the window's <b>bottom edge</b>. Three claims are readable from it — the height moves
+    /// the window's <b>bottom edge</b>. Three claims are readable from it, the height moves
     /// through intermediate values rather than jumping, the bottom edge does not move while
     /// it does (the fold grows upward out of the docked corner), and both ends settle back
     /// to a self-sizing body. It is run twice, because the second fold is the one that
@@ -558,7 +558,7 @@ internal static class SampleRenderer
 
         // Sampled per rendered frame, not on a DispatcherTimer. The first attempt used a
         // 40 ms timer and produced a trace showing the fold already finished at its first
-        // sample — a timer competing with the layout passes the fold itself causes drifts
+        // sample, a timer competing with the layout passes the fold itself causes drifts
         // exactly when there is something to measure, which is the one moment it must not.
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var phase = Phase.WarmUp;
@@ -573,7 +573,7 @@ internal static class SampleRenderer
 
         // Re-entrancy guard, and it is not defensive programming: laying the panel out inside
         // a toggle raises Rendering again from within this handler, so the first version
-        // cascaded two phase changes in one frame — it folded twice where it meant to fold
+        // cascaded two phase changes in one frame, it folded twice where it meant to fold
         // once, and wrote a filmstrip labelled "expand" that shows a collapse. A trace that
         // mislabels what it recorded is worse than no trace.
         var folding = false;
@@ -601,7 +601,7 @@ internal static class SampleRenderer
             Record();
 
             // The screen, not the visual tree. What the numbers above cannot answer is whether
-            // any frame between them was ever WRONG — a window resized before it is re-docked
+            // any frame between them was ever WRONG, a window resized before it is re-docked
             // presents one frame in the taskbar, and an offscreen render of the same tree shows
             // a perfect panel. Grabbing the pixels the compositor actually put on the display
             // is the only instrument that sees it.
@@ -610,7 +610,7 @@ internal static class SampleRenderer
                 frames.Add((clock.ElapsedMilliseconds, Grab(capture)));
             }
 
-            // Each fold is given 400 ms — comfortably past the 191 ms expand and the 125 ms
+            // Each fold is given 400 ms, comfortably past the 191 ms expand and the 125 ms
             // collapse, so the settled state is part of every phase rather than assumed.
             if (clock.ElapsedMilliseconds < 400)
             {
@@ -671,7 +671,7 @@ internal static class SampleRenderer
         // The band that moves, not the whole panel: everything above the disclosure row is
         // 400 px of figures that only translate, and tiling eight copies of it costs the
         // resolution the fold itself needs to be judged at. The row's own screen position is
-        // taken from the OPEN panel, and the band runs from there to below the docked edge —
+        // taken from the OPEN panel, and the band runs from there to below the docked edge,
         // so it holds the fold at full extent and shows the taskbar the panel must never
         // cross.
         var left = (window.Left - margin) * scale;
@@ -742,11 +742,11 @@ internal static class SampleRenderer
     /// <summary>
     /// Exercises every menu row the way a user does, repeatedly: open the flyout, activate a
     /// row, let it close, open it again. A single activation of a single row can never catch
-    /// this class of fault — the flyout carries state across opens (`_closing`, `_closedAt`)
+    /// this class of fault, the flyout carries state across opens (`_closing`, `_closedAt`)
     /// and it is the SECOND and third cycles that expose it, exactly as `--toggle-check`
     /// exists because the panel's toggle only broke on the second open.
     ///
-    /// Handlers here only record. The point is the plumbing from a row to its event — running
+    /// Handlers here only record. The point is the plumbing from a row to its event, running
     /// the real actions would exit the app halfway through and download an installer.
     /// </summary>
     public static void RunMenuCheck(string path, Action shutdown)
@@ -770,7 +770,7 @@ internal static class SampleRenderer
 
         // Every open re-populates from these, so each cycle starts from every tick ON and a
         // toggle within the cycle must flip its row to OFF. canAuto is forced true so the
-        // automatic-update row is present to be toggled whatever this build actually is —
+        // automatic-update row is present to be toggled whatever this build actually is,
         // the check is exercising the row, not the install policy.
         void Open() => menu.ShowDocked(new MenuWindow.MenuState(
             RunAtStartup: true,
@@ -790,14 +790,14 @@ internal static class SampleRenderer
                               $"threshold=[{menu.ThresholdLabel,-4} open {menu.ThresholdOptionsOpen,-5}] " +
                               $"fired=[diag {fired["diagnostics"]}, upd {fired["updates"]}, exit {fired["exit"]}]");
 
-        // A toggle row renders what its setter RETURNS, not what was requested — the whole
+        // A toggle row renders what its setter RETURNS, not what was requested, the whole
         // point being that a failed registry write must not draw a tick that lies about the
         // machine. Nothing verified the tick actually followed, so verify it: with identity
         // setters here, a toggle that leaves its row unchanged means the plumbing from the
         // row through the setter to the glyph is broken.
         //
         // Checked on the FOLLOWING step, not inline. InvokeRow goes through the button's
-        // automation peer, which raises Click on a later dispatcher turn — so the tick has
+        // automation peer, which raises Click on a later dispatcher turn, so the tick has
         // not moved by the time InvokeRow returns, and comparing immediately reports every
         // toggle as broken. (It did: the first version of this counter said 0 of 6 while
         // the recorded tick states plainly showed all six flipping.)
@@ -811,7 +811,7 @@ internal static class SampleRenderer
         // phase began. It sometimes is not: the flyout takes the foreground on Show, and on the
         // first cycle of a freshly launched process something else occasionally still holds it,
         // so the window is deactivated and dismisses itself before these steps run. That is the
-        // condition issue #11 is about and it is not what this counter is measuring — counting
+        // condition issue #11 is about and it is not what this counter is measuring, counting
         // it as a failure would make the check fail for a reason unrelated to the selector.
         // Skipped cycles are reported rather than quietly dropped.
         var thresholdAttempts = 0;
@@ -844,7 +844,7 @@ internal static class SampleRenderer
             menu.InvokeRow(row);
         }
 
-        // Each action row, three times over, with a full open/close cycle between — plus the
+        // Each action row, three times over, with a full open/close cycle between, plus the
         // toggle rows, which must NOT close the flyout, and a click-away dismissal.
         var steps = new List<(string Label, Action Do)>();
         for (var cycle = 1; cycle <= 3; cycle++)
@@ -866,7 +866,7 @@ internal static class SampleRenderer
             // The threshold selector (issue #141). Three properties that a still cannot show
             // and a single activation cannot catch: the pill opens the list, choosing a value
             // closes it and moves the label, and NEITHER action dismisses the flyout or
-            // flips the Notify tick — the pill is nested inside the Notify row, so a click
+            // flips the Notify tick, the pill is nested inside the Notify row, so a click
             // that failed to mark itself handled would silently switch notifications off.
             //
             // Checked on the FOLLOWING step for the same reason the toggles are: InvokeButton
@@ -895,7 +895,7 @@ internal static class SampleRenderer
 
                 // The expanded card must be fully drawn, not just logically expanded. The open
                 // transition clips the content to the size it had when the flyout opened, and
-                // growing it left the rows below that line sliced off — with every logical
+                // growing it left the rows below that line sliced off, with every logical
                 // assertion above still passing.
                 if (thresholdCycleUsable && menu.ContentFullyDrawn)
                 {
@@ -938,7 +938,7 @@ internal static class SampleRenderer
                 report.AppendLine($"toggles that moved their tick       : {toggleFlips} of {toggleAttempts} expected");
                 report.AppendLine($"pill opened the list, flyout alive  : {listOpened} of {thresholdAttempts} expected"
                                   + (thresholdSkipped > 0
-                                      ? $"  ({thresholdSkipped} cycle(s) skipped — flyout was not open, see #11)"
+                                      ? $"  ({thresholdSkipped} cycle(s) skipped, flyout was not open, see #11)"
                                       : ""));
                 report.AppendLine($"choice applied, list closed, tick   : {choiceApplied} of {thresholdAttempts} expected");
                 report.AppendLine($"card fully drawn while expanded     : {drawnWhileExpanded} of {thresholdAttempts} expected");

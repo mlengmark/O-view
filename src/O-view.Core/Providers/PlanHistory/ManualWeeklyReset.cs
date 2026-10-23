@@ -10,17 +10,17 @@ namespace OView.Core.Providers.PlanHistory;
 /// exception, and it inverts for a specific reason: Anthropic documents the weekly reset as
 /// "a fixed time each week that is <b>assigned to your account</b>", whose "reset day and
 /// time stay the same regardless of when you start using Claude". So the user is not
-/// guessing — they are reading the authoritative source directly, while O-view is inferring
+/// guessing, they are reading the authoritative source directly, while O-view is inferring
 /// it from when a percentage happened to fall between two samples.</para>
 ///
 /// <para>And that inference is weak in a way that does not improve on its own. The drop lands
-/// while Desktop is closed for the night, so the bracket is the whole overnight gap —
+/// while Desktop is closed for the night, so the bracket is the whole overnight gap,
 /// measured at ~10 hours on the development machine, leaving the derived answer 9h29m from
 /// Desktop's. A number the user can read in five seconds beats one O-view needs weeks to get
 /// within half a day of.</para>
 ///
 /// <para><b>It is still not unfalsifiable.</b> An observed bracket that excludes this time is
-/// proof it is wrong — the reset demonstrably happened inside that bracket, so it cannot also
+/// proof it is wrong, the reset demonstrably happened inside that bracket, so it cannot also
 /// have happened outside it. See <see cref="IsContradictedBy"/>: entry wins over inference,
 /// never over evidence.</para>
 /// </summary>
@@ -35,7 +35,7 @@ public sealed record ManualWeeklyReset(DayOfWeek Day, TimeOnly LocalTime)
     /// entry being wrong: a daylight-saving transition between the observation and now,
     /// Desktop's ~15-minute sampling, and a user who typed the minute they saw rounded. A
     /// contradiction has to be larger than the noise before it is worth telling anyone
-    /// about — a false alarm here trains people to ignore the real one.</para>
+    /// about, a false alarm here trains people to ignore the real one.</para>
     /// </summary>
     public static readonly TimeSpan ContradictionSlack = TimeSpan.FromHours(2);
 
@@ -44,7 +44,7 @@ public sealed record ManualWeeklyReset(DayOfWeek Day, TimeOnly LocalTime)
     ///
     /// <para>Stored as text rather than as a serialised <see cref="DayOfWeek"/> so a settings
     /// file remains legible and an enum's ordinal can never silently shift meaning. Invalid
-    /// input yields "not set" rather than throwing — a corrupt preference must never stop the
+    /// input yields "not set" rather than throwing, a corrupt preference must never stop the
     /// panel opening.</para>
     /// </summary>
     public static ManualWeeklyReset? Parse(string? day, string? time)
@@ -104,15 +104,15 @@ public sealed record ManualWeeklyReset(DayOfWeek Day, TimeOnly LocalTime)
     /// <summary>
     /// Whether the reset instant Claude reported proves this entry wrong.
     ///
-    /// <para>This used to take an <c>observation</c> — a bracket derived from a drop in Claude
+    /// <para>This used to take an <c>observation</c>, a bracket derived from a drop in Claude
     /// Desktop's sampled series, which said only that the reset fell <i>somewhere inside</i> a
     /// window that was routinely ten hours wide. ADR-0014 replaced that with the instant Claude
     /// reports outright, so the comparison is now exact on both sides: the entry either lands on
     /// the same weekly grid as the anchor or it does not.</para>
     ///
     /// <para><see cref="ContradictionSlack"/> still applies, because the two are expressed
-    /// differently — the entry is a local wall-clock day and time, the anchor a UTC instant with
-    /// sub-second precision — and a difference of a minute or two is transcription, not
+    /// differently, the entry is a local wall-clock day and time, the anchor a UTC instant with
+    /// sub-second precision, and a difference of a minute or two is transcription, not
     /// disagreement.</para>
     /// </summary>
     public bool IsContradictedBy(DateTimeOffset anchorUtc, TimeZoneInfo local)

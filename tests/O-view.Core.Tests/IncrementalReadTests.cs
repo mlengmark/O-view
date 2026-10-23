@@ -8,7 +8,7 @@ namespace OView.Core.Tests;
 
 /// <summary>
 /// Incremental reads are an optimisation over an idempotent store, so a bug here
-/// does not throw — it silently loses or double-counts records. These pin the
+/// does not throw, it silently loses or double-counts records. These pin the
 /// resumption boundary.
 /// </summary>
 public class IncrementalReadTests : IDisposable
@@ -94,7 +94,7 @@ public class IncrementalReadTests : IDisposable
     {
         // Offsets are byte-based; UTF-8 content must not shift the boundary.
         var path = Path.Combine(_dir, "s.jsonl");
-        var withUnicode = "{\"type\":\"user\",\"content\":\"café — 日本語 🎉\"}";
+        var withUnicode = "{\"type\":\"user\",\"content\":\"café, 日本語 🎉\"}";
         File.WriteAllText(path, withUnicode + "\n" + Line("req_A", 10) + "\n", new UTF8Encoding(false));
 
         var (first, offset) = TranscriptReader.ReadFrom(path, 0);
@@ -117,7 +117,7 @@ public class IncrementalReadTests : IDisposable
         File.WriteAllText(path, Line("req_A", 10) + "\n" + Line("req_B", 20) + "\n");
 
         using var incremental = new RollupStore(Path.Combine(_dir, "inc.db"));
-        // No Cowork roots — this test measures the projects root only, and a machine
+        // No Cowork roots, this test measures the projects root only, and a machine
         // default here would pull in the developer's real Cowork history.
         var provider = new JsonlUsageProvider(incremental, Path.Combine(_dir, "projects"), []);
         provider.GetSnapshot(DateTimeOffset.UtcNow);

@@ -6,7 +6,7 @@ namespace OView.Core.Models;
 /// <para>The panel's explanatory copy tells a stuck user what to do next, and until v0.6.0
 /// that instruction was hard-coded as <c>"Right-click the tray icon → Copy diagnostics"</c>
 /// in five places. On Linux the tray menu carries <b>Exit only</b>, so every one of those
-/// sentences directed the reader at a menu item that is not there — a claim about the user's
+/// sentences directed the reader at a menu item that is not there, a claim about the user's
 /// machine that O-view had not verified, which is CLAUDE.md rule 6 in the one place the app
 /// is supposed to be at its most careful: the copy shown when something is already
 /// wrong.</para>
@@ -22,7 +22,7 @@ namespace OView.Core.Models;
 /// </summary>
 public static class DiagnosticsHint
 {
-    /// <summary>Correct anywhere, specific nowhere — the safe fallback.</summary>
+    /// <summary>Correct anywhere, specific nowhere, the safe fallback.</summary>
     public const string Default = "Produce an O-view diagnostics report";
 
     /// <summary>

@@ -66,7 +66,7 @@ public class IngestAuditTests : IDisposable
     /// <summary>
     /// <b>The measurement issue #218 needs.</b> A surface whose transcripts are on disk and
     /// whose requests are not in the ledger is reported as missing, with the tokens that go with
-    /// them — and it works on a store carrying no attribution at all, which is every install
+    /// them, and it works on a store carrying no attribution at all, which is every install
     /// that predates the source column.
     /// </summary>
     [Fact]
@@ -76,7 +76,7 @@ public class IngestAuditTests : IDisposable
             ClaudeCodeRecord("cc-1") + "\n",
             CoworkRecord("cw-1") + "\n" + CoworkRecord("cw-2") + "\n");
 
-        // Only Claude Code is ingested. Cowork's transcripts sit on disk, unread — the exact
+        // Only Claude Code is ingested. Cowork's transcripts sit on disk, unread, the exact
         // state the bundle could not previously distinguish from Cowork being counted.
         using (var store = new RollupStore(DbPath))
         {
@@ -101,7 +101,7 @@ public class IngestAuditTests : IDisposable
         Assert.Contains("MISSING", audit.ToClipboardText(), StringComparison.Ordinal);
     }
 
-    /// <summary>Everything ingested reconciles exactly — the case that must not cry wolf.</summary>
+    /// <summary>Everything ingested reconciles exactly, the case that must not cry wolf.</summary>
     [Fact]
     public void AFullyIngestedMachineReportsNothingMissing()
     {

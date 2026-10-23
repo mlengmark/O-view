@@ -15,7 +15,7 @@ public sealed record RateDelta(string Model, string Column, decimal Ours, decima
 /// produce confident wrong money (GitHub issue #257).</para>
 ///
 /// <para>An empty <see cref="Differences"/> means the two agree. The check having failed is
-/// reported as <c>null</c> by the caller — an honest "did not check", never a silent pass.</para>
+/// reported as <c>null</c> by the caller, an honest "did not check", never a silent pass.</para>
 /// </summary>
 public sealed record RateCardDrift(DateOnly CheckedOn, IReadOnlyList<RateDelta> Differences)
 {
@@ -24,7 +24,7 @@ public sealed record RateCardDrift(DateOnly CheckedOn, IReadOnlyList<RateDelta> 
     /// <summary>One line for the log and the diagnostics bundle.</summary>
     public string Describe() => Agrees
         ? $"rate check {CheckedOn:yyyy-MM-dd}: published table agrees"
-        : $"rate check {CheckedOn:yyyy-MM-dd}: {Differences.Count} difference(s) — "
+        : $"rate check {CheckedOn:yyyy-MM-dd}: {Differences.Count} difference(s), "
           + string.Join("; ", Differences.Select(d =>
               string.Create(CultureInfo.InvariantCulture,
                   $"{d.Model} {d.Column} ours ${d.Ours} published ${d.Published}")));
@@ -52,18 +52,18 @@ public static class PublishedRates
     ///
     /// <para><b>Null rather than a partial answer.</b> A table that parsed to two rows out of
     /// fifteen would report thirteen models as "not published" and read as a wholesale price
-    /// change. The floor is deliberately crude — a header naming the five columns, and at
-    /// least one model row — because the failure being guarded against is the page's shape
+    /// change. The floor is deliberately crude, a header naming the five columns, and at
+    /// least one model row, because the failure being guarded against is the page's shape
     /// changing, not a single row going missing.</para>
     ///
     /// <para>A model in the card that the page does not list is <b>not</b> a difference. The
     /// published table names models by display name and this matches on that, so a rename
     /// upstream must read as "could not check that row" rather than as a price change. But
-    /// <b>no</b> model matching is a failed check rather than an agreement — see below.</para>
+    /// <b>no</b> model matching is a failed check rather than an agreement, see below.</para>
     ///
     /// <para><b>Two blind spots, both deliberate and neither reported.</b> Matching on display
     /// name means the one <c>claude-sonnet-4</c> row covering Sonnet 4, 4.5 and 4.6 is only ever
-    /// checked against whichever row the page calls "Sonnet 4" — the check is blind exactly where
+    /// checked against whichever row the page calls "Sonnet 4", the check is blind exactly where
     /// the prefix collision is. And the fast-mode rates are never compared at all, because
     /// <see cref="ParseTable"/> skips that table by design. Both would need the card to carry the
     /// page's own model ids to fix, which is a larger change than this check is worth.</para>
@@ -95,7 +95,7 @@ public static class PublishedRates
 
         // Not one model name matched, so the comparison compared nothing. Returning an empty
         // difference list here would log "published table agrees" on the strength of zero
-        // comparisons, and would go on doing so every week — the permanent silent pass this
+        // comparisons, and would go on doing so every week, the permanent silent pass this
         // check exists to prevent. The header parsing only proves the page still has a table
         // of that shape, not that it still names the models we hold.
         return matched > 0 ? new RateCardDrift(checkedOn, differences) : null;
@@ -113,8 +113,8 @@ public static class PublishedRates
     /// The model-pricing table, keyed by the display name the page uses, or null when no such
     /// table was found.
     ///
-    /// <para>The page carries several tables — batch pricing, fast mode, tool-use token counts
-    /// — with the same <c>| Model | … |</c> opening, so the header is matched on all five
+    /// <para>The page carries several tables, batch pricing, fast mode, tool-use token counts,
+    /// with the same <c>| Model | … |</c> opening, so the header is matched on all five
     /// column names rather than on the first pipe row. Rows stop at the first line that is not
     /// a table row, which is what keeps a later table from being read as more of this one.</para>
     /// </summary>

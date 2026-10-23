@@ -12,7 +12,7 @@ namespace OView.App.Tests;
 ///
 /// <para>The reported panel, reconstructed from the machine that produced it. Claude Desktop
 /// samples every 15 minutes, the divergence window is anchored on the first sample of the new
-/// window, and the user had run 56.6K output tokens since — so the series was <c>[5]</c>, the
+/// window, and the user had run 56.6K output tokens since, so the series was <c>[5]</c>, the
 /// rise was <c>5 - 5</c>, and the banner announced that a meter which had in fact gone 5% → 24%
 /// had not moved.</para>
 /// </summary>
@@ -39,7 +39,7 @@ public class OffPlanWindowTests
     /// The half that makes the reading right rather than merely quiet. Claude Code's cached
     /// figure was six minutes newer than Desktop's and O-view was already displaying it in the
     /// gauge above the banner; folded into the series it supplies the second point, and the
-    /// window reads as what it was — 19 points of ordinary plan usage.
+    /// window reads as what it was, 19 points of ordinary plan usage.
     /// </summary>
     [Fact]
     public void TheReportedReading_SuppliesTheSecondPoint()
@@ -54,7 +54,7 @@ public class OffPlanWindowTests
 
     /// <summary>
     /// The detector must not have been talked out of its job. Same one-sample window, same
-    /// volume, but Claude Code agrees the meter has not moved — two points, both flat, and the
+    /// volume, but Claude Code agrees the meter has not moved, two points, both flat, and the
     /// verdict stands.
     /// </summary>
     [Fact]
@@ -99,7 +99,7 @@ public class OffPlanWindowTests
     /// <summary>
     /// The window that reset while Desktop was closed: a run of zeros, then first use. That
     /// shape is what <c>ResetDetector</c> reads as a boundary, and it puts the window start at
-    /// the rise — leaving one sample inside it.
+    /// the rise, leaving one sample inside it.
     /// </summary>
     private static string WritePlanHistory(TempDir dir)
     {
@@ -119,7 +119,7 @@ public class OffPlanWindowTests
     }
 
     /// <summary>
-    /// 56.6K output tokens inside the window — past <c>DefaultMinOutputTokens</c>, which is
+    /// 56.6K output tokens inside the window, past <c>DefaultMinOutputTokens</c>, which is
     /// what made the one-sample series worth an opinion at all.
     /// </summary>
     private static void SeedHeavyWindow(string dbPath)
@@ -132,7 +132,7 @@ public class OffPlanWindowTests
         ]);
     }
 
-    /// <summary>Claude Code's cached block, read a minute ago — newer than Desktop's sample.</summary>
+    /// <summary>Claude Code's cached block, read a minute ago, newer than Desktop's sample.</summary>
     private static CachedUtilization Block(int fiveHourPercent) =>
         new(T0.AddMinutes(-1), null, new UtilizationBar(fiveHourPercent, T0.AddHours(4)), null);
 }

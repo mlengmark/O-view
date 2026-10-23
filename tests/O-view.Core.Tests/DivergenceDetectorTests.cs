@@ -13,8 +13,8 @@ public class DivergenceDetectorTests
     // ── the meter has to be reporting before a flat meter means anything ───────
 
     /// <summary>
-    /// Reported 2026-08-24. Claude Desktop had not sampled for 81 minutes — it was closed,
-    /// and the user was working entirely in Claude Code — so the series was flat for a reason
+    /// Reported 2026-08-24. Claude Desktop had not sampled for 81 minutes, it was closed,
+    /// and the user was working entirely in Claude Code, so the series was flat for a reason
     /// that has nothing to do with billing. The panel told them their usage was not drawing
     /// from their plan and named extra-usage credits, which their account had switched off.
     /// </summary>
@@ -35,7 +35,7 @@ public class DivergenceDetectorTests
 
     /// <summary>
     /// The gate is the Live/Stale bound, so a meter one tick inside it is still evidence.
-    /// Pinned in both directions — a gate that silently swallowed the real case would look
+    /// Pinned in both directions, a gate that silently swallowed the real case would look
     /// exactly like a fixed false alarm.
     /// </summary>
     [Fact]
@@ -93,7 +93,7 @@ public class DivergenceDetectorTests
     [Fact]
     public void LightActivityWithFlatMeter_IsNotFlagged()
     {
-        // ~4K tokens is well under one percentage point at the observed median —
+        // ~4K tokens is well under one percentage point at the observed median,
         // a flat meter here is rounding, not divergence.
         var result = DivergenceDetector.Evaluate([12, 12, 12], outputTokensInWindow: 4_000, meterAge: LiveMeter);
 
@@ -112,7 +112,7 @@ public class DivergenceDetectorTests
     [Fact]
     public void SinglePointRise_IsToleratedAsRounding()
     {
-        // One point over a heavy window is still effectively flat — but the volume
+        // One point over a heavy window is still effectively flat, but the volume
         // means we should not claim consistency either; the tolerance treats it as
         // flat, which is the safe direction for a heavy window.
         var result = DivergenceDetector.Evaluate([6, 6, 7], outputTokensInWindow: 60_000, meterAge: LiveMeter);
@@ -141,7 +141,7 @@ public class DivergenceDetectorTests
     [Fact]
     public void ClimbingToLimit_ReportsLimitReached_NotConsistent()
     {
-        // Rose legitimately but has now hit the ceiling — further work bills elsewhere.
+        // Rose legitimately but has now hit the ceiling, further work bills elsewhere.
         var result = DivergenceDetector.Evaluate([80, 90, 99], outputTokensInWindow: 60_000, meterAge: LiveMeter);
 
         Assert.Equal(DivergenceState.PlanLimitReached, result.State);
@@ -161,7 +161,7 @@ public class DivergenceDetectorTests
 
     /// <summary>
     /// Reported 2026-09-01 on 0.9.1 (issue #268). The five-hour window had opened minutes
-    /// earlier, so plan history held exactly one sample of it — <c>[5]</c> — and
+    /// earlier, so plan history held exactly one sample of it, <c>[5]</c>, and
     /// <c>percents[^1] - percents[0]</c> was 0 because it is the same number twice. The panel
     /// announced that 56.6K output tokens had moved the meter 0 points, on an account with
     /// extra usage switched off, while Claude Code's own reading six minutes newer said 24%.

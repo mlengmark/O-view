@@ -8,12 +8,12 @@ namespace OView.Core.Updates;
 ///
 /// <para><b>Why this is its own decision.</b> <c>ReleaseFeed</c> used to call
 /// <c>EnsureSuccessStatusCode()</c> and catch the exception, so a throttle and a dead network
-/// produced the same <see cref="UpdateOutcome.Unknown"/> — and the throttle then retried
+/// produced the same <see cref="UpdateOutcome.Unknown"/>, and the throttle then retried
 /// straight back into the limit, forever (GitHub issue #176). Telling them apart needs the
 /// status code <i>and</i> the headers, which is a rule, not a line.</para>
 ///
 /// <para><b>Not every 403 is a throttle.</b> GitHub returns 403 for several reasons, so the
-/// headers have to agree before this claims a rate limit — otherwise a genuinely broken
+/// headers have to agree before this claims a rate limit, otherwise a genuinely broken
 /// request would be excused as "try again in an hour" and never investigated.</para>
 /// </summary>
 public static class RateLimitResponse
@@ -32,8 +32,8 @@ public static class RateLimitResponse
     /// </summary>
     /// <param name="statusCode">The HTTP status.</param>
     /// <param name="rateLimitRemaining">Value of <c>x-ratelimit-remaining</c>, if present.</param>
-    /// <param name="rateLimitReset">Value of <c>x-ratelimit-reset</c> — <b>epoch seconds</b>, not a delta.</param>
-    /// <param name="retryAfter">Value of <c>retry-after</c> — <b>delta seconds</b>, not an instant.</param>
+    /// <param name="rateLimitReset">Value of <c>x-ratelimit-reset</c>, <b>epoch seconds</b>, not a delta.</param>
+    /// <param name="retryAfter">Value of <c>retry-after</c>, <b>delta seconds</b>, not an instant.</param>
     /// <param name="utcNow">Now, for turning a delta into an instant.</param>
     public static bool IsRateLimited(
         int statusCode,
@@ -65,8 +65,8 @@ public static class RateLimitResponse
         && value <= 0;
 
     /// <summary>
-    /// <c>x-ratelimit-reset</c> is Unix epoch seconds. Reading it as a delta — the mistake the
-    /// header name invites next to <c>retry-after</c> — would put the retry 56 years out.
+    /// <c>x-ratelimit-reset</c> is Unix epoch seconds. Reading it as a delta, the mistake the
+    /// header name invites next to <c>retry-after</c>, would put the retry 56 years out.
     /// </summary>
     private static DateTimeOffset? ResetInstant(string? reset, DateTimeOffset utcNow)
     {

@@ -5,7 +5,7 @@ namespace OView.Core.Tests;
 
 /// <summary>
 /// Whether extra usage (auto-billing) is switched on for the account, read from Claude Code's
-/// own cache — the field that decides whether O-view's off-plan banner may claim a charge at
+/// own cache, the field that decides whether O-view's off-plan banner may claim a charge at
 /// all (issue #259).
 ///
 /// <para><b>These fixtures are the real shape, measured 2026-09-01</b> on a <c>claude_pro</c>
@@ -59,7 +59,7 @@ public class ExtraUsageStatusTests
 
     /// <summary>
     /// <c>is_enabled</c> is the resolved answer and the only thing the state comes from. The
-    /// other three explain it — an account barred by policy is disabled without the person
+    /// other three explain it, an account barred by policy is disabled without the person
     /// having chosen it, and reading <c>user_disabled</c> as the answer would call that one
     /// enabled.
     /// </summary>
@@ -78,7 +78,7 @@ public class ExtraUsageStatusTests
 
     /// <summary>
     /// <c>spend_limit_reached</c> is carried, never branched on. It looks like a second off
-    /// switch for an enabled account whose cap is spent, and it may well be — but nothing has
+    /// switch for an enabled account whose cap is spent, and it may well be, but nothing has
     /// been observed with it true, so acting on it would be reasoning from a field name
     /// (rule 6). If an account is ever found in that state, this is the test to change.
     /// </summary>
@@ -108,7 +108,7 @@ public class ExtraUsageStatusTests
     public void AnythingElseIsUnknownRatherThanAGuess(string utilization) =>
         Assert.Equal(ExtraUsageState.Unknown, Read(utilization).State);
 
-    /// <summary>A <c>utilization</c> that is not an object at all — the block's own absence.</summary>
+    /// <summary>A <c>utilization</c> that is not an object at all, the block's own absence.</summary>
     [Fact]
     public void AMissingUtilizationObjectIsUnknown() =>
         Assert.Equal(ExtraUsageState.Unknown, ExtraUsageStatus.Read(default(JsonElement)).State);

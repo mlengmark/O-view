@@ -6,13 +6,13 @@ namespace OView.Linux.Tray;
 /// <summary>What the session bus says about a notification-area host.</summary>
 public enum TrayHostState
 {
-    /// <summary>A StatusNotifierWatcher owns its name — something is there to draw the icon.</summary>
+    /// <summary>A StatusNotifierWatcher owns its name, something is there to draw the icon.</summary>
     Present,
 
     /// <summary>No watcher on the bus. Stock GNOME, with no AppIndicator extension installed.</summary>
     Absent,
 
-    /// <summary>The bus could not be asked. Distinct from Absent — never claim more than was observed.</summary>
+    /// <summary>The bus could not be asked. Distinct from Absent, never claim more than was observed.</summary>
     Unknown,
 }
 
@@ -20,7 +20,7 @@ public enum TrayHostState
 /// Asks the session bus whether anything is there to display a tray icon.
 ///
 /// <para><b>Why this exists at all.</b> The spike measured that an Avalonia
-/// <c>TrayIcon</c> reports <c>IsVisible = true</c> whether or not a host exists — the app's
+/// <c>TrayIcon</c> reports <c>IsVisible = true</c> whether or not a host exists, the app's
 /// own output is identical either way. Stock Ubuntu ships GNOME, which provides no host, so
 /// trusting the toolkit means being silently invisible on the most likely Linux
 /// configuration. That is exactly what CLAUDE.md rule 6 forbids, and ADR-0013 decision 2
@@ -41,7 +41,7 @@ public sealed class SniHostProbe
     /// Whether a host is on the session bus right now.
     ///
     /// <para>Returns <see cref="TrayHostState.Unknown"/> rather than Absent when the bus
-    /// itself cannot be reached — "I could not ask" and "I asked and nothing was there" are
+    /// itself cannot be reached, "I could not ask" and "I asked and nothing was there" are
     /// different facts, and only one of them justifies telling the user to install an
     /// extension.</para>
     /// </summary>
@@ -64,7 +64,7 @@ public sealed class SniHostProbe
     }
 
     /// <summary>
-    /// Completes when a notification-area host owns the name — immediately if one already
+    /// Completes when a notification-area host owns the name, immediately if one already
     /// does. The Linux equivalent of Windows' <c>TaskbarCreated</c> re-registration
     /// (ADR-0003 item 5).
     ///

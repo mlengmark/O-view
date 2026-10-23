@@ -13,15 +13,15 @@ namespace OView.Linux.Tests.Runtime;
 ///
 /// <para><b>Why the real executable rather than the classes behind it.</b> Everything that has
 /// gone wrong with this head went wrong in the wiring between the toolkit, the dispatcher and
-/// the bus — the first click deadlocking (#124), the menu taking tens of seconds (#125). A
+/// the bus, the first click deadlocking (#124), the menu taking tens of seconds (#125). A
 /// test that constructs <c>LinuxApp</c> in-process has the test runner's dispatcher and the
 /// test runner's bus connections, which is precisely the part not under test. This starts the
 /// binary the .deb carries.</para>
 ///
 /// <para><b>It never runs against a real home.</b> <c>HOME</c>, and the XDG variables .NET
 /// derives from it, point at a writable copy of <c>tests/fixtures/claude-home</c>: the app
-/// finds real-shaped data to ingest, and nothing it writes — the log, the rollup store, the
-/// autostart entry — can land in the account running the test (CLAUDE.md rule 4). The
+/// finds real-shaped data to ingest, and nothing it writes, the log, the rollup store, the
+/// autostart entry, can land in the account running the test (CLAUDE.md rule 4). The
 /// single-instance lock is redirected too, so one test's app cannot be mistaken for another's
 /// and silently exit.</para>
 ///
@@ -39,7 +39,7 @@ namespace OView.Linux.Tests.Runtime;
 /// </summary>
 public sealed class LinuxAppProcess : IAsyncDisposable
 {
-    /// <summary>The app's file name on disk — <c>AssemblyName</c> in O-view.Linux.csproj.</summary>
+    /// <summary>The app's file name on disk, <c>AssemblyName</c> in O-view.Linux.csproj.</summary>
     public const string ExecutableName = "o-view";
 
     /// <summary>
@@ -51,7 +51,7 @@ public sealed class LinuxAppProcess : IAsyncDisposable
 
     /// <summary>
     /// The line the app writes each time it draws its gauge into the tray icon. Waiting for the
-    /// first one is how a test says the toolkit came up and the engine's snapshot reached it —
+    /// first one is how a test says the toolkit came up and the engine's snapshot reached it,
     /// the whole path that deadlocked in v0.6.1 (issue #124), end to end.
     /// </summary>
     public const string IconRenderedLogLine = "icon rendered";
@@ -123,7 +123,7 @@ public sealed class LinuxAppProcess : IAsyncDisposable
 
         var start = new ProcessStartInfo(Executable())
         {
-            // On by default in the app, so this only redirects it — into a folder this
+            // On by default in the app, so this only redirects it, into a folder this
             // instance owns, which is what makes reading it back unambiguous.
             ArgumentList = { "--log", logPath },
             WorkingDirectory = root,
@@ -207,8 +207,8 @@ public sealed class LinuxAppProcess : IAsyncDisposable
     }
 
     /// <summary>
-    /// Waits for something happening elsewhere — a registration reaching the stand-in host, a
-    /// panel appearing — with the same two guarantees as <see cref="WaitForLogAsync"/>: the
+    /// Waits for something happening elsewhere, a registration reaching the stand-in host, a
+    /// panel appearing, with the same two guarantees as <see cref="WaitForLogAsync"/>: the
     /// app's output on any failure, and no waiting out the timeout once the app is gone.
     /// </summary>
     /// <param name="work">The wait to run. Its own result is returned untouched.</param>
@@ -224,8 +224,8 @@ public sealed class LinuxAppProcess : IAsyncDisposable
 
             if (finished == work)
             {
-                // Awaited rather than read off .Result so the wait's own failure — a
-                // TimeoutException from the host, say — arrives with the app's log attached.
+                // Awaited rather than read off .Result so the wait's own failure, a
+                // TimeoutException from the host, say, arrives with the app's log attached.
                 try
                 {
                     return await work;
@@ -237,7 +237,7 @@ public sealed class LinuxAppProcess : IAsyncDisposable
             }
 
             throw await FailureAsync(finished == exited
-                ? $"waiting for {what} — the app exited first"
+                ? $"waiting for {what}, the app exited first"
                 : $"waiting {timeout.TotalSeconds:0.#} s for {what}");
         }
         finally
@@ -247,7 +247,7 @@ public sealed class LinuxAppProcess : IAsyncDisposable
     }
 
     /// <summary>
-    /// Kills the app and reports its log — always, whether the test passed or failed. A
+    /// Kills the app and reports its log, always, whether the test passed or failed. A
     /// surviving o-view would hold the bus name and the display for the rest of the run, and
     /// an unreported log is a failure nobody can explain afterwards.
     /// </summary>
@@ -283,7 +283,7 @@ public sealed class LinuxAppProcess : IAsyncDisposable
     /// <summary>
     /// A failure, with the bus asked what the app owns before the message is built. Every
     /// throwing path goes through here rather than through <see cref="Failure"/> directly,
-    /// because the answer is only available while the app is still on the bus — once it has
+    /// because the answer is only available while the app is still on the bus, once it has
     /// been killed on dispose there is nothing left to ask.
     /// </summary>
     private async Task<XunitException> FailureAsync(string what, Exception? cause = null)
@@ -392,7 +392,7 @@ public sealed class LinuxAppProcess : IAsyncDisposable
     /// call to the watcher is what failed; absent, and the backend never got that far.
     ///
     /// <para>The whole list rather than a filtered one, because what owns which name is not
-    /// worth another round trip here — asking the bus for the process behind each name closed
+    /// worth another round trip here, asking the bus for the process behind each name closed
     /// this connection under it, and the list alone answers the question.</para>
     ///
     /// <para>Never throws, and catches broadly to make sure of it. This runs only while a
@@ -466,8 +466,8 @@ public sealed class LinuxAppProcess : IAsyncDisposable
         LogLines().FirstOrDefault(line => line.Contains(containing, StringComparison.Ordinal));
 
     /// <summary>
-    /// The log as it stands. Shared read because the app holds the file open for appending —
-    /// the same reason <c>FileLog.Tail</c> gives — and an empty list for "not written yet",
+    /// The log as it stands. Shared read because the app holds the file open for appending,
+    /// the same reason <c>FileLog.Tail</c> gives, and an empty list for "not written yet",
     /// which is the ordinary state for the first few hundred milliseconds.
     /// </summary>
     private IReadOnlyList<string> LogLines()
@@ -487,7 +487,7 @@ public sealed class LinuxAppProcess : IAsyncDisposable
 
     /// <summary>
     /// The built app under <c>src/O-view.Linux/bin</c>. Prefers the configuration this test
-    /// assembly was itself built in — the job builds both in Release — and otherwise the most
+    /// assembly was itself built in, the job builds both in Release, and otherwise the most
     /// recently built one, so a developer who built Debug last gets the app they just changed.
     /// </summary>
     private static string Executable()
@@ -526,7 +526,7 @@ public sealed class LinuxAppProcess : IAsyncDisposable
 
     /// <summary>
     /// The committed Claude home the app is given a copy of. Real-shaped data, so the engine
-    /// has something to ingest and the panel has numbers — the same fixture the smoke test
+    /// has something to ingest and the panel has numbers, the same fixture the smoke test
     /// runs the engine against.
     /// </summary>
     private static string FixtureHome() =>

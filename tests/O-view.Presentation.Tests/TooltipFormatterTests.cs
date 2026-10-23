@@ -62,7 +62,7 @@ public class TooltipFormatterTests
     /// bracket left and the marker is unreachable on this row. Asserting its absence is what
     /// stops the marker being reintroduced alongside a value that has nothing to qualify.</para>
     ///
-    /// <para><b>The session reset keeps its <c>~</c></b> — that window rolls from first use and is
+    /// <para><b>The session reset keeps its <c>~</c></b>, that window rolls from first use and is
     /// still derived. <c>PanelTextTests</c> covers it.</para>
     /// </summary>
     [Fact]
@@ -113,7 +113,7 @@ public class TooltipFormatterTests
 
     /// <summary>
     /// Every figure here is <see cref="UsageValueStatus.Estimated"/> rather than
-    /// <see cref="UsageValueStatus.Real"/> — exactly how <c>PlanHistoryProvider</c> marks a
+    /// <see cref="UsageValueStatus.Real"/>, exactly how <c>PlanHistoryProvider</c> marks a
     /// derived session reset. The tooltip reads the status through
     /// <c>SessionPercentValue</c>/<c>SessionResetAtUtcValue</c>/<c>WeeklyPercentValue</c> now
     /// rather than the plain nullable members, and must still show every figure: a modelled
@@ -174,7 +174,7 @@ public class TooltipFormatterTests
     [Fact]
     public void Output_NeverExceedsNotifyIconCap()
     {
-        // 127, not 128 — measured (docs/findings/tray-icon-rendering.md).
+        // 127, not 128, measured (docs/findings/tray-icon-rendering.md).
         var s = new UsageSnapshot(
             DataSource.Live,
             UsageSnapshot.Percent(100),

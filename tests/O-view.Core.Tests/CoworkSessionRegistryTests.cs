@@ -12,7 +12,7 @@ namespace OView.Core.Tests;
 /// is the independent expectation to measure against.</para>
 ///
 /// <para>Session ids here are deliberately not UUID-shaped. Real ones are, and the bundle
-/// truncates them on the way out — but a UUID literal in a tracked file is what the repository's
+/// truncates them on the way out, but a UUID literal in a tracked file is what the repository's
 /// identifier scan exists to reject, and a fixture is not a good reason to carve an exception
 /// into a guard that protects against publishing real ones. Nothing in the lookup cares: the id
 /// is a file name.</para>
@@ -43,7 +43,7 @@ public class CoworkSessionRegistryTests : IDisposable
 
     /// <summary>
     /// A registration as Cowork writes one: the session's own id, its cwd, when it was last
-    /// touched — and a pile of session state around them, which is the reason only three
+    /// touched, and a pile of session state around them, which is the reason only three
     /// fields are read.
     /// </summary>
     private void Register(string sessionId, DateTimeOffset lastActivity, string cwd = @"C:\work")
@@ -97,7 +97,7 @@ public class CoworkSessionRegistryTests : IDisposable
 
     /// <summary>
     /// <b>The finding.</b> A session Cowork touched minutes ago with nothing written for it
-    /// means the machine is producing usage that nothing local records — which is exactly the
+    /// means the machine is producing usage that nothing local records, which is exactly the
     /// state that reads as "the token tiles have stopped", and which no other field in the
     /// bundle can see.
     /// </summary>
@@ -135,7 +135,7 @@ public class CoworkSessionRegistryTests : IDisposable
     /// <summary>
     /// The transcript is found by its file name wherever it sits. Rebuilding the encoded
     /// directory from the cwd would break the moment Claude Code changed a rule this project
-    /// does not control — and break in the direction that invents a fault, reporting every
+    /// does not control, and break in the direction that invents a fault, reporting every
     /// session as missing on a machine where nothing is.
     /// </summary>
     [Fact]
@@ -148,7 +148,7 @@ public class CoworkSessionRegistryTests : IDisposable
     }
 
     /// <summary>
-    /// A machine that has never opened Cowork says so rather than rendering nothing — an
+    /// A machine that has never opened Cowork says so rather than rendering nothing, an
     /// omitted section is indistinguishable from one that failed.
     /// </summary>
     [Fact]
@@ -158,8 +158,8 @@ public class CoworkSessionRegistryTests : IDisposable
     }
 
     /// <summary>
-    /// Only the newest few registrations are read in full — they run to hundreds of kilobytes
-    /// each and this builds on the UI thread — but the true total is still counted, so the
+    /// Only the newest few registrations are read in full, they run to hundreds of kilobytes
+    /// each and this builds on the UI thread, but the true total is still counted, so the
     /// bound is never mistaken for the whole picture.
     /// </summary>
     [Fact]
@@ -183,7 +183,7 @@ public class CoworkSessionRegistryTests : IDisposable
     /// <para>MSIX presents a package's store through the canonical path as well as the
     /// package's own; neither is a link, and nothing about either name reveals they are the
     /// same tree. A path-keyed de-duplication therefore kept both copies and reported twice the
-    /// sessions that exist — measured on the development machine as 54 registered against 27
+    /// sessions that exist, measured on the development machine as 54 registered against 27
     /// real ones. A registration's file name carries the session's own id, so two entries
     /// sharing one cannot be two sessions.</para>
     /// </summary>
@@ -214,7 +214,7 @@ public class CoworkSessionRegistryTests : IDisposable
 
     /// <summary>
     /// These files carry conversation titles. The report reads three fields and never
-    /// materialises the rest, and nothing identifying reaches the bundle — the same line the
+    /// materialises the rest, and nothing identifying reaches the bundle, the same line the
     /// plan-history and transcript-scope reports hold.
     /// </summary>
     [Fact]

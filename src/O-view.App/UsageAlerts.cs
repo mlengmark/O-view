@@ -5,11 +5,11 @@ using OView.Presentation.Text;
 namespace OView.App;
 
 /// <summary>
-/// The two notifications the engine decides to raise on its own — the usage threshold and
-/// the off-plan warning — end to end: the edge-trigger state, the decision, and (now in
+/// The two notifications the engine decides to raise on its own, the usage threshold and
+/// the off-plan warning, end to end: the edge-trigger state, the decision, and (now in
 /// <see cref="NoticeText"/> and <see cref="OffPlanText"/>) the wording.
 ///
-/// <para>Split out of <see cref="UsageEngine"/> purely to shorten that file — same members,
+/// <para>Split out of <see cref="UsageEngine"/> purely to shorten that file, same members,
 /// same behaviour, same logging, the same seam <see cref="WeeklyResetCoordinator"/> uses for
 /// settings and <see cref="UsageCacheRefresh"/> uses for publishing back onto the engine.</para>
 /// </summary>
@@ -53,7 +53,7 @@ public sealed class UsageAlerts
 
     /// <summary>
     /// Applies and persists the threshold-notification preference, returning the state as it
-    /// actually stands afterwards — a failed write must not be reported as success
+    /// actually stands afterwards, a failed write must not be reported as success
     /// (CLAUDE.md rule 6).
     /// </summary>
     public bool SetNotifyOnThreshold(bool enable)
@@ -65,8 +65,8 @@ public sealed class UsageAlerts
 
         // Re-armed on the off→on edge, for the same reason SetThresholdPercent rebuilds the
         // watcher: it is edge-triggered, and while notifications are off it is never
-        // consulted — `Settings.NotifyOnThreshold && _watcher.ShouldNotify(...)` short-circuits
-        // — so its "we are currently above" flag freezes at whatever it held when they were
+        // consulted, `Settings.NotifyOnThreshold && _watcher.ShouldNotify(...)` short-circuits,
+        // so its "we are currently above" flag freezes at whatever it held when they were
         // switched off.
         //
         // Left stale, that silently swallows the next crossing. Notify at 95%, switch
@@ -87,7 +87,7 @@ public sealed class UsageAlerts
     /// effect (ADR-0009 as amended, issue #140).
     ///
     /// <para>This class stores it and nothing more. <b>Whether a build may act on it is not
-    /// this class's decision</b> — <c>UpdatePolicy.MayDownloadAndRun</c> owns that, and the
+    /// this class's decision</b>, <c>UpdatePolicy.MayDownloadAndRun</c> owns that, and the
     /// head consults it before every install. Keeping the two apart is what stops a
     /// preference read as permission: a tarball build can hold this setting true in a
     /// settings file copied from a Windows machine and must still install nothing.</para>
@@ -103,8 +103,8 @@ public sealed class UsageAlerts
     /// Applies and persists the notification threshold, returning the percentage now in
     /// effect (issue #141).
     ///
-    /// <para><b>The watcher is rebuilt, not just re-read.</b> It is edge-triggered — it fires
-    /// once per upward crossing and re-arms on a drop below — so it holds "we are currently
+    /// <para><b>The watcher is rebuilt, not just re-read.</b> It is edge-triggered, it fires
+    /// once per upward crossing and re-arms on a drop below, so it holds "we are currently
     /// above" state that was decided against the OLD threshold. Rebuilding clears that, which
     /// makes lowering the threshold behave the way a user asking for it means: someone sitting
     /// at 75% who moves the threshold from 80 to 70 is notified on the next poll, rather than
@@ -128,9 +128,9 @@ public sealed class UsageAlerts
     {
         // Branches on the figure rather than the status: an Unavailable percentage carries no
         // figure by construction (UsageValueRule), so this can never read one as a crossing to
-        // zero — the trap a plain `?? 0` on the nullable field would have walked straight into.
-        // The converse isn't guaranteed (UsagePercent) — a present status can still carry no
-        // figure yet — so branching on the status instead would dereference a null one.
+        // zero, the trap a plain `?? 0` on the nullable field would have walked straight into.
+        // The converse isn't guaranteed (UsagePercent), a present status can still carry no
+        // figure yet, so branching on the status instead would dereference a null one.
         var session = snapshot.SessionPercentValue;
         var percent = session.Value is { } sessionPercent ? (int?)sessionPercent : null;
 
@@ -144,12 +144,12 @@ public sealed class UsageAlerts
 
     /// <summary>
     /// Notifies once when usage starts bypassing the plan. Edge-triggered like the
-    /// threshold watcher, and re-armed when it stops — the point is to catch the
+    /// threshold watcher, and re-armed when it stops, the point is to catch the
     /// silent-and-expensive case the plan bars cannot show, not to nag.
     /// </summary>
     public void CheckOffPlan(PanelStatistics? stats)
     {
-        // No plan history, or the figures could not be built — either way there is nothing
+        // No plan history, or the figures could not be built, either way there is nothing
         // to decide on, and a failed build must not re-arm the edge trigger.
         if (stats is null)
         {
@@ -174,13 +174,13 @@ public sealed class UsageAlerts
 
         // What Claude Code says about extra usage on this account (issue #259). Read through
         // the same source the reset anchor uses, so a test that supplied its own Provider gets
-        // Unknown rather than the developer's real ~/.claude.json — the hazard PlanHistoryPoll's
+        // Unknown rather than the developer's real ~/.claude.json, the hazard PlanHistoryPoll's
         // addressed-flag doc is about, pointed at this field.
         var extraUsage = _readExtraUsage();
 
         // The panel's formatter, not a pinned-culture "C" lookup. This balloon sends
         // the user to the Est. tile, so the two must write the same amount the same
-        // way — and ICU's currency pattern is not the same instruction as composing
+        // way, and ICU's currency pattern is not the same instruction as composing
         // "$" + a fixed decimal format, even where they agree today (issue #55).
         //
         // The claim is made only where the setting supports it. Asserting a charge at an
@@ -191,7 +191,7 @@ public sealed class UsageAlerts
         // kind exists: these are what the yellow triangle is FOR, and it meant nothing while
         // every "up to date" balloon wore the same one.
         // Branches on the figure rather than the status, for the same reason NotifyOnThreshold
-        // does — EstimatedUsd gives the same guarantee only in the absent direction.
+        // does, EstimatedUsd gives the same guarantee only in the absent direction.
         var estOffPlanUsd = stats.EstOffPlanValue.Value;
 
         _notify(new AppNotification(
@@ -202,7 +202,7 @@ public sealed class UsageAlerts
 
     /// <summary>
     /// The divergence figures, or null when there is no plan history to compare against or
-    /// the build failed. A failure here is not a failed poll — the snapshot is still good.
+    /// the build failed. A failure here is not a failed poll, the snapshot is still good.
     /// </summary>
     public PanelStatistics? ReadOffPlan()
     {

@@ -7,8 +7,8 @@ namespace OView.Presentation.Text;
 /// The words on the tray menu's rows (see <see cref="PanelText"/> for why wording like this
 /// is shared rather than written per platform).
 ///
-/// <para>Both heads draw this menu, with entirely different machinery — a WPF flyout of
-/// templated Buttons, a DBusMenu the desktop renders — which is the shape in which two
+/// <para>Both heads draw this menu, with entirely different machinery, a WPF flyout of
+/// templated Buttons, a DBusMenu the desktop renders, which is the shape in which two
 /// surfaces drift. The Linux menu carries three of these rows and once had its own copy of
 /// two of them, so "Exit O-view" existed twice and nothing would have failed if one of them
 /// had become "Quit". The resume row is the exception that proves the rule: it already read
@@ -25,7 +25,7 @@ public static class MenuText
     /// platform-specific: on Windows the icon's own left click opens the panel, so a row saying
     /// the same thing would be a second way to do what the obvious gesture already does.
     ///
-    /// <para>Ubuntu's AppIndicators extension gives the panel no gesture at all — a single click
+    /// <para>Ubuntu's AppIndicators extension gives the panel no gesture at all, a single click
     /// opens the menu and only a double click opens the panel, which nothing tells the user to
     /// try (issue #315). A row works on every SNI host whatever its click handling, which is why
     /// it is the fix rather than asking each desktop for different behaviour.</para>
@@ -35,8 +35,8 @@ public static class MenuText
     /// <summary>On both heads' menus.</summary>
     public const string RunAtStartupRow = "Run at startup";
 
-    /// <summary>Issue #140. Windows only in practice — the row is dropped on a build that
-    /// cannot self-install — but the wording is not platform-specific.</summary>
+    /// <summary>Issue #140. Windows only in practice, the row is dropped on a build that
+    /// cannot self-install, but the wording is not platform-specific.</summary>
     public const string UpdateAutomaticallyRow = "Update automatically";
 
     /// <summary>The threshold row reads "Notify at [70% ⌄] usage": this, the pill, then
@@ -68,7 +68,7 @@ public static class MenuText
     /// dialog what O-view is currently doing.</summary>
     public const string WeeklyResetDerived = "derived";
 
-    /// <summary>An entry as the row shows it — three letters and the time, because the row
+    /// <summary>An entry as the row shows it, three letters and the time, because the row
     /// has a label beside it and no room for more.</summary>
     public static string WeeklyResetValue(string dayText, string timeText) =>
         $"{dayText[..3]} {timeText}";

@@ -5,7 +5,7 @@ namespace OView.App.Tests;
 
 /// <summary>
 /// The rule for where a dragged panel goes back to. Everything here is device-independent
-/// units, since what is stored is a physical location rather than a pixel count — see
+/// units, since what is stored is a physical location rather than a pixel count, see
 /// <see cref="DipBox"/> for why.
 /// </summary>
 public class PanelPlacementMemoryTests
@@ -27,7 +27,7 @@ public class PanelPlacementMemoryTests
     /// <summary>
     /// A laptop's external monitor is unplugged and a different display is now asked about.
     /// The store was never saved to for that id, which is indistinguishable from "gone" at
-    /// this layer — the caller supplies whichever ids it currently knows about.
+    /// this layer, the caller supplies whichever ids it currently knows about.
     /// </summary>
     [Fact]
     public void AnUnpluggedDisplay_FallsBackToTodaysPlacement()
@@ -41,7 +41,7 @@ public class PanelPlacementMemoryTests
 
     /// <summary>
     /// An absent or unreadable file degrades to "nothing stored" inside the store itself
-    /// (<c>PanelPositionFileTests</c> covers that), not inside this rule — a store that fails
+    /// (<c>PanelPositionFileTests</c> covers that), not inside this rule, a store that fails
     /// outright is a defect this class must not hide behind a plausible-looking fallback.
     /// </summary>
     [Fact]
@@ -201,7 +201,7 @@ public class PanelPlacementMemoryTests
         Assert.Equal(topDip, nudged.Value.TopDip, precision: 3);
     }
 
-    /// <summary>And with Shift held, one DIP — the step for placing it against something seen.</summary>
+    /// <summary>And with Shift held, one DIP, the step for placing it against something seen.</summary>
     [Theory]
     [InlineData(NudgeDirection.Left, 499, 300)]
     [InlineData(NudgeDirection.Right, 501, 300)]
@@ -220,7 +220,7 @@ public class PanelPlacementMemoryTests
     }
 
     /// <summary>
-    /// Held against an edge, the keyboard cannot push the panel off the work area — the clamp is
+    /// Held against an edge, the keyboard cannot push the panel off the work area, the clamp is
     /// what the step keeps of a release, and it is also how the keys reach flush at all.
     /// Pressing again from where it now stands leaves it exactly there, so holding the key down
     /// does not walk the stored offset off into the distance.
@@ -269,7 +269,7 @@ public class PanelPlacementMemoryTests
     /// <summary>
     /// Inside the snap distance is where the two paths part: a release there is a near miss and
     /// goes flush, while a step there is exactly where the key asked for. Both are asserted
-    /// together because the claim is the difference, not either half — a <c>Nudge</c> that went
+    /// together because the claim is the difference, not either half, a <c>Nudge</c> that went
     /// back through <c>Remember</c> would make both columns read 0.
     /// </summary>
     [Theory]
@@ -296,7 +296,7 @@ public class PanelPlacementMemoryTests
     }
 
     /// <summary>
-    /// And the step is stored as it landed, not merely returned that way — the next open has to
+    /// And the step is stored as it landed, not merely returned that way, the next open has to
     /// put the panel back where the keys left it, which is the whole point of storing anything.
     /// </summary>
     [Fact]
@@ -312,7 +312,7 @@ public class PanelPlacementMemoryTests
     }
 
     /// <summary>
-    /// A panel that no longer fits resolves to nothing, exactly as a remembered place does —
+    /// A panel that no longer fits resolves to nothing, exactly as a remembered place does,
     /// the caller leaves it where it is rather than being handed a position off the screen.
     /// </summary>
     [Fact]

@@ -17,8 +17,8 @@ namespace OView.Tray.Popup;
 /// Draws the token composition disclosure: the Bars/Breakdown switch, the per-window bars
 /// with their legends, and the table they fold open into.
 ///
-/// <para><b>The panel is never laid out at the far end of the fold.</b> The obvious order —
-/// apply the final state, lay it out, then animate back from where the fold was — puts the
+/// <para><b>The panel is never laid out at the far end of the fold.</b> The obvious order,
+/// apply the final state, lay it out, then animate back from where the fold was, puts the
 /// window at its full height for the length of that layout, still docked for the height it
 /// had. It does not stay there, but it is presented: <c>--fold-check</c>'s screen grabs
 /// caught the frame, a whole panel 72 px down with its bottom inside the taskbar. So the
@@ -62,7 +62,7 @@ internal sealed class PopupTokenComposition
         _redock = redock;
 
         // Checked fires on the segment being turned ON only, so one handler per segment is
-        // one handler per state — no need to read IsChecked back off the group.
+        // one handler per state, no need to read IsChecked back off the group.
         barsToggle.Checked += (_, _) => Show(false);
         breakdownToggle.Checked += (_, _) => Show(true);
     }
@@ -74,7 +74,7 @@ internal sealed class PopupTokenComposition
     public double ScreenTop => _barsToggle.PointToScreen(new Point(0, 0)).Y;
 
     /// <summary>
-    /// The folding body's current height — what <c>--fold-check</c> samples.
+    /// The folding body's current height, what <c>--fold-check</c> samples.
     ///
     /// <para>Read from the <c>Height</c> property rather than from <c>ActualHeight</c>: a
     /// dependency property returns its animated value, while <c>ActualHeight</c> reported the
@@ -97,7 +97,7 @@ internal sealed class PopupTokenComposition
 
     /// <summary>
     /// Opens the breakdown for a verification render. The view resets to Bars on every
-    /// Populate, so a sample of the expanded state cannot be produced any other way — and an
+    /// Populate, so a sample of the expanded state cannot be produced any other way, and an
     /// unrendered state is how the no-data banner spent its whole life saying the wrong
     /// thing (issues #58, #170).
     /// </summary>
@@ -113,7 +113,7 @@ internal sealed class PopupTokenComposition
     /// <summary>
     /// Freezes the disclosure partway open for a verification render. On a real desktop this
     /// state exists for about a tenth of a second, which is long enough to look wrong and far
-    /// too short to inspect — and the failure it guards against, content drawn outside the
+    /// too short to inspect, and the failure it guards against, content drawn outside the
     /// height it has been given, is invisible at both ends of the fold.
     /// </summary>
     /// <param name="fraction">How far open, 0–1.</param>
@@ -150,7 +150,7 @@ internal sealed class PopupTokenComposition
     /// tall display and fail on a short one.</para>
     /// </summary>
     /// <param name="availableWidth">
-    /// The text column the body wraps within — a disclosure measures against the line it sits
+    /// The text column the body wraps within, a disclosure measures against the line it sits
     /// under, not against the panel.
     /// </param>
     private void RunFold(bool expanded, double availableWidth)
@@ -163,7 +163,7 @@ internal sealed class PopupTokenComposition
         _disclosure.Prepare(fromHeight);
 
         // Expanding is exactly when the panel crosses the work area, so the density is
-        // re-decided here rather than only at open — a panel that fitted closed and does
+        // re-decided here rather than only at open, a panel that fitted closed and does
         // not fit open is the whole reported case.
         _refitForPendingGrowth(toHeight - fromHeight);
 
@@ -183,7 +183,7 @@ internal sealed class PopupTokenComposition
     ///
     /// <para>The figures stay on screen; the prose folds behind a disclosure. It was four
     /// lines of standing text that every user read on every open, and it answers a question
-    /// only some of them have — but the ones who do have it are looking straight at the
+    /// only some of them have, but the ones who do have it are looking straight at the
     /// number that prompted it, so the answer stays one click away rather than moving to a
     /// document nobody opens.</para>
     ///
@@ -215,7 +215,7 @@ internal sealed class PopupTokenComposition
 
         PopupText.SetLine(_coverageLine, view.CoverageLine);
 
-        // Back to Bars on every open. The panel is a transient view, not a setting — the same
+        // Back to Bars on every open. The panel is a transient view, not a setting, the same
         // reason StatTile resets its own expansion.
         SetExpanded(false);
     }
@@ -270,7 +270,7 @@ internal sealed class PopupTokenComposition
                 Background = swatch,
                 // Rounded only at the ends. A Border does not clip its children to a corner
                 // radius, so a rounded container over square segments shows the corners
-                // through — this gets the pill without a hand-maintained Clip geometry.
+                // through, this gets the pill without a hand-maintained Clip geometry.
                 CornerRadius = new CornerRadius(
                     i == 0 ? 3 : 0, i == segments.Count - 1 ? 3 : 0,
                     i == segments.Count - 1 ? 3 : 0, i == 0 ? 3 : 0),
@@ -285,7 +285,7 @@ internal sealed class PopupTokenComposition
         block.Children.Add(track);
 
         // Every figure the bar cannot draw honestly. This is what makes the 3 px floor safe,
-        // so it is not optional decoration — see TokenBarGeometry.
+        // so it is not optional decoration, see TokenBarGeometry.
         var legend = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
         for (var i = 0; i < segments.Count; i++)
         {
@@ -342,7 +342,7 @@ internal sealed class PopupTokenComposition
 
     /// <summary>
     /// The card behind one segment. Built through <see cref="HoverCard.Figure"/> rather than
-    /// as a third card shape — a kind's figure with a line naming it is exactly what that
+    /// as a third card shape, a kind's figure with a line naming it is exactly what that
     /// shape is for, and the panel has shipped two unrelated tooltip designs before.
     /// </summary>
     private ToolTip SegmentCard(TokenKindSlice slice, string window, Brush swatch) =>
@@ -440,7 +440,7 @@ internal sealed class PopupTokenComposition
     }
 
     /// <summary>
-    /// Puts the explanation in a finished state at once — open or closed, nothing in flight.
+    /// Puts the explanation in a finished state at once, open or closed, nothing in flight.
     /// The interactive path goes through <see cref="Show"/>, which folds; this
     /// is what <see cref="Populate"/> and the verification renders use.
     /// </summary>
@@ -448,7 +448,7 @@ internal sealed class PopupTokenComposition
     {
         _expanded = expanded;
 
-        // The switch is the state's only visible indicator, so it has to move with it —
+        // The switch is the state's only visible indicator, so it has to move with it,
         // including on the Populate reset, where nothing was clicked. Set before Apply and
         // guarded by the equality check in Show, so the Checked handler this
         // raises finds the state already correct and does not fold a second time.

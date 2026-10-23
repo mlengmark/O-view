@@ -22,7 +22,7 @@ internal sealed class PanelScroll
     /// How far one notch of the wheel moves the content. This is Avalonia's own figure for a
     /// viewport whose child does not scroll by logical item, and it is matched rather than
     /// chosen so that a turn this class handles and a turn the viewport handles itself move
-    /// the content by the same amount — the user cannot tell which of the two answered, and
+    /// the content by the same amount, the user cannot tell which of the two answered, and
     /// that is the point.
     /// </summary>
     private const double WheelStepDip = 50;
@@ -50,11 +50,11 @@ internal sealed class PanelScroll
     ///
     /// <para><b>Why it cannot be left to the viewport, which is what this code used to say.</b>
     /// <see cref="ScrollContentPresenter"/> does answer a wheel turn, and it answers one raised
-    /// anywhere inside itself — which is why the first wheel test passed and why this was
+    /// anywhere inside itself, which is why the first wheel test passed and why this was
     /// believed to be working. But a real turn is not raised inside the viewport unless the
     /// pointer is over something that <i>paints</i>: Avalonia hit-tests a point against drawn
-    /// content, and of everything between this panel's border and its sections — the frame grid,
-    /// the viewport, the sections' stack — not one has a background. So a turn over the gap
+    /// content, and of everything between this panel's border and its sections, the frame grid,
+    /// the viewport, the sections' stack, not one has a background. So a turn over the gap
     /// between two tiles, over a row of the Breakdown table, or over the panel's own padding
     /// lands on the panel's border, which is the viewport's <i>parent</i>; the event then bubbles
     /// outward, away from the viewport, and nothing moves. Only a turn that happened to be over
@@ -68,7 +68,7 @@ internal sealed class PanelScroll
     private void WireWheel(Control panel) =>
         panel.AddHandler(InputElement.PointerWheelChangedEvent, (object? _, PointerWheelEventArgs e) =>
         {
-            // Nothing out of sight means nothing to scroll — and a panel that fits has no
+            // Nothing out of sight means nothing to scroll, and a panel that fits has no
             // viewport at all, so a turn over it must stay the compositor's business.
             if (Hidden() <= 0)
             {
@@ -136,7 +136,7 @@ internal sealed class PanelScroll
     /// what is on screen.
     ///
     /// <para>Making the bar visible narrows the content by its own width, which can reflow a
-    /// wrapped line and make the content taller still — so this can run twice for one scroll.
+    /// wrapped line and make the content taller still, so this can run twice for one scroll.
     /// It cannot oscillate: a narrower column never shortens the content, so a bar that has
     /// appeared never has cause to go away again.</para>
     /// </summary>

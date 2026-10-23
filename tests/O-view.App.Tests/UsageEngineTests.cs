@@ -4,7 +4,7 @@ using OView.Core.Providers.CachedUsage;
 namespace OView.App.Tests;
 
 /// <summary>
-/// The refresh cycle and the notification rules — logic that shipped for months inside
+/// The refresh cycle and the notification rules, logic that shipped for months inside
 /// <c>App.xaml.cs</c> with no coverage at all, because it could not be reached without a
 /// WPF dispatcher and a desktop session.
 /// </summary>
@@ -17,7 +17,7 @@ public class UsageEngineTests
 
     private static (UsageEngine Engine, FakeProvider Provider, FakeTimerFactory Timers, ListLog Log)
         // A transform, not an Action. UsageEngineOptions is a record with init-only members,
-        // so the previous `Action<UsageEngineOptions>` could not set anything — it compiled,
+        // so the previous `Action<UsageEngineOptions>` could not set anything, it compiled,
         // ran, and silently changed nothing. Nothing had used it, which is why that went
         // unnoticed; `o => o with { ... }` is the shape that actually works.
         Build(TempDir dir, Func<UsageEngineOptions, UsageEngineOptions>? tweak = null)
@@ -95,7 +95,7 @@ public class UsageEngineTests
         timers.Poll.Tick();
         Assert.Single(notifications);
 
-        provider.SetSession(96);          // still above — must stay silent
+        provider.SetSession(96);          // still above, must stay silent
         timers.Poll.Tick();
         timers.Poll.Tick();
         Assert.Single(notifications);
@@ -113,7 +113,7 @@ public class UsageEngineTests
 
     /// <summary>
     /// Writes a real plan-history file, because the fast path deliberately reads
-    /// <c>PlanHistoryProvider</c> directly rather than the composite — that is the whole point
+    /// <c>PlanHistoryProvider</c> directly rather than the composite, that is the whole point
     /// of the split, so faking the composite would test the wrong seam.
     /// </summary>
     private static string WritePlanHistory(TempDir dir, params (DateTimeOffset At, int Fh, int Sd)[] samples)
@@ -151,7 +151,7 @@ public class UsageEngineTests
 
     /// <summary>
     /// Crossing the threshold is noticed on the fast cadence rather than waiting for the full
-    /// poll — a real gain, not a side effect, since the notification only needs the percentage.
+    /// poll, a real gain, not a side effect, since the notification only needs the percentage.
     /// </summary>
     [Fact]
     public void APlanTick_CanRaiseTheThresholdNotification()
@@ -176,7 +176,7 @@ public class UsageEngineTests
 
     /// <summary>
     /// A snapshot with nothing authoritative in it is dropped rather than published. The fast
-    /// path skips the composite, so it cannot see the JSONL estimate that would otherwise win —
+    /// path skips the composite, so it cannot see the JSONL estimate that would otherwise win,
     /// publishing its <c>None</c> would blank a panel the full poll had correctly filled.
     /// </summary>
     [Fact]
@@ -201,7 +201,7 @@ public class UsageEngineTests
     /// missing. The <b>full</b> poll is the slow one, so it is the one that loses the race: it
     /// starts reading, spends seconds ingesting, and posts a snapshot it took before a plan
     /// tick that has already published. Guarded only on the fast path, the session percentage
-    /// went 77 → 30 — the jump backwards the guard exists to prevent.
+    /// went 77 → 30, the jump backwards the guard exists to prevent.
     /// </summary>
     [Fact]
     public void ALateFullPoll_DoesNotOverwriteANewerPlanReading()
@@ -273,8 +273,8 @@ public class UsageEngineTests
 
     /// <summary>
     /// The guard compares two authoritative readings, and the incoming side matters as much as
-    /// the current one. A JSONL estimate carries a capture time too — the newest transcript
-    /// activity — so comparing it against a live plan sample would block the fallback the
+    /// the current one. A JSONL estimate carries a capture time too, the newest transcript
+    /// activity, so comparing it against a live plan sample would block the fallback the
     /// composite resolved to, and block it <i>permanently</i>: <c>Latest</c> stays Live, so
     /// every later estimate is measured against the same frozen sample and dropped in turn.
     /// The panel would sit on a reading that had stopped being true.
@@ -325,7 +325,7 @@ public class UsageEngineTests
 
     /// <summary>
     /// A caller that injects a whole provider chain and names no plan-history file gets no
-    /// fast path. The engine still builds a provider — the off-plan arithmetic needs one — but
+    /// fast path. The engine still builds a provider, the off-plan arithmetic needs one, but
     /// it defaults to the <b>real machine's</b> plan-usage-history.json and is not part of the
     /// injected chain, so publishing from it would put the developer's own Claude Desktop usage
     /// over the caller's resolution.
@@ -333,7 +333,7 @@ public class UsageEngineTests
     /// <para>Worth being straight about what this asserts where: on a machine with Claude
     /// Desktop data it is a real assertion and fails without the guard, which is how it was
     /// checked. On a CI runner there is no such file and it passes trivially. That asymmetry is
-    /// the defect exactly — a suite whose result depends on whose machine ran it.</para>
+    /// the defect exactly, a suite whose result depends on whose machine ran it.</para>
     /// </summary>
     [Fact]
     public void AnInjectedProviderNamingNoPlanHistory_NeverPublishesFromTheRealMachinesFile()
@@ -372,7 +372,7 @@ public class UsageEngineTests
 
     /// <summary>
     /// Turning one preference on must not disturb the others. They share one record and one
-    /// file, so a `with` that dropped a member would silently reset it — and the threshold
+    /// file, so a `with` that dropped a member would silently reset it, and the threshold
     /// resetting to 70 because someone enabled auto-update is the kind of thing nobody
     /// notices until a notification arrives early.
     /// </summary>
@@ -397,7 +397,7 @@ public class UsageEngineTests
     /// Turning notifications off and on again must not swallow the next crossing.
     ///
     /// <para>The gate is <c>Settings.NotifyOnThreshold &amp;&amp; _watcher.ShouldNotify(...)</c>,
-    /// and <c>&amp;&amp;</c> short-circuits — so while notifications are off the watcher is
+    /// and <c>&amp;&amp;</c> short-circuits, so while notifications are off the watcher is
     /// never consulted and its edge state freezes at whatever it held when they were switched
     /// off. Notify once at 95%, switch off, let the window reset, switch back on, climb past
     /// the threshold again: the watcher still believes it is above, and a genuine crossing is
@@ -413,7 +413,7 @@ public class UsageEngineTests
         var notifications = new List<AppNotification>();
         engine.NotificationRequested += notifications.Add;
 
-        provider.SetSession(95);          // crosses 70 — one notification
+        provider.SetSession(95);          // crosses 70, one notification
         engine.Start(timers);
         Assert.Single(notifications);
 
@@ -474,7 +474,7 @@ public class UsageEngineTests
     }
 
     /// <summary>
-    /// The notification actually fires at the new threshold, not the old one — the whole
+    /// The notification actually fires at the new threshold, not the old one, the whole
     /// point, and the part a setter that only wrote settings would miss.
     /// </summary>
     [Fact]
@@ -503,7 +503,7 @@ public class UsageEngineTests
     /// <para>This is why <see cref="UsageEngine.SetThresholdPercent"/> rebuilds the watcher
     /// rather than re-reading a field. The watcher is edge-triggered, so a stale "we are not
     /// above" flag decided against the old threshold would keep it silent until a window
-    /// reset — leaving a user who just asked to be warned at 70%, while sitting at 75%,
+    /// reset, leaving a user who just asked to be warned at 70%, while sitting at 75%,
     /// hearing nothing for hours.</para>
     /// </summary>
     [Fact]
@@ -545,7 +545,7 @@ public class UsageEngineTests
         engine.SetThresholdPercent(90);
         timers.Poll.Tick();
 
-        Assert.Single(notifications);     // 75 < 90 — no second notification
+        Assert.Single(notifications);     // 75 < 90, no second notification
     }
 
     /// <summary>
@@ -587,7 +587,7 @@ public class UsageEngineTests
 
     /// <summary>
     /// An absent session percentage (<see cref="UsageValueStatus.Unavailable"/>) must never be
-    /// read as a zero crossing the threshold — the whole reason the engine now branches on
+    /// read as a zero crossing the threshold, the whole reason the engine now branches on
     /// <see cref="UsageSnapshot.SessionPercentStatus"/> rather than on nullness. The threshold
     /// is set to the lowest value the UI allows, so any fabricated number at all would notify.
     /// </summary>
@@ -625,7 +625,7 @@ public class UsageEngineTests
     /// <see cref="UsagePercent"/>'s own doc states the converse of the test above does not
     /// hold: a status other than <see cref="UsageValueStatus.Unavailable"/> can still carry no
     /// figure. The threshold notifier used to branch on the status alone and then dereference
-    /// the figure unconditionally, which crashed on exactly that combination — no provider
+    /// the figure unconditionally, which crashed on exactly that combination, no provider
     /// shipped today produces it, but nothing says one never will.
     /// </summary>
     [Fact]
@@ -737,7 +737,7 @@ public class UsageEngineTests
         engine.UpdateCheckDue += () => checks++;
         engine.Start(timers);
 
-        Assert.Equal(0, checks);                  // not during startup — it must not race the first refresh
+        Assert.Equal(0, checks);                  // not during startup, it must not race the first refresh
 
         timers.FirstUpdateCheck.Tick();
         Assert.Equal(1, checks);
@@ -752,11 +752,11 @@ public class UsageEngineTests
 
     /// <summary>
     /// The rate-card drift check rides the same two-timer shape as the update check (ADR-0016,
-    /// GitHub issue #257) — one shortly after launch, then weekly.
+    /// GitHub issue #257), one shortly after launch, then weekly.
     ///
     /// <para>Its own timers, not the update check's: the two cadences are hours and days apart
     /// and share nothing but the pattern. What they must share is that the engine only ever says
-    /// <i>when</i> — it raises the event and touches no network, which is what keeps
+    /// <i>when</i>, it raises the event and touches no network, which is what keeps
     /// <c>O-view.App</c> free of the HTTP that both heads wire up.</para>
     /// </summary>
     [Fact]
@@ -813,7 +813,7 @@ public class UsageEngineTests
     /// <summary>
     /// Regression: <c>WeeklyResetCoordinator.WithReportedResets</c> overrode the session reset
     /// instant with a <c>with</c> expression that left <c>SessionResetAtUtcStatus</c> carried
-    /// forward from the snapshot it refines — <c>Unavailable</c>, on the ordinary path where
+    /// forward from the snapshot it refines, <c>Unavailable</c>, on the ordinary path where
     /// nothing had been derived yet. That left a snapshot holding an instant while still
     /// flagged as carrying none, and reading <c>SessionResetAtUtcValue</c> threw. The override
     /// must read back as <see cref="UsageValueStatus.Real"/>, the same as any other source read
@@ -833,7 +833,7 @@ public class UsageEngineTests
         using var _e = engine;
 
         // No derived session reset: SessionResetAtUtc is null, so SessionResetAtUtcStatus
-        // starts Unavailable by UsageSnapshot's own default — the exact state the override
+        // starts Unavailable by UsageSnapshot's own default, the exact state the override
         // must leave readable rather than carry forward unchanged.
         provider.Next = new UsageSnapshot(
             DataSource.Live,

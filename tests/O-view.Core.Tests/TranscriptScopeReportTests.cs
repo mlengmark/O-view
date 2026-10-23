@@ -125,7 +125,7 @@ public class TranscriptScopeReportTests : IDisposable
     [Fact]
     public void Explain_ReportsHowManyLocationsWereChecked()
     {
-        // The evidence behind a "found none" — the same contract PlanHistoryReport keeps.
+        // The evidence behind a "found none", the same contract PlanHistoryReport keeps.
         var report = TranscriptScopeReport.Inspect(Projects, [Cowork, Path.Combine(_root, "cowork2")]);
 
         Assert.Equal(3, report.SearchedRoots.Count);
@@ -153,7 +153,7 @@ public class TranscriptScopeReportTests : IDisposable
     public void DeduplicatesCoworkFiles_SeenThroughTwoRoots()
     {
         // MSIX write-redirection can expose one set of sessions through both the canonical
-        // and the packaged path. Ingestion de-duplicates, so the evidence must too —
+        // and the packaged path. Ingestion de-duplicates, so the evidence must too,
         // otherwise the report overstates what is on disk.
         WriteTranscript(Path.Combine(Cowork, "org", "user", "s1"), "audit.jsonl", "{}\n");
 
@@ -222,7 +222,7 @@ public class TranscriptScopeReportTests : IDisposable
     public void ASiblingFolderWithASimilarName_IsNotExcludedByPrefix()
     {
         // "...own-refresher-folder-2" must not be treated as sitting inside
-        // "...own-refresher-folder" — a plain string prefix check would get this wrong.
+        // "...own-refresher-folder", a plain string prefix check would get this wrong.
         var ownFolder = Path.Combine(Projects, "own-refresher-folder");
         WriteTranscript(ownFolder + "-2", "session.jsonl", "{}\n");
 
@@ -232,25 +232,25 @@ public class TranscriptScopeReportTests : IDisposable
     }
 
     [Theory]
-    // Windows, this machine's own layout — matches, which is why the exclusion worked here.
+    // Windows, this machine's own layout, matches, which is why the exclusion worked here.
     [InlineData(
         @"C:\Users\Maximilian\AppData\Local\O-view",
         "C--Users-Maximilian-AppData-Local-O-view")]
-    // Windows, a user name holding a dot or an underscore — "." and "_" are each a separate
+    // Windows, a user name holding a dot or an underscore, "." and "_" are each a separate
     // character Claude Code also maps to "-", missed before and silently breaking the
     // exclusion for exactly this population.
     [InlineData(@"C:\Users\john_doe\AppData\Local\O-view", "C--Users-john-doe-AppData-Local-O-view")]
     [InlineData(
         @"C:\Users\Maximilian\.paperclip\instances\default\_default",
         "C--Users-Maximilian--paperclip-instances-default--default")]
-    // Linux — WorkingDirectory resolves to this shape, and the leading "/" plus the "."
+    // Linux, WorkingDirectory resolves to this shape, and the leading "/" plus the "."
     // immediately after it must both become "-", producing a double dash.
     [InlineData("/home/user/.local/share/O-view", "-home-user--local-share-O-view")]
     public void MangleCwd_MatchesHowClaudeCodeNamesTheProjectFolder(string cwd, string expected)
     {
         // issue #313: a folder name derived with only separators and colons replaced never
         // matches Claude Code's own folder on Linux, and silently misses on Windows whenever
-        // the user name holds a "." or "_" — so the exclusion this whole report depends on
+        // the user name holds a "." or "_", so the exclusion this whole report depends on
         // quietly does nothing.
         Assert.Equal(expected, ClaudeCliRefresher.MangleCwd(cwd));
     }
@@ -275,11 +275,11 @@ public class TranscriptScopeReportTests : IDisposable
     [Fact]
     public void ResolveOwnProjectFolder_Null_WhenThePreferredDirectoryIsMissing()
     {
-        // O-view's data directory does not exist yet — first run, a fresh install, or a
-        // cleared folder — so the refresher actually spawns out of the user-profile fallback
+        // O-view's data directory does not exist yet, first run, a fresh install, or a
+        // cleared folder, so the refresher actually spawns out of the user-profile fallback
         // instead (ClaudeCliRefresher.WorkingDirectory). That fallback is the same home
         // directory the user's real sessions already use, so excluding its mangled form would
-        // drop every genuine transcript they have — issue #313 the other way round. Null means
+        // drop every genuine transcript they have, issue #313 the other way round. Null means
         // "exclude nothing", which is the only safe answer once the refresher and the user
         // share one folder.
         var absent = Path.Combine(Path.GetTempPath(), $"oview-own-absent-{Guid.NewGuid():N}");

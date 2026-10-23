@@ -15,8 +15,8 @@ namespace OView.Tray.Popup;
 /// so nothing on it says which application is asking.
 ///
 /// This carries the same mark, palette and type as the tray menu and the detail panel, and
-/// gives the two answers different weight — one accent-filled primary, one outlined
-/// secondary — instead of two identical buttons that make the user read both to tell them
+/// gives the two answers different weight, one accent-filled primary, one outlined
+/// secondary, instead of two identical buttons that make the user read both to tell them
 /// apart.
 /// </summary>
 public partial class DialogWindow : Window
@@ -62,12 +62,12 @@ public partial class DialogWindow : Window
         dialog.Populate(title, message, confirmLabel, cancelLabel, detail);
 
         // A tray app owns no activated window, so the same foreground problem the flyouts
-        // have applies here — except a dialog that opens behind another window is worse:
+        // have applies here, except a dialog that opens behind another window is worse:
         // it is modal, so the user is left with an app that appears to have frozen.
         //
         // This MUST run after the window is on screen. It used to be attached to
-        // SourceInitialized, which fires while the HWND exists but is still WS_VISIBLE-less
-        // — and SetForegroundWindow silently fails on an invisible window, so the whole
+        // SourceInitialized, which fires while the HWND exists but is still WS_VISIBLE-less,
+        // and SetForegroundWindow silently fails on an invisible window, so the whole
         // AttachThreadInput fallback was being spent on a no-op. The failure only shows on a
         // long-running instance, because a process that was just launched still holds
         // foreground rights and gets activated anyway; that is exactly why it survived
@@ -98,7 +98,7 @@ public partial class DialogWindow : Window
     }
 
     /// <summary>
-    /// Renders the dialog without showing it — the same verification path the tray menu
+    /// Renders the dialog without showing it, the same verification path the tray menu
     /// uses, since a modal cannot be screenshotted without blocking the run that would
     /// take the screenshot.
     /// </summary>

@@ -10,14 +10,14 @@ namespace OView.Linux.Tests.Runtime;
 /// <param name="Label">The text a person reads, with the mnemonic markers taken out.</param>
 /// <param name="Enabled">Whether it could be clicked. Absent from the properties means true.</param>
 /// <param name="Visible">Whether it would be drawn at all. Absent from the properties means true.</param>
-/// <param name="Kind">The <c>type</c> property — <c>separator</c> for a divider, <c>standard</c> otherwise.</param>
+/// <param name="Kind">The <c>type</c> property, <c>separator</c> for a divider, <c>standard</c> otherwise.</param>
 public sealed record DBusMenuRow(int Id, int Depth, string Label, bool Enabled, bool Visible, string Kind)
 {
     /// <summary>
     /// The label without its mnemonic markers: an underscore marks the letter after it as the
     /// keyboard shortcut and is not drawn, and a doubled one is a literal underscore. Rows are
-    /// matched on this rather than on the raw property, so a test says what the person reads —
-    /// "Exit O-view" — and keeps saying it if the head ever marks up a shortcut.
+    /// matched on this rather than on the raw property, so a test says what the person reads,
+    /// "Exit O-view", and keeps saying it if the head ever marks up a shortcut.
     /// </summary>
     public static string Readable(string label)
     {
@@ -66,7 +66,7 @@ public sealed record DBusMenuStep(string What, TimeSpan Took);
 public sealed record DBusMenu(
     string Path, uint Revision, IReadOnlyList<DBusMenuRow> Rows, IReadOnlyList<DBusMenuStep> Steps)
 {
-    /// <summary>How long the whole menu took to open — the duration this slice exists to bound.</summary>
+    /// <summary>How long the whole menu took to open, the duration this slice exists to bound.</summary>
     public TimeSpan Took => Steps.Aggregate(TimeSpan.Zero, (total, step) => total + step.Took);
 
     /// <summary>
@@ -79,7 +79,7 @@ public sealed record DBusMenu(
 
     /// <summary>
     /// Which of <paramref name="labels"/> a person would not find in this menu, each said the
-    /// way it is wrong — missing outright, or there but hidden. The difference is the whole
+    /// way it is wrong, missing outright, or there but hidden. The difference is the whole
     /// diagnosis: nothing built the row, against the row being built and suppressed.
     /// </summary>
     public IReadOnlyList<string> RowsMissing(IEnumerable<string> labels) =>
@@ -107,7 +107,7 @@ public sealed record DBusMenu(
 
         if (Rows.Count == 0)
         {
-            report.AppendLine("(none — the menu is empty)");
+            report.AppendLine("(none, the menu is empty)");
         }
         else
         {
@@ -124,7 +124,7 @@ public sealed record DBusMenu(
 /// <summary>
 /// Test code standing in for the half of a panel that opens a menu: it asks a registered tray
 /// item where its menu lives, tells the item the menu is about to be shown, and fetches the
-/// layout over <c>com.canonical.dbusmenu</c> — the three calls a notification area makes, in the
+/// layout over <c>com.canonical.dbusmenu</c>, the three calls a notification area makes, in the
 /// order it makes them.
 ///
 /// <para><b>Why this exists.</b> The menu on this head took tens of seconds to appear (issue
@@ -141,7 +141,7 @@ public sealed record DBusMenu(
 /// <para><b>Its own connection, not <see cref="DBusConnection.Session"/>.</b> The same reason
 /// <see cref="StandInTrayHost"/> keeps one: that one is a shared static the app's own code uses,
 /// and disposing it would leave the rest of the run without a bus. A panel is also a different
-/// process from the notification area's registry in no desktop at all — but it is a different
+/// process from the notification area's registry in no desktop at all, but it is a different
 /// connection here, which is what makes the item answer the way it would a stranger.</para>
 /// </summary>
 public sealed class DBusMenuClient : IDisposable
@@ -207,7 +207,7 @@ public sealed class DBusMenuClient : IDisposable
             "reading the item's menu object path", () => ReadMenuPathAsync(item));
 
         // What a panel says before it draws: the item's chance to bring the rows up to date.
-        // Answered, not obeyed — nothing here acts on the "needs updating" it replies with,
+        // Answered, not obeyed, nothing here acts on the "needs updating" it replies with,
         // because the fetch below asks for the layout as it stands either way.
         await StepAsync(
             "telling the item its menu is about to be shown", () => AboutToShowAsync(item, path));
@@ -254,7 +254,7 @@ public sealed class DBusMenuClient : IDisposable
     public void Dispose() => _connection.Dispose();
 
     /// <summary>
-    /// The item's <c>Menu</c> property — an object path under the spec, and read as a string
+    /// The item's <c>Menu</c> property, an object path under the spec, and read as a string
     /// because that is all it is used for here. A panel with nothing to open is not a slow menu
     /// but a missing one, so an empty or root path is rejected here rather than fetched.
     /// </summary>
@@ -286,7 +286,7 @@ public sealed class DBusMenuClient : IDisposable
     /// <summary>
     /// <c>AboutToShow</c>, as a panel calls it on the way to drawing. An error reply is let
     /// through: an item that does not implement it is within the spec, and this call is here to
-    /// be made and waited on, not to be the thing under test. A timeout is not let through —
+    /// be made and waited on, not to be the thing under test. A timeout is not let through,
     /// that is the menu failing to open, which is the whole subject.
     /// </summary>
     private async Task<bool> AboutToShowAsync(RegisteredItem item, string menuPath)
@@ -313,7 +313,7 @@ public sealed class DBusMenuClient : IDisposable
     }
 
     /// <summary>
-    /// <c>GetLayout(0, -1, [])</c> — the whole menu, every property — and the rows it replies
+    /// <c>GetLayout(0, -1, [])</c>, the whole menu, every property, and the rows it replies
     /// with. The same call libdbusmenu makes, so an item that is slow to answer it is slow for a
     /// person in front of a panel.
     /// </summary>
@@ -355,7 +355,7 @@ public sealed class DBusMenuClient : IDisposable
 
     /// <summary>
     /// The <c>u(ia{sv}av)</c> a <c>GetLayout</c> reply carries: the revision, then the root item
-    /// with every row nested inside it. The root itself is not a row — it is the menu — so what
+    /// with every row nested inside it. The root itself is not a row, it is the menu, so what
     /// comes back is its children, flattened depth first with the depth kept.
     /// </summary>
     private static (uint Revision, IReadOnlyList<DBusMenuRow> Rows) ReadLayout(Message message)
@@ -447,7 +447,7 @@ public sealed class DBusMenuClient : IDisposable
             : "";
 
     /// <summary>
-    /// A boolean property, true when it is absent — which is what the interface says both
+    /// A boolean property, true when it is absent, which is what the interface says both
     /// <c>enabled</c> and <c>visible</c> default to, and why a row with no properties at all is
     /// still a row a person would see.
     /// </summary>

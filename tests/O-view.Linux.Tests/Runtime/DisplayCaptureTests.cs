@@ -5,7 +5,7 @@ namespace OView.Linux.Tests;
 
 /// <summary>
 /// Proves <see cref="DisplayCapture"/> both ways: a no-op, no throw, with
-/// OVIEW_RUNTIME_ARTIFACTS unset — the state the ordinary test job runs in — and, under the
+/// OVIEW_RUNTIME_ARTIFACTS unset, the state the ordinary test job runs in, and, under the
 /// linux-runtime job's virtual display, a real PNG sized to that display, not an empty file.
 /// </summary>
 public class DisplayCaptureTests

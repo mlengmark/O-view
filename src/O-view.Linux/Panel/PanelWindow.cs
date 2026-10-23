@@ -19,15 +19,15 @@ namespace OView.Linux.Panel;
 /// The detail panel as a window, placed in the work area's corner nearest the panel bar.
 ///
 /// <para><b>Still not a docked flyout, and it never can be.</b> StatusNotifierItem exposes no
-/// way to ask where its own icon was drawn — there is no <c>Shell_NotifyIconGetRect</c>
-/// equivalent — so anchoring the panel <i>under the icon</i> remains impossible and is not
+/// way to ask where its own icon was drawn, there is no <c>Shell_NotifyIconGetRect</c>
+/// equivalent, so anchoring the panel <i>under the icon</i> remains impossible and is not
 /// attempted. What ADR-0013 decision 3 asks for is "whatever positioning is genuinely
 /// achievable", and a fixed corner is: the work area already excludes the panel bar wherever
 /// the desktop publishes it, so the same corner the Windows head docks to can be computed
 /// from <c>Screens</c> alone (issue #144).</para>
 ///
 /// <para>The corner rule itself is <see cref="WorkAreaPlacement"/>, shared with the Windows
-/// head rather than copied — it is a decision a user would expect both platforms to make the
+/// head rather than copied, it is a decision a user would expect both platforms to make the
 /// same way.</para>
 ///
 /// <para><b>A request, not a guarantee.</b> Setting <c>Position</c> is an X11 request the
@@ -36,21 +36,21 @@ namespace OView.Linux.Panel;
 /// <c>--diagnose</c> is that one round trip answers the question, and "did the corner take?"
 /// is exactly the question the next hardware report needs to answer. Where the screen
 /// geometry cannot be read at all, this falls back to centring rather than guessing at
-/// coordinates — ADR-0013's reasoning, unchanged: a panel half off-screen reads as broken
+/// coordinates, ADR-0013's reasoning, unchanged: a panel half off-screen reads as broken
 /// where a plainly-centred one does not.</para>
 ///
 /// <para><b>And the corner is only where it starts.</b> Given somewhere to keep a place, the
-/// header becomes a drag handle and the panel reopens where the user put it —
+/// header becomes a drag handle and the panel reopens where the user put it,
 /// <see cref="PanelPlacementMemory"/> decides both the snap on release and the re-clamp on
 /// open, shared with the Windows head so dragging cannot come to mean two different things.
 /// Given nowhere, which is a native Wayland session (<see cref="ClientPlacement"/>), nothing
 /// about this file changes: no handle, no cursor, no stored place, no keyboard move, the same
 /// corner as before. The gesture itself is <see cref="PanelDrag"/>, and Alt with an arrow key is
-/// <see cref="NudgeOf"/> — the same save through the same rule, without the pointer. What makes
+/// <see cref="NudgeOf"/>, the same save through the same rule, without the pointer. What makes
 /// the settled place stick once the manager lets go is <see cref="PanelMoveSettling"/>, which has
 /// to ask twice.</para>
 ///
-/// <para>Deactivation only dismisses once the panel has actually been focused — see
+/// <para>Deactivation only dismisses once the panel has actually been focused, see
 /// <see cref="PanelDismissal"/> for why an unguarded handler makes a refused activation look
 /// exactly like a broken tray icon. A move suppresses it too, for a different reason the
 /// handler names.</para>
@@ -70,13 +70,13 @@ public sealed class PanelWindow : Window
 
     /// <summary>
     /// Waits for the window manager to stop moving the panel, which is the only way the end of
-    /// a move is observable — see <see cref="PanelDrag"/>. The same wait then carries the
+    /// a move is observable, see <see cref="PanelDrag"/>. The same wait then carries the
     /// settling's read-backs, since both are "give the manager a grace and look again".
     /// </summary>
     private readonly DispatcherTimer _settle;
 
     /// <summary>
-    /// Makes the settled place stick, which asking for it once does not —
+    /// Makes the settled place stick, which asking for it once does not,
     /// <see cref="PanelMoveSettling"/> says why. Built for every session, since a head with no
     /// store never reaches a drop to settle.
     /// </summary>
@@ -91,7 +91,7 @@ public sealed class PanelWindow : Window
     /// <summary>
     /// The height the last fit decided. Kept because a re-placement after a drag or a reset has
     /// no new one to go on, and the window's own frame is not the panel's height on a short
-    /// screen — <see cref="FitToScreen"/> says why.
+    /// screen, <see cref="FitToScreen"/> says why.
     /// </summary>
     private double _placedHeightDip;
 
@@ -122,7 +122,7 @@ public sealed class PanelWindow : Window
 
         // Says whether the corner actually took. A window manager is free to ignore a
         // position request and a native Wayland compositor always will, so the difference
-        // between "we asked" and "it happened" has to reach a bug report — no test here can
+        // between "we asked" and "it happened" has to reach a bug report, no test here can
         // reach a compositor.
         PositionChanged += (_, e) =>
         {
@@ -155,8 +155,8 @@ public sealed class PanelWindow : Window
                 return;
             }
 
-            // Marked handled only when the panel actually moved, so every other press — and the
-            // same press in a session that can keep no place — reaches the content exactly as it
+            // Marked handled only when the panel actually moved, so every other press, and the
+            // same press in a session that can keep no place, reaches the content exactly as it
             // did before.
             if (NudgeOf(e.Key, e.KeyModifiers) is { } nudge && NudgeTo(nudge.Direction, nudge.Fine))
             {
@@ -167,7 +167,7 @@ public sealed class PanelWindow : Window
         Deactivated += (_, _) =>
         {
             // A move is run by the window manager, which grabs the pointer and can take the
-            // activation with it — so without this the panel would dismiss itself the instant
+            // activation with it, so without this the panel would dismiss itself the instant
             // it was dragged, which is the whole feature failing. The grace covers the
             // release: the click that ends a move lands wherever the panel now is, and arrives
             // after the manager has given the activation back. Returning here rather than
@@ -185,11 +185,11 @@ public sealed class PanelWindow : Window
                 return;
             }
 
-            // Not a click-away — the compositor refused the activation. Named in the log
+            // Not a click-away, the compositor refused the activation. Named in the log
             // because "panel opened" alone cannot distinguish this from the #124 deadlock,
             // and the two need completely different fixes.
             _log?.Write(
-                "panel deactivated before it was ever focused — dismissal suppressed "
+                "panel deactivated before it was ever focused, dismissal suppressed "
                 + $"(x{_dismissal.SuppressedDeactivations}); the window manager declined to activate it");
         };
 
@@ -248,7 +248,7 @@ public sealed class PanelWindow : Window
     /// Hides the panel and says which gesture did it.
     ///
     /// <para>Hidden rather than closed, as the Windows panel is: the window survives to be shown
-    /// again. What that leaves behind — one hidden window, still the application's — is what
+    /// again. What that leaves behind, one hidden window, still the application's, is what
     /// made the <i>next</i> open end the process on the lifetime's default shutdown mode (issue
     /// #312, and <see cref="Program"/> for the mode this head starts with).</para>
     ///
@@ -267,7 +267,7 @@ public sealed class PanelWindow : Window
     /// <para>Two steps, in this order. First the panel is re-laid out compactly when the screen
     /// is too short for the natural layout (<see cref="PanelDensity"/>), which buys back about
     /// 94 DIP. Then, because compacting is not always enough, <see cref="PanelFit"/> caps the
-    /// window at the work area and the content scrolls inside it — nothing is dropped and the
+    /// window at the work area and the content scrolls inside it, nothing is dropped and the
     /// last section stays reachable.</para>
     ///
     /// <para><b>Both steps measure the content, never the window.</b> The panel is
@@ -279,7 +279,7 @@ public sealed class PanelWindow : Window
     /// the tree instead.</para>
     ///
     /// <para>And it measures <i>again</i> after the compact re-layout, because the tree that
-    /// answered first is not the tree now on screen — the cap, the scroll decision and the
+    /// answered first is not the tree now on screen, the cap, the scroll decision and the
     /// corner all have to be about the second one.</para>
     ///
     /// <para>Re-populating rebuilds the whole tree, which is why the compact step only runs
@@ -350,7 +350,7 @@ public sealed class PanelWindow : Window
 
         _log?.Write(mustScroll
             ? $"panel height: capped at {heightDip:0} dip of {availableHeightDip:0} dip "
-              + "available — content scrolls"
+              + "available, content scrolls"
             : $"panel height: {heightDip:0} dip of {availableHeightDip:0} dip available");
     }
 
@@ -358,7 +358,7 @@ public sealed class PanelWindow : Window
 
     /// <summary>
     /// Puts the panel where the user left it, or at the work-area corner when there is no such
-    /// place — <see cref="PanelPlacementMemory"/> answers which, and re-clamps a remembered
+    /// place, <see cref="PanelPlacementMemory"/> answers which, and re-clamps a remembered
     /// place into the work area as it stands at this open.
     ///
     /// <para>Every fallback lands on <see cref="PlaceAtWorkAreaCorner"/> rather than on a
@@ -397,7 +397,7 @@ public sealed class PanelWindow : Window
     }
 
     /// <summary>
-    /// Puts the panel back at the work-area corner and forgets where it was dragged to — the
+    /// Puts the panel back at the work-area corner and forgets where it was dragged to, the
     /// menu's "Reset panel position" row, on a panel that is already open.
     ///
     /// <para>Forgetting first, so a later open reaches the corner rule by the ordinary route
@@ -419,7 +419,7 @@ public sealed class PanelWindow : Window
     }
 
     /// <summary>
-    /// Drop the saved place at the next open instead of opening at it — the same menu row,
+    /// Drop the saved place at the next open instead of opening at it, the same menu row,
     /// clicked before any panel existed to forget a place for.
     ///
     /// <para>A place is stored per display, and which display a panel will open on is not
@@ -431,7 +431,7 @@ public sealed class PanelWindow : Window
     private void Forget(string displayId, string? displayName)
     {
         _positions?.Forget(displayId);
-        _log?.Write($"panel position forgotten for \"{displayName}\" — back to the work-area corner");
+        _log?.Write($"panel position forgotten for \"{displayName}\", back to the work-area corner");
     }
 
     /// <summary>
@@ -443,19 +443,19 @@ public sealed class PanelWindow : Window
     /// <para><paramref name="panelHeightDip"/> comes from <see cref="FitToScreen"/> rather than
     /// from the window, for two reasons: the compositor has not answered the resize that was
     /// just asked for, and on a short screen what it answers describes the screen rather than
-    /// the panel. Width is still read from the window — nothing has ever capped it.</para>
+    /// the panel. Width is still read from the window, nothing has ever capped it.</para>
     /// </summary>
     private void PlaceAtWorkAreaCorner(double panelHeightDip)
     {
         if (TargetScreen() is not { } screen)
         {
-            _log?.Write("panel placement skipped — no screen geometry available");
+            _log?.Write("panel placement skipped, no screen geometry available");
             return;
         }
 
         // FrameSize includes the border this window draws; ClientSize is the fallback for a
         // compositor that has not reported a frame yet. Both are DIPs, and the work area is
-        // device pixels, so the scale has to be applied — the classic HiDPI mistake is to
+        // device pixels, so the scale has to be applied, the classic HiDPI mistake is to
         // compare the two directly and land a quarter of the way up the screen.
         var size = new Size((FrameSize ?? ClientSize).Width, panelHeightDip);
         var scaling = Scaling(screen);
@@ -483,7 +483,7 @@ public sealed class PanelWindow : Window
     ///
     /// <para><b>The threshold is what keeps the header's own clicks.</b>
     /// <see cref="Window.BeginMoveDrag"/> takes the press event, not a point, and hands the
-    /// pointer to the window manager for good — so calling it on the press itself would swallow
+    /// pointer to the window manager for good, so calling it on the press itself would swallow
     /// every click on the header. Waiting for movement first means a press that does not move is
     /// a press the header's content sees exactly as it did before, which is why these handlers
     /// never mark an event handled and why nothing below the header is touched at all: the
@@ -574,14 +574,14 @@ public sealed class PanelWindow : Window
     ///
     /// <para>Nothing is stored for a display the toolkit cannot name: the place would then be
     /// restored onto whichever display next failed the same way. Losing it is the smaller cost,
-    /// and the panel opens at the corner as it always did — the Windows head refuses the same
+    /// and the panel opens at the corner as it always did, the Windows head refuses the same
     /// thing for the same reason.</para>
     /// </summary>
     private bool FinishMove()
     {
         if (_memory is null || TargetScreen() is not { } screen || DisplayId(screen) is not { } displayId)
         {
-            _log?.Write("panel move finished; no place was saved — the display cannot be named");
+            _log?.Write("panel move finished; no place was saved, the display cannot be named");
             return false;
         }
 
@@ -594,7 +594,7 @@ public sealed class PanelWindow : Window
             _settling, scaling);
 
         _log?.Write(
-            $"panel moved to {Position.X},{Position.Y} on \"{screen.DisplayName}\" — place saved"
+            $"panel moved to {Position.X},{Position.Y} on \"{screen.DisplayName}\", place saved"
             + (place is { } p ? $", settled at {p.LeftDip:0},{p.TopDip:0} dip" : "; nothing to settle at"));
 
         return place is not null;
@@ -612,12 +612,12 @@ public sealed class PanelWindow : Window
     /// means a release cannot decide a place without also asking for it.</para>
     ///
     /// <para>Static, and reaching the window only through <paramref name="settling"/>'s
-    /// callbacks, because this is the half of a drag that can be proven without a compositor —
+    /// callbacks, because this is the half of a drag that can be proven without a compositor,
     /// <c>PanelDragTests</c> drives it against a stand-in window manager. Everything around it
     /// needs a real one to produce a gesture, and CI has none.</para>
     /// </summary>
     /// <param name="settling">
-    /// Where the settled place is asked for, or null to decide it and ask for nothing — which is
+    /// Where the settled place is asked for, or null to decide it and ask for nothing, which is
     /// the arithmetic on its own.
     /// </param>
     public static PanelPlacementMemory.Resolved? Settle(
@@ -648,12 +648,12 @@ public sealed class PanelWindow : Window
     /// The move a key press asks for, or null when it is not one: Alt and an arrow key for a
     /// step, Alt and Shift and an arrow key for a fine one.
     ///
-    /// <para>Static and pure, because this is the half of a keyboard move a test can reach —
+    /// <para>Static and pure, because this is the half of a keyboard move a test can reach,
     /// Avalonia raises no key events without a windowing subsystem either, the same gap
     /// <see cref="PanelDrag"/> names for the pointer.</para>
     ///
     /// <para>Alt is the modifier because a bare arrow key belongs to whatever the panel is
-    /// scrolling, and because no desktop this head runs on claims Alt with an arrow key — the
+    /// scrolling, and because no desktop this head runs on claims Alt with an arrow key, the
     /// window-moving shortcuts are Alt+F7 and Super with an arrow key. How far each step goes is
     /// not decided here: <see cref="PanelPlacementMemory"/> owns both figures, for both
     /// heads.</para>
@@ -687,7 +687,7 @@ public sealed class PanelWindow : Window
     /// press is left for whatever else wants it rather than silently swallowed.</para>
     ///
     /// <para>The step itself goes through <see cref="PanelPlacementMemory.Nudge"/>, which is
-    /// <see cref="Settle"/>'s own pair of calls with the step added first — so the keyboard
+    /// <see cref="Settle"/>'s own pair of calls with the step added first, so the keyboard
     /// snaps, clamps and saves exactly as letting go of the header does.</para>
     /// </summary>
     private bool NudgeTo(NudgeDirection direction, bool fine)
@@ -769,7 +769,7 @@ public sealed class PanelWindow : Window
     private static PixelBox ToBox(PixelRect r) => new(r.X, r.Y, r.Width, r.Height);
 
     /// <summary>
-    /// The same rectangle in device-independent units — what the shared placement rule works
+    /// The same rectangle in device-independent units, what the shared placement rule works
     /// in, since a remembered place is a physical spot on a display rather than a pixel count
     /// (<see cref="DipBox"/>).
     /// </summary>
@@ -778,7 +778,7 @@ public sealed class PanelWindow : Window
 
     private static string Describe(PixelRect r) => $"{r.Width}x{r.Height}+{r.X}+{r.Y}";
 
-    /// <summary>Populates without showing — for the offscreen verification renders.</summary>
+    /// <summary>Populates without showing, for the offscreen verification renders.</summary>
     internal PanelContent PopulateOnly(
         UsageSnapshot snapshot,
         PanelStatistics stats,
@@ -797,16 +797,16 @@ public sealed class PanelWindow : Window
 
 /// <summary>
 /// The press-and-move gesture that moves the panel, and the window it has to stay open
-/// through — everything about a drag that can be decided without a compositor.
+/// through, everything about a drag that can be decided without a compositor.
 ///
 /// <para><b>Why the end of a move is a wait.</b> An X11 move is run by the window manager:
 /// <c>BeginMoveDrag</c> asks for one and returns at once, the manager takes the pointer, and
-/// the client is told where the window ended up by a stream of position changes — and is never
+/// the client is told where the window ended up by a stream of position changes, and is never
 /// told that the stream has finished. The button release goes to the manager's own grab, not to
 /// this window, so there is no release event to read. The end of a move is therefore the moment
 /// the positions stop arriving, and <see cref="SettleGrace"/> is how long that takes to be sure
 /// of. This is the one real difference from the Windows head, whose move loop blocks until the
-/// user lets go and so knows the moment exactly — and the reason the settled place has to be
+/// user lets go and so knows the moment exactly, and the reason the settled place has to be
 /// asked for more than once (<see cref="PanelMoveSettling"/>): the positions stop when the
 /// pointer stops, which can be well before the button comes up and the grab with it.</para>
 ///
@@ -845,7 +845,7 @@ public sealed class PanelDrag
     /// <summary>The handle was pressed at <paramref name="at"/>, in the window's own units.</summary>
     public void Pressed(Point at) => _pressedAt = at;
 
-    /// <summary>Forgets a press that came up without the threshold being passed — a click.</summary>
+    /// <summary>Forgets a press that came up without the threshold being passed, a click.</summary>
     public void PressSpent() => _pressedAt = null;
 
     /// <summary>

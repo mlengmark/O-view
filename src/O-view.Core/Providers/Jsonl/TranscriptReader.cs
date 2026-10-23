@@ -6,7 +6,7 @@ using OView.Core.Pricing;
 namespace OView.Core.Providers.Jsonl;
 
 /// <summary>
-/// Reads Claude agent JSONL transcripts (docs/findings/jsonl-schema.md) — both Claude
+/// Reads Claude agent JSONL transcripts (docs/findings/jsonl-schema.md), both Claude
 /// Code transcripts and Cowork audit logs, whose assistant records carry the identical
 /// usage schema and differ only in how the request id is spelled (see
 /// <see cref="ReadRequestId"/>). Claude appends while we read, so files open with
@@ -17,7 +17,7 @@ namespace OView.Core.Providers.Jsonl;
 public static class TranscriptReader
 {
     /// <summary>
-    /// Claude Code's marker for a locally generated assistant message — an interruption,
+    /// Claude Code's marker for a locally generated assistant message, an interruption,
     /// an error, a "prompt too long" notice. Not a model and not an API call.
     ///
     /// <para><b>This is the one and only place such records are handled.</b> They are
@@ -25,14 +25,14 @@ public static class TranscriptReader
     /// rollup store, so it cannot reach <see cref="Pricing.CostEstimator"/> or
     /// <see cref="Models.ModelDisplayName"/>. Both of those used to carry their own
     /// <c>&lt;synthetic&gt;</c> branch, which was unreachable and diverged from this one on
-    /// case sensitivity — so an upstream casing change would have silently swapped which
+    /// case sensitivity, so an upstream casing change would have silently swapped which
     /// implementation was live, and with it whether these records count toward
     /// <c>DailyRollup.RequestCount</c> (GitHub issue #57).</para>
     ///
     /// <para>Dropping rather than storing at zero cost is deliberate and is the behaviour
     /// that has always shipped: the filter dates from the same commit that introduced the
     /// store, so no build has ever ingested one. Measured on real transcripts, every
-    /// synthetic record carries all-zero usage in all four token fields — so storing them
+    /// synthetic record carries all-zero usage in all four token fields, so storing them
     /// would add nothing to any total while inflating the request count with messages no
     /// model produced.</para>
     /// </summary>
@@ -40,7 +40,7 @@ public static class TranscriptReader
 
     /// <summary>
     /// Parse a whole transcript file into assistant records, in file order (append
-    /// order — so per-request, later records supersede earlier ones). Returns empty on
+    /// order, so per-request, later records supersede earlier ones). Returns empty on
     /// any file-level failure. Never throws.
     /// </summary>
     public static IReadOnlyList<TranscriptRecord> ReadFile(string path) => ReadFrom(path, 0).Records;
@@ -50,7 +50,7 @@ public static class TranscriptReader
     ///
     /// <para><b>Not <see cref="FileInfo.Length"/>, and the difference is the point.</b> That
     /// reads the cached directory entry through <c>GetFileAttributesEx</c>, which Windows
-    /// documents as not necessarily current for a file that is open and being written — and
+    /// documents as not necessarily current for a file that is open and being written, and
     /// every transcript this app reads is exactly that, held open by Claude for the length of a
     /// session. A stale entry makes a growing file look untouched, and ingestion's "unchanged
     /// since the last poll" test then skips it on every poll for as long as the session lasts:
@@ -84,7 +84,7 @@ public static class TranscriptReader
     /// truncated record or skipping it permanently.
     ///
     /// <para><b>Streamed, not slurped.</b> This used to read the whole range into one
-    /// <c>byte[]</c>, decode it to a string and <c>Split</c> that — roughly five times the
+    /// <c>byte[]</c>, decode it to a string and <c>Split</c> that, roughly five times the
     /// file's size in transient allocations per file, nearly all of it on the large object
     /// heap. Steady state never noticed, because the offset above means there is usually
     /// nothing new to read. A <i>first</i> run has no offsets, and the first machine to
@@ -167,7 +167,7 @@ public static class TranscriptReader
 
     /// <summary>
     /// 64 KB. Large enough that a poll over a big transcript is not dominated by syscalls,
-    /// small enough to stay off the large object heap — the 85 KB threshold is the ceiling
+    /// small enough to stay off the large object heap, the 85 KB threshold is the ceiling
     /// this is chosen under, and exceeding it is what the streaming change exists to avoid.
     /// </summary>
     private const int ReadBufferSize = 64 * 1024;
@@ -188,7 +188,7 @@ public static class TranscriptReader
             var root = doc.RootElement;
             if (root.ValueKind != JsonValueKind.Object) return null;
 
-            // Only assistant records carry usage. Unknown types are skipped silently —
+            // Only assistant records carry usage. Unknown types are skipped silently,
             // the type list is not assumed exhaustive.
             if (!root.TryGetProperty("type", out var type) ||
                 type.ValueKind != JsonValueKind.String ||
@@ -233,7 +233,7 @@ public static class TranscriptReader
         }
         catch (JsonException)
         {
-            // Truncated final line or malformed content — skip, never fatal.
+            // Truncated final line or malformed content, skip, never fatal.
             return null;
         }
     }
@@ -242,7 +242,7 @@ public static class TranscriptReader
     /// The request id under either spelling. Claude Code transcripts write
     /// <c>requestId</c>; Cowork audit logs write <c>request_id</c> with an otherwise
     /// identical record. Reading only the camelCase name ingested nothing at all from
-    /// Cowork — no error, no partial total, just permanently empty tiles (issue #44).
+    /// Cowork, no error, no partial total, just permanently empty tiles (issue #44).
     /// </summary>
     private static string? ReadRequestId(JsonElement root)
     {
@@ -276,7 +276,7 @@ public static class TranscriptReader
     /// <para><b>Present on effectively every record is not present on every record.</b> A
     /// record whose object is missing or unreadable keeps its flat total in
     /// <see cref="TokenSplit.CacheWriteTtlUnrecorded"/> rather than being attributed to either
-    /// TTL — the same bucket the migration puts pre-existing rows in, priced at the cheaper
+    /// TTL, the same bucket the migration puts pre-existing rows in, priced at the cheaper
     /// rate with the assumption named in the panel's caveat. Splitting the difference, or
     /// assuming the majority TTL, would be a fabricated attribution (rule 6).</para>
     ///

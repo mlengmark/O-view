@@ -17,20 +17,20 @@ namespace OView.Tray.Popup;
 ///
 /// It replaces a WPF <c>ContextMenu</c> placed at <c>PlacementMode.MousePoint</c>. Opening
 /// at the cursor put the menu wherever the pointer happened to be when the tray icon was
-/// hit — which, since the tray icon sits *inside* the taskbar, is reliably the one place a
+/// hit, which, since the tray icon sits *inside* the taskbar, is reliably the one place a
 /// menu cannot fully fit. It clipped into the taskbar and off the screen edge, leaving
 /// items unclickable, and grew worse with every item added.
 ///
 /// So placement no longer depends on the cursor at all: the flyout docks to the same
-/// work-area corner as the detail panel, via the same <see cref="PopupPositioner"/> — the
+/// work-area corner as the detail panel, via the same <see cref="PopupPositioner"/>, the
 /// model Windows' own volume, network and calendar flyouts use. The work area excludes the
 /// taskbar by definition, so clearing it is structural rather than a margin that happens to
 /// be big enough. Height is measured after layout on every open, so adding rows keeps
 /// working without touching the placement code.
 ///
 /// Being a real window rather than a <c>ContextMenu</c> also buys the styling the issue
-/// asked for — the panel's own palette (<see cref="PanelTheme"/>), rounded card, brand
-/// mark — which a themed system context menu cannot give.
+/// asked for, the panel's own palette (<see cref="PanelTheme"/>), rounded card, brand
+/// mark, which a themed system context menu cannot give.
 /// </summary>
 public partial class MenuWindow : Window, IFlyout
 {
@@ -38,7 +38,7 @@ public partial class MenuWindow : Window, IFlyout
     public bool? ThemeOverride { get; set; }
 
     /// <summary>
-    /// Docking, the open/close transitions and the toggle grace window — shared with the
+    /// Docking, the open/close transitions and the toggle grace window, shared with the
     /// detail panel rather than reimplemented here (issue #54).
     /// </summary>
     private readonly DockedFlyout _flyout;
@@ -53,7 +53,7 @@ public partial class MenuWindow : Window, IFlyout
     /// <inheritdoc cref="DockedFlyout.ClosedByClickAway"/>
     public bool ClosedByClickAway => _flyout.ClosedByClickAway;
 
-    /// <summary>Closes the flyout from outside — a second right-click completing the toggle.</summary>
+    /// <summary>Closes the flyout from outside, a second right-click completing the toggle.</summary>
     public void DismissNow() => _flyout.BeginClose();
 
     /// <summary>
@@ -78,7 +78,7 @@ public partial class MenuWindow : Window, IFlyout
     public Func<int, int>? SetThresholdPercent { get; set; }
 
 
-    /// <summary>What the pill currently reads — the value the option marks are drawn from.</summary>
+    /// <summary>What the pill currently reads, the value the option marks are drawn from.</summary>
     private int _thresholdPercent = UsageLevels.CriticalPercent;
 
     /// <summary>The user asked to set or clear the weekly reset time (issue #186).</summary>
@@ -142,7 +142,7 @@ public partial class MenuWindow : Window, IFlyout
         foreach (var (option, label) in OptionRows.Zip(OptionLabels))
         {
             // Labelled from the row's own Tag rather than from XAML, so a choice cannot read
-            // one percentage and apply another — ChoiceOf is what the click uses too.
+            // one percentage and apply another, ChoiceOf is what the click uses too.
             label.Text = MenuText.ThresholdPercent(ChoiceOf(option));
 
             option.Click += (sender, e) =>
@@ -170,7 +170,7 @@ public partial class MenuWindow : Window, IFlyout
     /// </summary>
     /// <param name="CanUpdateAutomatically">
     /// Whether this build can self-install at all (<c>UpdatePolicy.MayDownloadAndRun</c>).
-    /// False hides the row outright — see the XAML for why it is hidden and not disabled.
+    /// False hides the row outright, see the XAML for why it is hidden and not disabled.
     /// </param>
     /// <param name="WeeklyReset">
     /// The entered weekly reset as the row should show it, or empty when O-view is deriving
@@ -201,7 +201,7 @@ public partial class MenuWindow : Window, IFlyout
         SetOptionsExpanded(false, redock: false);
 
         // takeForeground: a tray-resident app owns no activated window, so Activate()
-        // alone is not guaranteed the foreground — and without it the flyout never
+        // alone is not guaranteed the foreground, and without it the flyout never
         // receives the deactivation that dismisses it on an outside click (issue #11,
         // which the old ContextMenu hit for the same reason).
         _flyout.Show(takeForeground: true);
@@ -229,7 +229,7 @@ public partial class MenuWindow : Window, IFlyout
         UpdateAutoRow.Visibility = state.CanUpdateAutomatically ? Visibility.Visible : Visibility.Collapsed;
 
         // Only present while there is something to undo, and Collapsed for the same reason as
-        // above — this is the ordinary case, so a permanent empty row would be 34px of nothing
+        // above, this is the ordinary case, so a permanent empty row would be 34px of nothing
         // for every user who never trips the guard.
         var blocked = state.UsageRefreshBlocked.Length > 0;
         ResumeRefreshRow.Visibility = blocked ? Visibility.Visible : Visibility.Collapsed;
@@ -263,7 +263,7 @@ public partial class MenuWindow : Window, IFlyout
     private System.Windows.Controls.Button[] OptionRows => [Threshold70, Threshold80, Threshold90];
 
     /// <summary>
-    /// The percentage an option row stands for. XAML <c>Tag</c> is a string — the first
+    /// The percentage an option row stands for. XAML <c>Tag</c> is a string, the first
     /// version cast it straight to <c>int</c> and threw on the very first render.
     /// </summary>
     private static int ChoiceOf(FrameworkElement row) =>
@@ -275,7 +275,7 @@ public partial class MenuWindow : Window, IFlyout
 
     /// <summary>
     /// Applies a chosen percentage and closes the list. Renders what the setter
-    /// <em>returns</em>, exactly as the toggle rows do — a settings write can fail, and a
+    /// <em>returns</em>, exactly as the toggle rows do, a settings write can fail, and a
     /// pill claiming a value that was never persisted is the same fabrication a tick that
     /// lies about the registry would be (CLAUDE.md rule 6).
     /// </summary>
@@ -286,7 +286,7 @@ public partial class MenuWindow : Window, IFlyout
     }
 
     /// <summary>
-    /// Opens or closes the option list, then re-docks — the card is <c>SizeToContent</c>, so
+    /// Opens or closes the option list, then re-docks, the card is <c>SizeToContent</c>, so
     /// growing it downward from a fixed top would push the new rows into the taskbar, which
     /// is the failure the docked placement exists to prevent (issue #33).
     /// </summary>
@@ -345,7 +345,7 @@ public partial class MenuWindow : Window, IFlyout
     };
 
     /// <summary>
-    /// Activates a row through its automation peer — the same <c>Click</c> the mouse and the
+    /// Activates a row through its automation peer, the same <c>Click</c> the mouse and the
     /// keyboard both raise, so a verification run exercises the real handler rather than a
     /// parallel path that could pass while the real one is broken.
     /// </summary>
@@ -363,7 +363,7 @@ public partial class MenuWindow : Window, IFlyout
     /// needs a placed window; the sample renderer never shows one.
     ///
     /// <para>Note that skipping the re-dock also skips the clip re-fit, so this path cannot
-    /// see the clipping bug that <see cref="ContentFullyDrawn"/> exists for — nothing here
+    /// see the clipping bug that <see cref="ContentFullyDrawn"/> exists for, nothing here
     /// ever animates, so there is no clip to be stale. <c>--menu-check</c> drives the real
     /// window and is where that property is actually asserted.</para>
     /// </summary>
@@ -373,18 +373,18 @@ public partial class MenuWindow : Window, IFlyout
     /// <summary>The pill's current text, so a verification run can assert what it reads.</summary>
     internal string ThresholdLabel => ThresholdText.Text;
 
-    /// <summary>Whether the option list is open — the state a click on the pill must flip.</summary>
+    /// <summary>Whether the option list is open, the state a click on the pill must flip.</summary>
     internal bool ThresholdOptionsOpen => ThresholdOptions.Visibility == Visibility.Visible;
 
     /// <summary>
-    /// Whether every pixel of the card is actually being drawn — i.e. the open transition's
+    /// Whether every pixel of the card is actually being drawn, i.e. the open transition's
     /// clip, if one is still attached, covers the whole content.
     ///
     /// <para>This exists because expanding the threshold list severed the two: the card grew,
     /// the window grew with it, and the content stayed clipped to the height it had when the
     /// flyout opened. Rows below the fold were sliced in half and the bottom border and corner
     /// vanished, which reads as the UI breaking outright. Logical state was entirely correct
-    /// throughout — the list was open, the label had moved, the tick had not — so nothing the
+    /// throughout, the list was open, the label had moved, the tick had not, so nothing the
     /// verification asserted could see it.</para>
     /// </summary>
     internal bool ContentFullyDrawn =>
@@ -394,7 +394,7 @@ public partial class MenuWindow : Window, IFlyout
 
     /// <summary>
     /// Activates the pill through its automation peer, exactly as <see cref="InvokeRow"/>
-    /// does for a row — so a verification run drives the real <c>Click</c> handler, including
+    /// does for a row, so a verification run drives the real <c>Click</c> handler, including
     /// the <c>e.Handled</c> that stops the click bubbling to the row underneath.
     /// </summary>
     internal void InvokeThresholdPill() => InvokeButton(ThresholdPill);
@@ -416,11 +416,11 @@ public partial class MenuWindow : Window, IFlyout
         _ => IsChecked(NotifyCheck),
     };
 
-    /// <summary>Whether a row is present at all — the automatic-update row is dropped on a
+    /// <summary>Whether a row is present at all, the automatic-update row is dropped on a
     /// build that cannot self-install, and "absent" is a state worth asserting.</summary>
     internal bool RowIsVisible(MenuRow row) => RowButton(row).Visibility == Visibility.Visible;
 
-    /// <summary>Whether a close transition is in flight — the state that made rows dead.</summary>
+    /// <summary>Whether a close transition is in flight, the state that made rows dead.</summary>
     internal bool IsClosing => _flyout.IsClosing;
 
     private static bool IsChecked(Path check) => check.Visibility == Visibility.Visible;
@@ -431,7 +431,7 @@ public partial class MenuWindow : Window, IFlyout
         check.Visibility = value ? Visibility.Visible : Visibility.Hidden;
 
     /// <summary>
-    /// Renders the flyout to a bitmap without showing it — the menu's equivalent of the
+    /// Renders the flyout to a bitmap without showing it, the menu's equivalent of the
     /// tray icon's <c>--samples</c> hook, so both themes can be eyeballed side by side
     /// without a desktop session or disturbing a running instance.
     /// </summary>

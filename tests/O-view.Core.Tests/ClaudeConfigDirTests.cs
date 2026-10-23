@@ -12,7 +12,7 @@ namespace OView.Core.Tests;
 /// directory instead."</blockquote>
 ///
 /// <para>O-view honoured only the first, so anyone who had relocated their configuration got
-/// no transcripts found and a token tile reading zero, with nothing to explain it — the same
+/// no transcripts found and a token tile reading zero, with nothing to explain it, the same
 /// silent-empty-tile failure as issues #44 and #58 through a third door.</para>
 /// </summary>
 public class ClaudeConfigDirTests
@@ -35,7 +35,7 @@ public class ClaudeConfigDirTests
     /// <summary>
     /// An exported-but-blank variable is a shell accident, not an instruction to read the
     /// filesystem root. Honouring it literally would point the scan somewhere with no
-    /// transcripts and no explanation — which is the failure this whole change fixes.
+    /// transcripts and no explanation, which is the failure this whole change fixes.
     /// </summary>
     [Theory]
     [InlineData("")]

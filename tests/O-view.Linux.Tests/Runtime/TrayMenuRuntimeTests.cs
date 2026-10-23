@@ -7,12 +7,12 @@ namespace OView.Linux.Tests.Runtime;
 /// bus, and timed.
 ///
 /// <para><b>Why this exists.</b> On v0.6.1 the menu took tens of seconds to appear (issue #125).
-/// The rows themselves were never wrong — they are built in-process and read correctly in every
-/// unit test there is — so what shipped was a menu that was perfect and unusable. The delay was
+/// The rows themselves were never wrong, they are built in-process and read correctly in every
+/// unit test there is, so what shipped was a menu that was perfect and unusable. The delay was
 /// in answering <c>com.canonical.dbusmenu</c>, which nothing in the repository could reach: it
 /// needs the shipped binary, a session bus and a second connection asking it questions.</para>
 ///
-/// <para><b>Where the two seconds start.</b> When the panel first asks — the moment after which
+/// <para><b>Where the two seconds start.</b> When the panel first asks, the moment after which
 /// a person is waiting. The app is already warm by then: the menu is only opened once the icon
 /// has been drawn, which is the point at which the engine's first snapshot has reached the
 /// toolkit, so what is measured is answering the bus and not starting up or ingesting. Every
@@ -20,8 +20,8 @@ namespace OView.Linux.Tests.Runtime;
 ///
 /// <para><b>What an empty menu does.</b> Fails. A menu with no rows answers <c>GetLayout</c>
 /// instantly, which is the one way a timing test can pass while the thing it is about is
-/// broken, so the rows the head builds — "Show usage", "Reset panel position", "Run at
-/// startup" and "Exit O-view" — have to be in what came back, in that order.</para>
+/// broken, so the rows the head builds, "Show usage", "Reset panel position", "Run at
+/// startup" and "Exit O-view", have to be in what came back, in that order.</para>
 ///
 /// <para><b>Clicking a row is not in this.</b> "Exit O-view" ends the app, and the rest of the
 /// menu's rows open a window, change this machine's autostart entry or touch the usage cache.
@@ -50,7 +50,7 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
     ///
     /// <para>"Reset panel position" is expected here because this job has an X server behind it,
     /// which is the session the row exists in. The head leaves it out where no place can be
-    /// remembered — a native Wayland session — so this is the list for a session that can, and
+    /// remembered, a native Wayland session, so this is the list for a session that can, and
     /// the absence is asserted in-process instead, where either session can be arranged.</para>
     /// </summary>
     private static readonly string[] TheRowsTheHeadBuilds =
@@ -65,13 +65,13 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
 
     /// <summary>
     /// How much longer than its own budget the menu is waited for, so the client's timeout is
-    /// the one that fires and its message — naming the call that was outstanding — is what gets
+    /// the one that fires and its message, naming the call that was outstanding, is what gets
     /// reported, rather than a bare "waited 2 s".
     /// </summary>
     private static readonly TimeSpan Grace = TimeSpan.FromSeconds(2);
 
     /// <summary>
-    /// How long anything that is not the menu may take — the app starting, the icon reaching the
+    /// How long anything that is not the menu may take, the app starting, the icon reaching the
     /// notification area. Generous because this is a shared CI runner starting a GUI toolkit
     /// cold; neither is a duration this test measures.
     /// </summary>
@@ -82,12 +82,12 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
     /// <summary>
     /// The whole thing a panel does to show the menu: a notification area is waiting, the app
     /// comes up and publishes its icon to it, and then the menu is asked for where it lives, told
-    /// it is about to be shown, and read — inside two seconds, with the rows the head builds in
+    /// it is about to be shown, and read, inside two seconds, with the rows the head builds in
     /// it and the app still running.
     ///
     /// <para>One test rather than four, for the reason <see cref="TrayClickRuntimeTests"/> gives:
-    /// these are stages of one gesture, a failure at any of them is the same report — "the menu
-    /// does not open on Linux" — and splitting them would start the app four times in a job that
+    /// these are stages of one gesture, a failure at any of them is the same report, "the menu
+    /// does not open on Linux", and splitting them would start the app four times in a job that
     /// has fifteen minutes for everything.</para>
     /// </summary>
     [Trait("Category", "LinuxRuntime")]
@@ -111,7 +111,7 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
 
         // A connection of this test's own, which is how a panel asks: the stand-in host keeps
         // its own connection to itself, and DBusConnection.Session is the shared static the rest
-        // of the run — and the app's own code — depends on.
+        // of the run, and the app's own code, depends on.
         using var panel = await DBusMenuClient.ConnectAsync();
 
         // Through the app's own wait, so the app exiting mid-menu fails here and now with its
@@ -158,7 +158,7 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
     ///
     /// <para><b>Why a file and not just the test's output.</b> On a passing run xunit keeps a
     /// test's output to itself, so without this the one duration this test measures would be
-    /// readable only when it fails — and "it was under two seconds" with no number behind it is
+    /// readable only when it fails, and "it was under two seconds" with no number behind it is
     /// not a report anyone can act on, least of all the next person asking whether the bound is
     /// the right one. The <c>linux-runtime</c> artifact is where the other runtime tests already
     /// leave their evidence.</para>
@@ -243,7 +243,7 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// With no session bus — the ordinary test job, and a developer's own machine — asking to
+    /// With no session bus, the ordinary test job, and a developer's own machine, asking to
     /// open a menu says so plainly rather than failing somewhere further in.
     /// </summary>
     [Fact]

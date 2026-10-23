@@ -22,7 +22,7 @@ namespace OView.Linux.Tests;
 /// is this project's own rather than a toolkit default.
 ///
 /// <para><b>What went wrong.</b> The panel is <c>SizeToContent</c>, so its frame is only ever
-/// as tall as the compositor granted — and no compositor grants more than the screen. Asking
+/// as tall as the compositor granted, and no compositor grants more than the screen. Asking
 /// the frame how tall the panel wanted to be therefore returned exactly the screen height on
 /// Maximilian's 1024×768 desktop, the panel concluded it fitted the 712 DIP work area, and
 /// four sections sat below the bottom edge with nothing to bring them back (his report of
@@ -47,8 +47,8 @@ public class PanelShortScreenTests
 
     /// <summary>
     /// Half of the guard the whole slice turns on: whatever height the screen has already forced
-    /// on the panel, the content still answers with the height it wants. The other half — that
-    /// the window asks the content at all, rather than its own frame — is structural, and is the
+    /// on the panel, the content still answers with the height it wants. The other half, that
+    /// the window asks the content at all, rather than its own frame, is structural, and is the
     /// test below it.
     /// </summary>
     [Fact]
@@ -66,7 +66,7 @@ public class PanelShortScreenTests
             natural > ScreenHeightDip,
             $"the fullest panel measured {natural:0} dip, which a {ScreenHeightDip:0} dip screen "
             + "cannot have reported. This test only means something while the panel it measures "
-            + "is taller than that screen, and it no longer is — the state it is built from needs "
+            + "is taller than that screen, and it no longer is, the state it is built from needs "
             + "replacing with one that still overflows.");
     }
 
@@ -75,7 +75,7 @@ public class PanelShortScreenTests
     /// the test above pins the content's answer, but the fault was the window's. It asked its
     /// own frame how tall the panel wanted to be, and putting that one line back leaves every
     /// behavioural test in this file green. <see cref="PanelWindow"/> cannot be built in a test
-    /// process — there is no windowing subsystem — so its source is read, which is how that
+    /// process, there is no windowing subsystem, so its source is read, which is how that
     /// same file is already held.
     ///
     /// <para>The rule being held: the window may take its <i>width</i> from the size it reports
@@ -114,7 +114,7 @@ public class PanelShortScreenTests
         Assert.True(
             Regex.IsMatch(source, @"PlaceAtWorkAreaCorner\(\s*double"),
             "PanelWindow places the panel without being told how tall it is, so the corner can "
-            + "only have come from the window — which on a short screen describes the screen, and "
+            + "only have come from the window, which on a short screen describes the screen, and "
             + "straight after a resize describes a size the compositor has not answered yet. Pass "
             + "the height the fit decided.");
     }
@@ -137,7 +137,7 @@ public class PanelShortScreenTests
     }
 
     /// <summary>
-    /// The state the verification renders photograph for a short display is the tallest one —
+    /// The state the verification renders photograph for a short display is the tallest one,
     /// a picture of a state that nearly fitted would prove nothing. Named in the renderer so
     /// the golden image keeps its name; checked here so the name cannot go quietly stale.
     /// </summary>
@@ -154,7 +154,7 @@ public class PanelShortScreenTests
             Assert.True(
                 height <= rendered,
                 $"{state.Name} measures {height:0} dip against {PanelSampleRenderer.ShortState}'s "
-                + $"{rendered:0} — the short render should photograph the tallest state");
+                + $"{rendered:0}, the short render should photograph the tallest state");
         }
     }
 
@@ -176,7 +176,7 @@ public class PanelShortScreenTests
 
     /// <summary>
     /// The promise scrolling is for: every section of the capped panel can be brought fully
-    /// into view, and the last of them sits at the very foot of the content — so nothing is
+    /// into view, and the last of them sits at the very foot of the content, so nothing is
     /// past the end of what the scroll reaches. Both views, because the breakdown's table is
     /// the taller of the two and is the one most likely to run off.
     /// </summary>
@@ -230,7 +230,7 @@ public class PanelShortScreenTests
     /// panel's padding really lands.
     ///
     /// <para><b>This is the test the reported defect needed.</b> The wheel was left to the
-    /// viewport, which does answer a turn raised anywhere inside itself — so the test above
+    /// viewport, which does answer a turn raised anywhere inside itself, so the test above
     /// passed and the wheel was believed to work. But Avalonia hit-tests a point against drawn
     /// content, and nothing between this panel's border and its sections paints any (the test
     /// below pins that), so a real turn lands on the border instead: the viewport's
@@ -262,7 +262,7 @@ public class PanelShortScreenTests
 
     /// <summary>
     /// Why the turn has to be answered on the border: of everything between it and the
-    /// sections — the frame grid, the viewport, the sections' stack — not one paints anything,
+    /// sections, the frame grid, the viewport, the sections' stack, not one paints anything,
     /// so not one of them can be hit-tested, and the border is the only thing left under the
     /// pointer. Pinned because giving any of them a background would silently make the test
     /// above pass for a different reason, and dropping the border's would silently break it.
@@ -293,14 +293,14 @@ public class PanelShortScreenTests
                 painted is null,
                 $"a {between.GetType().Name} between the panel's border and its sections paints "
                 + $"{painted}. That is not wrong in itself, but the wheel is answered on the "
-                + "border because nothing here could be hit-tested — so if this is now the "
+                + "border because nothing here could be hit-tested, so if this is now the "
                 + "thing under the pointer, say so where the wheel is wired.");
         }
     }
 
     /// <summary>
-    /// A turn raised on a leaf deep inside a section — a tile's own text, and a cell of the
-    /// Breakdown table — moves the content both ways. These already worked, because a leaf is
+    /// A turn raised on a leaf deep inside a section, a tile's own text, and a cell of the
+    /// Breakdown table, moves the content both ways. These already worked, because a leaf is
     /// below the viewport and bubbles up through it; they are here so that stays true now the
     /// border answers the wheel too, and so neither route can double-scroll.
     /// </summary>
@@ -377,7 +377,7 @@ public class PanelShortScreenTests
         return tile.GetVisualDescendants().OfType<TextBlock>().First();
     }
 
-    /// <summary>A cell of the Breakdown table — its total row's label.</summary>
+    /// <summary>A cell of the Breakdown table, its total row's label.</summary>
     private static TextBlock BreakdownCell(PanelContent panel)
     {
         var table = panel.GetVisualDescendants().OfType<Grid>()
@@ -391,7 +391,7 @@ public class PanelShortScreenTests
 
     /// <summary>
     /// The bar is thin, and both its colours come from the shared palette rather than from a
-    /// grey chosen here — the same two the Windows panel reads.
+    /// grey chosen here, the same two the Windows panel reads.
     /// </summary>
     [Theory]
     [InlineData(false)]
@@ -438,7 +438,7 @@ public class PanelShortScreenTests
 
     /// <summary>
     /// The fullest panel as a short desktop lays it out: compacted, put in its viewport, and
-    /// pinned to the work area — the same three steps the window takes, and the same ones the
+    /// pinned to the work area, the same three steps the window takes, and the same ones the
     /// verification render takes offscreen.
     /// </summary>
     private static PanelContent Capped(bool light, bool breakdown)
@@ -476,7 +476,7 @@ public class PanelShortScreenTests
 
     /// <summary>
     /// Lays the tree out by hand. Nothing here is attached to a window, so there is no layout
-    /// manager to notice an invalidation and run the next pass — and a capped panel needs
+    /// manager to notice an invalidation and run the next pass, and a capped panel needs
     /// three, for the reason <c>PanelSampleRenderer</c> records.
     /// </summary>
     private static void Layout(Control content, int passes = 1)
@@ -497,7 +497,7 @@ public class PanelShortScreenTests
     ///
     /// <para>Two pieces, and deliberately not the app's own start-up: that would want a
     /// windowing system this process has not got, and it would leave an
-    /// <see cref="Application"/> behind for every other test in the assembly to trip over —
+    /// <see cref="Application"/> behind for every other test in the assembly to trip over,
     /// the panel asks whether one exists before it makes a mouse cursor. So the platform's
     /// file services are started on their own (the asset loader the font collection reads
     /// through), and then the rasteriser.</para>

@@ -12,13 +12,13 @@ namespace OView.Linux.Tests.Runtime;
 /// <para><b>Why this exists.</b> The click is where this head has failed worst: the first one
 /// deadlocked (#124), and later one segfaulted outright because the panel was built on the
 /// D-Bus thread (#143). A SIGSEGV is not an exception, so neither the app's own catch nor any
-/// in-process test could see it — the report was a core dump and an empty log. Nothing short of
+/// in-process test could see it, the report was a core dump and an empty log. Nothing short of
 /// a real click on a real bus reaches that code path, which is what this does.</para>
 ///
 /// <para><b>This is the live bus and the dispatcher together.</b> That combination was long
 /// written down as unreachable, and it is what let #124 ship and then let #143 ship past the fix
-/// for #124. It is reachable here — a real session bus, a real notification area, a real click,
-/// and the app's own Avalonia dispatcher on the other end — so the claim does not hold for this
+/// for #124. It is reachable here, a real session bus, a real notification area, a real click,
+/// and the app's own Avalonia dispatcher on the other end, so the claim does not hold for this
 /// test. Older comments elsewhere in the suite still make it; they are stale, not a contract.</para>
 ///
 /// <para><b>How a click arrives.</b> A notification area calls
@@ -34,7 +34,7 @@ namespace OView.Linux.Tests.Runtime;
 /// runner has no usable GLX and the frame is drawn on the CPU (measured, PR #295). A test that
 /// waits only for the line passes on a head that has gone back to building windows on the bus
 /// thread. The virtual display is photographed too, before the click and after it, and that pair
-/// is the only thing that shows a person what came up — but it is evidence for a reader, not an
+/// is the only thing that shows a person what came up, but it is evidence for a reader, not an
 /// assertion: nothing installed in the <c>linux-runtime</c> job can ask X11 which windows are
 /// mapped, so the log line is the only signal a test can act on.</para>
 ///
@@ -46,7 +46,7 @@ namespace OView.Linux.Tests.Runtime;
 ///
 /// <para><b>And the second click, which is a different defect.</b> The panel is hidden on
 /// dismissal, not closed, so the next open closed a window that was still the application's only
-/// one — and on Avalonia's default shutdown mode that ended the process while the new panel was
+/// one, and on Avalonia's default shutdown mode that ended the process while the new panel was
 /// coming up (issue #312). One click could never see it: the first open has nothing to close.
 /// <see cref="ASecondOpenAfterADismissalShowsThePanelAgainInsteadOfEndingTheApp"/> is the pair of
 /// opens, with the dismissal in between.</para>
@@ -62,7 +62,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     public const string PanelOpenedLogLine = "panel opened";
 
     /// <summary>
-    /// What that line says when the UI thread was the one that built and showed the window —
+    /// What that line says when the UI thread was the one that built and showed the window,
     /// <c>Dispatcher.UIThread.CheckAccess()</c>, read inside <c>ShowPanel</c> itself. With
     /// <see cref="OView.Linux.Tray.BusCallback"/>'s hand-off gone it reads <c>uiThread=false</c>.
     /// </summary>
@@ -90,15 +90,15 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     private static readonly TimeSpan PanelPatience = TimeSpan.FromSeconds(5);
 
     /// <summary>
-    /// How long anything that is not the panel may take — the app starting, the icon reaching the
+    /// How long anything that is not the panel may take, the app starting, the icon reaching the
     /// notification area, the item answering. Generous because this is a shared CI runner
     /// starting a GUI toolkit cold; none of these is a duration this test measures.
     /// </summary>
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(20);
 
     /// <summary>
-    /// Where a notification area would say the click happened. Any coordinates do — the app
-    /// positions its own panel and ignores them — but a real host sends the pointer's position,
+    /// Where a notification area would say the click happened. Any coordinates do, the app
+    /// positions its own panel and ignores them, but a real host sends the pointer's position,
     /// so sending a plausible one keeps the call indistinguishable from a desktop's.
     /// </summary>
     private const int ClickX = 1200;
@@ -118,7 +118,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
 
     /// <summary>
     /// How long the toolkit is given to put something on screen before the photograph is
-    /// settled for. Nothing is measured here and nothing fails when it runs out — see
+    /// settled for. Nothing is measured here and nothing fails when it runs out, see
     /// <see cref="PhotographTheOpenPanelAsync"/>.
     /// </summary>
     private static readonly TimeSpan PaintPatience = TimeSpan.FromSeconds(5);
@@ -126,16 +126,16 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     private static readonly TimeSpan BetweenPhotographs = TimeSpan.FromMilliseconds(250);
 
     /// <summary>
-    /// How long the dismissal is given to show up in the log. Not a duration anyone waits on — a
-    /// panel hides itself in the frame the focus leaves — so this is only long enough to tell a
+    /// How long the dismissal is given to show up in the log. Not a duration anyone waits on, a
+    /// panel hides itself in the frame the focus leaves, so this is only long enough to tell a
     /// slow runner from a focus change the X server never delivered.
     /// </summary>
     private static readonly TimeSpan DismissalPatience = TimeSpan.FromSeconds(3);
 
     /// <summary>
     /// How long the app is watched after the second panel has opened. The shutdown this test
-    /// exists to rule out is already in flight by then — it starts inside the <c>Close()</c> that
-    /// precedes the new window — so this is a settling period, not a measurement.
+    /// exists to rule out is already in flight by then, it starts inside the <c>Close()</c> that
+    /// precedes the new window, so this is a settling period, not a measurement.
     /// </summary>
     private static readonly TimeSpan TheShutdownWouldHaveLanded = TimeSpan.FromSeconds(2);
 
@@ -144,7 +144,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
 
     /// <summary>
     /// How much longer the app's own wait runs than the budget inside it, so a timeout is
-    /// reported by the inner wait — which names how many lines did arrive — rather than as a bare
+    /// reported by the inner wait, which names how many lines did arrive, rather than as a bare
     /// "waited 5 s". The same arrangement <see cref="TrayMenuRuntimeTests"/> uses.
     /// </summary>
     private static readonly TimeSpan Grace = TimeSpan.FromSeconds(2);
@@ -159,7 +159,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     /// seconds with the app still running.
     ///
     /// <para>One test rather than four, because these are four stages of one click and a failure
-    /// at any of them is the same report — "clicking the icon does nothing on Linux". Splitting
+    /// at any of them is the same report, "clicking the icon does nothing on Linux". Splitting
     /// them would also start the app four times, and the job has ten minutes for everything.</para>
     /// </summary>
     [Fact]
@@ -186,7 +186,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
 
             // A connection of this test's own, which is how a notification area clicks: the
             // stand-in host keeps its own connection to itself, and DBusConnection.Session is the
-            // shared static the rest of the run — and the app's own code — depends on.
+            // shared static the rest of the run, and the app's own code, depends on.
             using var area = new DBusConnection(SessionBusAddress());
             await area.ConnectAsync();
 
@@ -201,7 +201,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
 
             var panelOpened = await app.WaitForLogAsync(PanelOpenedLogLine, PanelPatience);
 
-            // Issue #143 is not "the panel did not open" — it is "the window was built on the
+            // Issue #143 is not "the panel did not open", it is "the window was built on the
             // D-Bus thread". Measured: with the hand-off removed the panel still opens here, so
             // this assertion, not the line's arrival, is what makes the removal visible.
             Assert.True(
@@ -232,25 +232,25 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
             throw;
         }
 
-        // On the pass path the photograph is part of what this test produces — the only thing
-        // that shows a reader what came up — so failing to take it fails the test.
+        // On the pass path the photograph is part of what this test produces, the only thing
+        // that shows a reader what came up, so failing to take it fails the test.
         await PhotographTheOpenPanelAsync(beforeTheClick);
     }
 
     /// <summary>
-    /// Looking at the panel twice: open it, put it away, open it again — and the app is still
+    /// Looking at the panel twice: open it, put it away, open it again, and the app is still
     /// running, with a second <c>panel opened</c> line to show the panel came back.
     ///
     /// <para><b>The defect.</b> A dismissed panel is hidden rather than closed, so it is still one
     /// of the application's windows. The next open closes it before building its replacement, and
-    /// under <c>ShutdownMode.OnLastWindowClose</c> — Avalonia's default for a classic desktop
-    /// lifetime, and what this head used to take — that close started a shutdown. The new panel
+    /// under <c>ShutdownMode.OnLastWindowClose</c>, Avalonia's default for a classic desktop
+    /// lifetime, and what this head used to take, that close started a shutdown. The new panel
     /// was built and shown anyway, so <c>panel opened</c> was written, and then the process ended
     /// with nothing having failed: no exception, no segfault, no shutdown line. Every Linux user
     /// lost the app the second time they looked at it (issue #312).</para>
     ///
     /// <para><b>What is asserted, and in which order.</b> The shutdown mode first, read out of the
-    /// app's own log where it reports what the live lifetime is on — before either click, because
+    /// app's own log where it reports what the live lifetime is on, before either click, because
     /// on the wrong mode everything below it fails as "the panel did not come back" and the mode
     /// is the reason. Then the two opens, the second of which must be there twice over: the line,
     /// and the app still being alive once the shutdown would have landed. Last, Exit O-view, which
@@ -258,7 +258,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     /// plausibly have broken.</para>
     ///
     /// <para><b>Why the clicks are not enough on their own.</b> The second <c>panel opened</c> line
-    /// was written on the broken head too — it is the line the bug report's log ends on. So the
+    /// was written on the broken head too, it is the line the bug report's log ends on. So the
     /// aliveness check after it, not the line, is what fails on a regression.</para>
     /// </summary>
     [Fact]
@@ -286,7 +286,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
             $"the Linux head is not on an explicit shutdown mode, so closing the hidden panel on "
             + $"the next open ends the process the way issue #312 did: \"{mode}\"");
 
-        // A connection of this test's own, which is how a notification area clicks — see the
+        // A connection of this test's own, which is how a notification area clicks, see the
         // click test above.
         using var area = new DBusConnection(SessionBusAddress());
         await area.ConnectAsync();
@@ -327,7 +327,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
             + "last window, and the shutdown that started there outlived the panel it had just built.");
 
         // And the one way out that is meant to work. An explicit shutdown mode means nothing but
-        // Shutdown() ends this process — so if Exit O-view were ever to stop calling it, this is
+        // Shutdown() ends this process, so if Exit O-view were ever to stop calling it, this is
         // the fix that would have made the app unquittable.
         await ExitFromTheMenuAsync(app, area, item);
     }
@@ -336,7 +336,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     /// Puts the panel away the way a click on the desktop does, and says whether it took.
     ///
     /// <para><b>Best effort, deliberately.</b> A dismissal that does not take leaves the panel on
-    /// screen — and the next open closes it just the same, which is the defect. So a hide that
+    /// screen, and the next open closes it just the same, which is the defect. So a hide that
     /// never arrives is recorded rather than failed on; what it must not do is go unsaid, which
     /// would leave a reader believing a panel was dismissed when it was not.</para>
     /// </summary>
@@ -351,17 +351,17 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
                 DismissalPatience + Grace,
                 "the panel to hide once the focus had gone");
 
-            SaveToArtifacts($"the panel was dismissed — {how}, and the app wrote: {hidden}");
+            SaveToArtifacts($"the panel was dismissed, {how}, and the app wrote: {hidden}");
             return true;
         }
         catch (Exception ex)
         {
             SaveToArtifacts(
-                $"the panel was NOT dismissed — {how}, and no \"{PanelHiddenLogLine}\" line arrived "
+                $"the panel was NOT dismissed, {how}, and no \"{PanelHiddenLogLine}\" line arrived "
                 + $"within {DismissalPatience.TotalSeconds:0} s ({ex.GetType().Name}: {ex.Message})."
                 + $"{Environment.NewLine}The second open below therefore closes a panel that is still "
                 + "on screen rather than a hidden one. Either way the close is what ended the app in "
-                + "issue #312, so the test carries on — but the dismissal half of it is unproven.");
+                + "issue #312, so the test carries on, but the dismissal half of it is unproven.");
             return false;
         }
     }
@@ -370,9 +370,9 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     /// Dismisses the panel with the keyboard focus, and says what it did either way.
     ///
     /// <para><b>Both halves of a click away.</b> The focus arrives somewhere else, and the panel
-    /// deactivates. <c>PanelWindow</c> hides only on a deactivation that follows an activation —
+    /// deactivates. <c>PanelWindow</c> hides only on a deactivation that follows an activation,
     /// deliberately, because a compositor that refuses the activation would otherwise hide the
-    /// panel in the frame it appeared (<c>PanelDismissal</c>) — so the focus is put on the panel
+    /// panel in the frame it appeared (<c>PanelDismissal</c>), so the focus is put on the panel
     /// first and then taken off it.</para>
     ///
     /// <para><b>Why by hand.</b> This display has no window manager, which is also why the panel
@@ -500,8 +500,8 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Clicks Exit O-view the way a notification area does — a <c>com.canonical.dbusmenu</c>
-    /// <c>Event</c> against the row's own id — and waits for the process to go.
+    /// Clicks Exit O-view the way a notification area does, a <c>com.canonical.dbusmenu</c>
+    /// <c>Event</c> against the row's own id, and waits for the process to go.
     ///
     /// <para>The row is found by reading the menu rather than by assuming an id: the ids are
     /// Avalonia's to choose. The click's reply is not waited on, because the app is shutting down
@@ -565,13 +565,13 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     /// <paramref name="containing"/>, and returns it.
     ///
     /// <para>Here rather than on <see cref="LinuxAppProcess"/> because that one answers with the
-    /// first line that matches, which cannot tell the second open from the first — and the second
+    /// first line that matches, which cannot tell the second open from the first, and the second
     /// is this test's whole subject. The log is read the way it reads it: shared, because the app
     /// holds the file open for appending.</para>
     ///
     /// <para>Every caller hands this to <see cref="LinuxAppProcess.WaitForAsync"/> on a slightly
     /// longer budget, so an app that has gone fails at once with its own log attached, and a
-    /// timeout is reported by the message below — which says how many lines did arrive.</para>
+    /// timeout is reported by the message below, which says how many lines did arrive.</para>
     /// </summary>
     private static async Task<string> WaitForLogLineAsync(
         LinuxAppProcess app, string containing, int occurrence, TimeSpan within)
@@ -602,7 +602,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
 
     /// <summary>
     /// The app's log as it stands. Shared read, and an empty list while the file is being written
-    /// to — the ordinary state between two appends.
+    /// to, the ordinary state between two appends.
     /// </summary>
     private static IReadOnlyList<string> LogLines(LinuxAppProcess app)
     {
@@ -653,7 +653,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     /// after <see cref="PaintPatience"/> and keeping the last photograph either way.
     ///
     /// <para><b>Why not photograph once and be done with it.</b> That is what this test did at
-    /// first, and the picture came back uniformly black — a truthful photograph of the display,
+    /// first, and the picture came back uniformly black, a truthful photograph of the display,
     /// taken in the moment between the window being shown and its first frame reaching the X
     /// server, and worth nothing to the reader it exists for. <c>panel opened</c> is written when
     /// the window has been shown; nothing the app writes marks the frame after it, and here that
@@ -661,7 +661,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     ///
     /// <para><b>Still not an assertion.</b> A display that never changes does not fail this test.
     /// Whether the panel is up has already been settled by the app's own log, and a photograph
-    /// that disagrees with it is a reason for a person to open the screenshot — not grounds for
+    /// that disagrees with it is a reason for a person to open the screenshot, not grounds for
     /// this test to call a click broken over a picture. It is said in the test's output instead,
     /// where the run that produced the photograph will carry it.</para>
     /// </summary>
@@ -675,7 +675,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
             // produces, so scrot failing to take it is a failure.
             DisplayCapture.CaptureTo(AfterTheClick);
 
-            // Null off the runtime job, where capturing is deliberately a no-op — there is
+            // Null off the runtime job, where capturing is deliberately a no-op, there is
             // nothing to wait for and nothing to compare, so the first pass is the last.
             var afterTheClick = ReadPhotograph(AfterTheClick);
             if (beforeTheClick is null || afterTheClick is null
@@ -717,7 +717,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// The bytes of a photograph just taken, or null where none was — off the runtime job
+    /// The bytes of a photograph just taken, or null where none was, off the runtime job
     /// <c>OVIEW_RUNTIME_ARTIFACTS</c> is unset and <see cref="DisplayCapture"/> writes nothing.
     /// The path is rebuilt from the same two pieces DisplayCapture puts it together from, because
     /// it photographs for the sake of the artifact folder and does not report where it wrote.
@@ -735,7 +735,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     //
     // Classic DllImport, as the Windows head's native methods are, and for the same reason given
     // there: these are a handful of calls with no marshalling to speak of. They are reached only
-    // from inside the linux-runtime job — this assembly also builds and runs on Windows, where
+    // from inside the linux-runtime job, this assembly also builds and runs on Windows, where
     // libX11 does not exist and nothing here is called.
 
     /// <summary>X's <c>None</c>: the focus belongs to no window, so nothing has it.</summary>
@@ -744,12 +744,12 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     /// <summary>Where the focus reverts if the window holding it goes away.</summary>
     private const int RevertToPointerRoot = 1;
 
-    /// <summary>X's <c>CurrentTime</c> — let the server timestamp it.</summary>
+    /// <summary>X's <c>CurrentTime</c>, let the server timestamp it.</summary>
     private static readonly IntPtr CurrentTime = IntPtr.Zero;
 
     /// <summary>
     /// Smaller than this, either way, and a window is one of the toolkit's own rather than the
-    /// panel — which is 400 dip wide and taller than that.
+    /// panel, which is 400 dip wide and taller than that.
     /// </summary>
     private const uint SmallestPanel = 100;
 

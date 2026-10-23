@@ -3,7 +3,7 @@ namespace OView.Core.Models;
 /// <summary>
 /// A point-in-time view of Claude usage. Every reading except <see cref="Source"/> carries its
 /// own <see cref="UsageValueStatus"/> alongside its figure, so a reader is told whether the
-/// figure was measured, derived, or never produced at all — rather than inferring that from a
+/// figure was measured, derived, or never produced at all, rather than inferring that from a
 /// null it has to guess the meaning of (CLAUDE.md rule 6).
 /// </summary>
 /// <param name="Source">Where this data came from and how fresh it is.</param>
@@ -17,7 +17,7 @@ namespace OView.Core.Models;
 /// </param>
 /// <param name="CapturedAtUtcValue">When the underlying sample was taken. Drives staleness labels.</param>
 /// <param name="WeeklyResetAtUtcValue">
-/// Predicted next seven-day window reset, derived from persisted `sd` drops —
+/// Predicted next seven-day window reset, derived from persisted `sd` drops,
 /// <see cref="UsageValueStatus.Unavailable"/> until one has been observed, which the UI reports
 /// as still waiting rather than as broken (GitHub issue #6, ADR-0011).
 /// </param>
@@ -71,7 +71,7 @@ public sealed record UsageSnapshot(
 
     /// <summary>
     /// An instant this app derived or predicted rather than one a source reported: estimated
-    /// where there is a figure to label, unavailable where there is not — never "estimated" for
+    /// where there is a figure to label, unavailable where there is not, never "estimated" for
     /// a value nothing produced.
     /// </summary>
     internal static UsageInstant DerivedInstant(DateTimeOffset? value) =>

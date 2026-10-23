@@ -1,7 +1,7 @@
 namespace OView.Core.Providers;
 
 /// <summary>
-/// Where Claude Code keeps its per-user configuration — the directory O-view's transcript
+/// Where Claude Code keeps its per-user configuration, the directory O-view's transcript
 /// scan starts from.
 ///
 /// <para>Anthropic documents exactly two cases, so this is a rule rather than a search:</para>
@@ -11,7 +11,7 @@ namespace OView.Core.Providers;
 /// directory instead."</blockquote>
 ///
 /// <para>O-view honoured only the first, so anyone who had relocated their configuration was
-/// invisible — their transcripts were never found and their token tiles read zero, with no
+/// invisible, their transcripts were never found and their token tiles read zero, with no
 /// indication why. That is the same silent-empty-tile failure as issues #44 and #58, arriving
 /// through a third door.</para>
 ///
@@ -22,7 +22,7 @@ namespace OView.Core.Providers;
 ///
 /// <para>Read on every call rather than cached. The variable is process-scoped and O-view is
 /// designed to run for days, but a cached value would also survive a change made while it
-/// runs — and re-reading an environment variable costs nothing worth optimising.</para>
+/// runs, and re-reading an environment variable costs nothing worth optimising.</para>
 /// </summary>
 public static class ClaudeConfigDir
 {
@@ -39,7 +39,7 @@ public static class ClaudeConfigDir
     public static string Path => Resolve(Environment.GetEnvironmentVariable(OverrideVariable));
 
     /// <summary>
-    /// Testable core. Whitespace and empty are treated as unset — an exported-but-blank
+    /// Testable core. Whitespace and empty are treated as unset, an exported-but-blank
     /// variable is a shell accident, not an instruction to read the filesystem root, and
     /// honouring it literally would point the scan at somewhere with no transcripts and no
     /// explanation.

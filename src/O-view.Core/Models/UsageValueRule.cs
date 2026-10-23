@@ -12,8 +12,8 @@ internal static class UsageValueRule
     /// <paramref name="status"/> is <see cref="UsageValueStatus.Unavailable"/>.
     /// <see cref="UsageValueStatus.Unavailable"/> means no source produced a value, so a pair
     /// that carries both is a bug at the producer's call site, not a state a skin should ever
-    /// have to render. The converse — a null value paired with
-    /// <see cref="UsageValueStatus.Real"/> or <see cref="UsageValueStatus.Estimated"/> — is
+    /// have to render. The converse, a null value paired with
+    /// <see cref="UsageValueStatus.Real"/> or <see cref="UsageValueStatus.Estimated"/>, is
     /// left alone: a value that happens to be unknown right now is a different claim from one
     /// nothing can ever produce.
     /// </summary>
@@ -30,8 +30,8 @@ internal static class UsageValueRule
 
     /// <summary>
     /// Returns <paramref name="status"/> unchanged, or throws when it is
-    /// <see cref="UsageValueStatus.Real"/>. For a figure this app only ever derives — never
-    /// reads measured from a vendor — claiming <see cref="UsageValueStatus.Real"/> would be
+    /// <see cref="UsageValueStatus.Real"/>. For a figure this app only ever derives, never
+    /// reads measured from a vendor, claiming <see cref="UsageValueStatus.Real"/> would be
     /// false regardless of whether a value is present.
     /// </summary>
     public static UsageValueStatus NeverReal(UsageValueStatus status)

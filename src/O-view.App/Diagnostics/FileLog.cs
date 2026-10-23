@@ -6,7 +6,7 @@ namespace OView.App.Diagnostics;
 
 /// <summary>
 /// The diagnostic log for a windowed app with no console. Never records tokens,
-/// credentials, or conversation content — refresh telemetry, cadence changes, resource
+/// credentials, or conversation content, refresh telemetry, cadence changes, resource
 /// counts and failures only (CLAUDE.md rule 3).
 ///
 /// <para><b>On by default, which is the whole point of it.</b> It used to be created only
@@ -24,21 +24,21 @@ namespace OView.App.Diagnostics;
 /// truncation throws away precisely that.</para>
 ///
 /// <para><b>It never throws.</b> A diagnostic that can take down the thing it is diagnosing
-/// is worse than no diagnostic — and this is called from the poll's failure paths, where an
+/// is worse than no diagnostic, and this is called from the poll's failure paths, where an
 /// exception would replace a recorded failure with an unrecorded one.</para>
 /// </summary>
 public sealed class FileLog : IAppLog
 {
     /// <summary>
     /// Size at which the live file rolls. Two megabytes is a few days of ordinary polling at
-    /// the 60 s cadence, and roughly an hour of a poll failing on every tick — the case this
+    /// the 60 s cadence, and roughly an hour of a poll failing on every tick, the case this
     /// exists for, and the one that produces the most lines per minute.
     /// </summary>
     public const long DefaultMaxBytes = 2 * 1024 * 1024;
 
     /// <summary>
     /// Rolled generations kept beside the live file, so the ceiling is
-    /// <c>(KeepGenerations + 1) * DefaultMaxBytes</c> — 6 MB.
+    /// <c>(KeepGenerations + 1) * DefaultMaxBytes</c>, 6 MB.
     /// </summary>
     public const int KeepGenerations = 2;
 
@@ -74,7 +74,7 @@ public sealed class FileLog : IAppLog
 
     /// <summary>
     /// Marks the start of a run. In a rolling log that outlives the process, "which lines
-    /// belong to this launch" is otherwise guesswork — and a stall that survives a restart
+    /// belong to this launch" is otherwise guesswork, and a stall that survives a restart
     /// looks identical to one that does not until the restarts are visible.
     /// </summary>
     public void WriteSessionHeader(string version, string installKind) =>
@@ -103,7 +103,7 @@ public sealed class FileLog : IAppLog
 
     /// <summary>
     /// The most recent <paramref name="lines"/> lines of the live file, oldest first, for the
-    /// support bundle. Empty when there is no log yet or it cannot be read — both of which are
+    /// support bundle. Empty when there is no log yet or it cannot be read, both of which are
     /// ordinary, and neither of which may fail the bundle.
     ///
     /// <para>Reads with <see cref="FileShare.ReadWrite"/> because the running instance holds

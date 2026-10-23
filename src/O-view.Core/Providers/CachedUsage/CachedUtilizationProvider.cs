@@ -5,13 +5,13 @@ namespace OView.Core.Providers.CachedUsage;
 
 /// <summary>
 /// Serves session and weekly usage from Claude Code's own cached figures
-/// (<see cref="CachedUtilization"/>) — the source that finally gives the top two bars to
+/// (<see cref="CachedUtilization"/>), the source that finally gives the top two bars to
 /// people who have no Claude Desktop.
 ///
 /// <para>Until this existed, a Claude Code user got token counts and nothing else: the
 /// percentages came only from Claude Desktop's plan-history file, so the two plan bars read
 /// "unknown" on a machine that was generating usage all day. Deriving them from local tokens
-/// was investigated and rejected — even at window granularity, cost-per-percentage-point spread
+/// was investigated and rejected, even at window granularity, cost-per-percentage-point spread
 /// 2.6× across the middle 80% of windows, which would have put a true 50% anywhere between 31%
 /// and 81% (rule 6).</para>
 ///
@@ -25,12 +25,12 @@ public sealed class CachedUtilizationProvider : IUsageProvider
     ///
     /// <para><b>Not a measured sampling interval, and deliberately not presented as one.</b>
     /// Claude Desktop samples on a timer, so its freshness threshold came from measured gaps
-    /// (see <c>PlanHistoryProvider</c>). This is a <i>cache</i>, refreshed when Claude Code talks to the API — there is no
+    /// (see <c>PlanHistoryProvider</c>). This is a <i>cache</i>, refreshed when Claude Code talks to the API, there is no
     /// cadence to measure, only usage. One refresh gap was observed here, at 10.1 minutes, and
     /// n=1 is an anecdote rather than a distribution.</para>
     ///
-    /// <para>So the design does not lean on this number. It is a labelling threshold only —
-    /// past it the reading says "Stale" and wears its age — while the two rules that decide
+    /// <para>So the design does not lean on this number. It is a labelling threshold only,
+    /// past it the reading says "Stale" and wears its age, while the two rules that decide
     /// whether a figure may be shown at all are evidence-based and independent of it:
     /// <see cref="CurrentWindowPercent"/> discards a percentage whose window has demonstrably
     /// rolled over, and a zero is discarded far sooner than a non-zero for the reason
@@ -80,7 +80,7 @@ public sealed class CachedUtilizationProvider : IUsageProvider
             return UsageSnapshot.None;
         }
 
-        // Every figure here is what Claude reported, not something this provider derived — the
+        // Every figure here is what Claude reported, not something this provider derived, the
         // whole reason this source exists (see the class summary above). UsageSnapshot.Percent
         // and .Instant are exactly that pairing: measured where a figure was read, unavailable
         // where the cache held none.
@@ -92,7 +92,7 @@ public sealed class CachedUtilizationProvider : IUsageProvider
             UsageSnapshot.Instant(cached.FetchedAtUtc),
             UsageSnapshot.Instant(weeklyReset),
             // Named from here on. These trail a long positional list, and removing the weekly
-            // uncertainty field in issue #248 would otherwise have re-pointed them silently —
+            // uncertainty field in issue #248 would otherwise have re-pointed them silently,
             // the compiler caught it here, and naming them means it would not have to.
             WeeklyResetPeriod: weeklyReset is null ? null : WeeklyWindow.Length,
             // Reported rather than inferred, so this carries no bracket. The weekly one no
@@ -108,7 +108,7 @@ public sealed class CachedUtilizationProvider : IUsageProvider
     /// For the five-hour window that would rebuild the exact bug issue #180 removed: the window
     /// starts on first use, so a grid stepped forward from an old boundary describes a window
     /// that never existed. For the weekly window the arithmetic would be sound, but the value
-    /// would no longer be a reported one — it would be an inference wearing a reported value's
+    /// would no longer be a reported one, it would be an inference wearing a reported value's
     /// zero uncertainty. Handing back null instead lets the derivation that already exists take
     /// the question, correctly labelled as derived.</para>
     /// </summary>
@@ -126,12 +126,12 @@ public sealed class CachedUtilizationProvider : IUsageProvider
     /// a reset time already in the past is proof the figure describes a window that has since
     /// been replaced. Claude Code caches while it runs; leave it closed across a boundary and
     /// the file still reads 91% for a window that reset to nothing hours ago. This is the one
-    /// failure mode unique to this source, it is silent, and it is checkable — so it is
+    /// failure mode unique to this source, it is silent, and it is checkable, so it is
     /// checked.</item>
     /// <item><b>The reading is a stale zero.</b> Within a window utilisation only rises, so an
     /// aged figure is a lower bound rather than a measurement. A non-zero bound degrades
     /// gracefully; zero degrades to nothing at all while looking like a precise finding that
-    /// the window is empty — see <see cref="PlanHistoryProvider.ZeroReadingFreshness"/>, whose
+    /// the window is empty, see <see cref="PlanHistoryProvider.ZeroReadingFreshness"/>, whose
     /// argument and threshold apply here unchanged and are shared rather than restated.</item>
     /// </list>
     /// </summary>
@@ -146,7 +146,7 @@ public sealed class CachedUtilizationProvider : IUsageProvider
     }
 
     /// <summary>
-    /// A reader that throws must not blank the display — same contract as every other provider
+    /// A reader that throws must not blank the display, same contract as every other provider
     /// (<see cref="IUsageProvider"/>): unavailable data is <see cref="UsageSnapshot.None"/>, not
     /// an exception escaping into the poll loop.
     /// </summary>
