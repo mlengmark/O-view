@@ -32,15 +32,6 @@ public class SwallowedFailureReportingTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private sealed class ThrowingProvider(Exception ex) : IUsageProvider
-    {
-        public UsageSnapshot GetSnapshot(DateTimeOffset utcNow) => throw ex;
-    }
-
-    private sealed class FixedProvider(UsageSnapshot snapshot) : IUsageProvider
-    {
-        public UsageSnapshot GetSnapshot(DateTimeOffset utcNow) => snapshot;
-    }
 
     // ── the composite's own catch ───────────────────────────────────────────────────
 

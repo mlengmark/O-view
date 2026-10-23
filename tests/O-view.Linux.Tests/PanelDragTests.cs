@@ -170,7 +170,7 @@ public class PanelDragTests
     [Fact]
     public void AReleaseGoesThroughTheSharedRuleAndIsSaved()
     {
-        var store = new FakePositions();
+        var store = new FakePanelPositionStore();
         var memory = new PanelPlacementMemory(store);
 
         var settled = PanelWindow.Settle(memory, DisplayId, WorkArea, 300, 100, PanelWidth, PanelHeight);
@@ -194,7 +194,7 @@ public class PanelDragTests
     [Fact]
     public void AReleaseWithinTheSnapDistanceOfAnEdgeEndsUpFlushAgainstIt()
     {
-        var memory = new PanelPlacementMemory(new FakePositions());
+        var memory = new PanelPlacementMemory(new FakePanelPositionStore());
 
         var settled = PanelWindow.Settle(
             memory, DisplayId, WorkArea, leftDip: 9, topDip: WorkArea.Y + 4, PanelWidth, PanelHeight);
@@ -211,7 +211,7 @@ public class PanelDragTests
     [Fact]
     public void AReleaseHangingOffTheBottomIsBroughtBackInside()
     {
-        var memory = new PanelPlacementMemory(new FakePositions());
+        var memory = new PanelPlacementMemory(new FakePanelPositionStore());
 
         var settled = PanelWindow.Settle(
             memory, DisplayId, WorkArea, leftDip: 500, topDip: 700, PanelWidth, PanelHeight);
@@ -338,7 +338,7 @@ public class PanelDragTests
     private static PanelPlacementMemory.Resolved? Drop(
         StandInWindowManager manager, double droppedX, double droppedY) =>
         PanelWindow.Settle(
-            new PanelPlacementMemory(new FakePositions()), DisplayId, FourthRunWorkArea,
+            new PanelPlacementMemory(new FakePanelPositionStore()), DisplayId, FourthRunWorkArea,
             droppedX, droppedY, PanelWidth, FourthRunPanelHeight, manager.Settling);
 
     // ── and what the next open does with it ─────────────────────────────────────────
@@ -350,7 +350,7 @@ public class PanelDragTests
     [Fact]
     public void TheNextOpenRestoresThePlaceReClampedToTheWorkAreaAsItStandsThen()
     {
-        var store = new FakePositions();
+        var store = new FakePanelPositionStore();
         var memory = new PanelPlacementMemory(store);
         PanelWindow.Settle(memory, DisplayId, WorkArea, 600, 400, PanelWidth, PanelHeight);
 
@@ -373,7 +373,7 @@ public class PanelDragTests
     [Fact]
     public void APlaceThatCannotBeUsedResolvesToNothingSoTheCornerRuleAnswers()
     {
-        var memory = new PanelPlacementMemory(new FakePositions());
+        var memory = new PanelPlacementMemory(new FakePanelPositionStore());
         PanelWindow.Settle(memory, DisplayId, WorkArea, 600, 400, PanelWidth, PanelHeight);
 
         Assert.Null(memory.Resolve("a-display-that-left", WorkArea, PanelWidth, PanelHeight));
@@ -428,7 +428,7 @@ public class PanelDragTests
     public void AStepGoesThroughTheSharedRuleAndIsSaved(
         NudgeDirection direction, bool fine, double leftDip, double topDip)
     {
-        var store = new FakePositions();
+        var store = new FakePanelPositionStore();
         var memory = new PanelPlacementMemory(store);
 
         // 120 dip down, which is where a 600 dip panel still fits inside a 712 dip work area.
@@ -449,7 +449,7 @@ public class PanelDragTests
     [Fact]
     public void AStepUpIntoTheTopBarStopsBeneathIt()
     {
-        var memory = new PanelPlacementMemory(new FakePositions());
+        var memory = new PanelPlacementMemory(new FakePanelPositionStore());
 
         var nudged = memory.Nudge(
             DisplayId, WorkArea, 300, WorkArea.Y, PanelWidth, PanelHeight, NudgeDirection.Up,
@@ -472,7 +472,7 @@ public class PanelDragTests
     [Fact]
     public void OnAScreenThePanelFillsEachPressMovesItAStepAndBack()
     {
-        var memory = new PanelPlacementMemory(new FakePositions());
+        var memory = new PanelPlacementMemory(new FakePanelPositionStore());
         var top = FourthRunWorkArea.Y;
 
         double Press(NudgeDirection direction)
@@ -523,8 +523,8 @@ public class PanelDragTests
     [Fact]
     public void TheFileStoreRoundTripsAPlaceAndForgetsIt()
     {
-        using var temp = new TempFile();
-        var store = new FilePanelPositionStore(new PanelPositionFile(temp.Path));
+        using var temp = new TempDir();
+        var store = new FilePanelPositionStore(new PanelPositionFile(temp.File("panel-position.json")));
 
         store.Save(DisplayId, new PanelPlace(WorkAreaCorner.BottomRight, 24, 8));
 
@@ -549,8 +549,8 @@ public class PanelDragTests
     [InlineData("7")]
     public void ACornerTheFileDoesNotNameIsNotAPlace(string corner)
     {
-        using var temp = new TempFile();
-        var file = new PanelPositionFile(temp.Path);
+        using var temp = new TempDir();
+        var file = new PanelPositionFile(temp.File("panel-position.json"));
         file.Save(DisplayId, new PanelPositionFile.Place(corner, 10, 10));
 
         Assert.Null(new FilePanelPositionStore(file).Read(DisplayId));
@@ -660,27 +660,4 @@ public class PanelDragTests
         }
     }
 
-    /// <summary>An in-memory store, so the rule's arithmetic is asserted without file I/O.</summary>
-    private sealed class FakePositions : IPanelPositionStore
-    {
-        private readonly Dictionary<string, PanelPlace> _places = [];
-
-        public PanelPlace? Read(string displayId) =>
-            _places.TryGetValue(displayId, out var place) ? place : null;
-
-        public void Save(string displayId, PanelPlace place) => _places[displayId] = place;
-
-        public void Forget(string displayId) => _places.Remove(displayId);
-    }
-
-    /// <summary>A path in a directory of its own, removed with it.</summary>
-    private sealed class TempFile : IDisposable
-    {
-        private readonly string _directory =
-            Directory.CreateTempSubdirectory("oview-panel-place-").FullName;
-
-        public string Path => System.IO.Path.Combine(_directory, "panel-position.json");
-
-        public void Dispose() => Directory.Delete(_directory, recursive: true);
-    }
 }

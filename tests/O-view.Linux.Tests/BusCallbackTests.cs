@@ -37,12 +37,6 @@ public class BusCallbackTests
         public void Post(Action work) => throw new InvalidOperationException("dispatcher has shut down");
     }
 
-    private sealed class RecordingLog : IAppLog
-    {
-        public List<string> Lines { get; } = [];
-
-        public void Write(string message) => Lines.Add(message);
-    }
 
     /// <summary>
     /// The defect itself. Running inline is what put an X11 window construction on Tmds.DBus's
@@ -86,7 +80,7 @@ public class BusCallbackTests
     [Fact]
     public void ADeadDispatcherIsSurvivedAndNamedInTheLog()
     {
-        var log = new RecordingLog();
+        var log = new ListLog();
 
         var handler = BusCallback.For(new DeadDispatcher(), () => { }, log);
         handler(this, EventArgs.Empty);        // must not throw
