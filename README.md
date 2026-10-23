@@ -1,315 +1,153 @@
 # O-view
 
-A notification-area (system tray) app that displays your Claude AI token usage and the time remaining until your next usage-limit reset.
+A system tray app for Windows 11 and Linux that shows how much of your Claude usage limit you have used, when it resets, and whether your work is drawing from the plan or billing as extra usage. It reads the files Claude's own apps keep on your machine. It handles no credentials and sends nothing anywhere.
 
-> **Status:** **[v1.0.0](https://github.com/mlengmark/O-view/releases/latest)** is the current release, shipping Windows 11 and Linux assets under one tag — Windows installer and portable exe, `.deb` for amd64 and arm64, and portable tarballs. Linux has been a supported target since v0.6.0.
->
-> Windows has been shipped and in daily use since v0.1.0. **Linux has now been run on a physical desktop twice** — an Arch-based system on KDE Plasma under Wayland, tarball install, reporting against v0.6.1 and again against v0.6.5. Between them those reports confirmed that O-view finds and reads Claude's data correctly and that the tray icon appears, and found three separate faults that made the app unusable past that point: the first left click deadlocked it, then — after that was fixed — crashed it outright. A fourth was found by reading the code. **None of the four has been re-tested on hardware, and nobody has opened the detail panel on a physical Linux desktop.** It has been opened on an Ubuntu 24.04 VM, GNOME on Wayland through XWayland, most recently on 2026-10-19: dragging it by its header, reopening where it was left, resetting its position, moving it with Alt and an arrow key, and a drop that lands off-screen, past an edge, or within 16 px of the dock being pulled back onto the work area or snapped flush while the panel stayed open all worked there. One defect was seen: the first Alt+arrow press right after clicking the header does nothing, and the presses after it work. Xorg has not been re-tested against any of these fixes — it was last run on 2026-10-15, against an earlier build. Everything else in [Platform support](#platform-support) is still marked *never observed on hardware* and stays that way until someone reports back. See [`docs/adr/`](docs/adr/) for the decisions behind both.
+**Current release: [v1.0.0](https://github.com/mlengmark/O-view/releases/latest)**, with a Windows installer, a portable Windows exe, `.deb` packages for amd64 and arm64, and portable Linux tarballs under one tag.
 
----
+## What it shows
 
-## What it does
-
-O-view sits in the notification area and answers three questions at a glance:
-
-1. **How much of my Claude usage limit have I consumed?** (5-hour rolling window, and 7-day window)
-2. **When does it reset?**
-3. **Is my work actually drawing from the plan, or billing as extra usage?**
-
-| Surface | Shows |
+| Surface | What you see |
 |---|---|
-| Tray icon | A **ring gauge** filled in proportion to 5-hour usage, with the brand "eye" pupil at its centre — no digits. Colour-coded green (<50%) → amber (50–69%) → red (≥70%). At a measured 0% the pupil fades out with the ring, so an empty gauge reads as one thing rather than a live dot inside an empty circle. A grey, unfilled ring with a solid pupil is different again: it means no authoritative data, rather than a fabricated 0%. Geometry scales to the icon size, and the palette switches for a light or dark taskbar. |
-| Tooltip | `5h: 47% · resets 16:32 · 7d: 61%` — the exact number lives here, since the icon carries no text. Degrades honestly: `(as of 14:05)` when the data is stale, `local estimate · usage % unknown` on fallback data, `no usage data` when there is none. |
-| Detail panel | Left-click. Account header, session/weekly bars with reset times, four clickable stat tiles, a 31-day usage graph, and an off-plan section. Details below. |
-| Menu | Right-click. Reset panel position · Run at startup · Update automatically · notify-at-threshold, selectable between 70/80/90% · Weekly reset… · Copy diagnostics · Check for updates… · Exit. (Also Resume usage refresh, but only while the background usage check has stopped itself.) Rendered as an on-brand flyout docked to the taskbar corner, not a Win32 context menu, so it matches the panel. |
+| Tray icon | A ring gauge filled in proportion to your 5-hour usage, with the brand "eye" at its centre and no digits. Green below 50%, amber from 50%, red from 70%. A grey, unfilled ring means O-view has no authoritative data, which is not the same as 0%. |
+| Tooltip | The exact numbers: `5h: 47% · resets 16:32 · 7d: 61%`. When the data is stale it says so (`as of 14:05`); on fallback data it says `local estimate`; with nothing to read it says `no usage data`. |
+| Detail panel | Left-click the icon. Your account, the session and weekly bars with their reset times, four stat tiles you can flip to a per-model breakdown, a tokens-used section, a 31-day graph, and an off-plan section. |
+| Menu | Right-click the icon. Reset panel position, Run at startup, Update automatically, Notify at 70/80/90%, Weekly reset, Copy diagnostics, Check for updates, Exit. On Windows it is a flyout docked to the taskbar corner, matching the panel. |
 
-A balloon notification fires once per session window when usage crosses the threshold — **70% by default**, the point at which the gauge turns red, so out of the box the notification and the colour never disagree. Pick **80%** or **90%** from the menu row if you would rather be told later; the gauge still turns red at 70, because the colour bands and the notification are separate signals.
+A notification fires once per session window when usage crosses the threshold you chose. The default is 70%, the point at which the gauge turns red, so the colour and the notification agree out of the box.
 
 ### The detail panel
 
-On Windows both flyouts dock to the taskbar corner like a system flyout and animate open and closed. On Linux the panel opens in the same work-area corner — beside the panel bar, not anchored to the icon — and the menu is the desktop's own; see [Platform support](#platform-support) for why. Both follow the desktop's light/dark theme, re-read on every open, so switching never needs a restart.
+Both heads follow the desktop's light or dark theme, re-read every time the panel opens. On Windows the panel docks to the taskbar corner like a system flyout. On Linux it opens in the same work-area corner, and on X11 or XWayland you can drag it by its header, nudge it with Alt and an arrow key, and it reopens where you left it.
 
-- **Account header** — display name, email, and plan-tier badge, read from `~/.claude.json`. No token, no network call.
-- **Session and weekly bars** — percentage, proportional fill in the same colour bands as the icon, and a reset time for each: `Resets in 2h 14m · 16:32` for the 5-hour window, `Resets in 6d 3h · Mon 22:59` for the weekly one. **The two are found differently, because the windows are different shapes** ([ADR-0014](docs/adr/0014-weekly-reset-is-a-reported-constant.md)). The weekly reset is a **static grid** — same weekday, same time, every week — so O-view stores the instant Claude Code reports and projects it forward. It is exact and carries no `~`. The 5-hour window **rolls from first use** and sits on no grid, so its reset is derived by watching the percentage fall; before a drop has been seen the panel says the time is unknown rather than guessing, and a drop bracketed by a gap in sampling is shown with a `~` and an explanation on hover instead of a made-up minute.
-- **Four stat tiles** — Output tokens today, Est. value today, Output tokens over 31 days, Est. value over 31 days. **The tiles headline output alone and say so in their labels**, because output is the only one of the four billed quantities that tracks work done: measured over 29 days of transcripts here it is **0.10–0.97%** of everything billed, the rest being prompt re-sends against the cache. A tile leading with the total led with those re-sends. What was billed alongside the output is the **Tokens used** section below, not a smaller number hidden inside these tiles. **Click any tile to flip it to a per-model breakdown**: a segmented bar with a consistent colour per model across the whole panel, and per-model token and cost figures on hover. Nothing is fetched on click; the split is already in hand. A 31-day window O-view has not been installed for the whole of is captioned with its real coverage — `12 of 31 days recorded` — counting the days O-view has data **for**, not the days you happened to use Claude. A week away from Claude is low usage, not short history, and the caption no longer confuses the two.
-- **Tokens used — today and last 31 days** — two bars split by token kind, with a hover card per segment carrying that kind's share and estimated value, and a breakdown table behind a view switch. **A superset of the tiles above it, not a decomposition of them:** the tiles are output, and this is output plus the input, cache writes and cache reads billed beside it.
-- **Usage graph — last 31 days** — daily bars with hover tooltips, and dotted gridlines at each **weekly limit reset** (falling back to Monday, labelled as such, until Claude Code has reported one). Because a reset happens at a time of day rather than at midnight, a gridline sits at its true position *inside* the day it falls in. Days before O-view's first recorded day are drawn as an explicit empty region, never as zero-height bars, because "no data" and "no usage" are different claims.
-- **Off-plan usage — last 31 days** — the estimated API-rate value of usage on models that bill as extra usage (currently Fable) rather than drawing from the plan window.
-- **Off-plan warning banner** — appears when the live divergence detector sees substantial local work against a flat plan meter, or when the plan window is exhausted. This exists because the tray once read a comfortable green 6% while ~€86 of credit usage was being billed; see [findings/credit-usage-divergence.md](docs/findings/credit-usage-divergence.md). **What it claims about billing depends on your account, not on the meter:** an exhausted window means work has stopped drawing from the plan, which is not the same as being charged for it. O-view reads whether extra usage is switched on from Claude Code's own cache and says so — relayed with the time Claude Code read it, or stated as unknown where there is nothing to read — instead of asserting a charge at accounts that have auto-billing off. The banner links to Claude's usage settings for the figure O-view will not state.
-- **"No usage data" banner** — when the figures read unknown, the panel states *what* O-view checked and *what it observed*, rather than asserting anything about your machine it hasn't verified.
+- **Account header.** Your display name, email and plan tier, read from Claude Code's own config file.
+- **Session and weekly bars.** The percentage used and a reset time for each. The weekly reset is the exact instant Claude Code reports, stored once and projected forward. The 5-hour reset is derived by watching the percentage fall, so before the first drop the panel says the time is unknown rather than guessing, and a drop seen across a gap in sampling is shown with a `~`.
+- **Four stat tiles.** Output tokens and their estimated value, today and over 31 days. The tiles headline output alone, because output is the only billed quantity that tracks work done; the rest is prompt re-sends against the cache. Click any tile to flip it to a per-model bar with the same colour per model across the whole panel. A window O-view has not been installed for the whole of says so: `12 of 31 days recorded`.
+- **Tokens used.** Two bars split by token kind, today and over 31 days, with a hover card per segment and a breakdown table behind a switch. This is everything billed, where the tiles are output only.
+- **Usage graph.** A bar per day for the last 31 days, with dotted gridlines at each weekly reset. Days before O-view's first recorded day are drawn empty, never as zero, because no data and no usage are different claims.
+- **Off-plan usage.** The estimated API-rate value of usage on models that bill as extra usage rather than drawing from the plan, and a banner when the live detector sees substantial work against a flat plan meter or an exhausted window. The banner says whether your account has extra usage switched on, as Claude Code last reported it, rather than asserting a charge.
+- **No usage data.** When the figures are unknown, the panel states what O-view checked and what it found, never something about your machine it has not verified.
 
-Figures labelled **Est.** price tokens at published API rates. They are not money charged — within plan limits the marginal cost is zero. Where a model has no published rate, O-view sums what it can price and names the rest (`excludes claude-x (no published rate)`) instead of blanking the tile.
+Figures labelled **Est.** price tokens at published API rates. They are not money charged; within plan limits the marginal cost is zero. Where a model has no published rate, O-view sums what it can price and names what it left out.
 
 ### Why these totals are lower than Claude Code's own
 
-**They disagree by design, and O-view is counting the requests.** One API response is written to the transcript **once per content block** — the thinking, the text, and each tool call each become their own line, and every one of them repeats the *same* `usage` object. Measured here, one response reporting 1,068 output tokens was written as four lines — a thinking block, a text block and two tool calls — each carrying that same 1,068. Counting lines therefore multiplies a response by however many blocks it happened to contain. A resumed or forked session copies its transcript, so the same response can also land in more than one file: 45 request ids here appear in two.
-
-O-view keeps one row per request id, so a response is counted once ([`TranscriptRecord`](src/O-view.Core/Providers/Jsonl/TranscriptRecord.cs)). Claude Code's own `~/.claude/stats-cache.json` does not: across the 21 days it held figures for on this machine its per-day totals matched a raw line-by-line sum **exactly**, running **1.53×–2.60×** O-view's figure for the same day. So anything derived from that file reads roughly twice O-view's number, and the gap is duplicated lines rather than usage O-view failed to find.
+Claude Code writes one line to a transcript per content block, and every line repeats the same `usage` object, so counting lines multiplies a response by the number of blocks it had. O-view keeps one row per request id. Measured on one machine, Claude Code's own stats file ran between 1.5 and 2.6 times O-view's figure for the same day, and the gap was duplicated lines rather than usage O-view missed.
 
 ### What O-view cannot see
 
-Every figure here is read from files on **this machine**, which is the same scope Claude Code states for its own usage summary — *"does not include other devices or claude.ai."* Work that runs elsewhere writes no local transcript and is therefore absent from the tiles while still drawing on the plan window: cloud and remote agents, other machines, and claude.ai itself. Sub-agents are **not** in that list — they run locally and are counted, transcript and all.
+Everything here is read from this machine, which is the same scope Claude Code states for its own usage summary. Work that runs elsewhere writes no local transcript and is absent from the tiles while still drawing on the plan window: cloud and remote agents, other machines, and claude.ai itself. Sub-agents run locally and are counted.
 
 ## Platform support
 
-Both platforms are supported from **v0.6.0** onward. Releases before that are Windows-only.
-
 | | Supported since | Targets |
 |---|---|---|
-| **Windows 11** | v0.1.0 | x64 |
-| **Linux** | **v0.6.0** | Ubuntu 22.04+ / Debian 12+ (`.deb`), x64 and arm64; portable tarball elsewhere |
+| Windows 11 | v0.1.0 | x64 |
+| Linux | v0.6.0 | Ubuntu 22.04+ and Debian 12+ (`.deb`), x64 and arm64; portable tarball elsewhere |
 
-The Linux matrix deliberately mirrors what [Claude Desktop for
-Linux](https://code.claude.com/docs/en/desktop-linux) supports, since a machine that cannot
-run Claude Desktop has nothing for O-view to read. **macOS is out of scope.** See
-[ADR-0012](docs/adr/0012-linux-support.md) and [ADR-0013](docs/adr/0013-linux-ui-toolkit.md).
+The Linux targets mirror what Claude Desktop for Linux supports, since a machine that cannot run Claude Desktop has nothing for O-view to read. macOS is out of scope.
 
-**Supported does not mean identical, and this table does not pretend otherwise.**
+Supported does not mean identical. The table below says what each platform does; [docs/platform-status.md](docs/platform-status.md) says what has actually been seen working on Linux, which is less than what ships.
 
 | | Windows 11 | Linux |
 |---|---|---|
-| Reading Claude's data | ✅ | ✅ **seen working** — every path resolved, 5,645 of 5,645 plan-history samples parsed, Cowork logs and account tier read |
-| Tray icon | ✅ | ✅ **seen working** on KDE Plasma / Wayland. **Needs a notification-area host** — GNOME ships none by default, see below |
-| Tooltip | ✅ | ⚠️ **not shown on GNOME.** The text reaches the bus, but as the item's `Title`, not as the `ToolTip` a panel draws on hover. **The exact figures are in the detail panel instead** — see below |
-| Detail panel | ✅ docked flyout at the taskbar corner | ⚠️ a **plain window in the work area's corner**, not docked to the icon — see below. *Never observed:* neither report could open it — the left click first deadlocked the app, then crashed it. Three separate causes fixed since, none re-tested, and the corner placement has never been seen on hardware either |
-| Right-click menu | ✅ full, in order: **Reset panel position, Run at startup, Update automatically** (installed copies only), **Notify at [70/80/90%] usage, Weekly reset…, Resume usage refresh** (only while the background usage check has stopped itself), **Copy diagnostics, Check for updates…, Exit O-view** | ⚠️ **Show usage, Reset panel position** (XWayland/X11 sessions only — absent on native Wayland)**, Run at startup, Resume usage refresh** (only while the background usage check has stopped itself)**, Exit O-view.** Notifications, diagnostics, updates and the weekly-reset entry are not on the menu — `--diagnose` and `--probe` cover diagnostics from a terminal. *Rendering never observed on hardware;* took tens of seconds on the first report (fixed in v0.6.4, not re-tested). CI's `linux-runtime` reads the real four-row layout off the bus (Show usage, Reset panel position, Run at startup, Exit O-view — the layout for a session that can remember a position, with the resume row hidden) |
-| Notifications | ✅ balloon tip | ✅ freedesktop notifications, *never observed* |
-| Run at startup | ✅ registry `Run` key, toggled from the menu | ✅ XDG autostart `.desktop`, from the menu **or** `o-view --startup-on`, *menu rendering never observed* |
-| Light/dark theme | ✅ follows `AppsUseLightTheme` | ✅ XDG desktop portal — seen on the VM: dark on GNOME's default "no preference", light once the desktop explicitly prefers light, [a deliberate choice, not a defect](#why-the-panel-is-dark-on-gnomes-default-theme). The portal read once deadlocked the UI thread (fixed in v0.6.4, not re-tested since); *never observed on hardware* |
-| Auto-update | ✅ in-place, one confirmation — or none, if you turn on **Update automatically** (off by default) | ⚠️ **notifies only, by design** — tells you once per version, installs nothing ([ADR-0009](docs/adr/0009-auto-update.md)) |
-| Remembered position | ✅ drag the panel by its header, or Alt and an arrow key; it reopens where it was left | ⚠️ **XWayland and X11 only** — a native Wayland session cannot set or read its own position, so it keeps the work-area corner and has no reset row. **Run on the Ubuntu 24.04 VM, GNOME on Wayland through XWayland, 2026-10-19:** dragged by its header, reopening where it was left, and put back by "Reset panel position"; moved with Alt and an arrow key, stepping 10 px (1 px with Shift) and staying where it was put rather than snapping to an edge; and a drop landing off-screen, past an edge, or within 16 px of the dock, pulled back onto the work area or snapped flush while the panel was still open — all working as expected. **One defect seen:** the first Alt+arrow press right after clicking the header does nothing; the presses after it work. Xorg was not re-tested against any of this — last run 2026-10-15, against an earlier build, so it reads as not re-tested, never as verified. *Still never observed on a physical Linux desktop.* |
-
-**What the Linux column's three states mean.** They are deliberately not two, because
-"shipped" and "seen working" are different claims and the difference is the whole point.
-
-- ***Seen working*** — someone ran it on a physical Linux desktop and reported back. Two
-  reports exist, both from the same configuration: an Arch-based system, KDE Plasma, Wayland,
-  tarball install — the first against v0.6.1, the second against v0.6.5.
-- ***Never observed*** — the code ships and passes its tests, and the package installs and
-  runs in clean Ubuntu 22.04, Ubuntu 24.04, Debian 12 and Fedora containers on every change.
-  But a container is headless. That proves the package is sound, not that an icon appears in
-  a panel, a tooltip is legible or a theme follows.
-- ***Fixed, not re-tested*** — **four fixes now sit in this state.** The first report found
-  the app unusable past the tray icon: the first left click deadlocked it, and the menu took
-  tens of seconds. Both causes were found and fixed in v0.6.4. Reading that code turned up a
-  third failure nobody had hit yet — the panel dismissed itself when a compositor refused to
-  focus it — fixed in v0.6.5.
-
-  A second report then found the left click **crashing the whole app** rather than
-  deadlocking it: `segmentation fault (core dumped)`. Avalonia's tray backend raises the
-  click on D-Bus's own thread, and the head built its window straight from there
-  ([#143](https://github.com/mlengmark/O-view/issues/143)). Every bus callback is marshalled
-  onto the UI thread now — the menu items had the same defect, unreported only because the
-  click was hit first.
-
-  All four are reasoned from the code and guarded by tests, but **no test can reach a live
-  session bus and a dispatcher together**, which is exactly how the first one shipped, and
-  how the fourth one shipped past the fix for the first. So "fixed" here means found and
-  understood, not seen working. The label deliberately does not name a version: it applies to
-  whatever is currently shipped and unverified, and pinning it to one release just means
-  editing it at the next.
-
-Rows are recorded this way rather than ticked because shipping something is not the same as
-having seen it work, and claiming otherwise would be exactly the kind of unearned assertion
-the rest of this app refuses to make.
-
-**Not yet reported on at all:** X11 (both reports were Wayland), GNOME without an
-AppIndicator extension, and the `.deb` on real hardware (that report was a tarball install).
+| Reading Claude's data | Yes | Yes |
+| Tray icon | Yes | Yes, where the desktop has a notification-area host. GNOME ships none by default; see below |
+| Tooltip | Yes | Not on GNOME. The exact figures are in the panel instead |
+| Detail panel | Docked flyout at the taskbar corner | A window in the work area's corner, not docked to the icon |
+| Right-click menu | All rows | Show usage, Reset panel position (X11 and XWayland only), Run at startup, Resume usage refresh when needed, Exit. Diagnostics and updates have command-line equivalents |
+| Notifications | Balloon tip | Freedesktop notifications |
+| Run at startup | Registry `Run` key, from the menu | XDG autostart file, from the menu or `o-view --startup-on` |
+| Light and dark theme | Follows the app theme setting | Follows the desktop portal. GNOME's default "no preference" renders dark; prefer-light renders light |
+| Auto-update | In place, after one confirmation, or unattended if you turn Update automatically on | Notifies once per version and installs nothing |
+| Remembered panel position | Drag or Alt+arrow; reopens where left | The same on X11 and XWayland. A native Wayland session cannot place its own window, so it keeps the corner |
 
 ### Why the icon may not appear on GNOME
 
-The Linux notification area is a protocol — StatusNotifierItem, over D-Bus — and something
-has to implement the *host* side. KDE Plasma, XFCE and Cinnamon do. **GNOME does not, by
-default**, having removed tray support deliberately.
-
-Installing the **AppIndicator and KStatusNotifierItem Support** extension adds one, and
-O-view picks it up without needing a restart. Until then it will tell you, via a desktop
-notification, that it is running but has nowhere to put its icon — because an app that is
-silently invisible is indistinguishable from a broken one.
-
-O-view asks the session bus rather than trusting the toolkit, which reports success either
-way ([findings](docs/findings/linux-tray-spike.md)). `o-view --probe` reports what it found.
+The Linux notification area is a protocol, StatusNotifierItem over D-Bus, and something has to implement the host side. KDE Plasma, XFCE and Cinnamon do. GNOME removed tray support on purpose. Install the **AppIndicator and KStatusNotifierItem Support** extension and O-view picks it up without a restart. Until then it tells you by notification that it is running but has nowhere to put its icon, because an app that is silently invisible looks exactly like a broken one. `o-view --probe` reports what it found on the bus.
 
 ### Why there is no tooltip on GNOME
 
-Hovering the icon shows nothing there. **The exact percentages are in the detail panel** —
-left-click the icon, or pick **Show usage** from its menu — and on that desktop the panel is
-the only place they appear. The icon itself carries no digits by design, so this is the
-difference between reading a number at a glance and opening a window for it.
-
-Two separate things would have to be true for a tooltip, and neither is:
-
-- **Nothing publishes one.** StatusNotifierItem carries a `ToolTip` property, and that is what
-  a panel draws on hover. Avalonia's tray backend answers it with an empty structure and
-  offers no way to fill it; the text O-view sets on every poll is published as the item's
-  `Title` instead. `TrayTooltipRuntimeTests` reads both properties off a real session bus in
-  CI, so this is measured rather than assumed — and it is written to go red if a later
-  Avalonia starts filling the property.
-- **Nothing would read one.** The AppIndicator extension GNOME needs before it has a tray at
-  all has `ToolTip` commented out of its D-Bus interface description — *"We disable this as we
-  don't support tooltip, so no need to go through it"* — so it never asks for the property,
-  filled or not.
-
-What KDE Plasma does with an empty `ToolTip` is not known: its tray may fall back to the
-`Title` and show the text anyway, and neither of the two Plasma reports mentioned the tooltip
-either way. See [#314](https://github.com/mlengmark/O-view/issues/314).
+Nothing publishes one and nothing would read one. Avalonia's tray backend answers the `ToolTip` property with an empty structure, and the AppIndicator extension GNOME needs before it has a tray at all has tooltips disabled in its own interface description. The panel carries the exact percentages instead. What KDE Plasma does with the empty tooltip is not known; neither report mentioned it.
 
 ### Why the Linux panel is not docked to the icon
 
-SNI provides no way for an application to learn where its own icon was drawn — there is no
-`Shell_NotifyIconGetRect` equivalent. So the panel cannot appear *under the icon* the way the
-Windows one does, and does not try: approximating it would put the panel in the wrong place
-most of the time, which reads as broken.
-
-**A fixed corner needs none of that**, and is what you get. The work area already excludes the
-desktop's panel bar wherever it publishes one, so O-view places the window in the corner
-beside it — the same corner the Windows flyout docks to, computed by the same shared rule.
-
-That placement is a **request**, not a guarantee. Setting a window position is something an X11
-window manager may ignore and a native Wayland compositor will refuse outright. O-view logs
-both the position it asked for and the one it was given, so `o-view --log` says which happened
-rather than leaving you to guess. Where the screen geometry cannot be read at all, the panel
-centres instead of guessing at coordinates — half off-screen reads as broken where centred
-does not.
-
-### Why the panel is dark on GNOME's default theme
-
-A fresh Ubuntu install reports **no colour preference** rather than "light" —
-`gsettings get org.gnome.desktop.interface color-scheme` reads `'default'` even though
-every other window on the desktop renders light. O-view treats that absence of a signal
-for the panel the same way it already did for the tray icon: it stays **dark**. Set the
-desktop to **prefer-light** instead and the panel follows it there.
-
-That is a **deliberate choice, not a defect** — decided on
-[#316](https://github.com/mlengmark/O-view/issues/316) and reconfirmed in the Ubuntu
-24.04 VM run of 2026-10-15: `'default'` stayed dark, `prefer-light` rendered light. It
-has not been observed on physical hardware.
+StatusNotifierItem gives an application no way to learn where its icon was drawn, so the panel cannot appear under it. It opens in the work-area corner beside the panel bar, computed by the same rule the Windows flyout docks with. Placing a window is a request a window manager may ignore and a native Wayland compositor refuses, so O-view logs both the position it asked for and the one it got.
 
 ### No Snap or Flatpak
 
-Both sandbox the filesystem, and O-view's entire function is reading files that belong to
-*another* application under `~/.config/Claude` and `~/.claude`. Making that work under
-confinement is a project in itself, not a packaging option.
+Both sandbox the filesystem, and O-view's whole job is reading files that belong to another application. Making that work under confinement is a project of its own.
 
-## Provenance — clean-room
+## Where the numbers come from
 
-O-view is inspired by the *product concept* of macOS menu-bar apps that track AI token usage.
+O-view reads files Claude's own apps already keep and never writes to them. Three providers, with a composite that picks between them.
 
-**No third-party usage-monitor code has been read, copied, adapted, or consulted.** Those reference apps are macOS/Swift; O-view is an independent .NET implementation written from scratch against platform documentation and locally observed data formats. See [ADR-0004](docs/adr/0004-clean-room-provenance.md) for the full policy and its practical rules.
+| Provider | Reads | Gives |
+|---|---|---|
+| Plan history | Claude Desktop's `plan-usage-history.json` | The 5-hour and 7-day percentages, sampled while Desktop runs |
+| Cached utilization | The `cachedUsageUtilization` block in Claude Code's `.claude.json` | The same two percentages plus the exact weekly reset instant. This fills the bars on a machine with no Claude Desktop |
+| Transcripts | Claude Code transcripts and Cowork audit logs | Token counts and the per-model breakdown, one row per request id |
 
-## Data sources
+The composite takes any live reading over a stale one, and a stale authoritative percentage over an estimate with none. Between the two primaries it takes whichever carries more meters, and among equals the one captured most recently. A snapshot is used whole; two sources are never merged field by field. When it is running on transcript data alone the panel says **local estimate**.
 
-O-view handles **no credentials.** Everything comes from files Claude's own apps already keep on disk — it reads them, and never writes to them. It has three providers and falls back gracefully:
-
-| Provider | Role | Reads | Gives |
-|---|---|---|---|
-| `PlanHistoryProvider` | Primary | `%APPDATA%\Claude\plan-usage-history.json` on Windows, `~/.config/Claude/plan-usage-history.json` on Linux — read-only, the file belongs to Claude Desktop | Authoritative 5-hour and 7-day % utilisation, sampled while Desktop runs |
-| `CachedUtilizationProvider` | Primary | `~/.claude.json` → `cachedUsageUtilization`, written by Claude Code — read-only | The same two percentages, **plus the exact weekly reset instant**. This is what fills the bars on a machine with no Claude Desktop, and O-view refreshes it itself ([above](#one-thing-o-view-runs)) |
-| `JsonlUsageProvider` | Fallback | Claude Code transcripts under `%USERPROFILE%\.claude\projects` / `~/.claude/projects`, plus Cowork audit logs | Token counts and per-model breakdown, de-duplicated by `requestId` |
-
-`CompositeUsageProvider` resolves between them by information value rather than list position: any live snapshot beats a stale one, and stale authoritative percentages beat an estimate carrying no percentages at all. Between the two primaries it takes whichever carries **more meters**, and among equals the one captured **most recently** — neither has a standing preference, because Desktop samples on a timer while Claude Code's cache refreshes on use. The winning snapshot keeps its own label, so the UI shows a visible **"local estimate"** badge whenever it is running on fallback data. A provider that throws is treated as "no data" and the chain falls through rather than blanking the display.
-
-> **The two measure different things,** and the panel says so. The plan bars cover *all* Claude usage; the token tiles only cover usage that leaves a Claude Code transcript. A Desktop-only user therefore sees a non-zero session % beside 0 tokens.
-
-`OAuthUsageProvider` appears in some earlier design docs as the intended primary source. It was never built, and it **will not be** — reaching that endpoint means replaying a Claude subscription credential from a third-party product, which Anthropic's Consumer Terms prohibit. O-view handles no subscription credential of any kind, by decision rather than by deferral ([ADR-0015](docs/adr/0015-no-credential-based-usage-sources.md), [findings](docs/findings/api-usage-availability.md)). ADR-0002 is superseded on this point.
-
-O-view polls every 60 seconds, with a fast 3-second warm-up cadence for the first two minutes after launch so a start that beats Claude Desktop to the punch still fills the bars within seconds.
+The plan bars cover all your Claude usage. The token tiles cover only usage that leaves a transcript on this machine, so a Desktop-only user sees a non-zero session percentage beside zero tokens.
 
 ### One thing O-view runs
 
-Claude Code caches the same session and weekly percentages in `~/.claude.json`, which is what fills the bars on a machine with **no Claude Desktop**. It refreshes that cache **only when `/usage` runs** — not on startup, not while a session is open. Measured on a machine running Claude Code daily, the cache was **4.43 days stale**, so those users saw "unknown" indefinitely.
-
-So O-view runs `claude /usage` itself: when you open the panel, and at most once every 15 minutes in the background. It then reads the file, as it always has.
-
-**No credential is involved.** Claude Code authenticates as itself with its own stored login, exactly as when you run the command by hand; O-view holds no token and sends nothing to Anthropic ([ADR-0015](docs/adr/0015-no-credential-based-usage-sources.md)). The command costs **zero tokens** — and O-view checks after every invocation that it stayed free. If one is ever billed, it stops itself and offers a **Resume usage refresh** menu row rather than carrying on.
+Claude Code refreshes its cached percentages only when `/usage` runs, so on a machine without Claude Desktop they can be days stale. O-view runs `claude /usage` itself, when you open the panel and at most every 15 minutes in the background, then reads the file as it always has. Claude Code authenticates as itself; O-view holds no token. The command costs no tokens, and O-view checks after every run that it stayed free. If one is ever billed, the refresh stops itself and the menu offers a **Resume usage refresh** row.
 
 ### What O-view writes
 
-Only to its own directory — `%LOCALAPPDATA%\O-view\` on Windows, `~/.local/share/O-view/` on Linux. **Never to Claude's own files**, which are read-only to O-view on both platforms:
+Only to its own folder: `%LOCALAPPDATA%\O-view` on Windows, `~/.local/share/O-view` on Linux.
 
-- `usage.db` — SQLite daily rollups per model, so the 31-day figures survive Claude Code's own transcript cleanup ([ADR-0006](docs/adr/0006-local-rollup-store.md)). That retention is **not ours to rely on** — it is undocumented, a user can change it, and it was measured at over 42 days in August 2026 against a stated default of 30 — and history from before O-view was installed is unrecoverable at any retention length. Ingestion is idempotent.
-- `weekly-reset.json` — the weekly reset instant Claude Code reported, stored once and projected forward by whole weeks ([ADR-0014](docs/adr/0014-weekly-reset-is-a-reported-constant.md)). Losing it costs a wait, not a week: it is re-read whenever Claude Code refreshes its cache.
-- `settings.json` — notification preferences (including which threshold you picked) and whether automatic updates are on. Run-at-startup is not stored here; the registry `Run` key (Windows) or the XDG autostart `.desktop` file (Linux) is its single source of truth, so the two can never disagree. Automatic updates have no such external owner, so they do live here — and default to off, so a copied or hand-edited settings file cannot switch them on for a build that could not act on it anyway.
+- `usage.db`, daily rollups per model, so the 31-day figures survive Claude Code deleting old transcripts. History from before O-view was installed cannot be recovered.
+- `weekly-reset.json`, the weekly reset instant Claude Code reported, projected forward by whole weeks.
+- `settings.json`, the notification threshold and whether automatic updates are on. Run at startup is not stored here; the registry key or the autostart file is the only record of it, so the two can never disagree.
+- `panel-position.json`, where you left the panel, per display.
+- `logs/oview.log`.
 
-## Install and run
+## Install
+
+### Windows
+
+Download `O-view-Setup.exe` from the [latest release](https://github.com/mlengmark/O-view/releases/latest) and run it. It installs per user with no admin rights, adds a Start Menu entry, offers to start at sign-in, and appears in Settings under Apps for a clean uninstall.
+
+Prefer not to install? Download `O-view.Tray.exe` and run it from anywhere. It is self-contained. There is then no Start Menu entry; use the **Run at startup** row in the menu if you want it to persist.
+
+The icon lands in the taskbar overflow by default; drag it onto the taskbar to pin it. Left-click opens the panel, right-click the menu, and clicking the icon again closes whichever is open.
+
+**Updates.** O-view checks GitHub for a newer release and shows a balloon once when one exists; **Check for updates** in the menu does it on demand. An installed copy downloads the installer, upgrades in place after one confirmation, and relaunches. Tick **Update automatically** and it does this on its own, still telling you before it downloads. Portable copies are pointed at the release page.
+
+**SmartScreen.** Neither the installer nor the exe is code-signed; a certificate costs more than a free tool justifies. Windows will warn on first run. More info, then Run anyway. Every release carries a checksum file and a Sigstore build attestation so you can verify what you downloaded came out of this repository's workflow.
 
 ### Linux
 
-> **Read [Why the icon may not appear on GNOME](#why-the-icon-may-not-appear-on-gnome) first
-> if you are on GNOME** — including stock Ubuntu. Without an AppIndicator extension there is
-> nowhere for the icon to go, and that is a property of the desktop, not a bug in O-view.
+If you are on GNOME, including stock Ubuntu, read [Why the icon may not appear on GNOME](#why-the-icon-may-not-appear-on-gnome) first.
 
-**Debian / Ubuntu** — download `o-view_<version>_amd64.deb` (or `_arm64.deb`) from the
-[latest release](https://github.com/mlengmark/O-view/releases/latest):
+**Debian or Ubuntu:**
 
 ```bash
 sudo apt install ./o-view_1.0.0_amd64.deb
 ```
 
-Self-contained: no .NET runtime needed. It adds an application-menu entry, and deliberately
-does **not** enable run-at-startup on your behalf — that is the user's choice, not the
-package's. `apt remove` leaves your settings and — importantly — the weekly-reset log alone,
-since that one is unrebuildable.
+Self-contained, no .NET runtime needed. It adds an application-menu entry and does not enable run at startup for you. `apt remove` leaves your settings and your weekly-reset anchor alone.
 
-**To start O-view with your session**, tick **Run at startup** in the tray menu, or run:
+**To start with your session**, tick **Run at startup** in the menu or run:
 
 ```bash
 o-view --startup-on
 ```
 
-`--startup-off` disables it and `--startup-status` just reports. All three print the state as
-it stands *after* the write and the path of the autostart file, and exit non-zero if the write
-did not take — so a failure is visible rather than silently ignored. They work whether or not
-O-view is running, which matters because the menu is not always available: how faithfully an
-SNI host draws a checkable entry varies, and on GNOME without an AppIndicator extension there
-is no menu at all.
+`--startup-off` disables it and `--startup-status` reports it. All three print the state as it stands after the write and exit non-zero if the write did not take. They work whether or not O-view is running, which matters on a desktop where the menu is not available.
 
-It writes `~/.config/autostart/o-view.desktop` (honouring `$XDG_CONFIG_HOME`). That file is
-the single source of truth — nothing is copied into `settings.json` — so deleting it, or
-switching O-view off in your desktop's own startup-applications settings, is authoritative and
-the menu tick follows it.
+**Anything else:** download the `.tar.gz`, extract it and run `./o-view`.
 
-**Anything else** — download the `.tar.gz`, extract, and run `./o-view`. No installation.
+**Updates.** O-view tells you once when a newer release exists and installs nothing, because on a `.deb` install those files belong to your package manager. There is no apt repository, so `apt upgrade` will not find a new version. Download the next package from the releases page and install it the same way.
 
-**Staying up to date on Linux.** O-view checks for a newer release and tells you once per
-version — then leaves it entirely to you. It never downloads or replaces anything, because on
-a `.deb` install those files belong to your package manager and overwriting them would be
-undone by the next `apt upgrade`.
-
-> There is **no O-view apt repository**, so `apt upgrade` will not find a new version by
-> itself. Updating means downloading the next `.deb` or tarball from the releases page and
-> installing it the same way you did the first time. This is the one part of the Linux
-> experience that is genuinely worse than the Windows one, and it is stated rather than
-> glossed.
-
-On every change, the packaging workflow installs the `.deb` in clean **Ubuntu 22.04, Ubuntu
-24.04 and Debian 12** containers (plus Ubuntu 24.04 under arm64 emulation) and extracts the
-tarball on **Fedora**. Each run checks that the declared dependencies resolve, that the binary
-starts and renders its icons, that `--probe` reports rather than crashes when there is no
-session bus, and that `apt purge` leaves your data behind.
-
-Those are headless containers, so they prove the package is *sound* — not that the tray icon
-appears on your desktop. That is the distinction the ⚠️ rows above are recording.
-
-### Windows
-
-**Recommended — the installer.** Download `O-view-Setup.exe` from the [latest release](https://github.com/mlengmark/O-view/releases/latest) and run it. It installs per-user (no admin rights), adds an **O-view** entry to the Start Menu so you can relaunch it any time, and offers a "start automatically when I sign in" option so it survives reboots. It appears in *Settings → Apps* for a clean uninstall. See [ADR-0008](docs/adr/0008-installer-distribution.md).
-
-**Portable alternative.** Prefer not to install? Download the standalone `O-view.Tray.exe` and run it from anywhere — it is self-contained, no .NET required. Note there is then no Start Menu entry; use the right-click **Run at startup** toggle if you want it to persist.
-
-Either way: the icon lands in the taskbar overflow flyout (the `^` chevron) by default; drag it onto the taskbar to pin it. Left-click opens the panel, right-click the menu; clicking the icon again closes what is open.
-
-**Staying up to date.** O-view checks GitHub for a newer release in the background and shows a one-time balloon when one is available; right-click → **Check for updates…** at any time. For an installed copy it downloads `O-view-Setup.exe`, upgrades in place, and relaunches — all after a single confirmation. Portable copies are pointed at the release page.
-
-Prefer not to confirm each time? Tick **Update automatically** in the menu and the background check installs new versions on its own. It is **off unless you turn it on**, it still tells you *before* it downloads anything — naming the version and warning that O-view will close and reopen — and the downloaded installer is still checksum-verified before it runs. The row appears only on installed copies: a portable exe cannot replace itself while running, so it is not offered a setting it could not honour. See [ADR-0009](docs/adr/0009-auto-update.md) and [ADR-0010](docs/adr/0010-post-update-relaunch.md).
-
-> **SmartScreen, honestly:** neither the installer nor the executable is code-signed — a certificate costs more than a free tool justifies, which is also why there is no MSIX package (MSIX cannot install unsigned). Windows SmartScreen will warn on first run ("Windows protected your PC"); *More info → Run anyway* proceeds. The source is in this repository, and both the installer and the binary are built from it by the GitHub Actions workflow — verify rather than trust.
+Every change installs the `.deb` in clean Ubuntu 22.04, Ubuntu 24.04 and Debian 12 containers and runs the tarball on Fedora. Those are headless, which proves the package is sound and not that the icon appears on your desktop.
 
 ## Troubleshooting
 
-If the panel reads "no usage data", it will state which path it checked and what it found there — what it *observed*, never an assertion about your machine it hasn't verified.
-
-On Windows, right-click → **Copy diagnostics** puts the full report on the clipboard. Either platform can produce it without disturbing a running instance:
+If the panel reads "no usage data" it says which path it checked and what it found. For the full report, right-click and choose **Copy diagnostics** on Windows, or run:
 
 ```bash
 O-view.Tray.exe --diagnose report.txt
@@ -319,34 +157,15 @@ O-view.Tray.exe --diagnose report.txt
 o-view --diagnose
 ```
 
-The report names the platform, the resolved config and data roots, which locations were searched, and how many transcripts were found. On Linux it also reports the desktop, the session type, and **whether a notification-area host was found on the bus** — which is the answer to "why can't I see the icon". For just that question:
-
-```bash
-o-view --probe
-```
-
-It contains no token and no conversation content.
+The report names the platform, the resolved data roots, which locations were searched and how many transcripts were found. On Linux it also names the desktop, the session type, and whether a notification-area host was found, which answers "why can't I see the icon". It contains no token and no conversation content. Every flag is listed in [docs/cli.md](docs/cli.md).
 
 ## Versioning
 
-Releases are tagged `vMAJOR.LARGE.MINOR` — three numbers, read left to right, **higher is newer**:
-
-| Vector | Bumped when |
-|---|---|
-| **Major** | A release large enough to be a different product generation |
-| **Large** | A substantial change — new surfaces, new platform support, reworked behaviour |
-| **Minor** | Fixes and small additions |
-
-Four rules, and the reasons they exist rather than the rules alone:
-
-- **Each vector is compared as a number, not as text.** `0.6.10` is newer than `0.6.9`, and `1.0.0` is newer than `0.99.99`. This is the one that has to be right: a text comparison puts `0.6.10` *below* `0.6.9`, so every installed copy would decide the newer release was older, report "up to date", and never update again — silently, with no error anywhere. `ReleaseVersion` compares each vector as an `int`, and the tests pin the inversion cases (9→10, 99→100) in all three positions.
-- **No upper bound.** A vector may be any non-negative integer; `0.6.100` follows `0.6.99` perfectly well. There is deliberately no cap, because nothing in the app, the release workflow or the installer enforces one — and a cap is only ever a reason to bump a higher vector for no engineering reason.
-- **No leading zeros.** `v0.06.10` is rejected by the release workflow. It would parse as `0.6.10` and the app would report `0.6.10`, but the published asset names are built from the raw tag — so one release would carry two different version strings, and the mismatch would only surface in whichever of them you happened to read.
-- **Releases are published in ascending order.** The updater reads GitHub's `releases/latest`, which returns the most recently *published* release rather than the highest-numbered one. Publishing a fix to an older line after a newer release would offer users the older build. Ship forward.
-
-This is **not** semantic versioning and carries no breaking-change contract — O-view is an application, not a library, and nothing consumes it as an API.
+Tags are `vMAJOR.LARGE.MINOR`: a different product generation, a substantial change, a fix. Higher is newer, compared number by number, so `0.6.10` is newer than `0.6.9` and `1.0.0` is newer than `0.99.99`. There is no cap on any number and no leading zeros. Releases are published in ascending order, because the updater reads the most recently published release. This is not semantic versioning: O-view is an application and nothing consumes it as an API.
 
 ## Building from source
+
+Requires the .NET 10 SDK.
 
 ```bash
 dotnet build
@@ -362,55 +181,32 @@ The Windows head:
 dotnet publish src/O-view.Tray -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
 ```
 
-The Linux head, and the `.deb` and tarball around it — the same script CI runs, so a local
-build is the artefact, not an approximation of it:
+The Linux head, the `.deb` and the tarball, with the same script CI runs (needs `dpkg-deb`, so a Debian-family machine or container):
 
 ```bash
 ./packaging/linux/build.sh 1.0.0 linux-x64 dist
 ```
 
-It needs `dpkg-deb`, so it runs on a Debian-family machine or in a container; `linux-arm64` is
-the other supported RID.
+On Linux, build the projects rather than the solution: `O-view.Tray` is WPF and does not build there. Everything else is portable, and CI tests it on both Windows and Ubuntu on every push.
 
-**On Linux, build the projects rather than the solution.** `O-view.Tray` is WPF and targets
-`net10.0-windows`, so a bare `dotnet build` of the whole solution fails there on that one
-project. Everything else is portable:
+Before opening a pull request run the full check, which builds, runs every test, renders both panels in every sample state and compares them pixel by pixel with `tests/golden`:
 
 ```bash
-dotnet test tests/O-view.Core.Tests -c Release
-dotnet test tests/O-view.App.Tests -c Release
-dotnet test tests/O-view.Linux.Tests -c Release
-dotnet test tests/O-view.Presentation.Tests -c Release
+powershell -File tools/check.ps1
 ```
-
-`dotnet test` accepts only one project at a time, so the `ubuntu-latest` CI leg runs these
-same four projects as four separate commands, one per project, in this order.
-
-Requires the .NET 10 SDK (10.0.302+). The test suite is 1,575 xUnit tests across `O-view.Core` (689), `O-view.App` (385), `O-view.Linux` (174) and `O-view.Presentation` (327); CI builds and tests on **both** windows-latest and ubuntu-latest on every push and pull request, and tagging `v*` publishes all six assets — the Windows installer and portable exe, both `.deb` architectures, and both tarballs — to a single GitHub release.
-
-Two verification hooks exist because unit tests genuinely cannot reach what they cover, and both write their findings to a file rather than to a screen you have to be watching:
-
-```bash
-O-view.Tray.exe --menu-samples out\   # renders every menu state offscreen, both themes
-```
-
-```bash
-O-view.Tray.exe --menu-check report.txt   # drives the real flyout through open/toggle/close cycles
-```
-
-`--menu-check` exists because the flyout's regressions have all been *stateful* — they appear on the second open, not the first — and because logical state and what is actually drawn have come apart before now: the threshold list once expanded correctly, reported every setting correctly, and rendered the card sliced in half.
-
-Runtime prerequisites: Windows 11 or a supported Linux (see [Platform support](#platform-support)), and Claude data present locally — [Claude Desktop](https://claude.ai/download) for authoritative percentages, and/or Claude Code transcripts under `%USERPROFILE%\.claude\` for token counts.
 
 ## Documentation
 
-- [Architecture Decision Records](docs/adr/) — why the stack, providers, and constraints are what they are
-- [Findings](docs/findings/) — empirical observations about local data formats
-- [UI spec](docs/ui-spec.md) — the panel contract
-- [CLAUDE.md](CLAUDE.md) — the rules any contributor (human or AI) works under
+- [docs/architecture.md](docs/architecture.md): the layers and the rules the code follows.
+- [docs/platform-status.md](docs/platform-status.md): what has been seen working on each platform.
+- [docs/cli.md](docs/cli.md): every command-line flag.
+- [docs/ui-spec.md](docs/ui-spec.md): the panel contract.
+- [docs/adr/](docs/adr/): the decisions and their reasons.
+- [docs/findings/](docs/findings/): what was measured about Claude's local data formats.
+- [CLAUDE.md](CLAUDE.md): the rules any contributor, human or AI, works under.
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
 
 Not affiliated with, endorsed by, or sponsored by Anthropic.

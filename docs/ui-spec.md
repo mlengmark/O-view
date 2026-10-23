@@ -14,8 +14,8 @@ mixed together throughout, and they are not equally binding:
 
 | | Binds where | Lives in |
 |---|---|---|
-| **The shared contract** — *what* a surface says and when. Icon geometry and colour bands, the tooltip's wording and its degraded forms, panel copy, the reset-line phrasing, the countdown format, tile labels, which states are "unknown" rather than zero | **Both heads.** A user should not be told a different thing on a different OS | `O-view.App` — `TrayIconGeometry`, `PanelPalette`, `PanelText`. Changing the wording here means changing it in one place, and 21 exact-string tests pin it |
-| **Windows presentation** — *where* a surface appears and how it moves. Docked placement, `PopupPositioner`, work-area insets, the 230 ms rise, foreground/`AttachThreadInput` handling, `Shell_NotifyIcon` behaviour, Segoe glyph avoidance | **The Windows head only** | `O-view.Tray` |
+| **The shared contract**: *what* a surface says and when. Icon geometry and colour bands, the tooltip's wording and its degraded forms, panel copy, the reset-line phrasing, the countdown format, tile labels, which states are "unknown" rather than zero | **Both heads.** A user should not be told a different thing on a different OS | `O-view.Presentation` for the wording and view models (`PanelText`, `PanelSections` and the rest), `O-view.App` for the geometry and palette (`TrayIconGeometry`, `PanelPalette`, `PanelMetrics`). Changing the wording means changing it in one place, and exact-string tests pin it |
+| **Windows presentation**: *where* a surface appears and how it moves. Docked placement, `PopupPositioner`, work-area insets, the 230 ms rise, foreground/`AttachThreadInput` handling, `Shell_NotifyIcon` behaviour, Segoe glyph avoidance | **The Windows head only** | `O-view.Tray` |
 
 Read every section below as Windows presentation unless it is describing content. Where Linux
 **cannot** meet a section, it is noted inline rather than left to be inferred — the four real
@@ -39,7 +39,7 @@ Per [ADR-0003](adr/0003-windows-tray-constraints.md) and the [legibility spike](
 - Arc colour — the shared `UsageLevels` bands ([issue #2](https://github.com/mlengmark/O-view/issues/2)):
   **green < 50% · amber 50–69% · red ≥ 70%**. Same classifier drives the popup bars.
 - No data / estimate: faint empty ring — never a fabricated fill
-- Tooltip (≤127 chars): `5h: 47% · resets 16:32 · 7d: 61% · resets ~Tue 06:28`. The weekly reset joins on the same terms as the session one — shown once derived, absent while unknown, `~` when the observation behind it was bracketed by a gap in Desktop's sampling ([ADR-0011](adr/0011-weekly-reset-derivation.md)).
+- Tooltip (≤127 chars): `5h: 47% · resets 16:32 · 7d: 61% · resets Tue 06:28`. The weekly reset is the instant Claude Code reports, shown exactly and never with a `~` ([ADR-0014](adr/0014-weekly-reset-is-a-reported-constant.md)); the session reset is derived and carries a `~` when the observation behind it was bracketed by a gap in sampling. Either is absent while unknown.
 
 > **Linux: GNOME shows none of this.** The text above is still what O-view publishes, but as
 > the tray item's `Title` — Avalonia's tray backend fills `ToolTip` with an empty structure and
@@ -71,14 +71,17 @@ always opens in the same dedicated place regardless of exact click position. The
 cursor selects only the monitor; the taskbar edge is derived from the work-area
 inset (handles all four dock positions and auto-hide).
 
-> **Linux: the placement above does not apply; the content below does.** SNI gives an
-> application no way to learn where its own icon was drawn — there is no
-> `Shell_NotifyIconGetRect` equivalent — and a Wayland client generally cannot position its
-> own surface at all. Approximating the docking would put the panel in the wrong place most
-> of the time, which reads as broken, so the Linux panel is a **plain centred window**
-> ([ADR-0013](adr/0013-linux-ui-toolkit.md)). Everything from *Header* down — the copy, the
-> bands, the tiles, the graph's rules about absent days — is the shared contract and holds
-> identically.
+> **Linux: the docking above does not apply; the content below does.** SNI gives an
+> application no way to learn where its own icon was drawn (there is no
+> `Shell_NotifyIconGetRect` equivalent), so the panel cannot anchor to the icon. It opens
+> instead at the **work-area corner beside the panel bar**, computed by the same shared
+> `WorkAreaPlacement` rule the Windows flyout docks with, and on an X11 or XWayland session
+> it remembers a dragged position exactly as the Windows panel does (*Moving the panel*,
+> below). A native Wayland compositor refuses to place or report a window, so there the panel
+> keeps the corner and has no drag handle or reset row ([ADR-0013](adr/0013-linux-ui-toolkit.md),
+> [ADR-0017](adr/0017-remembered-panel-position.md)). Everything from *Header* down, the copy,
+> the bands, the tiles and the graph's rules about absent days, is the shared contract and
+> holds identically.
 
 **The window never grows past the display's work area.** Whatever the content's own height,
 the flyout stops at the space the work area leaves; the part that does not fit is not
@@ -203,7 +206,7 @@ The row has three states:
 
 O-view runs that command itself on its own cadence (`ClaudeCliRefresher`, issue #234), so for most users this row fills in without being read. The copy exists for the machines where it has not.
 
-Percentages come from the OAuth provider. On JSONL fallback they are estimates and must be labelled as such.
+Percentages come from Claude Desktop's plan history or Claude Code's cached figures, whichever carries more meters most recently. On JSONL fallback they are estimates and must be labelled as such.
 
 ### Statistics tiles
 
@@ -315,8 +318,6 @@ Days before install are **blank columns** (no bar) with their date still labelle
 
 **Implemented 2026-07-21** after [credit-usage-divergence.md](findings/credit-usage-divergence.md) established that plan percentages can be accurate and misleading at once.
 
-When the session window shows substantial activity but a flat plan meter, the panel:
-
 The panel carries the signal in **two independent registers**:
 
 **Live (current session window)** — the real-time divergence detector:
@@ -421,9 +422,12 @@ The right-click surface. Rebuilt as a **docked flyout window** ([GitHub issue #3
 
 | Row | Kind | Notes |
 |---|---|---|
-| Reset panel position | action | First row — there is no "Show usage" row above it to follow, since the tray icon's own click already opens the panel on this head. Forgets the dragged place for this display and puts an open panel back at the work-area corner |
+| Reset panel position | action | First row: there is no "Show usage" row above it to follow, since the tray icon's own click already opens the panel on this head. Forgets the dragged place for this display and puts an open panel back at the work-area corner |
 | Run at startup | toggle | Re-read from `HKCU\...\Run` on every open |
-| Notify at *N*% session usage | toggle | *N* from settings |
+| Update automatically | toggle | Installed copies only; a portable exe cannot replace itself ([ADR-0009](adr/0009-auto-update.md)) |
+| Notify at *N*% usage | toggle, with a 70/80/90 selector | *N* from settings |
+| Weekly reset… | action | Opens the dialog for entering or clearing the weekly reset time ([issue #186](https://github.com/mlengmark/O-view/issues/186)) |
+| Resume usage refresh | action | Only while the background `/usage` refresh has stopped itself after detecting a charge |
 | Copy diagnostics | action | Support bundle to clipboard |
 | Check for updates… | action | Directly above Exit ([issue #18](https://github.com/mlengmark/O-view/issues/18)) |
 | Exit O-view | action | |
@@ -445,8 +449,8 @@ Measured on a 2560×1440 display, taskbar bottom-docked at `y=1392`, **before th
 ## 4. Motion
 
 > **Windows-only, and for a stated reason.** The motion below is *fitted to Windows' own
-> Quick Settings flyout* — it exists to make O-view's surfaces indistinguishable from the
-> shell's. Copying that curve onto a centred window on a Linux desktop would imitate nothing;
+> Quick Settings flyout*: it exists to make O-view's surfaces indistinguishable from the
+> shell's. Copying that curve onto a window in a Linux desktop's corner would imitate nothing;
 > it would just be an animation borrowed from another platform's shell. The Linux panel opens
 > without it.
 
@@ -557,17 +561,17 @@ Images are generated from `brand/o-view-mark.svg` into `installer/brand/` as BMP
 
 ## Data source summary
 
-| UI element | Source | Status |
-|---|---|---|
-| Name, email, tier | `~/.claude.json` | ✅ verified present |
-| Session % (`fh`) | `plan-usage-history.json` | ✅ **verified — no token needed** |
-| Weekly % (`sd`) | `plan-usage-history.json` | ✅ verified |
-| Reset countdowns | Derived from `fh` drops | ✅ verified exact (5.00014 h cadence) |
-| Tokens today / 31d | Rollup store ← JSONL | ✅ verified; needs ADR-0006 |
-| Est. value | Rollup store + price table | ✅ computable |
-| Usage graph | Rollup store | ✅ sparse until history builds |
-| Credits | **unknown** | ❌ spike required |
+| UI element | Source |
+|---|---|
+| Name, email, tier | `~/.claude.json` |
+| Session and weekly % | `plan-usage-history.json` (Claude Desktop) or `cachedUsageUtilization` in `~/.claude.json` (Claude Code), whichever carries more meters most recently; O-view runs `claude /usage` to keep the latter fresh |
+| Session reset | Derived from `fh` drops in the plan history, bracketed, or reported in the cached figures |
+| Weekly reset | Reported in the cached figures and stored as an anchor ([ADR-0014](adr/0014-weekly-reset-is-a-reported-constant.md)); entered by hand where never reported |
+| Tokens today / 31 days | Rollup store, fed from Claude Code and Cowork transcripts ([ADR-0006](adr/0006-local-rollup-store.md)) |
+| Est. value | Rollup store and the bundled price table, checked weekly against the published one ([ADR-0016](adr/0016-published-reference-data-is-fetchable.md)) |
+| Usage graph | Rollup store |
+| Off-plan usage | The divergence detector and the credit-billed model list; an exact credit balance has no local source and is not shown |
 
-Every element except credits is served from **local files with no network call and no credential**. See [ADR-0007](adr/0007-plan-history-primary-provider.md).
+Every element is served from local files and from invoking Claude's own client, with no credential handled ([ADR-0015](adr/0015-no-credential-based-usage-sources.md)).
 
 Degradation path: if Claude Desktop is not installed or its data is stale, the session and weekly bars fall back to JSONL estimates labelled `local estimate`, and reset times show as unknown. The panel degrades; it does not break.
