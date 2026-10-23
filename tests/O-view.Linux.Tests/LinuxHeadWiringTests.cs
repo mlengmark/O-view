@@ -69,7 +69,7 @@ public class LinuxHeadWiringTests
     [Fact]
     public void TheHeadWiresThePanelPositionStoreToTheFileBackedImplementation()
     {
-        Assert.IsType<LinuxPanelPositionStore>(SeamValue(typeof(IPanelPositionStore)));
+        Assert.IsType<FilePanelPositionStore>(SeamValue(typeof(IPanelPositionStore)));
     }
 
     /// <summary>

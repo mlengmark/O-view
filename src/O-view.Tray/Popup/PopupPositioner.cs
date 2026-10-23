@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using OView.App.Platform;
 using OView.App.Rendering;
-using OView.Core.Storage;
+
 using Point = System.Windows.Point;
 
 namespace OView.Tray.Popup;
@@ -282,48 +282,3 @@ internal static class PopupPositioner
     private static extern int GetDpiForMonitor(nint hmonitor, int dpiType, out uint dpiX, out uint dpiY);
 }
 
-/// <summary>
-/// The file-backed <see cref="IPanelPositionStore"/> the Windows head hands the placement rule:
-/// <see cref="PanelPositionFile"/> plus the one translation Core cannot do for itself, between
-/// its bare-string corner and <see cref="WorkAreaCorner"/>.
-///
-/// <para>It sits beside <see cref="PopupPositioner"/> because the two are the same job — the
-/// pair of translations that let a shared rule speak to this platform, pixels and DIPs in one
-/// and a corner name in the other. A corner the file does not recognise degrades to "nothing
-/// remembered", exactly as an unreadable file already does: a place O-view cannot interpret is
-/// not a place, and guessing a corner would move the panel somewhere the user never put
-/// it.</para>
-/// </summary>
-internal sealed class FilePanelPositionStore(PanelPositionFile file) : IPanelPositionStore
-{
-    public FilePanelPositionStore() : this(new PanelPositionFile()) { }
-
-    /// <summary>
-    /// <c>Enum.IsDefined</c> beside the parse, because <c>TryParse</c> also accepts a bare
-    /// number — <c>"7"</c> would hand back a corner that does not exist and the panel would be
-    /// placed against it. A hand-edited or half-written file is exactly where that comes from.
-    /// </summary>
-    public PanelPlace? Read(string displayId) =>
-        file.Read(displayId) is { } place
-        && Enum.TryParse<WorkAreaCorner>(place.Corner, out var corner) && Enum.IsDefined(corner)
-            ? new PanelPlace(corner, place.OffsetXDip, place.OffsetYDip)
-            : null;
-
-    public void Save(string displayId, PanelPlace place) =>
-        file.Save(displayId, new PanelPositionFile.Place(
-            place.Corner.ToString(), place.OffsetXDip, place.OffsetYDip));
-
-    /// <summary>
-    /// Forgets this display's place, so the panel opens at the tray corner again — the menu's
-    /// "Reset panel position" row.
-    ///
-    /// <para>Written as an entry with no corner rather than deleted, because
-    /// <see cref="PanelPositionFile"/> has no delete and is not this slice's to change. An empty
-    /// corner is already the file's own reading of "nothing remembered" — its <c>Read</c> wants a
-    /// non-empty one — so this is the file saying what it already says about a damaged entry,
-    /// deliberately, and it survives a restart where a flag in memory would not. A <c>Forget</c>
-    /// on the file itself is the better shape.</para>
-    /// </summary>
-    public void Forget(string displayId) =>
-        file.Save(displayId, new PanelPositionFile.Place("", 0, 0));
-}

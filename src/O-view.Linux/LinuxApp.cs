@@ -43,7 +43,7 @@ public sealed class LinuxApp : Application, IShellToSkin
     /// <see cref="_placement"/>'s decision, so nothing is read or written on a session that
     /// could not read a place back.</para>
     /// </summary>
-    private readonly LinuxPanelPositionStore _panelPositions = new();
+    private readonly FilePanelPositionStore _panelPositions = new();
 
     /// <summary>
     /// Whether this session lets the panel be put back where the user left it. Read once: a
