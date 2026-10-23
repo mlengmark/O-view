@@ -18,8 +18,7 @@ namespace OView.App;
 /// <see cref="Settings"/> and the rest are queries, not commands — because that is what
 /// both skins actually do today; this interface only names the shape already in use.</para>
 ///
-/// <para>The Windows skin holds nothing but this; the Linux skin still holds the engine
-/// itself.</para>
+/// <para>Both skins hold nothing but this; <see cref="ShellHost"/> owns the engine.</para>
 /// </summary>
 public interface ISkinToShell
 {

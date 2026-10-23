@@ -8,7 +8,7 @@ namespace OView.Core.Tests;
 
 /// <summary>
 /// Each provider now says, per percentage and per reset time, whether what it produced was
-/// measured, modelled or absent (OVIAA-79) — alongside the existing nullable members, which
+/// measured, modelled or absent, alongside the existing nullable members, which
 /// read exactly as before and are covered by each provider's own test file already.
 /// </summary>
 public class UsageSnapshotStatusTests

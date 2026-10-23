@@ -8,8 +8,8 @@ namespace OView.App.Rendering;
 /// height and stop there, leaving <see cref="WorkAreaPlacement.Place"/> to pin a too-tall
 /// result to the top-left of the work area the window manager already capped. That keeps the
 /// header on screen but leaves the rest unreachable — on a 1024×768 desktop the Linux panel ran
-/// off the bottom of the screen with nothing to scroll it back into view (Maximilian's B13
-/// report on OVIAA-7, VM run 2026-10-15 16:05–16:25 CEST).</para>
+/// off the bottom of the screen with nothing to scroll it back into view (seen on the Ubuntu
+/// 24.04 VM run of 2026-10-15).</para>
 ///
 /// <para><see cref="PanelDensity.Compact"/> is the first answer, and on its own is not always
 /// enough: it buys back about 94 DIP, while both panels measure more than 150 DIP too tall

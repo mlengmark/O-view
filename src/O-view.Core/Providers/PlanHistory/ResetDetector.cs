@@ -3,8 +3,8 @@ namespace OView.Core.Providers.PlanHistory;
 /// <summary>
 /// When the current five-hour window began, bracketed by the two samples that straddle it.
 ///
-/// <para>Same shape as <see cref="WeeklyResetObservation"/>, and for the same reason: Claude
-/// Desktop samples every ~5 minutes and stops entirely when it is closed, so a boundary is
+/// <para>Bracketed rather than exact because Claude Desktop samples every 15 minutes (5 before
+/// 2026-08-10) and stops entirely when it is closed, so a boundary is
 /// almost never seen at the instant it happens. What is known is that it fell <i>after</i>
 /// one sample and <i>at or before</i> the next.</para>
 /// </summary>

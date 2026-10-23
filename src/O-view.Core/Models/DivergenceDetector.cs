@@ -84,7 +84,7 @@ public static class DivergenceDetector
     /// happening now.
     ///
     /// <para><b>This is the Live/Stale bound, deliberately.</b> The meter comes from Claude
-    /// Desktop, which samples every ~5 minutes <i>while it is running</i> and not at all
+    /// Desktop, which samples every 15 minutes <i>while it is running</i> and not at all
     /// otherwise, so a series that has stopped is flat for the same reason whether the user is
     /// off-plan or simply working in Claude Code with Desktop closed. Reusing
     /// <see cref="PlanHistoryProvider.DefaultFreshness"/> makes one statement of what "the

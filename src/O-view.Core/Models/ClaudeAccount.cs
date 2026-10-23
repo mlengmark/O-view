@@ -33,26 +33,6 @@ public sealed record ClaudeAccount(
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), FileName),
     ];
 
-    /// <summary>
-    /// The candidate the account was actually read from, or the profile-relative path so a
-    /// "not found" still names somewhere real for diagnostics to report.
-    ///
-    /// <para><b>The first file that carries an account, not the first that exists.</b> Claude
-    /// Code migrated its state into <c>~/.claude/.claude.json</c> on 2026-08-24, and the file it
-    /// writes there starts as nine keys of migration bookkeeping — no <c>oauthAccount</c>, no
-    /// <c>cachedUsageUtilization</c>. Existence-first resolution therefore picked a stub over a
-    /// populated file and reported "account unknown / tier unknown" beside a
-    /// <c>~/.claude.json</c> that had both, with the diagnostics bundle saying "not readable"
-    /// about a file that read perfectly.</para>
-    ///
-    /// <para><see cref="CachedUsage.CachedUtilization"/> already documented this exact trap —
-    /// "a relocated configuration can leave a stub behind" — and resolved it correctly. The
-    /// lesson had simply never been applied here, one file away.</para>
-    /// </summary>
-    public static string DefaultPath =>
-        Candidates().FirstOrDefault(p => TryReadFrom(p) is not null)
-        ?? Candidates().FirstOrDefault(File.Exists)
-        ?? Candidates()[^1];
 
     /// <summary>
     /// Read account info from the first candidate that carries an <c>oauthAccount</c>; null

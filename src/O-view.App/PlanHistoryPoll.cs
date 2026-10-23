@@ -108,7 +108,7 @@ public sealed class PlanHistoryPoll
     /// history (issue #125).</para>
     ///
     /// <para>What this does <i>not</i> do is make the data fresher than its source. Claude
-    /// Desktop writes that file every ~5 minutes (measured median 5.00 min over 1,828 gaps),
+    /// Desktop writes that file every 15 minutes (measured; 5 minutes before 2026-08-10),
     /// and nothing here can beat it. What it removes is O-view's own contribution: up to a
     /// full 60 s of extra lag on top, now at most <see cref="UsageEngineOptions.PlanPollInterval"/>.
     /// Polling faster than Desktop writes would re-read an unchanged file for nothing.</para>

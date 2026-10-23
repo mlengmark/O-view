@@ -8,7 +8,7 @@ namespace OView.Tray;
 ///
 /// <para>Pairs with <see cref="DispatcherTimerFactory"/>: that puts the <i>tick</i> on the
 /// UI thread, this brings the <i>result</i> back to it after the read has run on the thread
-/// pool. <see cref="TrayController.Render"/> subscribes to the engine's events directly and
+/// pool. <c>TrayController.Render</c> subscribes to the engine's events directly and
 /// touches the tray icon from them, so publishing off the UI thread would be a
 /// thread-affinity violation.</para>
 ///

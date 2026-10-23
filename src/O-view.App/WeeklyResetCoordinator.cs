@@ -217,7 +217,7 @@ public sealed class WeeklyResetCoordinator
     /// machinery. It is simply correct.</para>
     ///
     /// <para><b>So this overrides rather than fills a gap</b> — the opposite of
-    /// <see cref="WithEnteredWeeklyReset"/>, and the difference is the point. A derived bracket
+    /// <see cref="WithWeeklyReset"/>, and the difference is the point. A derived bracket
     /// and a typed-in time are both attempts to recover a number that this source states
     /// outright; leaving either in place ahead of it would be preferring a guess to the
     /// answer.</para>

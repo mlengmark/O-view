@@ -248,20 +248,6 @@ public sealed class PlanHistoryProvider : IUsageProvider
     }
 
     /// <summary>
-    /// The five-hour reading, or <c>null</c> when it can no longer be trusted to describe now.
-    ///
-    /// <para>Only zero is discarded, and only once it has aged past
-    /// <see cref="ZeroReadingFreshness"/> — see there for why zero is the special case. Unknown
-    /// renders as the neutral icon and "usage % unknown", which is the honest statement: O-view
-    /// has lost contact and does not know. An empty gauge would be a claim it cannot support,
-    /// and is the one a user acts on (CLAUDE.md rule 6).</para>
-    ///
-    /// <para>The <b>weekly</b> figure is deliberately left alone. The same monotonic argument
-    /// applies to it, but its window is 7 days rather than 5 hours, so a sample minutes old
-    /// cannot have drifted meaningfully — discarding it would cost information and buy
-    /// nothing.</para>
-    /// </summary>
-    /// <summary>
     /// Pulls a window's upper bound down to the first local request inside it, when there is
     /// one (issue #185).
     ///
@@ -300,6 +286,20 @@ public sealed class PlanHistoryProvider : IUsageProvider
         }
     }
 
+    /// <summary>
+    /// The five-hour reading, or <c>null</c> when it can no longer be trusted to describe now.
+    ///
+    /// <para>Only zero is discarded, and only once it has aged past
+    /// <see cref="ZeroReadingFreshness"/>; see there for why zero is the special case. Unknown
+    /// renders as the neutral icon and "usage % unknown", which is the honest statement: O-view
+    /// has lost contact and does not know. An empty gauge would be a claim it cannot support,
+    /// and is the one a user acts on (CLAUDE.md rule 6).</para>
+    ///
+    /// <para>The <b>weekly</b> figure is deliberately left alone. The same monotonic argument
+    /// applies to it, but its window is 7 days rather than 5 hours, so a sample minutes old
+    /// cannot have drifted meaningfully; discarding it would cost information and buy
+    /// nothing.</para>
+    /// </summary>
     private static int? TrustedFiveHourPercent(int? fiveHourPercent, TimeSpan age) =>
         fiveHourPercent is 0 && age > ZeroReadingFreshness ? null : fiveHourPercent;
 

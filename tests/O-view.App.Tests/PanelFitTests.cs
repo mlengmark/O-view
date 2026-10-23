@@ -6,7 +6,7 @@ namespace OView.App.Tests;
 /// <see cref="PanelFit"/> is the shared answer to "how tall may the window be, and must its
 /// content scroll" — the question each head used to ask the work area alone and stop at,
 /// which on a 1024×768 desktop left the Linux panel running off the bottom of the screen
-/// (Maximilian's B13 report on OVIAA-7, VM run 2026-10-15 16:05–16:25 CEST).
+/// (seen on the Ubuntu 24.04 VM run of 2026-10-15).
 /// </summary>
 public class PanelFitTests
 {

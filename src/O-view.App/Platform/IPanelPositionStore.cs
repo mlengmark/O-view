@@ -16,10 +16,9 @@ public readonly record struct PanelPlace(WorkAreaCorner Corner, double OffsetXDi
 /// other interfaces in this folder stand in for something a test should not have to do for
 /// real.
 ///
-/// <para>No head constructs an implementation yet — dragging is not wired up in this change.
-/// The file-backed implementation, translating <see cref="OView.Core.Storage.PanelPositionFile"/>'s
-/// bare-string corner to and from <see cref="WorkAreaCorner"/>, arrives with whichever head
-/// wires dragging up first.</para>
+/// <para>Each head constructs the file-backed implementation, which translates
+/// <see cref="OView.Core.Storage.PanelPositionFile"/>'s bare-string corner to and from
+/// <see cref="WorkAreaCorner"/>.</para>
 /// </summary>
 public interface IPanelPositionStore
 {

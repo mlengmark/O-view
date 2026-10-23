@@ -24,11 +24,7 @@ public static class ClaudeProjectsLocator
     public static IReadOnlyList<string> FindTranscripts(string root) =>
         TranscriptFileScan.Find(root, "*.jsonl");
 
-    // A MangleCwd helper used to live here, reproducing how Claude Code turns a working
-    // directory into a project folder name (C:\Users\X → C--Users-X). It has since moved to
-    // ClaudeCliRefresher, whose OwnProjectFolder uses it for real: finding the mangled name
-    // of its own working directory, so TranscriptScopeReport can leave that one folder's
-    // transcripts out of the count it shows the user. Transcripts are still only ever found
-    // by walking TranscriptFileScan, never by reconstructing a directory name — the
-    // convention is recorded in docs/findings/jsonl-schema.md.
+    // Transcripts are only ever found by walking TranscriptFileScan, never by reconstructing a
+    // project folder name; the name convention lives in ClaudeCliRefresher.MangleCwd and
+    // docs/findings/jsonl-schema.md.
 }

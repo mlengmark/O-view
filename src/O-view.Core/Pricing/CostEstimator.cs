@@ -30,11 +30,8 @@ public static class CostEstimator
     /// Estimated USD value of the given tokens; null when the rates cannot be established
     /// (the caller labels it, never guessing a rate).
     ///
-    /// <para>There is deliberately no <c>&lt;synthetic&gt;</c> special case here. Claude
-    /// Code's marker for locally generated messages is dropped at parse time by
-    /// <see cref="Providers.Jsonl.TranscriptReader"/>, so it never reaches the store and
-    /// therefore never reaches this method. The branch that used to sit here was
-    /// unreachable, and disagreed with the reader on case sensitivity (issue #57).</para>
+    /// <para>No <c>&lt;synthetic&gt;</c> special case: <see cref="Providers.Jsonl.TranscriptReader"/>
+    /// drops that marker at parse time, so it never reaches the store or this method (issue #57).</para>
     /// </summary>
     /// <param name="card">
     /// The rates to price against. Defaults to the bundled table, which is the only source

@@ -77,12 +77,6 @@ public partial class MenuWindow : Window, IFlyout
     /// </summary>
     public Func<int, int>? SetThresholdPercent { get; set; }
 
-    /// <summary>
-    /// The percentages the selector offers. Three, deliberately: enough to cover "warn me
-    /// early" through "warn me only when it matters", few enough to stay one glance on a row
-    /// rather than a scrolling list.
-    /// </summary>
-    internal static readonly int[] ThresholdChoices = [70, 80, 90];
 
     /// <summary>What the pill currently reads — the value the option marks are drawn from.</summary>
     private int _thresholdPercent = UsageLevels.CriticalPercent;
@@ -251,7 +245,7 @@ public partial class MenuWindow : Window, IFlyout
     /// Draws a threshold onto the pill and the option marks.
     ///
     /// <para>The value is <b>rendered as it is</b>, not snapped to one of
-    /// <see cref="ThresholdChoices"/>. <c>TraySettings</c> accepts any 1–100 value and a
+    /// the three the rows offer (70, 80, 90). <c>TraySettings</c> accepts any 1–100 value and a
     /// hand-edited settings.json is a legitimate way to hold one; showing 75 as "80%" would
     /// be the menu asserting something about the machine that is not true.</para>
     /// </summary>
