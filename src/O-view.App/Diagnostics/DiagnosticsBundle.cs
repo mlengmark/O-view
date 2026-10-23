@@ -258,24 +258,6 @@ public static class DiagnosticsBundle
     }
 
     /// <summary>
-    /// Whether the rollup store has had to quarantine itself, and what is still on disk from
-    /// the last time it did (issue #160).
-    ///
-    /// <para>This is the only place the retained <c>.corrupt-*</c> files are named. Before it,
-    /// they were kept "so the corruption can still be examined" while nothing told anyone they
-    /// existed — which is what makes bounding their number reasonable: a bug report can now
-    /// point at them.</para>
-    ///
-    /// <para><b>The count is of files retained, not of corruption events, and the wording says
-    /// so.</b> Pruning is what bounds the first and it necessarily discards the second — after
-    /// a prune, a machine that corrupted seven times and one that corrupted twice look
-    /// identical here. That is the trade the issue accepts, and the retention limit is printed
-    /// alongside the count so a reader can see the ceiling rather than mistake it for a
-    /// total (rule 6). The newest stamp still answers the question worth asking of a single
-    /// report — <i>when did this last happen</i> — and the "none" case is printed rather than
-    /// omitted so its absence is never ambiguous with a field that failed to render.</para>
-    /// </summary>
-    /// <summary>
     /// The tail of the log, which is the only part of this bundle that describes what the
     /// app <i>did</i> rather than what its inputs look like.
     ///
@@ -381,6 +363,24 @@ public static class DiagnosticsBundle
                         + "Claude Code's own /usage summary (CostEstimator.RelativeError)");
     }
 
+    /// <summary>
+    /// Whether the rollup store has had to quarantine itself, and what is still on disk from
+    /// the last time it did (issue #160).
+    ///
+    /// <para>This is the only place the retained <c>.corrupt-*</c> files are named. Before it,
+    /// they were kept "so the corruption can still be examined" while nothing told anyone they
+    /// existed, which is what makes bounding their number reasonable: a bug report can now
+    /// point at them.</para>
+    ///
+    /// <para><b>The count is of files retained, not of corruption events, and the wording says
+    /// so.</b> Pruning is what bounds the first and it necessarily discards the second: after
+    /// a prune, a machine that corrupted seven times and one that corrupted twice look
+    /// identical here. That is the trade the issue accepts, and the retention limit is printed
+    /// alongside the count so a reader can see the ceiling rather than mistake it for a
+    /// total (rule 6). The newest stamp still answers the question worth asking of a single
+    /// report, <i>when did this last happen</i>, and the "none" case is printed rather than
+    /// omitted so its absence is never ambiguous with a field that failed to render.</para>
+    /// </summary>
     private static void AppendCorruptBackups(StringBuilder text, CorruptBackupReport report) =>
         text.AppendLine($"  corrupt stores: {(report.Generations == 0
             ? "none"

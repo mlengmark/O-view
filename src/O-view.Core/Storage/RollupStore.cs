@@ -181,11 +181,6 @@ public sealed class RollupStore : IDisposable
                 byte_offset INTEGER NOT NULL,
                 file_length INTEGER NOT NULL
             );
-            -- Read-only since ADR-0011 (weekly resets live in weekly-resets.json now).
-            -- Still created so the legacy read works against a fresh database.
-            CREATE TABLE IF NOT EXISTS weekly_resets (
-                reset_at TEXT PRIMARY KEY
-            );
             """;
         cmd.ExecuteNonQuery();
 
@@ -575,19 +570,9 @@ public sealed class RollupStore : IDisposable
         }
     }
 
-    // CountRecordedDays lived here, counting distinct dates with usage to drive the
-    // "N of 31 days recorded" label. It is gone rather than left unused: it could only answer
-    // "how many days had usage", which is not what coverage means, and a day the user spent
-    // away from Claude was indistinguishable from a day before the store existed. Coverage is
-    // now derived in PanelStatistics.Build from the same first-recorded-day boundary the graph
-    // draws, so the label and the chart cannot disagree (issue #142). Leaving a second, wrong
-    // answer to the same question in place is how it would come back.
+    // Coverage ("N of 31 days recorded") is derived in PanelStatistics.Build from the same
+    // first-recorded-day boundary the graph draws; it is deliberately not counted here (issue #142).
 
-    /// <summary>
-    /// Per-model totals for requests at or after <paramref name="sinceUtc"/>. The daily
-    /// rollups are too coarse for a 5-hour window, so this reads the request ledger
-    /// directly — the same de-duplicated rows, just filtered by time rather than day.
-    /// </summary>
     /// <summary>
     /// Earliest recorded request in <c>(afterUtc, throughUtc]</c>, or null when there was no
     /// activity in that span.
@@ -626,6 +611,11 @@ public sealed class RollupStore : IDisposable
         }
     }
 
+    /// <summary>
+    /// Per-model totals for requests at or after <paramref name="sinceUtc"/>. The daily
+    /// rollups are too coarse for a 5-hour window, so this reads the request ledger
+    /// directly: the same de-duplicated rows, just filtered by time rather than day.
+    /// </summary>
     public IReadOnlyList<DailyRollup> GetUsageSince(DateTimeOffset sinceUtc)
     {
         lock (_gate)

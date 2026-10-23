@@ -19,8 +19,6 @@ public sealed record BoostNotice(string Bar, string Text, int? Percent, DateOnly
     /// <summary>The weekly meter's key, and the only bar any notice has ever named.</summary>
     public const string WeeklyBar = "seven_day";
 
-    /// <summary>The five-hour meter's key.</summary>
-    public const string SessionBar = "five_hour";
 
     /// <summary>
     /// Whether the promo's last day is behind us. False when no date resolved — an unknown

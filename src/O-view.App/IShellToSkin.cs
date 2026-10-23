@@ -12,8 +12,8 @@ namespace OView.App;
 /// one-way, fire-and-forget interface the skin implements. The member list itself is this
 /// app's own, matching what <see cref="UsageEngine"/>'s events already carry
 /// (<see cref="UsageEngine.SnapshotUpdated"/>, <see cref="UsageEngine.NotificationRequested"/>,
-/// <see cref="UsageEngine.UpdateCheckDue"/>, <see cref="UsageEngine.RateCheckDue"/>). No skin
-/// implements this yet — both still subscribe to those events directly.</para>
+/// <see cref="UsageEngine.UpdateCheckDue"/>, <see cref="UsageEngine.RateCheckDue"/>). Both
+/// skins implement it, and <see cref="ShellHost"/> is the only caller.</para>
 /// </summary>
 public interface IShellToSkin
 {

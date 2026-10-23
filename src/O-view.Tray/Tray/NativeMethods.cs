@@ -19,7 +19,7 @@ internal static class NativeMethods
 
     internal const uint GR_GDIOBJECTS = 0;
 
-    /// <summary>GDI object count for the leak self-check (build-plan Phase 3 acceptance).</summary>
+    /// <summary>GDI object count for the leak self-check.</summary>
     [DllImport("user32.dll")]
     internal static extern uint GetGuiResources(nint hProcess, uint uiFlags);
 

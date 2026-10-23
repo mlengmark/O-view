@@ -93,7 +93,7 @@ public sealed class TrayController : IShellToSkin
     }
 
     /// <summary>
-    /// Phase 3 acceptance self-check: N refreshes with GDI object counts sampled
+    /// Leak self-check: N refreshes with GDI object counts sampled
     /// before and after. A leak shows as growth ≈ N (one handle per refresh).
     ///
     /// <para>Stays here rather than on the shell: <c>Bitmap.GetHicon()</c> allocates an

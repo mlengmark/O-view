@@ -302,9 +302,9 @@ internal static class SampleRenderer
                 {
                     RenderHoverCards(dir, light,
                     [
-                        pending[6].Tile.BuildSampleTooltip(0),   // 5-models: named model, tokens
-                        pending[6].Tile.BuildSampleTooltip(2),   // 5-models: folded "Other"
-                        pending[7].Tile.BuildSampleTooltip(0),   // 5-models: named model, est. value
+                        pending[6].Tile.BuildSampleTooltip(0),   // three models: named model, tokens
+                        pending[6].Tile.BuildSampleTooltip(2),   // three models: the third named model
+                        pending[7].Tile.BuildSampleTooltip(0),   // three models: named model, est. value
                         // An UNRECOGNISED model, where the friendly name is the raw id.
                         // Included because that is the case where dropping the card's
                         // title could have left nothing naming the row at all.
@@ -743,7 +743,7 @@ internal static class SampleRenderer
             return;
         }
 
-        // Every third frame: a 60 Hz display gives ~24 frames over a fold, which tiled at a
+        // Every second frame: a 60 Hz display gives ~24 frames over a fold, which tiled at a
         // legible size is wider than anything can be looked at.
         var chosen = frames.Where((_, i) => i % 2 == 0).Take(9).ToList();
         const int gap = 6;

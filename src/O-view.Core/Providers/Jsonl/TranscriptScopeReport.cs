@@ -206,7 +206,7 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
 
     /// <summary>
     /// As above, but with the refresher's own project folder named explicitly rather than
-    /// resolved from the live machine — the seam <see cref="TranscriptScopeReportTests"/>
+    /// resolved from the live machine — the seam <c>TranscriptScopeReportTests</c>
     /// uses to pin the exclusion without touching the real Claude Code configuration
     /// directory. Pass null to count everything, as if no refresher had ever run.
     /// </summary>

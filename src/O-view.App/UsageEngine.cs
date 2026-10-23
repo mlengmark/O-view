@@ -122,7 +122,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
     /// outcome, which is why it survived a suite that runs on every commit. A test can now say
     /// "not that file" and be right on every machine on every day.</para>
     /// </summary>
-    public string PlanHistoryPath => (_planHistory as PlanHistoryProvider)?.Path ?? "";
+    public string PlanHistoryPath => _planHistory?.Path ?? "";
 
     /// <summary>
     /// How many <b>plan-history</b> samples the current window holds. Zero when there is no
@@ -136,7 +136,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
     /// </summary>
     public int PlanWindowSampleCount => _planHistoryPoll.WindowSampleCount;
 
-    /// <summary>Current persisted settings. Mutated only through <see cref="SetNotifyOnThreshold"/>.</summary>
+    /// <summary>Current persisted settings. Mutated only through the engine's own setters.</summary>
     public TraySettings Settings { get; private set; }
 
     /// <summary>Raised after every refresh attempt that produced a snapshot. The head redraws from this.</summary>

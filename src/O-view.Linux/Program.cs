@@ -1,5 +1,5 @@
 using System.Globalization;
-using System.Runtime.InteropServices;
+
 using System.Text;
 using Avalonia;
 using Avalonia.Controls;
@@ -418,8 +418,6 @@ internal static class Program
         Environment.GetEnvironmentVariable("XDG_SESSION_TYPE")
         ?? (Environment.GetEnvironmentVariable("WAYLAND_DISPLAY") is { Length: > 0 } ? "wayland" : "(unset)");
 
-    internal static string RuntimeDescription() =>
-        $"{RuntimeInformation.OSDescription.Trim()} / {RuntimeInformation.OSArchitecture}";
 }
 
 /// <summary>

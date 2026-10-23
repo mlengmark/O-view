@@ -14,7 +14,7 @@ namespace OView.Core.Providers;
 /// It no longer does: two sources now report the same meters — Claude Desktop's sampled series
 /// and Claude Code's cached figures — and within a tier the better answer is whichever describes
 /// the account most completely and most recently, not whichever was passed first. Desktop samples
-/// every ~5 minutes; Claude Code refreshes whenever it talks to the API, so during active use it
+/// every 15 minutes; Claude Code refreshes whenever it talks to the API, so during active use it
 /// is routinely the fresher of the two. Preferring the earlier argument meant showing a reading
 /// up to a sampling interval old while a newer one sat in the other source, which is the opposite
 /// of what a monitoring tool is for. See <see cref="MoreAccurate"/>.</para>

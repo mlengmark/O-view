@@ -178,16 +178,13 @@ public static class TokenText
     public const string Tokens31DaysLabel = "Output tokens · 31 days";
 
     /// <summary>
-    /// Headings for the two composition bars.
+    /// The section heading above both bars and the view switch. Names the section once so the
+    /// two bar headings can name only their windows.
     ///
     /// <para><b>"Tokens used" rather than "Tokens", and deliberately not the tiles' wording.</b>
     /// A bar totalling 1.4M sitting under a tile reading <c>Output tokens today 14.6K</c> is a
     /// contradiction unless something says the two count different things. These name the
     /// billed whole; the tiles name the work.</para>
-    /// </summary>
-    /// <summary>
-    /// The section heading above both bars and the view switch. Names the section once so the
-    /// two bar headings can name only their windows.
     /// </summary>
     public const string TokensUsedHeading = "Tokens used";
 

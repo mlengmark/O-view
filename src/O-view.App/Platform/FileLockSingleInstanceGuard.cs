@@ -31,8 +31,6 @@ public sealed class FileLockSingleInstanceGuard : ISingleInstanceGuard
 
     public FileLockSingleInstanceGuard(string? path = null) => _path = path ?? DefaultPath;
 
-    /// <summary>Where this guard is holding, or would hold, its lock. Useful in diagnostics.</summary>
-    public string LockPath => _path;
 
     public bool TryAcquire()
     {
