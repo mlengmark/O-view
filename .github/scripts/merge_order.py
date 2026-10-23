@@ -21,7 +21,7 @@ import sys
 import urllib.request
 
 sys.path.insert(0, ".github/scripts")
-from pr_common import event, field, finish, is_dependabot, matches, pull_request, sections, touches_patterns  # noqa: E402
+from pr_common import event, field, finish, gate, matches, sections, touches_patterns  # noqa: E402
 
 REPO = os.environ["GITHUB_REPOSITORY"]
 TOKEN = os.environ["GITHUB_TOKEN"]
@@ -45,9 +45,7 @@ def files_of(number):
         page += 1
 
 
-pr = pull_request()
-if is_dependabot(pr):
-    finish([], "Dependabot PR: merge order not applicable.")
+pr = gate("merge order not applicable")
 
 problems = []
 merge = sections(pr.get("body")).get("Merge order", "")

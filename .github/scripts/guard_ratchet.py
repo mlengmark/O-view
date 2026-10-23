@@ -17,11 +17,9 @@ import subprocess
 import sys
 
 sys.path.insert(0, ".github/scripts")
-from pr_common import field, finish, is_dependabot, is_guarded, pull_request, sections  # noqa: E402
+from pr_common import changed_files, field, finish, gate, is_guarded, sections  # noqa: E402
 
-pr = pull_request()
-if is_dependabot(pr):
-    finish([], "Dependabot PR: ratchet not applicable.")
+pr = gate("ratchet not applicable")
 
 base = pr["base"]["sha"]
 body = pr.get("body") or ""
@@ -66,8 +64,14 @@ def cited(proof):
     return set(re.findall(r"`([A-Z][A-Za-z0-9]+(?:\.[A-Za-z0-9_]+)+)`", proof))
 
 
-test_sources = [now(p) or "" for p in subprocess.run(["git", "ls-files", "tests"], capture_output=True, text=True,
-                                                      check=True).stdout.split() if p.endswith(".cs")]
+def test_files(ref=None):
+    """Every .cs file under tests/: in the working tree, or at `ref` when one is given."""
+    listing = ["git", "ls-files", "tests"] if ref is None else ["git", "ls-tree", "-r", "--name-only", ref, "tests"]
+    return [p for p in subprocess.run(listing, capture_output=True, text=True, check=True).stdout.split()
+            if p.endswith(".cs")]
+
+
+test_sources = [now(p) or "" for p in test_files()]
 
 
 def test_exists(name):
@@ -92,29 +96,16 @@ for fid, proof in sorted(after.items()):
 
 
 # Test methods don't decrease.
-def test_count(read):
-    files = subprocess.run(["git", "ls-files", "tests"], capture_output=True, text=True, check=True).stdout.split()
-    total = 0
-    for path in files:
-        if path.endswith(".cs"):
-            text = read(path) or ""
-            total += len(re.findall(r"\[(?:Fact|Theory)\b", text))
-    return total
+def test_methods(paths, read):
+    return sum(len(re.findall(r"\[(?:Fact|Theory)\b", read(p) or "")) for p in paths)
 
 
-def base_test_count():
-    files = subprocess.run(["git", "ls-tree", "-r", "--name-only", base, "tests"],
-                           capture_output=True, text=True, check=True).stdout.split()
-    return sum(len(re.findall(r"\[(?:Fact|Theory)\b", at_base(p) or "")) for p in files if p.endswith(".cs"))
-
-
-tests_before, tests_after = base_test_count(), test_count(now)
+tests_before, tests_after = test_methods(test_files(base), at_base), test_methods(test_files(), now)
 if tests_after < tests_before:
     problems.append(f"lowers the test count from {tests_before} to {tests_after}")
 
 # Golden images change only where the PR says so, and guarded paths only where it says so.
-changed = subprocess.run(["git", "diff", "--name-only", base, "HEAD"],
-                         capture_output=True, text=True, check=True).stdout.split()
+changed = changed_files(base)
 for path in changed:
     if path.startswith("tests/golden/") and path.endswith(".png"):
         state = re.sub(r"^panel-|-(?:dark|light)\.png$", "", os.path.basename(path))
