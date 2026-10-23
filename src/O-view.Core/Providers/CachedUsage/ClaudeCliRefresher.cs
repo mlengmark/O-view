@@ -176,8 +176,7 @@ public sealed class ClaudeCliRefresher : IUsageCacheRefresher
     /// written, so <see cref="WorkingDirectory"/> and <see cref="OwnProjectFolder"/> can each
     /// use it without drifting apart.
     /// </summary>
-    private static string PreferredWorkingDirectory => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "O-view");
+    private static string PreferredWorkingDirectory => OViewDataDirectory.Root;
 
     /// <summary>
     /// Working directory for the spawned process, chosen rather than inherited.

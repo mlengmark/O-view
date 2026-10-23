@@ -20,11 +20,8 @@ namespace OView.Core.Storage;
 /// </summary>
 public sealed class PanelPositionFile
 {
-    /// <summary>Default location: <c>%LOCALAPPDATA%\O-view\panel-position.json</c>.</summary>
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "O-view",
-        "panel-position.json");
+    /// <summary>Default location: <c>panel-position.json</c> under <see cref="OViewDataDirectory"/>.</summary>
+    public static string DefaultPath => OViewDataDirectory.File("panel-position.json");
 
     /// <summary>
     /// A remembered place, in device-independent units: the name of the work-area corner it

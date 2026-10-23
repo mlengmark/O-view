@@ -64,19 +64,19 @@ public sealed record PanelStatistics(
     /// <para>Unavailable unless <see cref="Build"/> prices it, so a statistics record built
     /// without money in mind reads as "nothing was priced" rather than as a known zero.</para>
     /// </summary>
-    public EstimatedUsd EstTodayValue { get; init; } = Priced(null);
+    public EstimatedUsd EstTodayValue { get; init; } = EstimatedUsd.Priced(null);
 
     /// <inheritdoc cref="TokensTodayCount"/>
     public TokenCount Tokens31DaysCount { get; init; }
 
     /// <inheritdoc cref="EstTodayValue"/>
-    public EstimatedUsd Est31DaysValue { get; init; } = Priced(null);
+    public EstimatedUsd Est31DaysValue { get; init; } = EstimatedUsd.Priced(null);
 
     /// <inheritdoc cref="TokensTodayCount"/>
     public TokenCount CreditTokens31DaysCount { get; init; }
 
     /// <inheritdoc cref="EstTodayValue"/>
-    public EstimatedUsd EstCredit31DaysValue { get; init; } = Priced(null);
+    public EstimatedUsd EstCredit31DaysValue { get; init; } = EstimatedUsd.Priced(null);
 
     /// <summary>
     /// What the current session window's off-plan work would have cost.
@@ -86,7 +86,7 @@ public sealed record PanelStatistics(
     /// check <see cref="IsOffPlan"/> before it means anything, so the two cases need no further
     /// distinction here.
     /// </summary>
-    public EstimatedUsd EstOffPlanValue { get; init; } = Priced(null);
+    public EstimatedUsd EstOffPlanValue { get; init; } = EstimatedUsd.Priced(null);
 
     /// <inheritdoc cref="TokensTodayCount"/>
     public TokenCount TtlUnrecordedCacheWritesCount { get; init; }
@@ -207,7 +207,7 @@ public sealed record PanelStatistics(
         return this with
         {
             Divergence = result,
-            EstOffPlanValue = Priced(estOffPlan),
+            EstOffPlanValue = EstimatedUsd.Priced(estOffPlan),
         };
     }
 
@@ -302,13 +302,13 @@ public sealed record PanelStatistics(
             // than by model — so the composition cannot disagree with the figure it explains.
             CompositionToday = TokenComposition.From(todayRollups),
             Composition31Days = TokenComposition.From(rollups),
-            TokensTodayCount = Measured(tokensToday),
-            EstTodayValue = Priced(estToday),
-            Tokens31DaysCount = Measured(tokens31Days),
-            Est31DaysValue = Priced(est31),
-            CreditTokens31DaysCount = Measured(creditTokens31Days),
-            EstCredit31DaysValue = Priced(estCredit31Days),
-            TtlUnrecordedCacheWritesCount = Measured(ttlUnrecordedCacheWrites),
+            TokensTodayCount = TokenCount.Measured(tokensToday),
+            EstTodayValue = EstimatedUsd.Priced(estToday),
+            Tokens31DaysCount = TokenCount.Measured(tokens31Days),
+            Est31DaysValue = EstimatedUsd.Priced(est31),
+            CreditTokens31DaysCount = TokenCount.Measured(creditTokens31Days),
+            EstCredit31DaysValue = EstimatedUsd.Priced(estCredit31Days),
+            TtlUnrecordedCacheWritesCount = TokenCount.Measured(ttlUnrecordedCacheWrites),
         };
     }
 
@@ -331,8 +331,8 @@ public sealed record PanelStatistics(
                 var estUsd = EstimateTotal(g.ToList());
                 return new ModelSlice(g.Key, ModelDisplayName.For(g.Key), tokens)
                 {
-                    TokensCount = Measured(tokens),
-                    EstUsdValue = Priced(estUsd),
+                    TokensCount = TokenCount.Measured(tokens),
+                    EstUsdValue = EstimatedUsd.Priced(estUsd),
                 };
             })
             .OrderByDescending(s => s.Tokens)
@@ -373,18 +373,4 @@ public sealed record PanelStatistics(
     private static decimal? EstimateTotal(IReadOnlyList<DailyRollup> rollups) =>
         EstimateTotal(rollups, out _);
 
-    /// <summary>
-    /// Wraps a token count as <see cref="UsageValueStatus.Real"/> — every count on this type
-    /// is read directly from recorded transcripts, never modelled, so none of them can carry
-    /// any other status.
-    /// </summary>
-    private static TokenCount Measured(long value) => new(value, UsageValueStatus.Real);
-
-    /// <summary>
-    /// Wraps a priced figure as <see cref="UsageValueStatus.Unavailable"/> when
-    /// <paramref name="value"/> is null, or <see cref="UsageValueStatus.Estimated"/> otherwise
-    /// — the same null/non-null split <see cref="EstimateTotal"/> already returns.
-    /// </summary>
-    private static EstimatedUsd Priced(decimal? value) =>
-        new(value, value is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated);
 }
