@@ -20,11 +20,6 @@ public class EnteredWeeklyResetTests
 
     private static readonly ManualWeeklyReset Entry = new(DayOfWeek.Monday, new TimeOnly(22, 59));
 
-    /// <summary>A provider standing in for the composite's answer on a given machine.</summary>
-    private sealed class FixedProvider(UsageSnapshot snapshot) : Core.Providers.IUsageProvider
-    {
-        public UsageSnapshot GetSnapshot(DateTimeOffset utcNow) => snapshot;
-    }
 
     private static UsageEngine Build(TempDir dir, UsageSnapshot snapshot, ManualWeeklyReset? entry)
     {

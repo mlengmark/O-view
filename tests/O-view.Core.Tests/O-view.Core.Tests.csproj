@@ -19,10 +19,12 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="OView.TestSupport" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\O-view.Core\O-view.Core.csproj" />
+    <ProjectReference Include="..\O-view.TestSupport\O-view.TestSupport.csproj" />
   </ItemGroup>
 
 
