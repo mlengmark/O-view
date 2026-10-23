@@ -172,9 +172,7 @@ internal static class Program
         var log = new FileLog(
             parsed.TryGetValue("--log", out var logPath) && logPath is { Length: > 0 } ? logPath : null);
 
-        log.WriteSessionHeader(
-            typeof(Program).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0",
-            DetectInstallKind().ToString());
+        log.WriteSessionHeader(ReleaseFeed.VersionOf(typeof(Program).Assembly), DetectInstallKind().ToString());
         log.Write($"startup desktop={DesktopEnvironment()} session={SessionType()} trayHost={hostState}");
 
         // The toolkit's own log, into this file. Everything that can fail on this head fails
@@ -371,7 +369,7 @@ internal static class Program
     /// exists — so the bus is asked rather than the toolkit.
     /// </summary>
     private static DiagnosticsEnvironment DescribeThisMachine() => new(
-        Version: typeof(Program).Assembly.GetName().Version is { } v ? $"{v.Major}.{v.Minor}.{v.Build}" : "0.0.0",
+        Version: ReleaseFeed.VersionOf(typeof(Program).Assembly),
         InstallKind: DetectInstallKind().ToString(),
         Desktop: DesktopEnvironment(),
         SessionType: SessionType(),

@@ -9,12 +9,13 @@
         TextOptions.TextFormattingMode="Display">
 
     <Window.Resources>
-        <!-- The same brand arc DialogWindow and the tray menu use, so this reads as the
-             same application rather than a system box wearing its title. -->
-        <LinearGradientBrush x:Key="BrandArc" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#F4A17A" Offset="0"/>
-            <GradientStop Color="#D9603A" Offset="1"/>
-        </LinearGradientBrush>
+        <ResourceDictionary>
+            <!-- The brand arc and the two button weights, shared with the tray menu and
+                 DialogWindow (Brand.xaml), so this reads as the same application rather than
+                 a system box wearing its title. -->
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="Brand.xaml"/>
+            </ResourceDictionary.MergedDictionaries>
 
         <!-- WPF's stock TextBox and ComboBox arrive with system chrome: white fill, a hard
              border, an Aero dropdown. On a dark themed panel that is not a small mismatch,
@@ -119,51 +120,7 @@
                 </Setter.Value>
             </Setter>
         </Style>
-
-        <Style x:Key="PrimaryButton" TargetType="Button">
-            <Setter Property="Height" Value="30"/>
-            <Setter Property="Padding" Value="14,0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{DynamicResource AccentBg}"
-                                CornerRadius="6" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
-                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource AccentHover}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
-
-        <Style x:Key="SecondaryButton" TargetType="Button">
-            <Setter Property="Height" Value="30"/>
-            <Setter Property="Padding" Value="14,0"/>
-            <Setter Property="Cursor" Value="Hand"/>
-            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="Transparent"
-                                BorderBrush="{DynamicResource PanelBorder}" BorderThickness="1"
-                                CornerRadius="6" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
-                            <ContentPresenter VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource RowHover}"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-        </Style>
+        </ResourceDictionary>
     </Window.Resources>
 
     <Border Background="{DynamicResource PanelBg}" BorderBrush="{DynamicResource PanelBorder}"
