@@ -11,7 +11,7 @@ public class ThresholdWatcherTests
 
         Assert.False(w.ShouldNotify(60));
         Assert.True(w.ShouldNotify(87));   // crossing
-        Assert.False(w.ShouldNotify(90));  // still above — no repeat
+        Assert.False(w.ShouldNotify(90));  // still above, no repeat
         Assert.False(w.ShouldNotify(99));
     }
 
@@ -39,8 +39,8 @@ public class ThresholdWatcherTests
         var w = new ThresholdWatcher(85);
 
         Assert.True(w.ShouldNotify(90));
-        Assert.False(w.ShouldNotify(null));  // data lost — no notification, re-armed
-        Assert.True(w.ShouldNotify(91));     // data back above — this IS new information
+        Assert.False(w.ShouldNotify(null));  // data lost, no notification, re-armed
+        Assert.True(w.ShouldNotify(91));     // data back above, this IS new information
     }
 
     [Fact]

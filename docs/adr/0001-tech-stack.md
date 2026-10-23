@@ -1,10 +1,10 @@
-# ADR-0001: Technology stack — .NET 10 + WPF
+# ADR-0001: Technology stack (.NET 10 + WPF)
 
-- **Status:** Accepted — *partially superseded by [ADR-0005](0005-native-tray-integration.md)*
+- **Status:** Accepted, *partially superseded by [ADR-0005](0005-native-tray-integration.md)*
 - **Date:** 2026-07-20
 - **Deciders:** @mlengmark
 
-> **⚠️ Superseded in part.** The **H.NotifyIcon.Wpf** dependency selected below was dropped in favour of the first-party `System.Windows.Forms.NotifyIcon` — see [ADR-0005](0005-native-tray-integration.md). The .NET 10 + WPF decision, and all other content here, still stands.
+> **⚠️ Superseded in part.** The **H.NotifyIcon.Wpf** dependency selected below was dropped in favour of the first-party `System.Windows.Forms.NotifyIcon`, see [ADR-0005](0005-native-tray-integration.md). The .NET 10 + WPF decision, and all other content here, still stands.
 
 ## Context
 
@@ -18,7 +18,7 @@ O-view is a Windows notification-area application that must:
 
 Idle resource cost matters more than usual here: this app runs all day doing nothing most of the time. A heavyweight runtime is a poor trade for a widget that displays two numbers.
 
-The development machine has `git`, `gh` (authenticated), and the `dotnet` host — but **no .NET SDK and no Node or Rust toolchain**.
+The development machine has `git`, `gh` (authenticated), and the `dotnet` host, but **no .NET SDK and no Node or Rust toolchain**.
 
 ## Decision
 
@@ -33,14 +33,14 @@ Supporting choices:
 
 ### Why .NET 10 rather than .NET 8
 
-Earlier planning assumed .NET 8. Revised: as of mid-2026, **.NET 8 LTS support ends in November 2026** — starting a new project on a runtime with roughly four months of support remaining would mean an immediate migration. .NET 10 is the current LTS with support into 2028.
+Earlier planning assumed .NET 8. Revised: as of mid-2026, **.NET 8 LTS support ends in November 2026**, starting a new project on a runtime with roughly four months of support remaining would mean an immediate migration. .NET 10 is the current LTS with support into 2028.
 
 ## Alternatives considered
 
 | Option | Why rejected |
 |---|---|
 | **Rust + Tauri** | Smallest binaries and lowest memory, genuinely attractive. Rejected because it requires installing *both* the Rust toolchain and Node (neither present), and drawing text into a tray icon means hand-rolling rasterisation. The binary-size win does not pay for the setup and implementation cost at this scope. |
-| **Python + pystray** | Fastest prototype. Rejected: the machine's `python` is the non-functional Microsoft Store alias stub, and PyInstaller output routinely triggers antivirus false positives — unacceptable for a distributed tray app. |
+| **Python + pystray** | Fastest prototype. Rejected: the machine's `python` is the non-functional Microsoft Store alias stub, and PyInstaller output routinely triggers antivirus false positives, unacceptable for a distributed tray app. |
 | **Electron / Node** | Familiar web UI. Rejected: ~150 MB and high idle RAM for a widget showing two numbers, and no Node installed. Directly contradicts the idle-cost requirement. |
 | **WinForms instead of WPF** | `NotifyIcon` is first-party in WinForms, which is a real advantage. Rejected because the popup panel wants modern layout, animation, and per-monitor DPI handling, all of which are markedly better in WPF. H.NotifyIcon closes the tray gap. |
 | **WinUI 3 / Windows App SDK** | Most modern stack, best toast-notification story. Rejected as primary: heavier deployment story (framework dependency or bulky self-contained output) and more friction for unpackaged apps. Reconsider only if toast notifications become a headline feature. |
@@ -62,6 +62,6 @@ Toolchain confirmed rather than assumed:
 
 - .NET SDK **10.0.302** installed, with `Microsoft.WindowsDesktop.App 10.0.10`
 - A `net10.0-windows` WPF project scaffolds and builds with 0 warnings / 0 errors
-- **`H.NotifyIcon.Wpf 2.4.1`** resolves as compatible and builds against .NET 10 — the one third-party risk in this ADR is retired
+- **`H.NotifyIcon.Wpf 2.4.1`** resolves as compatible and builds against .NET 10, the one third-party risk in this ADR is retired
 - .NET 11 is preview-only at this date, confirming .NET 10 as the correct LTS choice
-- Windows-only by construction. This is intended — see [ADR-0003](0003-windows-tray-constraints.md).
+- Windows-only by construction. This is intended, see [ADR-0003](0003-windows-tray-constraints.md).

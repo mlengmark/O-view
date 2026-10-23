@@ -9,7 +9,7 @@ namespace OView.Core.Providers.Jsonl;
 /// node it cannot read, and the natural `catch (IOException) → return []` around it then
 /// reports "no transcripts" rather than "one folder was skipped". The Cowork tree
 /// contains a broken directory junction (a `…-outputs` link whose target is gone), so
-/// that shape would zero every token in the app the moment Cowork was scanned —
+/// that shape would zero every token in the app the moment Cowork was scanned,
 /// silently, because <see cref="DirectoryNotFoundException"/> derives from
 /// <see cref="IOException"/> and looks like an ordinary miss (GitHub issue #44).
 ///
@@ -19,7 +19,7 @@ public static class TranscriptFileScan
 {
     /// <summary>
     /// Depth ceiling, kept as a backstop even though links are now resolved before they are
-    /// walked. Resolution can fail — a permission error, a racing rename — and when it does
+    /// walked. Resolution can fail, a permission error, a racing rename, and when it does
     /// this is the only thing standing between a link loop and an unbounded walk. Real
     /// layouts here are 3–5 levels, so it only ever trips on something pathological.
     /// </summary>
@@ -35,7 +35,7 @@ public static class TranscriptFileScan
     /// <summary>
     /// The same walk under a ceiling on how many directories it will visit.
     ///
-    /// <para>Ingestion deliberately has no ceiling — a transcript skipped because a walk gave
+    /// <para>Ingestion deliberately has no ceiling, a transcript skipped because a walk gave
     /// up is a token silently uncounted, which is the whole class of bug this file exists to
     /// prevent. The bound is for the <b>diagnostic</b> sweep, which walks the whole of Claude's
     /// data directory rather than two known subtrees, and runs on the UI thread inside Copy
@@ -76,12 +76,12 @@ public static class TranscriptFileScan
         //
         // Keyed by platform path identity, not OrdinalIgnoreCase: on Linux, Alpha/ and
         // alpha/ are two directories, and folding them together would skip the second
-        // silently — every transcript in it simply missing from the totals.
+        // silently, every transcript in it simply missing from the totals.
         //
         // It only works because links are resolved BEFORE being pushed (see Canonical), so
         // every path in here is already canonical. Comparing paths as walked would not
         // catch a symlink loop at all: `a/link -> ../..` generates
-        // a/link/a/link/a/link/... — textually distinct every time, so the set never hits,
+        // a/link/a/link/a/link/..., textually distinct every time, so the set never hits,
         // and only MaxDepth would stop it after a very large number of directories.
         var visited = new HashSet<string>(PathIdentity.Comparer);
         var pending = new Stack<(string Path, int Depth)>();
@@ -110,7 +110,7 @@ public static class TranscriptFileScan
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
-                // Unreadable node (broken junction, permissions) — skip just this one.
+                // Unreadable node (broken junction, permissions), skip just this one.
             }
 
             if (depth >= MaxDepth)
@@ -137,14 +137,14 @@ public static class TranscriptFileScan
     /// The directory a path actually refers to, following a symlink or junction to its
     /// final target.
     ///
-    /// <para>Resolving here — at the moment a directory is queued, rather than when it is
-    /// compared — is what keeps the whole walk in canonical space. It means a link back to
+    /// <para>Resolving here, at the moment a directory is queued, rather than when it is
+    /// compared, is what keeps the whole walk in canonical space. It means a link back to
     /// an ancestor is recognised on the very next pop, instead of generating an ever-longer
     /// chain of distinct-looking paths that the visited set can never match.</para>
     ///
     /// <para>Falls back to the path as given whenever resolution says nothing useful:
     /// <see cref="Directory.ResolveLinkTarget"/> returns null for an ordinary directory,
-    /// and throws for a dangling link whose target is gone. Neither is an error here — a
+    /// and throws for a dangling link whose target is gone. Neither is an error here, a
     /// dangling link simply fails to enumerate a moment later, which the per-directory
     /// catch already handles and which is how a broken junction was made survivable in the
     /// first place (issue #44).</para>

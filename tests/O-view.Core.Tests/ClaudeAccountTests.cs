@@ -12,7 +12,7 @@ public class ClaudeAccountTests : IDisposable
     public void Tier_ComesFromOrganizationType_NotSeatTier()
     {
         // Real-account shape (CLAUDE.md rule 8): seatTier and userRateLimitTier are
-        // empty strings — the obvious-looking fields silently render a blank badge.
+        // empty strings, the obvious-looking fields silently render a blank badge.
         var path = Path.Combine(_dir, ".claude.json");
         File.WriteAllText(path, """
             {"oauthAccount":{"displayName":"Maximilian","emailAddress":"m@example.com",
@@ -31,7 +31,7 @@ public class ClaudeAccountTests : IDisposable
 
     /// <summary>
     /// Reported 2026-08-24. Claude Code migrated its state into <c>~/.claude/.claude.json</c>
-    /// and the file it writes there starts as nine keys of migration bookkeeping — no
+    /// and the file it writes there starts as nine keys of migration bookkeeping, no
     /// <c>oauthAccount</c>. Resolving to the first candidate that EXISTED picked that stub, and
     /// the panel read "account unknown / tier unknown" beside a populated file one directory up.
     /// </summary>

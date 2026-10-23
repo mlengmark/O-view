@@ -7,7 +7,7 @@ namespace OView.Linux.Rendering;
 /// <summary>
 /// What a render actually produced, beside the percentage it was asked for: the pixmap's
 /// own size, and how many of its pixels carry any paint. Two renders can share a snapshot
-/// and still disagree here — that disagreement is the point of logging this.
+/// and still disagree here, that disagreement is the point of logging this.
 /// </summary>
 public readonly record struct IconRenderDiagnostics(int Width, int Height, int PaintedPixelCount);
 
@@ -15,8 +15,8 @@ public readonly record struct IconRenderDiagnostics(int Width, int Height, int P
 /// The Linux drawing backend for the tray icon: Skia over the shared measurements in
 /// <see cref="TrayIconGeometry"/>.
 ///
-/// <para>The mark itself — ring and pupil ratios, stroke width, arc start angle, colour
-/// bands, and the rule that an estimate renders no fill — is defined once in
+/// <para>The mark itself, ring and pupil ratios, stroke width, arc start angle, colour
+/// bands, and the rule that an estimate renders no fill, is defined once in
 /// <see cref="TrayIconGeometry"/> and shared with the Windows head, so the two cannot
 /// drift. Only the drawing differs, which is a view and may reasonably differ per platform
 /// (ADR-0013).</para>
@@ -28,21 +28,21 @@ public static class SkiaIconRenderer
 {
     /// <summary>
     /// Sizes an SNI host may ask for. Linux panels commonly request 22 or 24 px, and 48 px
-    /// on HiDPI — larger than the 16/20/24 Windows uses, which is why legibility has to be
+    /// on HiDPI, larger than the 16/20/24 Windows uses, which is why legibility has to be
     /// checked at these sizes rather than assumed from the Windows evidence.
     /// </summary>
     public static readonly int[] CommonSizes = [16, 22, 24, 32, 48];
 
     /// <summary>
     /// Renders the snapshot as a PNG. Unknown or estimated data (no authoritative percent)
-    /// renders an empty ring — never a fabricated fill (CLAUDE.md rule 6).
+    /// renders an empty ring, never a fabricated fill (CLAUDE.md rule 6).
     /// </summary>
     public static byte[] RenderPng(int size, UsageSnapshot snapshot, bool lightPanel) =>
         RenderPng(size, snapshot, lightPanel, out _);
 
     /// <summary>
     /// As <see cref="RenderPng(int, UsageSnapshot, bool)"/>, and also reports what was
-    /// actually handed to the pixmap — so a caller that logs the render can tell a ring that
+    /// actually handed to the pixmap, so a caller that logs the render can tell a ring that
     /// drew from one that silently didn't, which the PNG bytes alone don't say.
     /// </summary>
     public static byte[] RenderPng(int size, UsageSnapshot snapshot, bool lightPanel, out IconRenderDiagnostics diagnostics)
@@ -59,9 +59,9 @@ public static class SkiaIconRenderer
 
     /// <summary>
     /// How many pixels of the <paramref name="size"/>×<paramref name="size"/> pixmap carry
-    /// any alpha. Cheap on purpose: a 24 px icon — the only size the tray actually uses — is
+    /// any alpha. Cheap on purpose: a 24 px icon, the only size the tray actually uses, is
     /// 576 reads off the surface already in memory, measured at ~6 microseconds against a
-    /// render that happens once a minute — nothing a VM run could notice.
+    /// render that happens once a minute, nothing a VM run could notice.
     /// </summary>
     public static int CountPaintedPixels(SKSurface surface, int size)
     {
@@ -125,7 +125,7 @@ public static class SkiaIconRenderer
         }
 
         // Pupil: the brand "eye", centred in the ring's hole. Takes the arc's colour, so the
-        // icon stays a single-colour signal rather than gaining a second one — except at a
+        // icon stays a single-colour signal rather than gaining a second one, except at a
         // measured 0%, where there is no arc and it fades to the track instead (issue #139).
         using var pupil = new SKPaint
         {

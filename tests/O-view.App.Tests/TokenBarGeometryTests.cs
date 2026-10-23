@@ -36,7 +36,7 @@ public class TokenBarGeometryTests
 
     /// <summary>
     /// The measurement the design rests on. Drawn strictly to scale, output is a hairline and
-    /// input does not render at all — which is why the tiles headline output instead of this
+    /// input does not render at all, which is why the tiles headline output instead of this
     /// total, and why the floor exists.
     /// </summary>
     [Fact]
@@ -59,7 +59,7 @@ public class TokenBarGeometryTests
         Assert.Equal(TokenBarGeometry.MinimumSegmentPx, input.Width);
         Assert.True(input.Floored);
 
-        // Output clears the floor on its own at this width, so it must NOT be flagged —
+        // Output clears the floor on its own at this width, so it must NOT be flagged,
         // a flag that is always on says nothing.
         var output = segments.Single(s => s.Kind == TokenKind.Output);
         Assert.False(output.Floored);
@@ -97,7 +97,7 @@ public class TokenBarGeometryTests
     }
 
     /// <summary>
-    /// A kind that did not happen gets no segment — not a zero-width one, which would be
+    /// A kind that did not happen gets no segment, not a zero-width one, which would be
     /// indistinguishable from a floored sliver. The same line the graph draws for
     /// pre-install days (ADR-0006).
     /// </summary>
@@ -124,7 +124,7 @@ public class TokenBarGeometryTests
     /// <summary>
     /// A track too narrow to afford the floors drops them rather than overflowing. Keeping
     /// them would push the bar past the panel it sits in, which is a layout break rather than
-    /// a legibility compromise — and at this width nothing on the bar is legible either way.
+    /// a legibility compromise, and at this width nothing on the bar is legible either way.
     /// </summary>
     [Fact]
     public void ADegeneratelyNarrowTrackGoesProportionalRatherThanOverflowing()
@@ -153,7 +153,7 @@ public class TokenBarGeometryTests
     /// <summary>
     /// The ramp is achromatic on purpose: the categorical trio means "which model", panel-wide,
     /// and reusing those hues here would put blue on Opus 5 in a flipped tile and on cache read
-    /// in the bar beneath it. A grey has equal channels — that is the whole check.
+    /// in the bar beneath it. A grey has equal channels, that is the whole check.
     /// </summary>
     [Theory]
     [InlineData(true)]
@@ -173,7 +173,7 @@ public class TokenBarGeometryTests
     }
 
     /// <summary>
-    /// Brightness is the encoding, ordered by how much the reader cares — so the steps must be
+    /// Brightness is the encoding, ordered by how much the reader cares, so the steps must be
     /// strictly separated, and in that order. Two kinds landing on the same grey would make the
     /// bar unreadable while every test above still passed.
     /// </summary>

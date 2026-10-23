@@ -10,7 +10,7 @@ namespace OView.Core.Storage;
 /// </summary>
 /// <param name="Source">A <see cref="TranscriptSources"/> label, or <c>unattributed</c>.</param>
 /// <param name="Rows">Ledger rows carrying it.</param>
-/// <param name="Tokens">Their four token fields summed — the figure the tiles are made of.</param>
+/// <param name="Tokens">Their four token fields summed, the figure the tiles are made of.</param>
 public sealed record LedgerSource(string Source, long Rows, long Tokens, string? FirstDay, string? LastDay);
 
 /// <summary>
@@ -29,8 +29,8 @@ public sealed record LedgerSource(string Source, long Rows, long Tokens, string?
 /// Files this build read from byte 0 through to the end that yielded no ledger row at all.
 ///
 /// <para>An observation, not a verdict: a transcript carrying no assistant record produces the
-/// same shape legitimately. It earns its place because the alternative reading — a watermark
-/// advanced over content that was never stored — is invisible in every other field, and on an
+/// same shape legitimately. It earns its place because the alternative reading, a watermark
+/// advanced over content that was never stored, is invisible in every other field, and on an
 /// append-only transcript it is permanent, since nothing ever revisits a file that is "0
 /// behind" (issue #218).</para>
 ///
@@ -46,16 +46,16 @@ public sealed record WatermarkSource(
 /// What the rollup store actually holds, and whether it can still be written.
 ///
 /// <para><b>The bundle had nothing about the store at all</b>, which is what made a stalled
-/// ingest undiagnosable: every other field describes an <i>input</i> — which paths exist, how
-/// many samples they hold, how fresh they are — and all of them can read perfectly while the
+/// ingest undiagnosable: every other field describes an <i>input</i>, which paths exist, how
+/// many samples they hold, how fresh they are, and all of them can read perfectly while the
 /// token tiles have not moved in a week. Three support reports in a row led with
 /// <c>status : Ok</c> while exactly that was happening.</para>
 ///
 /// <para><b><see cref="Origin"/> is the field this exists for.</b> The same bundle can be
 /// produced two ways: by the running tray, from the connection it has held open all along, or
 /// by <c>--diagnose</c>, which opens its own. Those two should agree. On the machine that
-/// prompted this they demonstrably did not — the tray reported six weekly observations and no
-/// quarantined stores while the same directory held five and fifteen — so the report says
+/// prompted this they demonstrably did not, the tray reported six weekly observations and no
+/// quarantined stores while the same directory held five and fifteen, so the report says
 /// which reader produced it, and a mismatch between the two becomes evidence rather than a
 /// confusion.</para>
 ///
@@ -64,7 +64,7 @@ public sealed record WatermarkSource(
 /// into a catch that used to say nothing. <c>BEGIN IMMEDIATE</c> takes the write lock and
 /// rolls straight back, which exercises that path and leaves the database byte-identical.</para>
 /// </summary>
-/// <param name="Origin">Which reader produced this — the live instance, or a fresh connection.</param>
+/// <param name="Origin">Which reader produced this, the live instance, or a fresh connection.</param>
 /// <param name="WritesAccepted">Whether a write lock could be taken. Null when it was not attempted.</param>
 /// <param name="FilesBehind">
 /// Tracked transcripts whose file on disk is longer than the length recorded beside their
@@ -76,14 +76,14 @@ public sealed record WatermarkSource(
 /// is no journal.
 ///
 /// <para><b>A positive number here is the finding.</b> SQLite writes the journal on every
-/// commit and the database only on checkpoint, so a live journal is the newer of the two — one
+/// commit and the database only on checkpoint, so a live journal is the newer of the two, one
 /// that trails its database by hours cannot be a continuation of it, and SQLite will still
 /// recover from it and present the store as it stood when that file was written. This is the
 /// field that makes that visible; on the machine this was measured on, everything else read
 /// <c>ok</c>.</para>
 /// </param>
 /// <param name="JournalGuard">
-/// What the startup guard did about it, or null when this reader did not run one — which is
+/// What the startup guard did about it, or null when this reader did not run one, which is
 /// every reader but the live instance, and is deliberately not reported as "nothing was
 /// wrong".
 /// </param>
@@ -116,7 +116,7 @@ public sealed record RollupStoreReport(
     /// <summary>Produced by a reader that opened the file for this report alone.</summary>
     public const string OpenedForReport = "opened for this report";
 
-    /// <summary>When the store could not be inspected at all — named, never omitted.</summary>
+    /// <summary>When the store could not be inspected at all, named, never omitted.</summary>
     public static RollupStoreReport Unavailable(string path, string origin, string failure) =>
         new(path, origin, 0, 0, "?", "?", null, failure, 0, null, null, null, 0, 0, 0, 0);
 
@@ -166,7 +166,7 @@ public sealed record RollupStoreReport(
     ///
     /// <para><b>This is the line that turns the row count above it into evidence.</b> A bundle
     /// could report 58 MB of Cowork transcripts a few lines earlier and 407 ledger rows here,
-    /// and no reader — including the person who wrote both — could say whether those rows
+    /// and no reader, including the person who wrote both, could say whether those rows
     /// included any Cowork at all. The transcript section and this one are printed in the same
     /// words for the same reason: they are meant to be read against each other.</para>
     ///
@@ -196,7 +196,7 @@ public sealed record RollupStoreReport(
     }
 
     /// <summary>
-    /// What the watermarks claim, per surface — and specifically how many files were read end
+    /// What the watermarks claim, per surface, and specifically how many files were read end
     /// to end and produced nothing.
     ///
     /// <para>"0 behind by 0 bytes" on the line above says every tracked file has been consumed.
@@ -237,14 +237,14 @@ public sealed record RollupStoreReport(
             // carries no assistant record yet produces exactly this shape, and a line that
             // called it a stale watermark would be asserting a cause the store cannot see
             // (rule 6). What it is for is the case where the number is large and the files are
-            // not new — which the transcript sizes a few lines above will say.
+            // not new, which the transcript sizes a few lines above will say.
             text.AppendLine(string.Create(CultureInfo.InvariantCulture,
                 $"      !! {silent} file(s) read whole from byte 0 and produced no ledger row"));
         }
     }
 
     /// <summary>
-    /// The real surfaces first and always, then whatever else the store holds — which is
+    /// The real surfaces first and always, then whatever else the store holds, which is
     /// <c>unattributed</c> on any install that predates the source column, and would be a new
     /// label on any build that adds one. Nothing found in the database is dropped from the
     /// report on the grounds that this build did not expect it.
@@ -308,7 +308,7 @@ public sealed record RollupStoreReport(
 
     /// <summary>
     /// The shared reader. Takes an open connection so the live instance and a fresh one
-    /// produce byte-identical sections apart from <see cref="Origin"/> — which is the whole
+    /// produce byte-identical sections apart from <see cref="Origin"/>, which is the whole
     /// point of comparing them.
     /// </summary>
     internal static RollupStoreReport Read(
@@ -349,7 +349,7 @@ public sealed record RollupStoreReport(
 
 
     /// <summary>
-    /// Rows and tokens per surface. Tokens are the four fields summed — the same arithmetic the
+    /// Rows and tokens per surface. Tokens are the four fields summed, the same arithmetic the
     /// tiles do, so the breakdown can be compared against what the user is looking at rather
     /// than against a figure only this report produces.
     /// </summary>
@@ -394,7 +394,7 @@ public sealed record RollupStoreReport(
     /// <para>A file counts as silent only when all three hold: counting began at byte 0 (so the
     /// number covers the whole file), the offset has reached the recorded length (so there is
     /// nothing left to explain the absence), and the file was not empty. Anything short of that
-    /// is reported as unknown coverage instead — a watermark inherited from an earlier build can
+    /// is reported as unknown coverage instead, a watermark inherited from an earlier build can
     /// only ever say "nothing since", which is not evidence of anything.</para>
     /// </summary>
     private static IReadOnlyList<WatermarkSource> ReadWatermarksBySource(SqliteConnection connection)
@@ -456,7 +456,7 @@ public sealed record RollupStoreReport(
         }
         catch (InvalidOperationException)
         {
-            // A transaction already in flight on this connection — the live instance mid-ingest.
+            // A transaction already in flight on this connection, the live instance mid-ingest.
             // Not a refusal, and not something to report as one.
             return null;
         }
@@ -486,7 +486,7 @@ public sealed record RollupStoreReport(
     /// <summary>
     /// Compares every recorded offset against the file it belongs to. A file longer than the
     /// length stored beside its offset has content the app believes it has accounted for and
-    /// has not read — the signature of a stalled ingest, and invisible everywhere else.
+    /// has not read, the signature of a stalled ingest, and invisible everywhere else.
     /// </summary>
     private static (int Tracked, int Behind, long Unread, int Gone) ReadOffsets(SqliteConnection connection)
     {

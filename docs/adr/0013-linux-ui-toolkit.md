@@ -10,7 +10,7 @@
 
 [ADR-0012](0012-linux-support.md) put Linux in scope and deliberately left the toolkit open, because [ADR-0003](0003-windows-tray-constraints.md) had rejected Avalonia on reasoning that was only half expired:
 
-> tray behaviour is precisely where cross-platform frameworks are weakest — the abstraction would leak on the one feature that matters most
+> tray behaviour is precisely where cross-platform frameworks are weakest, the abstraction would leak on the one feature that matters most
 
 That half had not expired, so this decision waited on a spike rather than an opinion. The spike is done and its results are the basis for everything below.
 
@@ -18,7 +18,7 @@ Two facts frame the decision.
 
 **The Windows head is a shipped product on in-place auto-update.** A regression does not wait to be downloaded; it is pushed. Anything that rewrites working Windows UI spends risk on users who already have something that works.
 
-**On Linux the tray is a protocol, not a surface.** StatusNotifierItem over D-Bus, rendered by a *host* — and stock Ubuntu GNOME provides no host at all.
+**On Linux the tray is a protocol, not a surface.** StatusNotifierItem over D-Bus, rendered by a *host*, and stock Ubuntu GNOME provides no host at all.
 
 ## Decision
 
@@ -26,60 +26,60 @@ Two facts frame the decision.
 
 `O-view.Core` and `O-view.App` are already shared and platform-neutral ([#73](https://github.com/mlengmark/O-view/issues/73)). The Linux head sits on `O-view.App` exactly as `O-view.Tray` does.
 
-The spike confirmed Avalonia does the thing that actually matters, rather than the thing that is easy to demo: a **live-rendered** `RenderTargetBitmap` works as a tray icon and can be replaced repeatedly on a timer. SNI also accepts a themed icon *name*, which would have been useless for a gauge — that was the first thing checked, and it passed.
+The spike confirmed Avalonia does the thing that actually matters, rather than the thing that is easy to demo: a **live-rendered** `RenderTargetBitmap` works as a tray icon and can be replaced repeatedly on a timer. SNI also accepts a themed icon *name*, which would have been useless for a gauge, that was the first thing checked, and it passed.
 
 **The Windows head is not rewritten.** Consequences of that, accepted deliberately:
 
-- The panel UI exists twice. This codebase's recurring failure mode is duplication, so this is a real cost, not a footnote. It is mitigated by everything below XAML already being shared — formatters, statistics, scope reports, the engine — and issues [#55](https://github.com/mlengmark/O-view/issues/55)/[#56](https://github.com/mlengmark/O-view/issues/56) are the standing reminder of what happens when *facts* get duplicated rather than views.
+- The panel UI exists twice. This codebase's recurring failure mode is duplication, so this is a real cost, not a footnote. It is mitigated by everything below XAML already being shared, formatters, statistics, scope reports, the engine, and issues [#55](https://github.com/mlengmark/O-view/issues/55)/[#56](https://github.com/mlengmark/O-view/issues/56) are the standing reminder of what happens when *facts* get duplicated rather than views.
 - The frame-by-frame-measured flyout curves in `FlyoutAnimation.cs`, the `Shell_NotifyIconGetRect` docking, and the WinForms `NotifyIcon` integration all stay as they are, unrisked.
 
-### 2. On a desktop with no SNI host, O-view must say so — and it must ask the bus, not the toolkit
+### 2. On a desktop with no SNI host, O-view must say so, and it must ask the bus, not the toolkit
 
 This is the product decision the spike existed to inform, and it is not optional.
 
-**Measured:** an Avalonia `TrayIcon` reports `IsVisible = true` whether or not a host exists. The app's own output is *identical* with and without one. Trusting the toolkit therefore produces an app that is silently invisible on the single most likely Linux configuration — the exact failure [CLAUDE.md](../../CLAUDE.md) rule 6 was written after.
+**Measured:** an Avalonia `TrayIcon` reports `IsVisible = true` whether or not a host exists. The app's own output is *identical* with and without one. Trusting the toolkit therefore produces an app that is silently invisible on the single most likely Linux configuration, the exact failure [CLAUDE.md](../../CLAUDE.md) rule 6 was written after.
 
 So the Linux head **must**:
 
-1. Probe the session bus for `org.kde.StatusNotifierWatcher` — measured to return `False` with no host and `True` with one.
+1. Probe the session bus for `org.kde.StatusNotifierWatcher`, measured to return `False` with no host and `True` with one.
 2. When absent, tell the user plainly what was observed and what to do: that no notification-area host was found on the session bus, that GNOME needs an AppIndicator/KStatusNotifierItem extension, and how to reach the panel meanwhile. **State the observation, never a guess about their machine.**
-3. Watch for the name appearing later (`WatchNameOwnerAsync`) and register without a restart — a user may install the extension while O-view is running. This is the Linux `TaskbarCreated` (ADR-0003 item 5).
+3. Watch for the name appearing later (`WatchNameOwnerAsync`) and register without a restart, a user may install the extension while O-view is running. This is the Linux `TaskbarCreated` (ADR-0003 item 5).
 4. **Never** run that probe synchronously on the UI thread. Measured: blocking the dispatcher on a D-Bus round trip deadlocks the app outright.
 
 Silently invisible is not an acceptable outcome. Neither is a message asserting the extension is missing when what O-view actually observed was an absent bus name.
 
 ### 3. The docked flyout is not promised on Linux
 
-SNI exposes no icon rectangle — there is no `Shell_NotifyIconGetRect` equivalent — and Wayland clients generally cannot position their own surfaces. [#78](https://github.com/mlengmark/O-view/issues/78) should implement whatever positioning is genuinely achievable and stop there. A panel that lands in the wrong place every time reads as broken; a plainly-placed window does not.
+SNI exposes no icon rectangle, there is no `Shell_NotifyIconGetRect` equivalent, and Wayland clients generally cannot position their own surfaces. [#78](https://github.com/mlengmark/O-view/issues/78) should implement whatever positioning is genuinely achievable and stop there. A panel that lands in the wrong place every time reads as broken; a plainly-placed window does not.
 
-> **Followed up (2026-08-19, [#144](https://github.com/mlengmark/O-view/issues/144)) — "whatever is achievable" turned out to be the corner.**
+> **Followed up (2026-08-19, [#144](https://github.com/mlengmark/O-view/issues/144)), "whatever is achievable" turned out to be the corner.**
 >
 > The first hardware report to reach the panel found the centred window wrong for the product, and it is worth separating the two things this decision ran together:
 >
 > - **Anchoring the panel under the tray icon is still impossible**, exactly as stated above, and is not attempted. SNI genuinely will not say where the host drew the icon.
-> - **A fixed work-area corner needs none of that.** The work area already excludes the desktop's panel bar wherever it publishes one, and Avalonia's `Screens` reports both rectangles — so the same corner the Windows head docks to is computable from screen geometry alone. The corner rule itself now lives in `OView.App.Rendering.WorkAreaPlacement`, shared with the Windows head rather than copied, because which corner and how much margin are answers a user expects both platforms to give the same way.
+> - **A fixed work-area corner needs none of that.** The work area already excludes the desktop's panel bar wherever it publishes one, and Avalonia's `Screens` reports both rectangles, so the same corner the Windows head docks to is computable from screen geometry alone. The corner rule itself now lives in `OView.App.Rendering.WorkAreaPlacement`, shared with the Windows head rather than copied, because which corner and how much margin are answers a user expects both platforms to give the same way.
 >
-> **It remains a request, not a guarantee.** `Window.Position` is an X11 request a window manager may ignore, and a native Wayland compositor will refuse it outright — the reporting session reaches X11 through XWayland, where KWin generally honours it, but that is a reasonable expectation and not an observation. The panel therefore logs the position it asked for *and* the position it was given, so one round trip answers "did the corner take?". Where screen geometry cannot be read at all it still centres, for the reason above: half off-screen reads as broken where plainly-centred does not.
+> **It remains a request, not a guarantee.** `Window.Position` is an X11 request a window manager may ignore, and a native Wayland compositor will refuse it outright, the reporting session reaches X11 through XWayland, where KWin generally honours it, but that is a reasonable expectation and not an observation. The panel therefore logs the position it asked for *and* the position it was given, so one round trip answers "did the corner take?". Where screen geometry cannot be read at all it still centres, for the reason above: half off-screen reads as broken where plainly-centred does not.
 >
 > This is a follow-through on decision 3, not a change to it. Nothing here promises the docked flyout.
 
 ### 4. ADR-0005's zero-dependency guarantee holds on Windows only
 
-[ADR-0005](0005-native-tray-integration.md) claimed **zero third-party runtime dependencies**, and that was worth having — it is why H.NotifyIcon was dropped.
+[ADR-0005](0005-native-tray-integration.md) claimed **zero third-party runtime dependencies**, and that was worth having, it is why H.NotifyIcon was dropped.
 
 **It cannot survive on Linux, and the cost is now measured, not estimated:** 25 third-party managed assemblies (21 `Avalonia.*`, plus `SkiaSharp`, `HarfBuzzSharp`, `MicroCom.Runtime`, `Tmds.DBus.Protocol`), two third-party native libraries (`libSkiaSharp.so` 10.7 MB, `libHarfBuzzSharp.so` 2.7 MB), and ~100 MB self-contained against the Windows build's 76.7 MB.
 
 Windows has a first-party tray and a first-party rasteriser. Linux has neither, so this is a property of the platform rather than a choice being made badly.
 
-**Amendment:** ADR-0005's guarantee is hereby scoped to the Windows head, which keeps it in full. The Linux head takes Avalonia and its closure. `Tmds.DBus.Protocol` arriving transitively is a small consolation — the bus probe in decision 2 needs no dependency that Avalonia has not already brought.
+**Amendment:** ADR-0005's guarantee is hereby scoped to the Windows head, which keeps it in full. The Linux head takes Avalonia and its closure. `Tmds.DBus.Protocol` arriving transitively is a small consolation, the bus probe in decision 2 needs no dependency that Avalonia has not already brought.
 
 ## Alternatives considered
 
 | Option | Why rejected |
 |---|---|
-| **Avalonia for both platforms** | One UI codebase, and the duplication in decision 1 disappears. Rejected: it rewrites a shipped, tuned Windows product — including measured animation curves and the docked-flyout positioning — to serve a platform with no users yet, and would add 25 third-party assemblies plus Skia to a Windows build that today has none. Risk lands on the people who already have something working. **Revisit only if the duplicated panel actually causes drift**, at which point the trade-off has changed. |
-| **Direct SNI over `Tmds.DBus.Protocol`, GTK or nothing for the panel** | Most control, no toolkit tax. Rejected: it means hand-writing the SNI object, its properties, its menu protocol and a panel toolkit binding — all of which Avalonia already ships and the spike verified. The dependency saving is illusory, since `Tmds.DBus.Protocol` would be a dependency either way. |
-| **Ship Linux with a tray icon only, no panel** | Smaller. Rejected: the panel holds everything the icon cannot say — the model split, the 31-day graph, `Est.` tiles, the data-source badge and the no-data explanation. A coloured dot with no way to see why is not the product. |
+| **Avalonia for both platforms** | One UI codebase, and the duplication in decision 1 disappears. Rejected: it rewrites a shipped, tuned Windows product, including measured animation curves and the docked-flyout positioning, to serve a platform with no users yet, and would add 25 third-party assemblies plus Skia to a Windows build that today has none. Risk lands on the people who already have something working. **Revisit only if the duplicated panel actually causes drift**, at which point the trade-off has changed. |
+| **Direct SNI over `Tmds.DBus.Protocol`, GTK or nothing for the panel** | Most control, no toolkit tax. Rejected: it means hand-writing the SNI object, its properties, its menu protocol and a panel toolkit binding, all of which Avalonia already ships and the spike verified. The dependency saving is illusory, since `Tmds.DBus.Protocol` would be a dependency either way. |
+| **Ship Linux with a tray icon only, no panel** | Smaller. Rejected: the panel holds everything the icon cannot say, the model split, the 31-day graph, `Est.` tiles, the data-source badge and the no-data explanation. A coloured dot with no way to see why is not the product. |
 | **Wait for GNOME to support SNI natively** | GNOME removed tray icons deliberately and has not reversed it. Waiting is a decision not to ship. |
 | **Require the AppIndicator extension, and refuse to run without it** | Honest, but hostile: it makes a third-party GNOME extension a hard dependency of an app the user has already installed. Decision 2 informs instead of refusing. |
 
@@ -95,7 +95,7 @@ Windows has a first-party tray and a first-party rasteriser. Linux has neither, 
 **Negative**
 
 - **The panel exists twice.** The largest deliberate duplication in the project, in a codebase whose last release was a consolidation of exactly this kind of drift.
-- **Zero third-party dependencies is gone on Linux** — 25 assemblies and two native libraries, ~100 MB.
+- **Zero third-party dependencies is gone on Linux**, 25 assemblies and two native libraries, ~100 MB.
 - **Linux will not look like Windows.** No docked flyout, different animation, different notification style. The support matrix ([#83](https://github.com/mlengmark/O-view/issues/83)) must be honest about this rather than implying parity.
-- **A large part of the behaviour is still unverified on a real desktop.** Whether hosts draw the gauge legibly, recolour it, survive a shell restart, or deliver clicks are all open — listed in the findings. They gate [#77](https://github.com/mlengmark/O-view/issues/77) and [#78](https://github.com/mlengmark/O-view/issues/78), not this decision.
+- **A large part of the behaviour is still unverified on a real desktop.** Whether hosts draw the gauge legibly, recolour it, survive a shell restart, or deliver clicks are all open, listed in the findings. They gate [#77](https://github.com/mlengmark/O-view/issues/77) and [#78](https://github.com/mlengmark/O-view/issues/78), not this decision.
 - Avalonia becomes a version the project must track, including its own Skia and HarfBuzz.

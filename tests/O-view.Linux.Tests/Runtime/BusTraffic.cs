@@ -12,7 +12,7 @@ namespace OView.Linux.Tests.Runtime;
 ///
 /// <para><b>Why a recording at all.</b> The toolkit's tray backend logs its own failures
 /// through a logger the app installs no sink for, so a registration that never happens says
-/// nothing anywhere — and asking the bus afterwards what names exist (<see
+/// nothing anywhere, and asking the bus afterwards what names exist (<see
 /// cref="LinuxAppProcess"/>) only shows the end state. The conversation itself says which side
 /// gave up: whether the backend opened a bus connection of its own, whether it ever asked for
 /// an <c>org.kde.StatusNotifierItem-…</c> name, and what the bus or the watcher answered.</para>
@@ -73,7 +73,7 @@ public sealed class BusTraffic : IAsyncDisposable
     }
 
     /// <summary>
-    /// Whether the recorder is known to be seeing messages — it was started, and a marker sent
+    /// Whether the recorder is known to be seeing messages, it was started, and a marker sent
     /// on the bus came back out of it. False means <see cref="State"/> says why, and the
     /// capture is not evidence of anything.
     /// </summary>
@@ -93,7 +93,7 @@ public sealed class BusTraffic : IAsyncDisposable
 
     /// <summary>
     /// Starts recording the session bus the test is running against. Returns a recorder that
-    /// writes nothing — rather than throwing — when there is no bus or no <see cref="Tool"/>,
+    /// writes nothing, rather than throwing, when there is no bus or no <see cref="Tool"/>,
     /// so the ordinary test job and a developer's own machine are unaffected; <see
     /// cref="IsRecording"/> is then false and <see cref="State"/> names the reason.
     /// </summary>
@@ -109,7 +109,7 @@ public sealed class BusTraffic : IAsyncDisposable
         if (OnPath(Tool) is null)
         {
             return new BusTraffic(null, output, label,
-                $"not recording: {Tool} is not on PATH — the linux-runtime job's install step " +
+                $"not recording: {Tool} is not on PATH, the linux-runtime job's install step " +
                 "must add the dbus-bin package that carries it");
         }
 
@@ -162,14 +162,14 @@ public sealed class BusTraffic : IAsyncDisposable
     }
 
     /// <summary>
-    /// Every captured message mentioning <paramref name="fragment"/> — the whole message, its
+    /// Every captured message mentioning <paramref name="fragment"/>, the whole message, its
     /// header line and the body lines underneath it, as <see cref="Tool"/> printed them.
     /// </summary>
     public IReadOnlyList<string> Mentioning(string fragment) =>
         [.. Messages().Where(message => message.Contains(fragment, StringComparison.Ordinal))];
 
     /// <summary>
-    /// Stops the recorder and saves what it captured — whether the test passed or failed. A
+    /// Stops the recorder and saves what it captured, whether the test passed or failed. A
     /// surviving dbus-monitor would go on writing into the next test's capture, and an unsaved
     /// capture is evidence nobody can read after the run.
     /// </summary>
@@ -189,8 +189,8 @@ public sealed class BusTraffic : IAsyncDisposable
                 }
 
                 // Synchronous and unbounded on purpose: this is the call that waits for the
-                // output handlers to drain, so without it the last messages — the app being
-                // killed, the names being released — are missing from the capture.
+                // output handlers to drain, so without it the last messages, the app being
+                // killed, the names being released, are missing from the capture.
                 _monitor.WaitForExit();
             }
             catch (Exception ex) when (ex is InvalidOperationException or TimeoutException
@@ -213,7 +213,7 @@ public sealed class BusTraffic : IAsyncDisposable
     /// <para>Line-buffered through <c>stdbuf</c> because its output is read through a pipe, and
     /// a pipe makes the C library hold about four kilobytes back before writing any of it. The
     /// capture would still be complete by the end, but nothing in it could be read while the
-    /// test ran — including the marker that proves the recorder is alive. <c>stdbuf</c> is
+    /// test ran, including the marker that proves the recorder is alive. <c>stdbuf</c> is
     /// coreutils, so it is on every runner; without it the recording still happens and only
     /// the waiting for it stops working, which <see cref="State"/> then says.</para>
     /// </summary>

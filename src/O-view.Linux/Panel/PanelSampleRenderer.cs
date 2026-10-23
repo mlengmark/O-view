@@ -19,7 +19,7 @@ namespace OView.Linux.Panel;
 ///
 /// <para>Every state is rendered at the height it asks for, which is the panel a display with
 /// room shows. One state is rendered a second time at a short display's work area, because
-/// that panel — compacted, capped and scrolling — is a layout no natural-height render
+/// that panel, compacted, capped and scrolling, is a layout no natural-height render
 /// contains, and it is the one that was reported broken.</para>
 /// </summary>
 public static class PanelSampleRenderer
@@ -80,7 +80,7 @@ public static class PanelSampleRenderer
     /// lays the content out in the narrower column that leaves; the third re-cuts the token
     /// bars, which size their own segments against the track they were handed.
     ///
-    /// <para>Run by hand because nothing offscreen has a layout manager to run them — the
+    /// <para>Run by hand because nothing offscreen has a layout manager to run them, the
     /// tree never reaches a window, so an invalidation inside it is never picked up. Counted
     /// rather than looped-until-valid for the same reason: the root stays valid while a
     /// descendant is not.</para>

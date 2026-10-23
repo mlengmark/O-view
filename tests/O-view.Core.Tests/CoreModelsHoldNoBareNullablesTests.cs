@@ -6,15 +6,15 @@ namespace OView.Core.Tests;
 /// <summary>
 /// Keeps the bare nullables out of <c>OView.Core.Models</c> now that they have gone. A
 /// percentage, a reset time, a token count or an Est. figure declared as a plain
-/// <c>Nullable&lt;T&gt;</c> leaves every reader to decide what its null meant — never
-/// measured, measured as nothing, or simply not read yet — and those are three different
+/// <c>Nullable&lt;T&gt;</c> leaves every reader to decide what its null meant, never
+/// measured, measured as nothing, or simply not read yet, and those are three different
 /// claims about the user's account (CLAUDE.md rule 6). The status-paired types in that folder
 /// are what say which, so a reintroduced plain nullable is this test's one subject.
 ///
 /// <para><b>What it checks is read off the models, not listed here.</b> The types it objects
 /// to are the ones the status-paired types in <c>OView.Core.Models</c> wrap: each such type is
-/// found by its own shape — a <c>Value</c> beside a <see cref="UsageValueStatus"/>
-/// <c>Status</c> — and the type of its <c>Value</c> is what becomes forbidden as a bare
+/// found by its own shape, a <c>Value</c> beside a <see cref="UsageValueStatus"/>
+/// <c>Status</c>, and the type of its <c>Value</c> is what becomes forbidden as a bare
 /// nullable elsewhere in the namespace. Add a fifth paired type tomorrow and this test widens
 /// to cover its figures without being edited; it cannot fall behind the models the way a
 /// hand-written list of member names would. <see cref="PairedTypesAreDiscovered"/> fails if
@@ -23,7 +23,7 @@ namespace OView.Core.Tests;
 ///
 /// <para><b>What this test does not reach.</b> It sees declared member types only, so it says
 /// nothing about a nullable passed as a method parameter, held in a local, or declared on a
-/// type outside <c>OView.Core.Models</c> — a head's own view model, say. It also cannot object
+/// type outside <c>OView.Core.Models</c>, a head's own view model, say. It also cannot object
 /// to a figure whose underlying type no paired type wraps: a percentage reintroduced as
 /// <c>int?</c> rather than <c>double?</c> would pass, because nothing in the namespace pairs
 /// an <c>int</c>. Both are deliberate: the alternative is guessing which nullables are figures
@@ -35,7 +35,7 @@ public class CoreModelsHoldNoBareNullablesTests
     /// The only places a public member of <c>OView.Core.Models</c> may still be a bare
     /// nullable of a paired type's value, and why. Each entry is a value whose null says
     /// something other than "the trust of this figure is in question", which is the one
-    /// question the paired types answer — so pairing it would add a status no reader could
+    /// question the paired types answer, so pairing it would add a status no reader could
     /// act on. A new entry is a scope question for Gary III, not a line to add.
     /// </summary>
     private static readonly (Type Type, string Member, string Reason)[] Exemptions =
@@ -108,7 +108,7 @@ public class CoreModelsHoldNoBareNullablesTests
 
                 var replacement = paired.First(p => PairedValueTypeOf(p) == underlying);
                 violations.Add(
-                    $"{type.Name}.{member} is a bare {underlying.Name}? — use {replacement.Name}.");
+                    $"{type.Name}.{member} is a bare {underlying.Name}?, use {replacement.Name}.");
             }
         }
 
@@ -135,8 +135,8 @@ public class CoreModelsHoldNoBareNullablesTests
         [.. PairedTypes().Select(PairedValueTypeOf).OfType<Type>()];
 
     /// <summary>
-    /// The type a paired type's <c>Value</c> holds, unwrapped — <c>decimal</c> for
-    /// <see cref="EstimatedUsd"/> — or null when the type is not a paired one at all.
+    /// The type a paired type's <c>Value</c> holds, unwrapped, <c>decimal</c> for
+    /// <see cref="EstimatedUsd"/>, or null when the type is not a paired one at all.
     /// </summary>
     private static Type? PairedValueTypeOf(Type type)
     {
@@ -178,7 +178,7 @@ public class CoreModelsHoldNoBareNullablesTests
     //   Error Message:
     //    A public member of OView.Core.Models is a bare nullable of a value this app has a
     //   status-paired type for:
-    //     - PanelStatistics.EstTodayUsd is a bare Decimal? — use EstimatedUsd.
+    //     - PanelStatistics.EstTodayUsd is a bare Decimal?, use EstimatedUsd.
     //
     //   Declare it as that paired type instead, so the member carries why the figure is absent
     //   rather than leaving each reader to infer it from the null. If its null genuinely means

@@ -3,12 +3,12 @@ namespace OView.Core.Providers;
 /// <summary>
 /// Every directory Claude Desktop might keep its data in.
 ///
-/// <para>Normally that is the canonical per-user config location — <c>%APPDATA%\Claude</c>
+/// <para>Normally that is the canonical per-user config location, <c>%APPDATA%\Claude</c>
 /// on Windows, <c>~/.config/Claude</c> on Linux. But a sandboxed package does not write
 /// there: the platform redirects it into a per-package store, and on a machine where only
 /// that store is populated, a canonical-path-only locator finds nothing at all. Assuming
 /// the canonical path already cost this project one "no usage data" report against a
-/// machine where Claude Desktop was open and working — see
+/// machine where Claude Desktop was open and working, see
 /// <see cref="PlanHistory.PlanHistoryLocator"/>, which is where that lesson was first paid
 /// for.</para>
 ///
@@ -47,7 +47,7 @@ public static class ClaudeDataRoots
 
     /// <summary>
     /// Snap sandbox stores. A snap's <c>$HOME</c> is redirected to
-    /// <c>~/snap/&lt;snap&gt;/&lt;revision&gt;</c>, with <c>current</c> a symlink to the live one — so
+    /// <c>~/snap/&lt;snap&gt;/&lt;revision&gt;</c>, with <c>current</c> a symlink to the live one, so
     /// config lands at <c>~/snap/&lt;snap&gt;/current/.config/Claude</c>.
     /// </summary>
     /// <param name="homeRoot">Stands in for <c>$HOME</c>, so the layout is testable.</param>
@@ -67,7 +67,7 @@ public static class ClaudeDataRoots
             .ToList();
 
     /// <summary>
-    /// The redirected roots for the platform this is running on — <b>the only place here
+    /// The redirected roots for the platform this is running on, <b>the only place here
     /// that asks what OS it is</b> (ADR-0012).
     ///
     /// <para>Anthropic ships Claude Desktop for Linux through an apt repository, which does
@@ -75,13 +75,13 @@ public static class ClaudeDataRoots
     /// canonical path is the real one.</para>
     ///
     /// <para><b>The Linux half is unconfirmed, and no machine can currently confirm it.</b>
-    /// As of 2026-08-19 there is no Snap or Flatpak build of Claude Desktop — not from
+    /// As of 2026-08-19 there is no Snap or Flatpak build of Claude Desktop, not from
     /// Anthropic, and not as a third-party repackaging of the <c>.deb</c>. The Snap Store's
     /// two near-matches are unrelated apps (the current one is a browser wrapper, which
     /// writes no plan-history file), and Flathub carries nothing under either name. So these
     /// two layouts rest on the Snap and Flatpak specifications rather than on a directory
     /// anyone has looked at, and they are kept only because they are pure, cheap, tested on
-    /// both runners, and cost nothing where the directories do not exist — while removing
+    /// both runners, and cost nothing where the directories do not exist, while removing
     /// them would re-open the canonical-path-only assumption that this class was written to
     /// fix. See <c>docs/findings/claude-desktop-linux-packaging.md</c>.</para>
     /// </summary>

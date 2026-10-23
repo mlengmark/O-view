@@ -4,12 +4,12 @@ namespace OView.App.Tests;
 
 /// <summary>
 /// The detail panel is <c>SizeToContent</c> and docks to a work-area corner, so a panel taller
-/// than the work area has its bottom under the taskbar — <see cref="WorkAreaPlacement"/> pins
+/// than the work area has its bottom under the taskbar, <see cref="WorkAreaPlacement"/> pins
 /// the top and the rest is unreachable. That was reported after the token explanation gained a
 /// disclosure: the panel fitted closed and did not fit open.
 ///
 /// <para>Measured 2026-08-23: 662 DIP closed, 734 open, against roughly 680 DIP of work area
-/// on a 1920×1080 display at 150% scaling. Density is the answer — the window still sizes to
+/// on a 1920×1080 display at 150% scaling. Density is the answer, the window still sizes to
 /// its content and still expands, the content just packs tighter when it must.</para>
 /// </summary>
 public class PanelDensityTests
@@ -47,7 +47,7 @@ public class PanelDensityTests
 
     /// <summary>
     /// 1920×1080 at 150% scaling leaves ~680 DIP of work area, and 656 once both flyout
-    /// margins come out — less than the 662 the panel wants <i>closed</i>. So that display,
+    /// margins come out, less than the 662 the panel wants <i>closed</i>. So that display,
     /// which is a very ordinary Windows laptop, compacts before anything is expanded at all.
     /// The disclosure did not create this; it made an existing overflow reachable.
     /// </summary>
@@ -75,7 +75,7 @@ public class PanelDensityTests
 
     /// <summary>
     /// The saving has to be enough for the case it exists for. Rendered at 648 against 734,
-    /// so compact clears a 680 DIP work area with both margins — the display that prompted
+    /// so compact clears a 680 DIP work area with both margins, the display that prompted
     /// this. A change that quietly reduced the saving would still pass a "compact is smaller"
     /// test and fail the user.
     /// </summary>
@@ -109,7 +109,7 @@ public class PanelDensityTests
 
     /// <summary>
     /// Nothing collapses to nothing. A zero gap is not a denser panel, it is two sections
-    /// touching — and a zero graph is a chart with no bars.
+    /// touching, and a zero graph is a chart with no bars.
     /// </summary>
     [Fact]
     public void CompactKeepsEveryDimensionPositive()
@@ -126,7 +126,7 @@ public class PanelDensityTests
 
     /// <summary>
     /// The off-plan rule ships 2 px tighter below than above. Folding that asymmetry away made
-    /// every normal-density render 2 DIP taller than the shipped panel — an unrequested visual
+    /// every normal-density render 2 DIP taller than the shipped panel, an unrequested visual
     /// change arriving inside a change about short screens.
     /// </summary>
     [Fact]
@@ -150,7 +150,7 @@ public class PanelDensityTests
         Assert.Equal(1.0, PanelDensity.Normal.SpacingScale);
     }
 
-    /// <summary>Compact scales down, and not to nothing — a 60 px strip must stay a strip.</summary>
+    /// <summary>Compact scales down, and not to nothing, a 60 px strip must stay a strip.</summary>
     [Fact]
     public void TheScalesTightenWithoutCollapsing()
     {
@@ -172,7 +172,7 @@ public class PanelDensityTests
     // ── compacting is not the last word ─────────────────────────────────────────────
 
     /// <summary>
-    /// Choosing <see cref="PanelDensity.Compact"/> is not a promise that the result fits —
+    /// Choosing <see cref="PanelDensity.Compact"/> is not a promise that the result fits,
     /// the measured compact-expanded panel (648 DIP) still overflows a work area shorter than
     /// that. <see cref="PanelFit"/> is the piece that decides whether what is left scrolls.
     /// </summary>

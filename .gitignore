@@ -58,7 +58,7 @@ Desktop.ini
 $RECYCLE.BIN/
 *.lnk
 
-## SECURITY — never commit credentials or captured usage data
+## SECURITY, never commit credentials or captured usage data
 # See CLAUDE.md rule 3: the OAuth token must never be persisted or committed.
 .credentials.json
 *.credentials.json
@@ -69,7 +69,7 @@ appsettings.*.local.json
 *.pfx
 *.snk
 
-# Real transcripts may contain personal content — commit only scrubbed fixtures
+# Real transcripts may contain personal content, commit only scrubbed fixtures
 *.jsonl
 # The smoke test's Claude home: hand-written, no real content (see its README)
 !tests/fixtures/claude-home/**/*.jsonl

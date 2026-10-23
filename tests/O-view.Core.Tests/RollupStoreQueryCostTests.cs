@@ -15,13 +15,13 @@ namespace OView.Core.Tests;
 /// at request grain and are grouped in C#. That is more work per panel open than a
 /// <c>GROUP BY</c> over an indexed column.</para>
 ///
-/// <para><b>The measurement is taken against a synthetic ledger the size of a real one</b> —
+/// <para><b>The measurement is taken against a synthetic ledger the size of a real one</b>,
 /// the development machine's held 6,917 rows when the issue was written. It is deliberately
 /// <i>not</i> taken against that real store: reading it means opening it, and issue #213 is
 /// about an orphaned journal on exactly that file turning an open into permanent data
 /// loss.</para>
 ///
-/// <para><b>What this asserts, and what it does not.</b> The bound is loose on purpose — a
+/// <para><b>What this asserts, and what it does not.</b> The bound is loose on purpose, a
 /// wall-clock budget on a shared CI runner cannot be tight without becoming the flakiest test
 /// in the suite, which is the failure mode issue #212 is about. It catches the shape of
 /// regression that would matter here: a query that has gone super-linear, or one that has
@@ -30,7 +30,7 @@ namespace OView.Core.Tests;
 /// </summary>
 public class RollupStoreQueryCostTests : IDisposable
 {
-    /// <summary>The development machine's ledger, rounded up — see the class summary.</summary>
+    /// <summary>The development machine's ledger, rounded up, see the class summary.</summary>
     private const int RealisticLedgerRows = 7_000;
 
     /// <summary>
@@ -48,7 +48,7 @@ public class RollupStoreQueryCostTests : IDisposable
 
     /// <summary>
     /// Where the figures go. A measurement nobody can read is an assertion pretending to be
-    /// one — <c>dotnet test --logger "console;verbosity=detailed"</c> prints these, so the
+    /// one, <c>dotnet test --logger "console;verbosity=detailed"</c> prints these, so the
     /// numbers behind the bound can be quoted rather than guessed at.
     /// </summary>
     private readonly ITestOutputHelper _output;
@@ -59,7 +59,7 @@ public class RollupStoreQueryCostTests : IDisposable
         _store = new RollupStore(Path.Combine(_dir, "usage.db"));
 
         // A year of history at a realistic density, so the 31-day window is a small slice of a
-        // much larger table — which is the case the range scan has to stay cheap in.
+        // much larger table, which is the case the range scan has to stay cheap in.
         var models = new[] { "claude-opus-4-8", "claude-sonnet-5", "claude-fable-5" };
         var start = new DateTimeOffset(2025, 9, 1, 0, 0, 0, TimeSpan.Zero);
 
@@ -98,7 +98,7 @@ public class RollupStoreQueryCostTests : IDisposable
     /// <summary>
     /// The window is doing the work, not the grouping: reading a 31-day slice must not cost
     /// what reading the whole ledger costs. This is the assertion that would fail if the range
-    /// predicate were ever dropped or made unusable by an index — the failure that turns a
+    /// predicate were ever dropped or made unusable by an index, the failure that turns a
     /// panel open into a full-table scan, and which grows silently with the store.
     /// </summary>
     [Fact]
@@ -112,17 +112,17 @@ public class RollupStoreQueryCostTests : IDisposable
         var everything = Time(() => _store.GetDailyRollups(DateTimeOffset.MinValue, now, PlusTwo));
 
         _output.WriteLine(
-            $"per read — 31 days: {windowed.TotalMilliseconds / Repeats:0.00} ms · " +
+            $"per read, 31 days: {windowed.TotalMilliseconds / Repeats:0.00} ms · " +
             $"whole ledger: {everything.TotalMilliseconds / Repeats:0.00} ms");
 
         Assert.True(
             windowed < everything,
             $"a 31-day read took {windowed.TotalMilliseconds:0.0} ms against " +
-            $"{everything.TotalMilliseconds:0.0} ms for the whole ledger — the window is not " +
+            $"{everything.TotalMilliseconds:0.0} ms for the whole ledger, the window is not " +
             "narrowing the scan");
     }
 
-    /// <summary>Reads per measurement — enough that the timer's resolution is not the answer.</summary>
+    /// <summary>Reads per measurement, enough that the timer's resolution is not the answer.</summary>
     private const int Repeats = 20;
 
     private static TimeSpan Time(Action work)

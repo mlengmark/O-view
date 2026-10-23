@@ -9,7 +9,7 @@ namespace OView.Core.Tests;
 ///
 /// <para><b>Why this exists.</b> Issue #248 removed the seventh parameter of
 /// <see cref="UsageSnapshot"/>. Two provider call sites failed to build, which is the outcome
-/// anyone would expect — and two tests <b>compiled silently</b> with their argument landing in the
+/// anyone would expect, and two tests <b>compiled silently</b> with their argument landing in the
 /// wrong property, one of which went on passing. A test that keeps passing while asserting the
 /// wrong thing is the worst result available, and nothing in the language prevents it: a trailing
 /// optional parameter that is removed simply shifts everything after it.</para>
@@ -19,7 +19,7 @@ namespace OView.Core.Tests;
 /// bindings that still compile.</para>
 ///
 /// <para><b>When one of these fails, that is the test working.</b> Read the diff, confirm every
-/// positional construction still means what it did — the compiler will not — and then update the
+/// positional construction still means what it did, the compiler will not, and then update the
 /// list here in the same commit.</para>
 /// </summary>
 public class RecordShapeTests
@@ -28,7 +28,7 @@ public class RecordShapeTests
     /// The primary constructor's parameter names, in order.
     ///
     /// <para>A positional record also carries a copy constructor, so the one with the most
-    /// parameters is the primary — matching on count would break the moment a record gained one.</para>
+    /// parameters is the primary, matching on count would break the moment a record gained one.</para>
     /// </summary>
     private static string[] PositionalOrder(Type record) =>
         [.. record.GetConstructors(BindingFlags.Public | BindingFlags.Instance)
@@ -58,7 +58,7 @@ public class RecordShapeTests
     ///
     /// <para>The five readings in the middle are now each their own value-plus-status type, so
     /// the two <see cref="UsagePercent"/> arguments can be swapped for each other and the three
-    /// <see cref="UsageInstant"/> ones for each other — fewer ways to get it wrong than the
+    /// <see cref="UsageInstant"/> ones for each other, fewer ways to get it wrong than the
     /// plain nullables allowed, and still ways.</para>
     /// </summary>
     [Fact]
@@ -78,7 +78,7 @@ public class RecordShapeTests
     /// Six positional <c>long</c>s, and the most dangerous shape in the codebase (issue #255).
     ///
     /// <para>Nothing in the language stops <c>new TokenSplit(input, w1h, w5m, …)</c> from
-    /// compiling, and the two cache-write columns bill at 1.25× and 2× — so swapping them is a
+    /// compiling, and the two cache-write columns bill at 1.25× and 2×, so swapping them is a
     /// money error of exactly the kind this whole type was added to fix, arriving with no
     /// compiler diagnostic and no test failure anywhere the value is not asserted.</para>
     /// </summary>
@@ -95,7 +95,7 @@ public class RecordShapeTests
 
     /// <summary>
     /// Five positional <c>decimal</c>s, and the published table lists its columns in a different
-    /// order — input, 5m write, 1h write, cache hit, output. Transcribing a row off the page
+    /// order, input, 5m write, 1h write, cache hit, output. Transcribing a row off the page
     /// positionally therefore swaps output with the two writes, silently and with no type change
     /// to notice. The optional sixth is fast mode, and dropping it would rebind nothing.
     /// </summary>
@@ -111,10 +111,10 @@ public class RecordShapeTests
             "Fast");
 
     /// <summary>
-    /// The more dangerous of the two, and it has never bitten — yet.
+    /// The more dangerous of the two, and it has never bitten, yet.
     ///
     /// <para>It opens <c>long, long</c>: today's tokens, then the 31-day tokens. Swapping them
-    /// compiles, passes type checking, and puts a month's figure where the day's belongs — a
+    /// compiles, passes type checking, and puts a month's figure where the day's belongs, a
     /// wrong number rendered confidently, which is the failure CLAUDE.md rule 6 is written
     /// against. The four Est. figures that used to interleave with them left the positional
     /// list when they became <see cref="EstimatedUsd"/>, which halved the shape without making

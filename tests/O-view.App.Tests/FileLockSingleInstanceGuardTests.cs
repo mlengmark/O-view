@@ -6,7 +6,7 @@ namespace OView.App.Tests;
 /// The Linux single-instance mechanism. The property that matters is the one a named
 /// mutex on Unix does not give: the claim is released when the process dies, however it
 /// dies. That cannot be tested without killing a process, so what is tested here is
-/// everything around it — and the release-on-dispose behaviour that stands in for it.
+/// everything around it, and the release-on-dispose behaviour that stands in for it.
 /// </summary>
 public class FileLockSingleInstanceGuardTests
 {
@@ -53,7 +53,7 @@ public class FileLockSingleInstanceGuardTests
 
     /// <summary>
     /// A lock file left behind by a killed process must not, on its own, look like a live
-    /// instance — the file's existence means nothing, only the lock does.
+    /// instance, the file's existence means nothing, only the lock does.
     /// </summary>
     [Fact]
     public void AStaleFileWithNoHolderDoesNotBlockStartup()

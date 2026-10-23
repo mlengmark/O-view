@@ -17,13 +17,13 @@ namespace OView.Linux.Tests;
 /// <para><b>Why this file exists.</b> Three times in the v0.6.0 milestone, behaviour was
 /// written in the shared layer, covered by tests, and then never wired to the Linux head:
 /// the diagnostics copy, the update check, and run-at-startup. Every time the unit tests
-/// passed — because the shared class genuinely works — and nothing anywhere asserted that a
+/// passed, because the shared class genuinely works, and nothing anywhere asserted that a
 /// head <i>constructs</i> it. <c>XdgAutostartRegistration</c> shipped in v0.6.0 fully
 /// implemented, fully tested, and completely unreachable: no menu item, no flag, no way for
 /// any user to turn it on.</para>
 ///
 /// <para>These tests are structural, not behavioural. They cannot tell whether the icon
-/// appears on a panel — nothing here can, without hardware — but they can tell whether the
+/// appears on a panel, nothing here can, without hardware, but they can tell whether the
 /// wiring exists, which is the failure that kept recurring.</para>
 ///
 /// <para>They assert on <b>constructed values</b> rather than declared field types, because
@@ -32,7 +32,7 @@ namespace OView.Linux.Tests;
 /// </summary>
 public class LinuxHeadWiringTests
 {
-    // Constructing the app runs its field initialisers and nothing else — no toolkit, no
+    // Constructing the app runs its field initialisers and nothing else, no toolkit, no
     // bus, no window. That is what makes the wiring inspectable without a desktop.
     private static readonly LinuxApp Head = new();
 
@@ -63,7 +63,7 @@ public class LinuxHeadWiringTests
     /// Where a dragged panel's place is kept, named rather than only swept for: the sweep below
     /// would be just as green if the head held the Windows head's store, or any other
     /// implementation of the seam, and what the panel reopening in the right spot depends on is
-    /// this one — the file in O-view's own data folder, with the corner translation
+    /// this one, the file in O-view's own data folder, with the corner translation
     /// <c>PanelPositionFile</c> cannot do for itself.
     /// </summary>
     [Fact]
@@ -121,7 +121,7 @@ public class LinuxHeadWiringTests
     /// a gap the sweep quietly fails to notice.
     ///
     /// <para><c>ISingleInstanceGuard</c> is claimed in <c>Program.Main</c> as a local, before
-    /// the toolkit starts — a second icon and double polling is exactly what must not happen
+    /// the toolkit starts, a second icon and double polling is exactly what must not happen
     /// while Avalonia is initialising. It never reaches the app object, and a local is not
     /// visible to reflection at all, so <see cref="TheSingleInstanceGuardIsClaimedBeforeTheToolkitStarts"/>
     /// covers it by behaviour instead.</para>
@@ -133,7 +133,7 @@ public class LinuxHeadWiringTests
     // Avalonia's SNI backend raises TrayIcon.Clicked and NativeMenuItem.Click on Tmds.DBus's
     // thread, not the UI thread. Building a window there segfaulted the app on the first left
     // click anyone ever gave it. These assert on the REAL delegates the head attaches, not on
-    // a re-implementation — a handler that goes through BusCallback carries its declaring
+    // a re-implementation, a handler that goes through BusCallback carries its declaring
     // type, so deleting the marshalling changes what the assertion sees.
     //
     // What they cannot do is prove the app no longer crashes: that needs a live session bus
@@ -143,7 +143,7 @@ public class LinuxHeadWiringTests
     public void TheTrayClickHandlerIsMarshalledOntoTheUiThread()
     {
         // The shell argument is only dereferenced when the work runs, and nothing here runs
-        // it — so no store is opened and no path on this machine is touched.
+        // it, so no store is opened and no path on this machine is touched.
         Assert.Equal(typeof(BusCallback), OpenPanelHandler().Method.DeclaringType);
     }
 
@@ -173,7 +173,7 @@ public class LinuxHeadWiringTests
     /// <para>Asserted as the work the two <see cref="BusCallback"/>s wrap, which is the only
     /// part a copy would differ in: both delegates declare <c>BusCallback</c> whatever they
     /// were built from, so the sweep above would be just as green if the row opened a panel of
-    /// its own — with its own marshalling to get wrong, and its own "panel opened" line to
+    /// its own, with its own marshalling to get wrong, and its own "panel opened" line to
     /// mislead whoever read the log after the next report.</para>
     /// </summary>
     [Fact]
@@ -203,7 +203,7 @@ public class LinuxHeadWiringTests
 
     /// <summary>
     /// The menu as <paramref name="placement"/> would have it. Passed in rather than read from
-    /// the machine, which is in neither Linux session — it is how the Wayland branch's missing
+    /// the machine, which is in neither Linux session, it is how the Wayland branch's missing
     /// row is assertable from Windows CI at all.
     /// </summary>
     private static NativeMenu Menu(ClientPlacement placement) =>
@@ -242,7 +242,7 @@ public class LinuxHeadWiringTests
     // The head is the shell's skin now rather than a subscriber to its events, and what makes
     // that safe is the one hop it hands over: the shell posts every push through the
     // dispatcher it was given (O-view.App.Tests' ShellToSkinDispatchTests), and the two tests
-    // below are the Linux halves of the same claim — that this head IS the skin being pushed
+    // below are the Linux halves of the same claim, that this head IS the skin being pushed
     // at, and that the dispatcher it hands over really lands work on Avalonia's UI thread
     // rather than running it where it was raised.
     //
@@ -264,7 +264,7 @@ public class LinuxHeadWiringTests
     [Fact]
     public void EveryShellToSkinCallReachesTheSkinOnTheUiThread()
     {
-        // Claimed before the first real touch below — see AvaloniaDispatcherTestSupport for why.
+        // Claimed before the first real touch below, see AvaloniaDispatcherTestSupport for why.
         AvaloniaDispatcherTestSupport.ClaimUiThreadForThisThread();
 
         var dispatcher = Assert.IsType<AvaloniaUiDispatcher>(SeamValue(typeof(IUiDispatcher)));
@@ -335,7 +335,7 @@ public class LinuxHeadWiringTests
     /// with the Windows menu cannot drift apart from it.
     ///
     /// <para>Two of them had their own copies, and nothing would have failed if one had become
-    /// "Quit" — the only other check on these strings is the runtime D-Bus sweep, which asks
+    /// "Quit", the only other check on these strings is the runtime D-Bus sweep, which asks
     /// a real desktop for the rows and so cannot run on a machine without one.</para>
     ///
     /// <para>Asserted in order, because the order is itself the point of the first row: the
@@ -359,7 +359,7 @@ public class LinuxHeadWiringTests
                 MenuText.RunAtStartupRow,
 
                 // Between the two it has something to say about and the one that ends the app,
-                // and hidden until the refresh has blocked itself — so a person sees four rows.
+                // and hidden until the refresh has blocked itself, so a person sees four rows.
                 PanelText.UsageRefreshBlockedRow,
                 MenuText.ExitRow,
             ],
@@ -373,7 +373,7 @@ public class LinuxHeadWiringTests
     /// O-view claiming a thing it cannot do.
     ///
     /// <para>Unlike the two rows above that appear only when they have something to say, this
-    /// one is absent on a whole class of session rather than a passing state — which is why its
+    /// one is absent on a whole class of session rather than a passing state, which is why its
     /// absence is asserted rather than left to the row order above.</para>
     /// </summary>
     [Fact]
@@ -415,8 +415,8 @@ public class LinuxHeadWiringTests
     /// moment before the icon appeared: what the wait does once it is over is
     /// <see cref="TrayHostNoticeTests"/>'s, and what is asserted here is that the head reaches
     /// it at all, carrying the real ten seconds rather than a test's. It cannot prove
-    /// <c>StartTray</c> still routes the notice through this — nothing on a machine with no
-    /// Linux desktop can — but restoring a direct <c>ShowAsync</c> beside it would leave this
+    /// <c>StartTray</c> still routes the notice through this, nothing on a machine with no
+    /// Linux desktop can, but restoring a direct <c>ShowAsync</c> beside it would leave this
     /// notice built and unused, which is the shape of the three regressions this file opens
     /// with.</para>
     /// </summary>

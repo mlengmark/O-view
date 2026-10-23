@@ -8,7 +8,7 @@ namespace OView.Presentation.Tests;
 /// A user who runs only the Claude Code CLI was shown "No usage data", and told to start
 /// Claude Desktop, directly above two token tiles that were populated from their own
 /// transcripts (GitHub issue #170). The plan-history file is written by Desktop, so its
-/// absence is normal for them — and O-view read it as a fault because it looked at that
+/// absence is normal for them, and O-view read it as a fault because it looked at that
 /// report alone.
 ///
 /// <para>These pin the join: the reassuring banner appears only when the plan file is
@@ -37,18 +37,18 @@ public class PanelBannerTests : IDisposable
         File.WriteAllText(Path.Combine(dir, name), "{}\n");
     }
 
-    /// <summary>A plan-history report for a file that is not there — the CLI user's normal state.</summary>
+    /// <summary>A plan-history report for a file that is not there, the CLI user's normal state.</summary>
     private PlanHistoryReport MissingPlanFile() =>
         PlanHistoryDiagnostics.Inspect(Path.Combine(_root, "absent.json"));
 
     /// <summary>
     /// Present but not JSON at all. Note that pointing <c>Inspect</c> at a <i>directory</i>
-    /// does not produce this — <c>File.Exists</c> is false for one, so that yields
+    /// does not produce this, <c>File.Exists</c> is false for one, so that yields
     /// <see cref="PlanDataStatus.FileMissing"/> and would silently test the wrong branch.
     /// </summary>
     private PlanHistoryReport UnreadablePlanFile() => WritePlanFile("unreadable.json", "{ not json");
 
-    /// <summary>Parses, but carries nothing matching the expected sample shape — schema drift.</summary>
+    /// <summary>Parses, but carries nothing matching the expected sample shape, schema drift.</summary>
     private PlanHistoryReport MalformedPlanFile() => WritePlanFile("drifted.json", """{"samples":[]}""");
 
     private PlanHistoryReport WritePlanFile(string name, string content)
@@ -68,7 +68,7 @@ public class PanelBannerTests : IDisposable
 
     /// <summary>
     /// The report itself. No plan file, but transcripts are being read and counted, so the
-    /// panel must not claim there is no usage data — the tiles below it disagree.
+    /// panel must not claim there is no usage data, the tiles below it disagree.
     /// </summary>
     [Fact]
     public void ACliOnlyUserIsNotToldTheyHaveNoUsageData()
@@ -167,7 +167,7 @@ public class PanelBannerTests : IDisposable
     /// <summary>
     /// The no-data banner carries <see cref="PlanHistoryReport.Explain"/> verbatim, and that
     /// sentence told the reader to start Claude Desktop and reopen the panel. A reader with
-    /// no Desktop reaches this banner — no plan file and no transcripts either — so it was
+    /// no Desktop reaches this banner, no plan file and no transcripts either, so it was
     /// the same unactionable remedy
     /// <see cref="ACliOnlyUserIsNotToldToStartAnApplicationTheyDoNotUse"/> removed from the
     /// scope banner, surviving in the louder of the two.
@@ -191,7 +191,7 @@ public class PanelBannerTests : IDisposable
 
     /// <summary>
     /// Neither banner calls the plan-history file the source of the two percentages. Claude
-    /// Code caches the same two figures, so there are two — the claim
+    /// Code caches the same two figures, so there are two, the claim
     /// <see cref="NeitherWordingSaysDesktopIsTheOnlyWriterOfThePercentages"/> pins for the
     /// scope banner, held to by the no-data banner as well.
     /// </summary>
@@ -240,7 +240,7 @@ public class PanelBannerTests : IDisposable
 
     /// <summary>
     /// Transcripts found but nothing ingested from them. The reassuring wording would be
-    /// false beside two zeroed tiles, which is the same defect as the banner this replaces —
+    /// false beside two zeroed tiles, which is the same defect as the banner this replaces,
     /// so this case gets its own sentence and points at diagnostics.
     /// </summary>
     [Fact]
@@ -311,7 +311,7 @@ public class PanelBannerTests : IDisposable
 
     /// <summary>
     /// The same file goes missing when a packaged install redirects it somewhere O-view did
-    /// not look, so the banner must not assert Desktop is absent — it states what was
+    /// not look, so the banner must not assert Desktop is absent, it states what was
     /// searched and leaves the conclusion to the reader (rule 6).
     ///
     /// <para>That these sentences also carry the diagnostics instruction is asserted in
@@ -337,7 +337,7 @@ public class PanelBannerTests : IDisposable
     /// The banner told a Claude Code user on a machine with no Claude Desktop that only
     /// Desktop writes what these gauges read. Claude Code caches the same two percentages
     /// and has done since issue #234, so the sentence was false for exactly the reader most
-    /// likely to meet it — and its only remedy was an application they do not run.
+    /// likely to meet it, and its only remedy was an application they do not run.
     ///
     /// <para>Both wordings open with the same claim, so both are pinned here.</para>
     /// </summary>

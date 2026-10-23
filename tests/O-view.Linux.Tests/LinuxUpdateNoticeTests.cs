@@ -35,7 +35,7 @@ public class LinuxUpdateNoticeTests : IDisposable
 
     /// <summary>
     /// The notice must not tell a .deb user to run "apt upgrade". There is no O-view apt
-    /// repository, so that command reports nothing to do — and a user who runs it and sees
+    /// repository, so that command reports nothing to do, and a user who runs it and sees
     /// nothing reasonably concludes the notification was wrong. Rule 6: do not assert
     /// something about the user's machine that is not true of it.
     /// </summary>
@@ -74,7 +74,7 @@ public class LinuxUpdateNoticeTests : IDisposable
     ///
     /// <para>Asserted as an equality against each Presentation member rather than by
     /// keyword, because the failure this guards against is a local copy quietly reappearing
-    /// beside the shared one — which every keyword assertion above would still pass.</para>
+    /// beside the shared one, which every keyword assertion above would still pass.</para>
     /// </summary>
     [Fact]
     public void TheWordsComeFromPresentationAndOnlyTheMappingIsHere()
@@ -88,7 +88,7 @@ public class LinuxUpdateNoticeTests : IDisposable
             LinuxUpdateNotice.NoticeBody(InstallKind.LinuxPackage, Update));
 
         // Everything that is not a .deb takes the tarball wording, including a kind this head
-        // should never be handed — guessing a third message for it would be worse.
+        // should never be handed, guessing a third message for it would be worse.
         foreach (var kind in Enum.GetValues<InstallKind>().Where(k => k != InstallKind.LinuxPackage))
         {
             Assert.Equal(

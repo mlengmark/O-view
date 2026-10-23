@@ -5,13 +5,13 @@ namespace OView.App.Updates;
 /// growing without bound (issue #159).
 ///
 /// <para><b>Why anything is needed at all.</b> Each download is named from the version it
-/// carries — <c>O-view-Setup-0.6.4.exe</c> — so every release lands as a new file rather than
+/// carries, <c>O-view-Setup-0.6.4.exe</c>, so every release lands as a new file rather than
 /// overwriting the last. The success path deletes nothing and could not: the head hands the
 /// file to the installer and exits immediately so the exe can be replaced underneath it, so
 /// there is no moment after a successful update at which this process is still alive to tidy
 /// up. At ~71 MB an installer and a release most days, that is on the order of 2 GB a month
 /// on every machine with automatic updates on, in a tray app whose entire other on-disk
-/// footprint is ~7 MB. <c>%TEMP%</c> is not self-cleaning — Storage Sense can reach it but is
+/// footprint is ~7 MB. <c>%TEMP%</c> is not self-cleaning, Storage Sense can reach it but is
 /// off by default, and Disk Cleanup has to be run by hand.</para>
 ///
 /// <para><b>So the sweep runs before the next download instead.</b> That is the one moment
@@ -39,21 +39,21 @@ public static class InstallerDownloads
     /// Deletes every installer already in <paramref name="directory"/>, returning how many
     /// went. Never throws.
     ///
-    /// <para><b>Best-effort per file, deliberately.</b> A locked one — an installer still
-    /// running from a previous attempt is the realistic case — is skipped rather than thrown
+    /// <para><b>Best-effort per file, deliberately.</b> A locked one, an installer still
+    /// running from a previous attempt is the realistic case, is skipped rather than thrown
     /// from, and the rest are still swept. Housekeeping must never be the reason an update
     /// fails: the caller's next line downloads the installer the user is waiting for, and
     /// failing that because a stale file could not be removed would trade a disk leak for a
     /// machine stuck on an old version.</para>
     ///
-    /// <para>A directory that does not exist is not a failure — there is nothing to sweep, and
+    /// <para>A directory that does not exist is not a failure, there is nothing to sweep, and
     /// the caller creates it either way.</para>
     /// </summary>
     /// <param name="directory">Directory to sweep. Only <see cref="InstallerPattern"/> is touched.</param>
     /// <param name="log">Optional log, written to only when something was actually deleted.</param>
     /// <param name="delete">
     /// How to remove one file. The seam exists for the test that a file which cannot be
-    /// deleted does not stop the sweep — the real failures are OS- and state-specific
+    /// deleted does not stop the sweep, the real failures are OS- and state-specific
     /// (a running exe on Windows, a read-only directory on Linux) and cannot be provoked the
     /// same way on both, whereas the guarantee under test is the same on both.
     /// </param>

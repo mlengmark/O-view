@@ -3,14 +3,14 @@ using OView.App.Platform;
 namespace OView.App.Tests;
 
 /// <summary>
-/// The Linux run-at-startup mechanism. Nothing here needs a Linux API — it is a text file
-/// in a directory — so it is exercised on both CI platforms rather than only the one it
+/// The Linux run-at-startup mechanism. Nothing here needs a Linux API, it is a text file
+/// in a directory, so it is exercised on both CI platforms rather than only the one it
 /// was written for.
 /// </summary>
 public class XdgAutostartRegistrationTests
 {
     // Returned as the interface deliberately: Apply is a default interface method, so it is
-    // reachable only through the contract — which is where that rule belongs, and how every
+    // reachable only through the contract, which is where that rule belongs, and how every
     // real caller holds it.
     private static IStartupRegistration Subject(TempDir dir, string? exe = "/usr/bin/o-view") =>
         new XdgAutostartRegistration(dir.Path, () => exe);
@@ -53,7 +53,7 @@ public class XdgAutostartRegistrationTests
     {
         using var dir = new TempDir();
         // Deleting what is not there leaves the machine in the requested state, so it is
-        // success — reporting failure would make the settings tick flip back for no reason.
+        // success, reporting failure would make the settings tick flip back for no reason.
         Assert.True(Subject(dir).Disable());
     }
 

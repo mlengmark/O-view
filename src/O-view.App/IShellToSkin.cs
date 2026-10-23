@@ -3,7 +3,7 @@ using OView.Core.Models;
 namespace OView.App;
 
 /// <summary>
-/// What the shell asks of a skin — the shell-to-skin half of the seam between
+/// What the shell asks of a skin, the shell-to-skin half of the seam between
 /// <c>O-view.App</c> and <c>O-view.Tray</c>/<c>O-view.Linux</c>
 /// (<see cref="ISkinToShell"/> is the other direction). The shell pushes state and events;
 /// no member returns anything the shell waits on.

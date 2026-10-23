@@ -6,7 +6,7 @@ namespace OView.Linux.Tests;
 /// <summary>
 /// The panel's dismissal rule: a window that has never been focused must not dismiss itself.
 ///
-/// <para>These tests cannot open a panel — Avalonia raises neither <c>Activated</c> nor
+/// <para>These tests cannot open a panel, Avalonia raises neither <c>Activated</c> nor
 /// <c>Deactivated</c> without a windowing subsystem, and CI has none. That is exactly why the
 /// decision lives in <see cref="PanelDismissal"/> rather than inline in the event handler: it
 /// puts the part that can be got wrong somewhere it can be tested.</para>
@@ -16,7 +16,7 @@ public class PanelDismissalTests
     /// <summary>
     /// The bug this exists for. A compositor that refuses the activation deactivates a panel
     /// the user has never seen focused, and the unguarded handler hid it in the same frame it
-    /// appeared — one flash, then a tray icon that looks dead.
+    /// appeared, one flash, then a tray icon that looks dead.
     /// </summary>
     [Fact]
     public void ADeactivationBeforeAnyActivationDoesNotDismiss()
@@ -76,7 +76,7 @@ public class PanelDismissalTests
 
     /// <summary>
     /// Each open starts over. Not load-bearing today, because <c>LinuxApp</c> builds a fresh
-    /// window per open — it is here so that reusing the window, an obvious later tidy-up and
+    /// window per open, it is here so that reusing the window, an obvious later tidy-up and
     /// cheaper than rebuilding the tree, cannot silently carry the previous activation across
     /// and re-open the bug.
     /// </summary>
@@ -114,8 +114,8 @@ public class PanelDismissalTests
 
     /// <summary>
     /// What a dismissal must never cost. Hiding the panel leaves a hidden window behind, the next
-    /// open closes it before building its replacement, and on the lifetime's default shutdown mode
-    /// — <c>OnLastWindowClose</c> — that close was the end of the process: the panel flashed up and
+    /// open closes it before building its replacement, and on the lifetime's default shutdown mode,
+    /// <c>OnLastWindowClose</c>, that close was the end of the process: the panel flashed up and
     /// the tray icon was gone, with nothing in the log to say why (issue #312).
     ///
     /// <para>Structural, like the guard above, and for the same reason: the mode is an argument to
@@ -138,7 +138,7 @@ public class PanelDismissalTests
             Assert.True(
                 arguments.Contains(',', StringComparison.Ordinal),
                 "the Linux head starts a desktop lifetime without saying when the process may end, "
-                + "so it takes Avalonia's default — OnLastWindowClose, which ends a tray app the "
+                + "so it takes Avalonia's default, OnLastWindowClose, which ends a tray app the "
                 + $"moment a dismissed panel is closed and rebuilt: {start.Value}");
         }
 
@@ -146,7 +146,7 @@ public class PanelDismissalTests
     }
 
     /// <summary>
-    /// Walks up from the test binary to the directory holding the solution file — the same
+    /// Walks up from the test binary to the directory holding the solution file, the same
     /// approach <c>PortalThemeSourceTests</c> takes, and for the same reason: the depth below
     /// <c>bin/</c> differs by configuration, so the marker is searched for rather than counted.
     /// </summary>

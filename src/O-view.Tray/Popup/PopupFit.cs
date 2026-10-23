@@ -11,14 +11,14 @@ namespace OView.Tray.Popup;
 /// that is not enough, and scrolls the sections that still do not fit inside the cap.
 ///
 /// <para><b>Measured, not guessed.</b> The natural layout is applied first and laid out,
-/// because the panel's height depends on what is in it — a no-data banner, an off-plan
-/// section, an expanded explanation — and a threshold on the work area alone would be wrong
+/// because the panel's height depends on what is in it, a no-data banner, an off-plan
+/// section, an expanded explanation, and a threshold on the work area alone would be wrong
 /// for most of those combinations. The extra layout pass costs nothing next to the two the
 /// flyout already runs.</para>
 ///
 /// <para><b>And measured from the content, not from the window.</b> This used to ask both
 /// questions about <c>ActualHeight</c>, which is the height of a window that has already been
-/// fitted to the display — so a panel too tall for the screen reads back the cap and concludes
+/// fitted to the display, so a panel too tall for the screen reads back the cap and concludes
 /// it fits. That is what the Linux panel did when four sections sat off the bottom of a
 /// 1024×768 desktop with nothing to scroll them back (Maximilian's B13 report of
 /// 2026-10-15). <see cref="NaturalHeightDip"/> asks the tree instead, and asks again after the
@@ -45,7 +45,7 @@ internal sealed class PopupFit
 
     private UsageSnapshot? _lastSnapshot;
 
-    /// <param name="window">The flyout being fit — its layout pass, width and height cap.</param>
+    /// <param name="window">The flyout being fit, its layout pass, width and height cap.</param>
     /// <param name="panelRoot">The sections' outer border, measured for its natural height.</param>
     /// <param name="scroll">Where the sections go if the fit has to cap them short.</param>
     /// <param name="applyDensity">Lays the panel out at a given <see cref="PanelDensity"/>.</param>
@@ -62,7 +62,7 @@ internal sealed class PopupFit
     }
 
     /// <param name="pendingGrowth">
-    /// Height the panel is about to gain or lose but has not yet — the disclosure fold, which is
+    /// Height the panel is about to gain or lose but has not yet, the disclosure fold, which is
     /// measured before it plays so that the window is never laid out at the far end of it
     /// (<see cref="PopupTokenComposition"/>). Zero everywhere else, where what is on screen and
     /// what is being measured are the same panel.
@@ -89,7 +89,7 @@ internal sealed class PopupFit
     }
 
     /// <summary>
-    /// The height the panel's content wants, measured against an unbounded height — the
+    /// The height the panel's content wants, measured against an unbounded height, the
     /// content's own answer rather than the window's.
     ///
     /// <para>Any cap already on the root is cleared before measuring. Leaving one would hand
@@ -114,7 +114,7 @@ internal sealed class PopupFit
     /// height had to cut them short.
     ///
     /// <para>The cap goes on the content rather than on the window, because the window is
-    /// <c>SizeToContent</c> and follows it — and because the verification renders lay the same
+    /// <c>SizeToContent</c> and follows it, and because the verification renders lay the same
     /// content out with no window at all, so a cap stated there is one both paths obey.
     /// <c>MaxHeight</c> holds it on the window as well, against a later re-layout this method
     /// never sees. A panel that fits goes back to sizing itself, so moving between a short

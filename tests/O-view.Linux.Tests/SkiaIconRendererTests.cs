@@ -6,7 +6,7 @@ namespace OView.Linux.Tests;
 
 /// <summary>
 /// The Skia backend draws the shared measurements in <c>TrayIconGeometry</c>, which have
-/// their own tests. What is checked here is that this backend actually applies them —
+/// their own tests. What is checked here is that this backend actually applies them,
 /// that the arc responds to the percentage, the bands change colour, and the states that
 /// must not show a fill do not.
 ///
@@ -38,7 +38,7 @@ public class SkiaIconRendererTests
         var png = Render(size, Live(47));
 
         Assert.NotEmpty(png);
-        // PNG signature — proves it is an encoded image rather than a buffer of zeroes.
+        // PNG signature, proves it is an encoded image rather than a buffer of zeroes.
         Assert.Equal([0x89, 0x50, 0x4E, 0x47], png[..4]);
     }
 
@@ -72,7 +72,7 @@ public class SkiaIconRendererTests
         Assert.NotEqual(Render(24, Live(47), light: false), Render(24, Live(47), light: true));
 
     /// <summary>
-    /// CLAUDE.md rule 6. An estimate is a real number, but the icon cannot label it as one —
+    /// CLAUDE.md rule 6. An estimate is a real number, but the icon cannot label it as one,
     /// so it must render exactly like "no data": a neutral empty ring, never a fill that
     /// would present a guess as a measurement.
     /// </summary>
@@ -103,7 +103,7 @@ public class SkiaIconRendererTests
         Assert.Equal(Render(24, Live(47)), Render(24, Live(47)));
 
     /// <summary>
-    /// The track alone paints the ring, so even a 0% snapshot — no arc — reports a non-zero
+    /// The track alone paints the ring, so even a 0% snapshot, no arc, reports a non-zero
     /// count. If this were ever zero for an ordinary snapshot, the number would be useless to
     /// a VM report: it has to actually distinguish a ring that drew from one that didn't.
     /// </summary>

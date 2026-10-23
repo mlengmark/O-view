@@ -12,9 +12,9 @@ public sealed record SurveyedChild(string Name, DateTimeOffset WrittenUtc);
 public sealed record SurveyedFile(string Path, DateTimeOffset WrittenUtc, long Bytes);
 
 /// <summary>One of Claude's directories, and what is actually being written inside it.</summary>
-/// <param name="Label">What this root is — <c>config</c> or <c>data</c>.</param>
+/// <param name="Label">What this root is, <c>config</c> or <c>data</c>.</param>
 /// <param name="Transcripts">Every <c>*.jsonl</c> beneath it, newest first.</param>
-/// <param name="Registries">Every <c>local_*.json</c> beneath it — Cowork's session register.</param>
+/// <param name="Registries">Every <c>local_*.json</c> beneath it, Cowork's session register.</param>
 /// <param name="Children">Immediate subdirectories by recency, which say what is live at all.</param>
 /// <param name="Capped">The walk hit its directory ceiling, so the counts are a floor.</param>
 public sealed record SurveyedRoot(
@@ -40,7 +40,7 @@ public sealed record SurveyedRoot(
     /// The most recently written files here, of any name.
     ///
     /// <para>The line that cannot come back empty on a machine where Claude is running. Every
-    /// other field in this report — and every scan in the app — asks after a shape someone has
+    /// other field in this report, and every scan in the app, asks after a shape someone has
     /// already thought of; this one just says what changed most recently, so a session written
     /// under a name nobody here anticipated shows up as itself rather than as an absence.</para>
     /// </summary>
@@ -56,8 +56,8 @@ public sealed record SurveyedRoot(
 /// (GitHub issue #218).
 ///
 /// <para><b>Why the existing reports cannot answer this.</b> Every other scan in this app looks
-/// in two known places — <c>~/.claude/projects</c> and each data root's
-/// <c>local-agent-mode-sessions</c> — and reports what it found there. That is the right shape
+/// in two known places, <c>~/.claude/projects</c> and each data root's
+/// <c>local-agent-mode-sessions</c>, and reports what it found there. That is the right shape
 /// for ingestion and the wrong shape for a fault where the files have moved: a machine actively
 /// running Cowork whose transcripts appear nowhere produces the same report as a machine sitting
 /// idle, and neither the transcript scan nor
@@ -67,14 +67,14 @@ public sealed record SurveyedRoot(
 /// unexpected rather than as an absence with no explanation.</para>
 ///
 /// <para><b>It is the map, not the verdict.</b> It asserts nothing about why a file is where it
-/// is; it reports paths, counts and ages. That is deliberate — the thing being diagnosed is by
+/// is; it reports paths, counts and ages. That is deliberate, the thing being diagnosed is by
 /// definition a layout this build does not know about, so any interpretation it offered would be
 /// a guess about a shape nobody has seen (rule 6).</para>
 ///
 /// <para><b>Bounded, because it runs in Copy diagnostics.</b> Claude's data directory holds
 /// browser-engine caches with a great many subdirectories, and this builds on the UI thread. The
 /// walk is filtered by file pattern rather than enumerating everything, and stops after
-/// <see cref="MaxDirectories"/> directories per root — saying so when it does, because a
+/// <see cref="MaxDirectories"/> directories per root, saying so when it does, because a
 /// truncated count that cannot admit it is worse than no count. Measured at ~150 ms across three
 /// roots on the development machine.</para>
 ///
@@ -151,7 +151,7 @@ public sealed record ClaudeWriteSurvey(IReadOnlyList<SurveyedRoot> Roots, TimeSp
             return new SurveyedRoot(label, path, false, [], [], [], false);
         }
 
-        // EVERY file, once, then partitioned — rather than one walk per shape being looked for.
+        // EVERY file, once, then partitioned, rather than one walk per shape being looked for.
         //
         // Sweeping only for known patterns can only ever confirm or deny what this build already
         // expects, which is the same blindness the section was written to fix one level up: if
@@ -187,7 +187,7 @@ public sealed record ClaudeWriteSurvey(IReadOnlyList<SurveyedRoot> Roots, TimeSp
     /// Immediate subdirectories, newest first.
     ///
     /// <para>This is what separates "Claude is not running" from "Claude is running and writing
-    /// no transcripts" — the second has a stale <c>projects</c> beside siblings touched
+    /// no transcripts", the second has a stale <c>projects</c> beside siblings touched
     /// minutes ago, and nothing else in the bundle shows that. One level only: a directory's
     /// own timestamp moves when its entries change, which is enough to rank them and cheap
     /// enough to take on the UI thread.</para>
@@ -273,7 +273,7 @@ public sealed record ClaudeWriteSurvey(IReadOnlyList<SurveyedRoot> Roots, TimeSp
             if (root.Capped)
             {
                 text.AppendLine(string.Create(CultureInfo.InvariantCulture,
-                    $"      capped      : stopped after {MaxDirectories:N0} directories — counts are a floor"));
+                    $"      capped      : stopped after {MaxDirectories:N0} directories, counts are a floor"));
             }
         }
 
@@ -296,14 +296,14 @@ public sealed record ClaudeWriteSurvey(IReadOnlyList<SurveyedRoot> Roots, TimeSp
         var relative = Elide(System.IO.Path.GetRelativePath(root, newest));
 
         return string.Create(CultureInfo.InvariantCulture,
-            $"{files.Count} file(s), newest {Age(utcNow - WrittenUtc(newest))} old — {relative}");
+            $"{files.Count} file(s), newest {Age(utcNow - WrittenUtc(newest))} old, {relative}");
     }
 
     /// <summary>
     /// An age in hours.
     ///
     /// <para>Clamped at zero: a file written while the sweep was running, or on a machine whose
-    /// clock has just been corrected, is otherwise reported as <c>-0.0 h</c> — an age that
+    /// clock has just been corrected, is otherwise reported as <c>-0.0 h</c>, an age that
     /// cannot exist and that reads as a rendering fault rather than as freshness.</para>
     /// </summary>
     private static string Age(TimeSpan age) => string.Create(CultureInfo.InvariantCulture,
@@ -314,11 +314,11 @@ public sealed record ClaudeWriteSurvey(IReadOnlyList<SurveyedRoot> Roots, TimeSp
     ///
     /// <para>Claude Code encodes a whole working directory into one folder name, so a session
     /// whose cwd was itself deep inside Claude's tree produces a segment several hundred
-    /// characters long — measured at 236 on the development machine.</para>
+    /// characters long, measured at 236 on the development machine.</para>
     ///
     /// <para><b>Trimmed per segment, never across the whole string, and the head of a segment is
     /// what survives.</b> Eliding the middle of the joined path was shorter but cut wherever the
-    /// character count happened to land — including through the middle of an account name, which
+    /// character count happened to land, including through the middle of an account name, which
     /// <see cref="App.Diagnostics.Redact"/> then could not match against either half. An encoded
     /// working directory carries the account name near its start (<c>C--Users-ada-work</c>), so
     /// keeping each segment's head keeps the name intact and redactable, and keeps the leading

@@ -10,7 +10,7 @@ namespace OView.Presentation.Tests;
 /// <para>These assert what used to be decided inside the Windows panel and was therefore
 /// missing from the Linux one: which week a day is shaded against, where a reset line falls
 /// inside a column, which days draw no bar at all, and what every hover card says. The
-/// numbers are fractions, never pixels — turning one into a height is the head's, and a test
+/// numbers are fractions, never pixels, turning one into a height is the head's, and a test
 /// that asserted pixels here would be asserting the Windows chart's size.</para>
 /// </summary>
 public class PanelGraphTests
@@ -18,7 +18,7 @@ public class PanelGraphTests
     private static readonly TimeZoneInfo Utc = TimeZoneInfo.Utc;
 
     /// <summary>
-    /// A zone an hour ahead of UTC that observes DST, named the way the OS names it — a
+    /// A zone an hour ahead of UTC that observes DST, named the way the OS names it, a
     /// hard-coded IANA id finds nothing on Windows, and the placement these tests are about is
     /// exactly what a UTC-only test cannot assert.
     /// </summary>
@@ -78,7 +78,7 @@ public class PanelGraphTests
 
     /// <summary>
     /// One column per day, in the series' own order, each dated. Both heads index the two
-    /// lists against each other — a boundary names a column by number — so a view that
+    /// lists against each other, a boundary names a column by number, so a view that
     /// dropped or reordered a day would move every gridline.
     /// </summary>
     [Fact]
@@ -102,7 +102,7 @@ public class PanelGraphTests
 
     /// <summary>
     /// Height is a fraction of the busiest day in the whole window, so the bars are
-    /// comparable across the chart — it is the colour, not the height, that is normalised per
+    /// comparable across the chart, it is the colour, not the height, that is normalised per
     /// week.
     /// </summary>
     [Fact]
@@ -110,13 +110,13 @@ public class PanelGraphTests
     {
         var graph = PanelSections.Graph(Stats(TenDays()), WithReset(WeeklyReset), Utc);
 
-        Assert.Equal(1.0, graph.Columns[7].Height, 6);       // 80,000 — the window's peak
+        Assert.Equal(1.0, graph.Columns[7].Height, 6);       // 80,000, the window's peak
         Assert.Equal(0.125, graph.Columns[0].Height, 6);     // 10,000 of 80,000
     }
 
     /// <summary>
     /// Intensity is normalised within the day's own plan week, so the busiest day of every
-    /// week is the darkest one in that band (issue #5) — which is a different number from the
+    /// week is the darkest one in that band (issue #5), which is a different number from the
     /// height beside it. The reset falls on the 28th, so the 19th and 20th are one band, the
     /// 21st to the 27th the next, and the 28th a band of its own.
     /// </summary>
@@ -140,7 +140,7 @@ public class PanelGraphTests
     }
 
     /// <summary>
-    /// The bar's hover card: the day's tokens, with the day written out in full under them —
+    /// The bar's hover card: the day's tokens, with the day written out in full under them,
     /// which the date label, squeezed under one of 31 columns, cannot be.
     /// </summary>
     [Fact]
@@ -177,7 +177,7 @@ public class PanelGraphTests
     }
 
     /// <summary>
-    /// A recorded day that used nothing has no bar either — there is nothing to draw — but it
+    /// A recorded day that used nothing has no bar either, there is nothing to draw, but it
     /// is <b>not</b> marked unrecorded: the store was running, so the zero is a genuine one
     /// and its date is not dimmed (issue #142).
     /// </summary>
@@ -208,7 +208,7 @@ public class PanelGraphTests
     }
 
     /// <summary>
-    /// An empty series is a chart neither head draws — and not an error state, so the heading
+    /// An empty series is a chart neither head draws, and not an error state, so the heading
     /// is still there for the banner above it to sit under.
     /// </summary>
     [Fact]
@@ -225,7 +225,7 @@ public class PanelGraphTests
 
     /// <summary>
     /// A reported reset gives a line inside the column it falls in, at its true position
-    /// through the day — 06:28:57 of a 24-hour day, not snapped to either edge. Snapping would
+    /// through the day, 06:28:57 of a 24-hour day, not snapped to either edge. Snapping would
     /// assert a midnight boundary the data does not have.
     /// </summary>
     [Fact]
@@ -254,7 +254,7 @@ public class PanelGraphTests
     /// <summary>
     /// The plan line's hover card states the reset's own local time above what it marks. The
     /// caption is asserted against <see cref="PanelText"/> rather than re-typed, so rewording
-    /// it does not fail here — only a line choosing the wrong sentence does.
+    /// it does not fail here, only a line choosing the wrong sentence does.
     /// </summary>
     [Fact]
     public void ThePlanLineNamesItsResetTime()
@@ -268,7 +268,7 @@ public class PanelGraphTests
 
     /// <summary>
     /// With no reset observed the lines fall back to local Mondays, land on a column edge
-    /// because midnight is one, and <b>say on hover that they are a calendar reference</b> —
+    /// because midnight is one, and <b>say on hover that they are a calendar reference</b>,
     /// the honest blank rather than a silent substitution (rule 6). They carry no time: there
     /// is no observed instant to state.
     /// </summary>
@@ -289,7 +289,7 @@ public class PanelGraphTests
 
     /// <summary>
     /// A boundary on the chart's own left edge is dropped: a line there reads as a border
-    /// rather than as a mark on the data. Only there — a midnight boundary anywhere else is a
+    /// rather than as a mark on the data. Only there, a midnight boundary anywhere else is a
     /// real column edge inside the chart and is drawn.
     /// </summary>
     [Fact]
@@ -334,7 +334,7 @@ public class PanelGraphTests
         Assert.Equal(1, utc.Column);
         Assert.Equal(0, utc.FractionOfDay);
 
-        // 02:00 on the 28th in Berlin — a twelfth of the way into that day, not the start of it.
+        // 02:00 on the 28th in Berlin, a twelfth of the way into that day, not the start of it.
         var local = Assert.Single(PanelSections.Graph(series, WithReset(midnightUtc), Berlin).Boundaries);
         Assert.Equal(1, local.Column);
         Assert.Equal(2 / 24.0, local.FractionOfDay, 6);
@@ -342,7 +342,7 @@ public class PanelGraphTests
 
     /// <summary>
     /// The fraction is taken against the day's real length. On the 23-hour spring-forward day
-    /// an instant 11 hours in is past halfway, which dividing by a flat 24 would deny — and
+    /// an instant 11 hours in is past halfway, which dividing by a flat 24 would deny, and
     /// would go on denying for every day after it.
     /// </summary>
     [Fact]

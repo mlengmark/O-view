@@ -5,7 +5,7 @@ namespace OView.App.Tests;
 /// <summary>
 /// The smoke test: the real engine, with its real provider chain and store, run once against
 /// a committed Claude home (<c>tests/fixtures/claude-home</c>). Unit tests prove the pieces;
-/// this proves they are wired together — that real-shaped files on disk come out as the
+/// this proves they are wired together, that real-shaped files on disk come out as the
 /// numbers the panel shows. An app whose providers were never connected passes every unit
 /// test and fails this one.
 ///

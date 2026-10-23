@@ -3,7 +3,7 @@ using OView.App.Platform;
 namespace OView.App.Rendering;
 
 /// <summary>
-/// Any of the four corners of a work area — unlike <see cref="FlyoutCorner"/>'s three, which
+/// Any of the four corners of a work area, unlike <see cref="FlyoutCorner"/>'s three, which
 /// only names the corners a flyout auto-docks adjacent to a taskbar. A panel the user dragged
 /// can end up nearest any corner, including top-left, so the two types answer different
 /// questions and neither should be widened to cover the other.
@@ -17,7 +17,7 @@ public enum WorkAreaCorner
 }
 
 /// <summary>
-/// A rectangle in device-independent units — <see cref="PixelBox"/>'s counterpart for the one
+/// A rectangle in device-independent units, <see cref="PixelBox"/>'s counterpart for the one
 /// place in <c>Rendering</c> where that matters. A remembered place is a physical location on
 /// a display, not a pixel count, and the scale factor can change between the save and the
 /// read (a display swapped for one at a different DPI, or Windows' own per-monitor scaling);
@@ -45,7 +45,7 @@ public enum NudgeDirection
 
 /// <summary>
 /// Where a panel the user has dragged is allowed to sit, and the one place both heads ask
-/// that question through — the drag-position counterpart to <see cref="WorkAreaPlacement"/>'s
+/// that question through, the drag-position counterpart to <see cref="WorkAreaPlacement"/>'s
 /// auto-docked corner, decided for both heads together for the same reason WorkAreaPlacement
 /// states: a Windows user and a Linux user would expect dragging to behave identically.
 ///
@@ -57,16 +57,16 @@ public enum NudgeDirection
 /// and snaps the released position flush to an edge or corner it landed within
 /// <see cref="SnapThresholdDip"/> of. Because clamping only ever touches a value read back and
 /// snapping only ever touches a value about to be saved, a saved place and the current work
-/// area cannot actually disagree about which rule applies — there is nothing to order.</para>
+/// area cannot actually disagree about which rule applies, there is nothing to order.</para>
 ///
 /// <para><b>Snapping is the pointer's, not the keyboard's.</b> <see cref="Nudge"/> stores the
-/// step exactly, clamped into the work area but never snapped — see its own remarks for why a
+/// step exactly, clamped into the work area but never snapped, see its own remarks for why a
 /// keyboard move that went through <see cref="Remember"/> cannot work on a screen the panel
 /// nearly fills.</para>
 ///
 /// <para><b>Falls back to null, not to a guess.</b> Nothing remembered, a display
 /// <paramref name="displayId"/> was never saved for, or a panel that no longer fits the work
-/// area at all — <see cref="Resolve"/> returns null in each case, and the caller uses
+/// area at all, <see cref="Resolve"/> returns null in each case, and the caller uses
 /// <see cref="WorkAreaPlacement.Place"/> exactly as it did before this existed. That rule
 /// already has the right answer for "does not fit"; re-deriving a second one here would be
 /// the two rules disagreeing for real.</para>
@@ -95,7 +95,7 @@ public sealed class PanelPlacementMemory(IPanelPositionStore store)
     public static readonly TimeSpan DragSettleGrace = TimeSpan.FromMilliseconds(400);
 
     /// <summary>
-    /// How far one arrow key moves the panel, in DIP — far enough to be worth a keystroke, and
+    /// How far one arrow key moves the panel, in DIP, far enough to be worth a keystroke, and
     /// a figure both heads are given rather than work out, so Alt and an arrow key cannot come
     /// to mean two different distances.
     /// </summary>
@@ -130,8 +130,8 @@ public sealed class PanelPlacementMemory(IPanelPositionStore store)
         var fromRight = place.Corner is WorkAreaCorner.TopRight or WorkAreaCorner.BottomRight;
         var fromBottom = place.Corner is WorkAreaCorner.BottomLeft or WorkAreaCorner.BottomRight;
 
-        // The anchor is the panel's own corner nearest the work area's — e.g. for
-        // BottomRight that is the panel's bottom-right point, not its top-left — so the
+        // The anchor is the panel's own corner nearest the work area's, e.g. for
+        // BottomRight that is the panel's bottom-right point, not its top-left, so the
         // panel's width/height only come off the anchor when that anchor is on the far side.
         var anchorX = fromRight ? workArea.Right - place.OffsetXDip : workArea.X + place.OffsetXDip;
         var anchorY = fromBottom ? workArea.Bottom - place.OffsetYDip : workArea.Y + place.OffsetYDip;
@@ -161,8 +161,8 @@ public sealed class PanelPlacementMemory(IPanelPositionStore store)
 
     /// <summary>
     /// Moves a panel standing at <paramref name="leftDip"/>, <paramref name="topDip"/> one step
-    /// <paramref name="direction"/> — <see cref="NudgeStepDip"/>, or
-    /// <see cref="FineNudgeStepDip"/> when <paramref name="fine"/> — and answers where it now
+    /// <paramref name="direction"/>, <see cref="NudgeStepDip"/>, or
+    /// <see cref="FineNudgeStepDip"/> when <paramref name="fine"/>, and answers where it now
     /// goes, having stored that place.
     ///
     /// <para><b>One press is exactly one step, and the step is clamped, never snapped.</b> The
@@ -209,7 +209,7 @@ public sealed class PanelPlacementMemory(IPanelPositionStore store)
         var (corner, offsetX, offsetY) = NearestCorner(left, top, widthDip, heightDip, workArea);
 
         // A clamped panel is inside the work area, so neither distance can be negative unless
-        // the panel is larger than the work area on that axis — and then flush is the only
+        // the panel is larger than the work area on that axis, and then flush is the only
         // place in it, which is also what Resolve's own fit check is about to answer null to.
         store.Save(displayId, new PanelPlace(corner, Math.Max(0, offsetX), Math.Max(0, offsetY)));
 
@@ -219,8 +219,8 @@ public sealed class PanelPlacementMemory(IPanelPositionStore store)
     /// <summary>
     /// Which corner of <paramref name="workArea"/> a panel at <paramref name="leftDip"/>,
     /// <paramref name="topDip"/> sits nearest, and how far its own matching corner is from that
-    /// one on each axis. The anchoring both stores share; what each does with the distance —
-    /// <see cref="Snap"/> it or keep it — is the only thing that differs.
+    /// one on each axis. The anchoring both stores share; what each does with the distance,
+    /// <see cref="Snap"/> it or keep it, is the only thing that differs.
     /// </summary>
     private static (WorkAreaCorner Corner, double OffsetXDip, double OffsetYDip) NearestCorner(
         double leftDip, double topDip, double widthDip, double heightDip, DipBox workArea)
@@ -247,7 +247,7 @@ public sealed class PanelPlacementMemory(IPanelPositionStore store)
     private static double Snap(double distanceDip) =>
         Math.Max(0, distanceDip) <= SnapThresholdDip ? 0 : distanceDip;
 
-    /// <summary>Clamp that yields to <paramref name="min"/> when the range inverts — see <see cref="WorkAreaPlacement"/>'s own copy for why.</summary>
+    /// <summary>Clamp that yields to <paramref name="min"/> when the range inverts, see <see cref="WorkAreaPlacement"/>'s own copy for why.</summary>
     private static double Clamp(double value, double min, double max) =>
         max < min ? min : Math.Max(min, Math.Min(max, value));
 }

@@ -51,7 +51,7 @@ public class UpdatePolicyTests
     /// <para>The setting is a <b>preference</b>; this is the <b>permission</b>, and the
     /// amendment to ADR-0009 says the second is unchanged and remains the only thing deciding
     /// whether anything is fetched or executed. The realistic way to break that is not an
-    /// argument about design — it is a <c>settings.json</c> copied from a Windows machine into
+    /// argument about design, it is a <c>settings.json</c> copied from a Windows machine into
     /// a tarball install's config directory, where the preference reads true on a build that
     /// must touch nothing.</para>
     ///

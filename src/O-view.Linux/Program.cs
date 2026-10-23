@@ -40,7 +40,7 @@ internal static class Program
     /// dismissed with Esc or a click away is hidden, not closed, so it is still one of the
     /// application's windows; the next open closes it before building its replacement; that was
     /// the last window, so the shutdown ran while the new panel was coming up. The panel flashed,
-    /// the icon disappeared, and because nothing had failed the log simply ended — no shutdown
+    /// the icon disappeared, and because nothing had failed the log simply ended, no shutdown
     /// line, no exception, no core dump (issue #312).</para>
     ///
     /// <para>Nothing depended on the default. Both ways this process is meant to end ask for it:
@@ -56,7 +56,7 @@ internal static class Program
         var parsed = CommandLine.Parse(args);
 
         // What the panel's explanatory copy should tell a stuck user to do. This head has no
-        // Copy-diagnostics menu item — the SNI menu carries Exit only — so the shared copy
+        // Copy-diagnostics menu item, the SNI menu carries Exit only, so the shared copy
         // must name the command instead of a menu the user does not have.
         DiagnosticsHint.Use("Run o-view --diagnose in a terminal");
 
@@ -86,8 +86,8 @@ internal static class Program
         }
 
         // Run-at-startup, from a terminal. Deliberately handled BEFORE the single-instance
-        // guard — unlike the Windows head's equivalent pair, which run inside the live
-        // instance — so these work whether or not O-view is already running, which is the
+        // guard, unlike the Windows head's equivalent pair, which run inside the live
+        // instance, so these work whether or not O-view is already running, which is the
         // normal case for someone who has just installed it and wants it to come back after
         // a reboot.
         //
@@ -102,8 +102,8 @@ internal static class Program
 
             // Apply is a default interface method, so it is reached through the interface.
             // Using it rather than Enable/Disable directly is the point: it reports the state
-            // as it stands AFTER the write, not the one requested. Writing the file can fail
-            // — a read-only home, a full disk — and saying otherwise would be a fabricated
+            // as it stands AFTER the write, not the one requested. Writing the file can fail,
+            // a read-only home, a full disk, and saying otherwise would be a fabricated
             // fact about the machine (rule 6). Shared with the Windows head so neither can
             // get it subtly different.
             IStartupRegistration registration = startup;
@@ -119,13 +119,13 @@ internal static class Program
             var requested = parsed.ContainsKey("--startup-status") || enabled == parsed.ContainsKey("--startup-on");
             if (!requested)
             {
-                Console.Error.WriteLine("could not write the autostart file — check permissions on the directory above");
+                Console.Error.WriteLine("could not write the autostart file, check permissions on the directory above");
             }
             return requested ? 0 : 1;
         }
 
         // The full support bundle, same shape as the Windows head's so a report is
-        // comparable across platforms. Writes to stdout by default — unlike Windows, where
+        // comparable across platforms. Writes to stdout by default, unlike Windows, where
         // a windowed app has no console and must be given a path.
         if (parsed.TryGetValue("--diagnose", out var diagnosePath))
         {
@@ -146,7 +146,7 @@ internal static class Program
         }
 
         // Both asked BEFORE the toolkit starts, and for the same reason: blocking the UI
-        // thread on a D-Bus round trip deadlocks the app outright — measured during the
+        // thread on a D-Bus round trip deadlocks the app outright, measured during the
         // spike, not guessed (docs/findings/linux-tray-spike.md), and shipped anyway in
         // v0.6.1 by way of the theme read, which froze the app on the first left click
         // (issue #124). There is no dispatcher yet at this point, so this is the one place
@@ -176,8 +176,8 @@ internal static class Program
         log.Write($"startup desktop={DesktopEnvironment()} session={SessionType()} trayHost={hostState}");
 
         // The toolkit's own log, into this file. Everything that can fail on this head fails
-        // inside Avalonia's FreeDesktop backends — publishing the tray icon, reading the
-        // portal theme, accessibility — and each of them reports itself through Avalonia's
+        // inside Avalonia's FreeDesktop backends, publishing the tray icon, reading the
+        // portal theme, accessibility, and each of them reports itself through Avalonia's
         // logger and nowhere else. See AvaloniaLog for what was happening to those reports
         // until now.
         //
@@ -193,9 +193,9 @@ internal static class Program
             ? TimeSpan.FromMilliseconds(parsedMs)
             : TimeSpan.FromSeconds(60);
 
-        // Everything about *what the numbers mean* — provider composition, the poll loop and
+        // Everything about *what the numbers mean*, provider composition, the poll loop and
         // its cadence, the rollup store and weekly-reset log lifecycle, threshold and off-plan
-        // decisions, settings, and the update schedule — lives on the other side of the seam,
+        // decisions, settings, and the update schedule, lives on the other side of the seam,
         // which is platform-neutral and tested (ADR-0012). What stays on this head is the Linux
         // face, and these options are all it says about the rest.
         var shellOptions = new UsageEngineOptions
@@ -206,7 +206,7 @@ internal static class Program
             // Lets the shell ask Claude Code to refresh its own usage cache (issue #234).
             // Without it, a machine with no Claude Desktop shows "unknown" indefinitely: Claude
             // Code refreshes that block only when /usage runs, and a running session does not
-            // maintain it. No credential is involved — Claude Code authenticates itself and
+            // maintain it. No credential is involved, Claude Code authenticates itself and
             // O-view reads the file it already reads (ADR-0015).
             UsageCacheRefresher = new ClaudeCliRefresher(),
         };
@@ -261,7 +261,7 @@ internal static class Program
     ///
     /// <para><b>Why this exists.</b> The builder used to end in <c>LogToTrace</c>, which routes
     /// the toolkit's log into <see cref="System.Diagnostics.Trace"/>. A shipped build registers
-    /// no trace listener, so every line Avalonia wrote was formatted and dropped — including the
+    /// no trace listener, so every line Avalonia wrote was formatted and dropped, including the
     /// handful its FreeDesktop backends write when they give up, which are the only account
     /// anything gives of why an icon or a theme read did not happen.</para>
     ///
@@ -275,7 +275,7 @@ internal static class Program
     /// </summary>
     private sealed class AvaloniaLog(IAppLog log) : ILogSink
     {
-        /// <summary>The lowest level passed through — named so the log can state it.</summary>
+        /// <summary>The lowest level passed through, named so the log can state it.</summary>
         public const LogEventLevel Floor = LogEventLevel.Warning;
 
         public bool IsEnabled(LogEventLevel level, string area) => level >= Floor;
@@ -332,7 +332,7 @@ internal static class Program
     /// Renders the tray icon at every size an SNI host might ask for, in both panel
     /// themes, so legibility can be judged from images rather than described in prose.
     ///
-    /// <para>Linux hosts commonly request 22–24 px and 48 px on HiDPI — larger than the
+    /// <para>Linux hosts commonly request 22–24 px and 48 px on HiDPI, larger than the
     /// 16/20/24 the Windows evidence covers, so the original legibility finding does not
     /// carry over untested.</para>
     /// </summary>
@@ -366,7 +366,7 @@ internal static class Program
     /// What only this head can tell the shared bundle. The tray-host line is the
     /// highest-value field on Linux: "my icon doesn't appear" is the most likely report by
     /// a wide margin, and an Avalonia tray icon claims success whether or not a host
-    /// exists — so the bus is asked rather than the toolkit.
+    /// exists, so the bus is asked rather than the toolkit.
     /// </summary>
     private static DiagnosticsEnvironment DescribeThisMachine() => new(
         Version: ReleaseFeed.VersionOf(typeof(Program).Assembly),
@@ -376,7 +376,7 @@ internal static class Program
         TrayHost: SniHostProbe.CheckAsync().GetAwaiter().GetResult().ToString());
 
     /// <summary>
-    /// Whether dpkg owns this build. An apt install must never self-update — overwriting
+    /// Whether dpkg owns this build. An apt install must never self-update, overwriting
     /// files the package manager owns is silently reverted by the next upgrade (ADR-0009).
     /// </summary>
     internal static InstallKind DetectInstallKind() =>
@@ -401,13 +401,13 @@ internal static class Program
 ///
 /// <para><b>Why it has to be asked at all.</b> A native Wayland client can neither set nor read
 /// its own position on screen. The compositor will happily move a window for the user, but it
-/// tells the client nothing about where — so a place dragged to there cannot be read back, and
+/// tells the client nothing about where, so a place dragged to there cannot be read back, and
 /// offering to remember one would be O-view claiming a thing it cannot do (rule 6). On that
 /// session the panel keeps the corner placement it has always had, nothing is stored, and the
 /// menu's reset row is absent, because there is nothing for it to reset.</para>
 ///
 /// <para><b>What tells it apart from XWayland.</b> This head's toolkit has exactly one Linux
-/// backend — <c>Avalonia.Desktop</c> ships <c>Avalonia.X11</c> and no Wayland one — so every
+/// backend, <c>Avalonia.Desktop</c> ships <c>Avalonia.X11</c> and no Wayland one, so every
 /// window it opens talks to an X server: the session's own under Xorg, and XWayland under a
 /// Wayland compositor. Position requests reach that server either way, which is why the Ubuntu
 /// VM's Wayland session already places the panel in its corner and its log shows an X11 input
@@ -420,7 +420,7 @@ internal static class Program
 /// rather than per open.</para>
 /// </summary>
 /// <param name="Allowed">Whether a dragged place may be stored and restored.</param>
-/// <param name="Reason">What was read and what it concluded — the sentence the log carries.</param>
+/// <param name="Reason">What was read and what it concluded, the sentence the log carries.</param>
 public readonly record struct ClientPlacement(bool Allowed, string Reason)
 {
     /// <summary>What this machine's session says.</summary>
@@ -430,7 +430,7 @@ public readonly record struct ClientPlacement(bool Allowed, string Reason)
         Environment.GetEnvironmentVariable("DISPLAY"));
 
     /// <summary>
-    /// The decision itself, from the three variables rather than from the environment — its own
+    /// The decision itself, from the three variables rather than from the environment, its own
     /// method so each of the three branches can be driven on a machine that is in none of them.
     /// </summary>
     public static ClientPlacement From(string? sessionType, string? waylandDisplay, string? x11Display)
@@ -446,19 +446,19 @@ public readonly record struct ClientPlacement(bool Allowed, string Reason)
         return (wayland, xServer) switch
         {
             (true, true) => new ClientPlacement(true,
-                $"XWayland — a Wayland session (XDG_SESSION_TYPE={Describe(sessionType)}, "
+                $"XWayland, a Wayland session (XDG_SESSION_TYPE={Describe(sessionType)}, "
                 + $"WAYLAND_DISPLAY={Describe(waylandDisplay)}) with an X server at "
                 + $"DISPLAY={Describe(x11Display)}, which is what this head's windows talk to, "
                 + "so a position can be requested and read back"),
 
             (true, false) => new ClientPlacement(false,
-                $"native Wayland — a Wayland session (XDG_SESSION_TYPE={Describe(sessionType)}, "
+                $"native Wayland, a Wayland session (XDG_SESSION_TYPE={Describe(sessionType)}, "
                 + $"WAYLAND_DISPLAY={Describe(waylandDisplay)}) with no X server (DISPLAY unset), "
                 + "where a client can neither set nor read its own position, so the panel keeps "
                 + "the work-area corner and no place is stored"),
 
             _ => new ClientPlacement(true,
-                $"X11 — no Wayland session reported (XDG_SESSION_TYPE={Describe(sessionType)}, "
+                $"X11, no Wayland session reported (XDG_SESSION_TYPE={Describe(sessionType)}, "
                 + $"WAYLAND_DISPLAY unset), DISPLAY={Describe(x11Display)}"),
         };
     }

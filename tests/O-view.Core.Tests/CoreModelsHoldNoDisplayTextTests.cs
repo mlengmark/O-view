@@ -12,7 +12,7 @@ namespace OView.Core.Tests;
 ///
 /// <para><b>Two independent checks, because a member can fail either way.</b> A member whose
 /// name ends in one of <see cref="DisplayTextSuffixes"/> is named like copy regardless of what
-/// it holds today — <c>PanelText.TokensUsedTodayLabel</c>, <c>TokenText.CoverageNote</c> and
+/// it holds today, <c>PanelText.TokensUsedTodayLabel</c>, <c>TokenText.CoverageNote</c> and
 /// <c>OffPlanText.CreditModelsCaption</c> all carried one of these endings until the display
 /// text moved to Presentation. Separately, a public <c>const string</c> whose
 /// literal value itself reads as a sentence is copy no matter what its name is.</para>
@@ -21,7 +21,7 @@ namespace OView.Core.Tests;
 /// claude-x (no published rate)" style caveats CLAUDE.md rule 6 describes) still compose prose
 /// from data at the point they are built; that composition is not a public member returning a
 /// fixed string, so reflection cannot see it and this test says nothing about it. <see
-/// cref="Exemptions"/> is not a place to park new copy to get past this test — it is a closed
+/// cref="Exemptions"/> is not a place to park new copy to get past this test, it is a closed
 /// list of two, each with the reason it is data rather than wording.</para>
 /// </summary>
 public class CoreModelsHoldNoDisplayTextTests
@@ -39,14 +39,14 @@ public class CoreModelsHoldNoDisplayTextTests
     /// <summary>
     /// The only two places a public member of <c>OView.Core.Models</c> may hold something a
     /// user reads, and why. A <c>null</c> member exempts every public member of the type; a
-    /// named member exempts only that one. There are at most two entries here — a third means
+    /// named member exempts only that one. There are at most two entries here, a third means
     /// Core still holds display text this phase was meant to move, which is a question for Gary
     /// III, not a line to add.
     /// </summary>
     private static readonly (Type Type, string? Member)[] Exemptions =
     [
         // The model's own published name (ModelCatalog's data, carried alongside the id it
-        // names rather than invented at render time) — not prose composed about the model.
+        // names rather than invented at render time), not prose composed about the model.
         // Neither check reaches it today ("DisplayName" matches no suffix above, and it is a
         // record property rather than a const), so this entry is pre-emptive: it keeps the
         // property's status settled if it is ever renamed to something that would match, such
@@ -56,7 +56,7 @@ public class CoreModelsHoldNoDisplayTextTests
         // An affordance phrase each head supplies once at startup ("Right-click the tray icon
         // -> Copy diagnostics"). Core holds no branch on it and never composes it itself; it is
         // set once by the head and read back whole. Core's own provider reports go on to
-        // compose this phrase into prose the way they compose everything else — exempting it
+        // compose this phrase into prose the way they compose everything else, exempting it
         // here does not exempt that composition, which this test cannot see in the first place.
         (typeof(DiagnosticsHint), null),
     ];
@@ -113,7 +113,7 @@ public class CoreModelsHoldNoDisplayTextTests
     }
 
     /// <summary>
-    /// Public properties and fields declared directly on the type whose value is a string —
+    /// Public properties and fields declared directly on the type whose value is a string,
     /// the only shape either check means anything for. Methods are never the shape a display
     /// member has taken in this codebase, so checking only properties and fields keeps a
     /// genuine hit obvious rather than guessing at method bodies.
@@ -141,8 +141,8 @@ public class CoreModelsHoldNoDisplayTextTests
     }
 
     /// <summary>
-    /// An identifier in this codebase — a model id, a file name, a phrase meant to be composed
-    /// rather than read whole — never contains a space; a sentence always does. That single
+    /// An identifier in this codebase, a model id, a file name, a phrase meant to be composed
+    /// rather than read whole, never contains a space; a sentence always does. That single
     /// distinction is all this check needs, and it is deliberately not trying to parse English.
     /// </summary>
     private static bool ReadsAsSentence(string value) =>

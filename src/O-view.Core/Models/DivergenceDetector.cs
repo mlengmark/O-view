@@ -8,10 +8,10 @@ public enum DivergenceState
     /// <summary>Not enough activity in the window to expect visible meter movement.</summary>
     InsufficientActivity,
 
-    /// <summary>Activity and meter movement are consistent — usage is drawing from the plan.</summary>
+    /// <summary>Activity and meter movement are consistent, usage is drawing from the plan.</summary>
     Consistent,
 
-    /// <summary>Substantial activity with a flat meter — usage is not drawing from the plan window.</summary>
+    /// <summary>Substantial activity with a flat meter, usage is not drawing from the plan window.</summary>
     Diverging,
 
     /// <summary>The plan window is exhausted, so further usage necessarily bills elsewhere.</summary>
@@ -39,7 +39,7 @@ public enum DivergenceState
 /// <param name="OutputTokensInWindow">Deduplicated output tokens observed since the window start.</param>
 /// <param name="PlanRisePoints">
 /// Percentage points the plan meter rose across the same window. Meaningful only where the
-/// state says a rise was measurable — a one-sample window reports 0 here because that is what
+/// state says a rise was measurable, a one-sample window reports 0 here because that is what
 /// subtracting a value from itself gives, not because the meter held still.
 /// </param>
 public sealed record DivergenceResult(
@@ -52,7 +52,7 @@ public sealed record DivergenceResult(
 }
 
 /// <summary>
-/// Detects usage that bypasses the plan window — the failure mode found on 2026-07-21,
+/// Detects usage that bypasses the plan window, the failure mode found on 2026-07-21,
 /// where the tray read a comfortable 6% while ~€86 of credit usage was billed
 /// (docs/findings/credit-usage-divergence.md).
 ///
@@ -60,7 +60,7 @@ public sealed record DivergenceResult(
 /// naive detector would mistake rounding for divergence. Thresholds below are
 /// calibrated from 20 observed rise events on this account: median 2,523 output
 /// tokens per percentage point, worst case 5,793. The default floor is set roughly
-/// 10x the worst case so that a flat meter is unambiguous rather than marginal —
+/// 10x the worst case so that a flat meter is unambiguous rather than marginal,
 /// deliberately biased toward silence, since a false "you're on credits" alarm would
 /// destroy trust faster than a missed one.
 /// </summary>
@@ -69,7 +69,7 @@ public static class DivergenceDetector
     /// <summary>
     /// Output tokens in the window below which a flat meter proves nothing.
     /// At the observed worst case this implies ~8 points of expected movement, and at
-    /// the median ~20 — either way, zero movement at this volume is anomalous.
+    /// the median ~20, either way, zero movement at this volume is anomalous.
     /// </summary>
     public const long DefaultMinOutputTokens = 50_000;
 
@@ -91,7 +91,7 @@ public static class DivergenceDetector
     /// meter is current" means rather than two that can drift apart.</para>
     ///
     /// <para>This gate is why the detector exists in its cautious form. Without it, every CLI
-    /// user with Desktop closed eventually sees "your usage is not drawing from your plan" —
+    /// user with Desktop closed eventually sees "your usage is not drawing from your plan",
     /// reported on 2026-08-24 against a meter that had not moved in 81 minutes because nothing
     /// was writing it, beside a banner naming extra-usage credits the account had disabled.
     /// A false "you're on credits" alarm destroys trust faster than a missed one, and this one
@@ -111,7 +111,7 @@ public static class DivergenceDetector
     /// anchored on the first plan-history sample of the new window and Claude Desktop samples
     /// every 15 minutes, so <i>every</i> five-hour window holds exactly one sample for its
     /// first quarter of an hour. Observed 2026-09-01: 64K output tokens nine minutes into a
-    /// fresh window, series <c>[5]</c>, <c>rise=0</c>, banner shown — against an account with
+    /// fresh window, series <c>[5]</c>, <c>rise=0</c>, banner shown, against an account with
     /// extra usage switched off and a meter that had in fact gone 5% → 24%.</para>
     ///
     /// <para>This gates the <see cref="DivergenceState.Diverging"/> verdict only.
@@ -122,7 +122,7 @@ public static class DivergenceDetector
     public const int MinSamplesForRise = 2;
 
     /// <param name="planPercentsInWindow">
-    /// Meter samples across the window, in time order. Must not span a reset — the
+    /// Meter samples across the window, in time order. Must not span a reset, the
     /// caller anchors the window on the last observed reset.
     /// </param>
     /// <param name="outputTokensInWindow">Deduplicated output tokens over the same span.</param>

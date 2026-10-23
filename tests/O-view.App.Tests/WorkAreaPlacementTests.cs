@@ -4,7 +4,7 @@ namespace OView.App.Tests;
 
 /// <summary>
 /// Where a tray flyout goes. This arithmetic shipped on Windows for months with no tests at
-/// all — it was welded to <c>GetMonitorInfoW</c> and could not have any. It is now shared with
+/// all, it was welded to <c>GetMonitorInfoW</c> and could not have any. It is now shared with
 /// the Linux panel (issue #144), which makes both a regression here a two-platform regression
 /// and the rule finally testable.
 ///
@@ -64,7 +64,7 @@ public class WorkAreaPlacementTests
 
     /// <summary>
     /// A right-hand bar inset the work area on the right, which is neither of the two edges
-    /// the rule tests for — so it takes the default. Correctly: the tray sits at the bottom of
+    /// the rule tests for, so it takes the default. Correctly: the tray sits at the bottom of
     /// a vertical bar, and the bottom-right corner is the one beside it.
     /// </summary>
     [Fact]
@@ -109,7 +109,7 @@ public class WorkAreaPlacementTests
     }
 
     /// <summary>
-    /// A monitor whose origin is negative — a display arranged to the left of the primary.
+    /// A monitor whose origin is negative, a display arranged to the left of the primary.
     /// Nothing here may assume the desktop starts at (0,0).
     /// </summary>
     [Fact]
@@ -149,7 +149,7 @@ public class WorkAreaPlacementTests
     }
 
     /// <summary>
-    /// The margin is real on every edge the surface touches — the property that keeps a
+    /// The margin is real on every edge the surface touches, the property that keeps a
     /// flyout off the screen edge and off the bar, rather than flush against either.
     /// </summary>
     [Theory]
@@ -171,7 +171,7 @@ public class WorkAreaPlacementTests
 
     /// <summary>
     /// The margin is in device pixels and the caller has already scaled the surface, so a
-    /// HiDPI display is just a bigger work area with a bigger surface — no implicit scaling
+    /// HiDPI display is just a bigger work area with a bigger surface, no implicit scaling
     /// happens in here. Mixing DIPs and pixels is the error that only shows on hardware
     /// nobody testing has.
     /// </summary>
@@ -227,7 +227,7 @@ public class WorkAreaPlacementTests
 
     /// <summary>
     /// A work area no larger than its own margins still yields a usable height. A non-positive
-    /// constraint is not a smaller window — on a SizeToContent surface it is a layout pass with
+    /// constraint is not a smaller window, on a SizeToContent surface it is a layout pass with
     /// no solution.
     /// </summary>
     [Theory]

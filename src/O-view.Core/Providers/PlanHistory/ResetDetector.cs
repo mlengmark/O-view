@@ -22,7 +22,7 @@ public sealed record SessionWindowStart(DateTimeOffset EarliestUtc, DateTimeOffs
     public DateTimeOffset ResetAtUtc => LatestUtc + ResetDetector.WindowLength;
 
     /// <summary>
-    /// The same window, with its upper bound pulled down to <paramref name="activityUtc"/> —
+    /// The same window, with its upper bound pulled down to <paramref name="activityUtc"/>,
     /// a moment the window is known to have already been running (GitHub issue #185).
     ///
     /// <para>Narrowing, never widening. Evidence outside the bracket says nothing about this
@@ -31,8 +31,8 @@ public sealed record SessionWindowStart(DateTimeOffset EarliestUtc, DateTimeOffs
     /// bound. Either would loosen a bound the data supports, so both are ignored.</para>
     ///
     /// <para>This is what keeps ADR-0011's guarantee intact while improving accuracy. The
-    /// ADR rejected taking a point <i>inside</i> the bracket — "can claim a reset has
-    /// happened before it has" — and that reasoning is untouched here: the forecast still
+    /// ADR rejected taking a point <i>inside</i> the bracket, "can claim a reset has
+    /// happened before it has", and that reasoning is untouched here: the forecast still
     /// comes from an upper bound, the bound is just better evidenced.</para>
     /// </summary>
     public SessionWindowStart NarrowedTo(DateTimeOffset? activityUtc) =>
@@ -45,7 +45,7 @@ public sealed record SessionWindowStart(DateTimeOffset EarliestUtc, DateTimeOffs
 /// Derives the current five-hour window from the sample series. The source never reports
 /// window boundaries; they have to be inferred from how <c>fh</c> moves.
 ///
-/// <para><b>The window rolls from first use — it is not a grid</b> (GitHub issue #180). This
+/// <para><b>The window rolls from first use, it is not a grid</b> (GitHub issue #180). This
 /// class used to anchor on the last observed drop and extrapolate in 5-hour steps
 /// indefinitely, which agrees with reality only while usage is continuous. After an idle gap
 /// the real window restarts whenever the user next works, at whatever time that is, while a
@@ -58,7 +58,7 @@ public sealed record SessionWindowStart(DateTimeOffset EarliestUtc, DateTimeOffs
 /// <para><b>A window start is not always a drop.</b> The old code assumed it was, and its
 /// comment claimed "re-anchoring happens naturally on the next observed drop". It does not:
 /// across a sampling gap the meter is already back at <c>0</c> when Desktop resumes, so the
-/// reset leaves no decrease behind. The signal there is a run of zeros followed by a rise —
+/// reset leaves no decrease behind. The signal there is a run of zeros followed by a rise,
 /// a different shape, the same event.</para>
 /// </summary>
 public static class ResetDetector
@@ -77,7 +77,7 @@ public static class ResetDetector
     /// Time of the most recent observed reset, or null if the series contains none.
     ///
     /// <para>Kept for callers that want the last <i>boundary</i> rather than the current
-    /// window — the divergence detector's window floor is the one that does. Samples must be
+    /// window, the divergence detector's window floor is the one that does. Samples must be
     /// ordered by time and belong to a single org.</para>
     /// </summary>
     public static DateTimeOffset? FindLastDrop(IReadOnlyList<PlanHistorySample> samples)
@@ -109,7 +109,7 @@ public static class ResetDetector
             return null;
         }
 
-        // fh == 0 means nothing has been used in the current window — which is to say no
+        // fh == 0 means nothing has been used in the current window, which is to say no
         // window is running, because it starts on first use. Predicting a reset from a
         // boundary seen earlier would be describing a window that has not begun.
         if (samples[^1].FiveHourPercent == 0)
@@ -133,7 +133,7 @@ public static class ResetDetector
     /// <paramref name="previous"/>.
     ///
     /// <para>Two shapes, one event. A <b>drop</b> is the window resetting while Desktop was
-    /// watching — precise, and the only case the old code handled. A <b>rise from zero</b> is
+    /// watching, precise, and the only case the old code handled. A <b>rise from zero</b> is
     /// first use starting a fresh window, which is what a reset looks like when it happened
     /// while Desktop was closed: there is no decrease to see, because the meter had already
     /// gone back to 0 by the time sampling resumed.</para>
@@ -147,7 +147,7 @@ public static class ResetDetector
     /// window or its end has already passed.
     ///
     /// <para><b>Nothing is extrapolated.</b> A reset in the past means the window ended and a
-    /// new one has not been observed starting — so the answer is unknown, and the panel says
+    /// new one has not been observed starting, so the answer is unknown, and the panel says
     /// so. The previous implementation stepped a stale anchor forward until it landed in the
     /// future, which always produced a confident time and was wrong by up to five hours
     /// (CLAUDE.md rule 6: a monitoring tool that confidently displays a wrong number is worse

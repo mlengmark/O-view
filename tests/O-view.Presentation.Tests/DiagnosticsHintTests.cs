@@ -7,7 +7,7 @@ namespace OView.Presentation.Tests;
 
 /// <summary>
 /// The panel's explanatory copy tells a stuck user what to do next. Until v0.6.0 it said
-/// "Right-click the tray icon → Copy diagnostics" in five places — an instruction that is
+/// "Right-click the tray icon → Copy diagnostics" in five places, an instruction that is
 /// simply false on Linux, where the SNI menu carries Exit only.
 ///
 /// <para>This is rule 6 at its sharpest: the copy is shown precisely when something has
@@ -34,7 +34,7 @@ public class DiagnosticsHintTests : IDisposable
         Directory.CreateDirectory(unreadableDir);   // a directory where a file is expected
         var unreadable = PlanHistoryDiagnostics.Inspect(unreadableDir);
 
-        // The CLI-only banner (issue #170) points at diagnostics too — for the user who does
+        // The CLI-only banner (issue #170) points at diagnostics too, for the user who does
         // run Desktop but whose packaged install redirected the file out of reach. Both of
         // its wordings compose the instruction, so both belong under these invariants.
         var projects = Path.Combine(_dir, "projects", "proj-a");
@@ -63,7 +63,7 @@ public class DiagnosticsHintTests : IDisposable
 
     /// <summary>
     /// The regression itself. With the Linux head's instruction configured, no explanation
-    /// anywhere may mention a tray menu — that is the affordance this head does not have.
+    /// anywhere may mention a tray menu, that is the affordance this head does not have.
     /// </summary>
     [Fact]
     public void TheLinuxInstructionLeavesNoMentionOfAMenuThisHeadDoesNotHave()

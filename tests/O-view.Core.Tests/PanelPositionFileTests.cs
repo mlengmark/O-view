@@ -52,7 +52,7 @@ public class PanelPositionFileTests : IDisposable
         Assert.Null(new PanelPositionFile(Path).Read("display-1"));
     }
 
-    /// <summary>A display nothing was ever saved for is not the same bug as a missing file — both read as null.</summary>
+    /// <summary>A display nothing was ever saved for is not the same bug as a missing file, both read as null.</summary>
     [Fact]
     public void ADisplayNeverSavedTo_ReadsAsNothingStored()
     {

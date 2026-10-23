@@ -27,7 +27,7 @@ public class UsageSnapshotStatusTests
         Assert.Null(none.CapturedAtUtcValue.Value);
     }
 
-    /// <summary>Every figure here is Claude's own cache — reported, so always measured.</summary>
+    /// <summary>Every figure here is Claude's own cache, reported, so always measured.</summary>
     public class CachedUtilizationStatus
     {
         private static readonly DateTimeOffset Fetched = new(2026, 9, 1, 12, 0, 0, TimeSpan.Zero);
@@ -130,7 +130,7 @@ public class UsageSnapshotStatusTests
     }
 
     /// <summary>
-    /// Never a percentage or a reset time — only ever the latest-activity instant, modelled
+    /// Never a percentage or a reset time, only ever the latest-activity instant, modelled
     /// from local transcripts rather than reported by a vendor, matching the Estimate label
     /// the whole snapshot already carries.
     /// </summary>

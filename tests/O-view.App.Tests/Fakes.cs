@@ -17,7 +17,7 @@ public sealed class FakeClock(DateTimeOffset start) : IClock
     /// result. Every provider-level fake throws from inside the read's own try and is
     /// caught there, which is precisely why the gate-wedge bug survived a suite that
     /// already had a "failed read" test. The engine reads the clock as the first statement
-    /// of its full poll, before that try — so this stands in for anything a read touches
+    /// of its full poll, before that try, so this stands in for anything a read touches
     /// before it is guarded.</para>
     /// </summary>
     public Exception? ThrowOnNext { get; set; }
@@ -40,7 +40,7 @@ public sealed class FakeClock(DateTimeOffset start) : IClock
 }
 
 /// <summary>
-/// A timer that never fires on its own — the test ticks it. Records start/stop so a
+/// A timer that never fires on its own, the test ticks it. Records start/stop so a
 /// schedule can be asserted rather than inferred from timing.
 /// </summary>
 public sealed class FakeTimer(TimeSpan interval, Action onTick) : IAppTimer
@@ -73,11 +73,11 @@ public sealed class FakeTimerFactory : ITimerFactory
     public List<FakeTimer> Created { get; } = [];
 
     // These are positional, so they track the order UsageEngine.Start creates its timers.
-    // Inserting one in the middle silently re-points every accessor after it — which is how
+    // Inserting one in the middle silently re-points every accessor after it, which is how
     // adding the plan-history cadence (issue #163) made the update-check test read the wrong
     // timer. If another is added, fix the indices here rather than reordering Start.
 
-    /// <summary>The full poll — transcripts and the 31-day figures. Created first.</summary>
+    /// <summary>The full poll, transcripts and the 31-day figures. Created first.</summary>
     public FakeTimer Poll => Created[0];
 
     /// <summary>The plan-history-only cadence (issue #163).</summary>
@@ -112,7 +112,7 @@ public sealed class FakeDispatcher : IUiDispatcher
 {
     private readonly List<Action> _queued = [];
 
-    /// <summary>The thread that constructed this — the stand-in for the UI thread.</summary>
+    /// <summary>The thread that constructed this, the stand-in for the UI thread.</summary>
     public int OwningThreadId { get; } = Environment.CurrentManagedThreadId;
 
     public int Pending
@@ -170,7 +170,7 @@ public sealed class FakeProvider : IUsageProvider
 
     public int Calls { get; private set; }
 
-    /// <summary>Blocks every read until released — stands in for a large first ingest.</summary>
+    /// <summary>Blocks every read until released, stands in for a large first ingest.</summary>
     public ManualResetEventSlim? BlockUntil { get; set; }
 
     /// <summary>The thread each read ran on, so "off the UI thread" can be asserted.</summary>

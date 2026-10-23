@@ -8,8 +8,8 @@ namespace OView.Presentation.Tests;
 
 /// <summary>
 /// A user reported the token tiles as inflated: <c>235.6M</c> where Claude's own UI showed
-/// thousands (GitHub issue #169). The sum is right — ingestion de-duplicates on request id
-/// and upserts by replacement — but roughly nine tenths of it is cached prompt re-reads, and
+/// thousands (GitHub issue #169). The sum is right, ingestion de-duplicates on request id
+/// and upserts by replacement, but roughly nine tenths of it is cached prompt re-reads, and
 /// an unqualified "Tokens today" invited a comparison against a figure measuring something
 /// else entirely.
 ///
@@ -26,7 +26,7 @@ public class TokenCompositionTests
         Input: 14, CacheCreation: 44_347, CacheRead: 398_121, Output: 3_666);
 
     /// <param name="cacheW">
-    /// Cache writes, as 1-hour ones — which is what the transcripts these figures came from
+    /// Cache writes, as 1-hour ones, which is what the transcripts these figures came from
     /// actually carry (GitHub issue #255). The composition still reports one cache-write
     /// figure; the TTL only changes what it is worth.
     /// </param>
@@ -39,7 +39,7 @@ public class TokenCompositionTests
 
     /// <summary>
     /// The fact the whole issue turns on. 7 requests produced 446K tokens, ~89% of them
-    /// cache reads — so a few thousand requests reaches hundreds of millions while the
+    /// cache reads, so a few thousand requests reaches hundreds of millions while the
     /// context-window figure a user compares against never leaves the thousands.
     /// </summary>
     [Fact]
@@ -73,7 +73,7 @@ public class TokenCompositionTests
 
         // The token split, compared field by field rather than as a whole record: the record
         // now also carries per-kind Est. values, and asserting on those here would make this
-        // case fail whenever a published rate changes — which is a different test's job.
+        // case fail whenever a published rate changes, which is a different test's job.
         Assert.Equal(MeasuredDay.Input, composition.Input);
         Assert.Equal(MeasuredDay.CacheCreation, composition.CacheCreation);
         Assert.Equal(MeasuredDay.CacheRead, composition.CacheRead);
@@ -85,8 +85,8 @@ public class TokenCompositionTests
     /// figures on screen at the same time, and a card that does not reconcile with its tile is
     /// exactly the "is this number right?" failure issue #169 was reported as.
     ///
-    /// <para>Guaranteed structurally — both sides go through <see cref="CostEstimator"/> over
-    /// the same rollups — and pinned here because the guarantee is one refactor away from
+    /// <para>Guaranteed structurally, both sides go through <see cref="CostEstimator"/> over
+    /// the same rollups, and pinned here because the guarantee is one refactor away from
     /// becoming two pricing paths.</para>
     /// </summary>
     [Fact]
@@ -109,7 +109,7 @@ public class TokenCompositionTests
 
     /// <summary>
     /// A model with no published rate yields unknown per kind, never a zero that would read
-    /// as "this cost nothing" — the same rule the Est. tiles follow (rule 6).
+    /// as "this cost nothing", the same rule the Est. tiles follow (rule 6).
     /// </summary>
     [Fact]
     public void AnUnpricedModelLeavesEveryKindUnknownRatherThanZero()
@@ -142,7 +142,7 @@ public class TokenCompositionTests
     // ── the copy ────────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The headline names its metric — the acceptance criterion #169 set, met by issue #253's
+    /// The headline names its metric, the acceptance criterion #169 set, met by issue #253's
     /// different answer. It must NOT read <c>incl. cache</c> any more: the qualifier was true
     /// of a total these tiles no longer show, and a stale qualifier is the same rule-6 failure
     /// as a wrong figure (the lesson of issue #210's "(UTC)").
@@ -173,7 +173,7 @@ public class TokenCompositionTests
     }
 
     /// <summary>
-    /// All four kinds are drawn, so the 89% is visible rather than merely asserted — and
+    /// All four kinds are drawn, so the 89% is visible rather than merely asserted, and
     /// <b>output leads</b>, which is the whole of the ordering decision: at 1.1% of the track
     /// it is legible at the origin and a sliver anywhere else.
     /// </summary>
@@ -205,7 +205,7 @@ public class TokenCompositionTests
         Assert.InRange(input.Share, 0, 0.0001);
         Assert.Equal("<0.01%", TokenText.TokenShare(input.Share));
 
-        // A genuine zero still reads as zero — the threshold is for "small", not for "absent".
+        // A genuine zero still reads as zero, the threshold is for "small", not for "absent".
         Assert.Equal("0%", TokenText.TokenShare(0));
         Assert.Equal("100%", TokenText.TokenShare(1));
         Assert.Equal("89.24%", TokenText.TokenShare(MeasuredDay.CacheReadShare));
@@ -275,9 +275,9 @@ public class TokenCompositionTests
     }
 
     /// <summary>
-    /// The breakdown caption, both ways round. The count is the whole disclosure — a chart that
+    /// The breakdown caption, both ways round. The count is the whole disclosure, a chart that
     /// said "by model" while two models were missing from its total would imply a completeness
-    /// it does not have (rule 6) — so which caption appears is asserted here rather than left
+    /// it does not have (rule 6), so which caption appears is asserted here rather than left
     /// to each panel to decide.
     /// </summary>
     [Fact]
@@ -296,7 +296,7 @@ public class TokenCompositionTests
     public void TheUnpricedHintNamesTheModelsAndWhatTheTotalCovers()
     {
         Assert.Equal(
-            "No published rate for claude-opus-5, claude-fable-5-1 — excluded from this "
+            "No published rate for claude-opus-5, claude-fable-5-1, excluded from this "
             + "chart, so the total shown is only the part O-view can price.",
             TokenText.UnpricedModelsHint(["claude-opus-5", "claude-fable-5-1"]));
     }
@@ -305,7 +305,7 @@ public class TokenCompositionTests
 
     /// <summary>
     /// Cache reads stay in the total. They are billed and priced, so dropping them would
-    /// understate consumption and break the Est. value tiles — the fix for #169 is the
+    /// understate consumption and break the Est. value tiles, the fix for #169 is the
     /// label, never the arithmetic. This pins that nobody "fixes" it the other way later.
     /// </summary>
     [Fact]

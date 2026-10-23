@@ -5,9 +5,9 @@ namespace OView.Presentation.Panel;
 /// for the current session window, the standing 31-day spend section, and the relabel the
 /// value tile takes while the two are true (docs/ui-spec.md §2, GitHub issues #3, #259).
 ///
-/// <para><b>Why one view model for two registers.</b> They are independent signals — the
+/// <para><b>Why one view model for two registers.</b> They are independent signals, the
 /// 31-day figure stands while the current window is on-plan, and the banner appears before
-/// any credit spend has accrued — but they make one claim between them, and the Windows panel
+/// any credit spend has accrued, but they make one claim between them, and the Windows panel
 /// was the only place that knew how the halves fit together. The Linux panel showed neither,
 /// so the one thing a reader needs when a meter stops moving existed on one face only.</para>
 ///
@@ -18,7 +18,7 @@ namespace OView.Presentation.Panel;
 /// (issue #259). It is decided here, once, and stamped with when the cache was read.</para>
 /// </summary>
 /// <param name="Banner">
-/// The live banner, or null when this window is drawing from the plan as expected — which is
+/// The live banner, or null when this window is drawing from the plan as expected, which is
 /// the usual state and draws nothing at all.
 /// </param>
 /// <param name="Heading">
@@ -28,14 +28,14 @@ namespace OView.Presentation.Panel;
 /// </param>
 /// <param name="Badge">Whether credit-billed usage was recorded in the window, in two words.</param>
 /// <param name="SpendLabel">The label on the figure.</param>
-/// <param name="SpendValue">The figure — a true zero when nothing was recorded, not a blank.</param>
+/// <param name="SpendValue">The figure, a true zero when nothing was recorded, not a blank.</param>
 /// <param name="Coverage">
 /// The caveat qualifying the figure directly, or the empty string when the window is fully
 /// covered. <b>This one belongs on screen</b>, unlike <see cref="Hint"/>: "30 of 31 days
 /// recorded" is the difference between a real total and a partial one (rule 6).
 /// </param>
 /// <param name="Hint">
-/// What the figure is and is not, in two clauses — an estimate at published rates, and not
+/// What the figure is and is not, in two clauses, an estimate at published rates, and not
 /// the charge. Shown on hover where a head has one (issue #181); a head with nowhere to put
 /// a card still has somewhere to put a sentence, because the caveat is the point of it.
 /// </param>
@@ -61,7 +61,7 @@ public sealed record PanelOffPlanView(
 /// it, and where the reader can find the figure O-view will not state.
 /// </summary>
 /// <param name="Title">
-/// The heading, which asserts a charge only where the account setting supports one — see
+/// The heading, which asserts a charge only where the account setting supports one, see
 /// <see cref="Text.OffPlanText.OffPlanTitle"/> for the three states and why they are three
 /// headings rather than one hedge.
 /// </param>
@@ -74,7 +74,7 @@ public sealed record PanelOffPlanView(
 /// </param>
 /// <param name="LinkUrl">
 /// Where it goes. Carried beside the label rather than left to each head, and <b>shown
-/// outright by a head that cannot open it</b> — a label with no affordance behind it is a dead
+/// outright by a head that cannot open it</b>, a label with no affordance behind it is a dead
 /// end, and the address is the whole of what it was offering.
 /// </param>
 public sealed record PanelOffPlanBannerView(

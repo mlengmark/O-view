@@ -7,7 +7,7 @@ namespace OView.Presentation.Tests;
 /// same thing.
 ///
 /// <para>These assert the <b>exact strings the two heads produced before the extraction</b>,
-/// character for character — the same contract <see cref="PanelTextTests"/> holds for the
+/// character for character, the same contract <see cref="PanelTextTests"/> holds for the
 /// panel, and for the same reason: the menu's only other verification is an offscreen render,
 /// which cannot tell a wording change from a layout one.</para>
 /// </summary>
@@ -63,7 +63,7 @@ public class MenuTextTests
 
     /// <summary>
     /// With nothing entered, the row states the answer in effect rather than only offering to
-    /// change it — a user who has never opened the dialog still learns what O-view is doing.
+    /// change it, a user who has never opened the dialog still learns what O-view is doing.
     /// </summary>
     [Fact]
     public void TheWeeklyResetRowSaysDerivedWhenNothingWasEntered() =>
@@ -82,8 +82,8 @@ public class MenuTextTests
     }
 
     /// <summary>
-    /// The exit row names the app. A bare "Exit" in a menu the desktop renders — which is
-    /// what Linux gets — does not say what it is exiting.
+    /// The exit row names the app. A bare "Exit" in a menu the desktop renders, which is
+    /// what Linux gets, does not say what it is exiting.
     /// </summary>
     [Fact]
     public void TheExitRowNamesTheApp() =>

@@ -9,23 +9,23 @@ namespace OView.Presentation.Tests;
 /// <summary>
 /// What O-view covers, per Claude surface, asserted in one place (GitHub issue #171).
 ///
-/// <para>The answer already existed — CLAUDE.md rule 9, two findings documents and three
-/// locator classes — but nothing pinned it, and it has been got wrong in shipping code
+/// <para>The answer already existed, CLAUDE.md rule 9, two findings documents and three
+/// locator classes, but nothing pinned it, and it has been got wrong in shipping code
 /// three times. Cowork usage was read by nothing at all (#44). A Cowork user was told their
 /// source was not counted while it was being counted (#58). A CLI-only user was told they
 /// had no usage data while their tiles were full (#170). Every one of those was a surface
 /// silently falling out of a picture nobody asserted.</para>
 ///
 /// <para>So each row below builds that surface's real on-disk layout and asserts what
-/// resolves from it — deleting a locator fails a test that names the surface it broke,
+/// resolves from it, deleting a locator fails a test that names the surface it broke,
 /// rather than producing an empty tile and no error.</para>
 ///
 /// <list type="table">
 /// <item><term>Claude Code CLI</term><description>tokens ✓, percentages ✗</description></item>
-/// <item><term>Claude Code in Desktop</term><description>tokens ✓, percentages ✓ — same transcripts</description></item>
+/// <item><term>Claude Code in Desktop</term><description>tokens ✓, percentages ✓, same transcripts</description></item>
 /// <item><term>Claude Desktop</term><description>tokens ✓, percentages ✓</description></item>
 /// <item><term>Cowork</term><description>tokens ✓, percentages ✗</description></item>
-/// <item><term>Chat</term><description>neither — no local record exists</description></item>
+/// <item><term>Chat</term><description>neither, no local record exists</description></item>
 /// </list>
 ///
 /// <para>"percentages" above means the plan-history file, which is what
@@ -66,7 +66,7 @@ public class CoverageMatrixTests : IDisposable
     /// <summary>A Cowork record: snake_case <c>request_id</c>, otherwise identical.</summary>
     private static string CoworkLine(string id) => UsageLine("request_id", id);
 
-    /// <summary>Claude Code, whether run from the CLI or hosted inside Desktop — same path.</summary>
+    /// <summary>Claude Code, whether run from the CLI or hosted inside Desktop, same path.</summary>
     private void GiveClaudeCodeSession(string id)
     {
         var dir = Path.Combine(ProjectsRoot, "C--Users-someone-repo");
@@ -76,7 +76,7 @@ public class CoverageMatrixTests : IDisposable
 
     /// <summary>
     /// A Cowork sandbox, including the <c>.claude\projects</c> directory it really contains
-    /// and which is <b>always empty</b> — the detail that made #44 invisible, because a
+    /// and which is <b>always empty</b>, the detail that made #44 invisible, because a
     /// projects-only scan finds the folder and concludes it succeeded.
     /// </summary>
     private void GiveCoworkSession(string id)
@@ -115,7 +115,7 @@ public class CoverageMatrixTests : IDisposable
     // ── the matrix, one row at a time ───────────────────────────────────────────────
 
     /// <summary>
-    /// Claude Code CLI: transcripts are read and counted, and there are no percentages —
+    /// Claude Code CLI: transcripts are read and counted, and there are no percentages,
     /// that file belongs to Desktop. Both halves matter; the second is issue #170.
     /// </summary>
     [Fact]
@@ -146,7 +146,7 @@ public class CoverageMatrixTests : IDisposable
 
     /// <summary>
     /// Cowork: counted, from <c>audit.jsonl</c> under its sandbox root, and with the
-    /// snake_case id spelling. Reading only the camelCase one ingests nothing from here —
+    /// snake_case id spelling. Reading only the camelCase one ingests nothing from here,
     /// no error, just an empty tile (rule 4).
     /// </summary>
     [Fact]
@@ -160,7 +160,7 @@ public class CoverageMatrixTests : IDisposable
     }
 
     /// <summary>
-    /// Chat: nothing, and that is correct rather than broken — claude.ai keeps no local
+    /// Chat: nothing, and that is correct rather than broken, claude.ai keeps no local
     /// usage record at all. Pinned so nobody later "fixes" a gap that cannot be closed.
     /// </summary>
     [Fact]
@@ -220,7 +220,7 @@ public class CoverageMatrixTests : IDisposable
         Assert.Equal(1052, IngestedTokens());
     }
 
-    /// <summary>Re-ingesting changes nothing — the store is re-fed on every poll (rule 7).</summary>
+    /// <summary>Re-ingesting changes nothing, the store is re-fed on every poll (rule 7).</summary>
     [Fact]
     public void IngestingTwiceDoesNotDoubleTheTotals()
     {
@@ -250,7 +250,7 @@ public class CoverageMatrixTests : IDisposable
 
     /// <summary>
     /// An absent surface is named rather than omitted. "Counting: Claude Code" alone cannot
-    /// be told apart from a build that forgot Cowork existed — which is how #44 hid.
+    /// be told apart from a build that forgot Cowork existed, which is how #44 hid.
     /// </summary>
     [Fact]
     public void TheCoverageLineNamesTheSurfaceThatFoundNothing()
@@ -266,7 +266,7 @@ public class CoverageMatrixTests : IDisposable
     /// <summary>
     /// <b>"local transcripts", not just "Counting"</b> (issue #245). Naming Cowork unqualified
     /// said all Cowork usage was counted, and it is not: a cloud-container session writes no
-    /// transcript on this machine at all — measured 2026-08-28, no registration and no transcript.
+    /// transcript on this machine at all, measured 2026-08-28, no registration and no transcript.
     ///
     /// <para>The line's job is still #171's: report which surfaces left files <i>here</i>, so a
     /// small figure can be told apart from O-view not looking where the user works. The missing
@@ -290,7 +290,7 @@ public class CoverageMatrixTests : IDisposable
     /// visible, where this line sits inside a disclosure most readers never open. The permanent
     /// gap is now stated once, in the more visible of the two.</para>
     ///
-    /// <para>Two notes saying overlapping things is how the panel's copy drifted apart before —
+    /// <para>Two notes saying overlapping things is how the panel's copy drifted apart before,
     /// the same reasoning <see cref="TheCoverageLineIsEmptyWhenNothingWasFound"/> already
     /// applies to <c>Explain()</c>.</para>
     /// </summary>
@@ -318,7 +318,7 @@ public class CoverageMatrixTests : IDisposable
         Assert.NotEqual("", Scope().Explain());
     }
 
-    /// <summary>Paths belong in Copy diagnostics, which resolves them — never in a sentence (#58).</summary>
+    /// <summary>Paths belong in Copy diagnostics, which resolves them, never in a sentence (#58).</summary>
     [Fact]
     public void TheCoverageLineHardCodesNoPath()
     {

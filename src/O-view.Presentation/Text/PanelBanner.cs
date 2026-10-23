@@ -10,7 +10,7 @@ namespace OView.Presentation.Text;
 ///
 /// <para><b>Why this joins two reports.</b> "Is anything wrong?" cannot be answered from
 /// the plan-history file alone. That file is written by Claude <i>Desktop</i>, so a user who
-/// runs only the Claude Code CLI will never have one — while their token tiles are being
+/// runs only the Claude Code CLI will never have one, while their token tiles are being
 /// filled perfectly well from their own transcripts. Reading
 /// <see cref="PlanHistoryReport"/> on its own, both heads printed <c>No usage data</c> and
 /// told that user to start an application they do not use, directly above two populated
@@ -19,7 +19,7 @@ namespace OView.Presentation.Text;
 /// place rather than in a branch inside each head.</para>
 ///
 /// <para>This is issue #58 in a second panel: copy that describes O-view's own architecture
-/// back at a user whose setup it never considered. The rule it broke is the same one —
+/// back at a user whose setup it never considered. The rule it broke is the same one,
 /// never assert something about the user's machine that O-view has not observed
 /// (CLAUDE.md rule 6). O-view observed a missing file. It did not observe an absent app, a
 /// closed app, or a misconfigured one.</para>
@@ -67,7 +67,7 @@ public sealed record PanelBanner(string Title, string Detail, string GaugePlaceh
     /// <param name="scopeReport">What the transcript scan resolved. Null is treated as "no evidence".</param>
     /// <param name="tokens31Days">
     /// The 31-day token total. Zero alongside present transcripts means ingestion, not
-    /// absence — a different problem needing a different sentence, and one that would
+    /// absence, a different problem needing a different sentence, and one that would
     /// otherwise hide behind reassuring copy.
     /// </param>
     public static PanelBanner? Resolve(
@@ -105,7 +105,7 @@ public sealed record PanelBanner(string Title, string Detail, string GaugePlaceh
     /// How both scope wordings open: who fills these two percentages.
     ///
     /// <para>This said <i>only</i> Claude Desktop wrote them, which stopped being true when
-    /// Claude Code began caching the same two figures (issue #234) — so the one sentence a
+    /// Claude Code began caching the same two figures (issue #234), so the one sentence a
     /// Claude Code user on a machine with no Desktop would read was the one that sent them
     /// after an application they do not run. Both writers are named, and neither is said to
     /// be absent: all O-view observed is that no reading arrived.</para>
@@ -117,7 +117,7 @@ public sealed record PanelBanner(string Title, string Detail, string GaugePlaceh
     /// <summary>
     /// The CLI-only note. Every clause is an observation: which surfaces were found, how
     /// many locations were searched, and what that costs. It never says either application
-    /// is absent — the file goes missing just as readily when a packaged install redirects
+    /// is absent, the file goes missing just as readily when a packaged install redirects
     /// it somewhere O-view did not look, which is why the diagnostics offer stays.
     /// </summary>
     private static string ScopeDetail(PlanHistoryReport plan, TranscriptScopeReport scope) =>
@@ -125,7 +125,7 @@ public sealed record PanelBanner(string Title, string Detail, string GaugePlaceh
         + $"Your {SourceList(scope)} token figures below are unaffected. "
         // The instruction opens its own sentence: it is a capitalised imperative phrase on
         // Windows ("Right-click the tray icon → …"), which reads as a typo mid-sentence.
-        + $"{DiagnosticsHint.Instruction} — O-view may be looking in the wrong place for how "
+        + $"{DiagnosticsHint.Instruction}, O-view may be looking in the wrong place for how "
         + "they are installed here.";
 
     /// <summary>
@@ -140,14 +140,14 @@ public sealed record PanelBanner(string Title, string Detail, string GaugePlaceh
         + $"{DiagnosticsHint.Instruction} and report this.";
 
     /// <summary>
-    /// "1 location" or "3 locations" — pluralised rather than written "location(s)". The
+    /// "1 location" or "3 locations", pluralised rather than written "location(s)". The
     /// count is evidence for a rule-6 claim, and evidence reads better without a bracket.
     /// </summary>
     private static string Locations(PlanHistoryReport plan) =>
         $"{plan.SearchedCount} location{(plan.SearchedCount == 1 ? "" : "s")}";
 
     /// <summary>
-    /// Names the surfaces the scan actually found, never a literal — a Cowork-only user
+    /// Names the surfaces the scan actually found, never a literal, a Cowork-only user
     /// must not be told their usage comes from Claude Code, and vice versa (issue #58).
     /// </summary>
     private static string SourceList(TranscriptScopeReport scope) => scope.PresentSources switch

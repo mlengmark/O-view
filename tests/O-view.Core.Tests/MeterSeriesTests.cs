@@ -11,7 +11,7 @@ public class MeterSeriesTests
     /// Issue #268, end to end through the detector. Plan history held one sample of a
     /// twelve-minute-old window; Claude Code's cache, six minutes newer, held the reading that
     /// showed where the meter had actually gone. Folded in, the window has two points and a
-    /// 19-point rise — which is what the panel's own gauge was displaying at the time.
+    /// 19-point rise, which is what the panel's own gauge was displaying at the time.
     /// </summary>
     [Fact]
     public void TheReportedReading_TurnsTheReportedCaseIntoAMeasurement()
@@ -78,7 +78,7 @@ public class MeterSeriesTests
 
     /// <summary>
     /// Within a window the meter only rises, so a fresher-but-lower reading means a boundary
-    /// fell between the two — the one thing the series must never span. Appending it would
+    /// fell between the two, the one thing the series must never span. Appending it would
     /// manufacture a negative rise, which reads as flat and reports as divergence: the exact
     /// false alarm this whole path exists to avoid.
     /// </summary>
@@ -92,7 +92,7 @@ public class MeterSeriesTests
         Assert.Equal(TwelveMinutes, age);
     }
 
-    /// <summary>Equal is not lower — a meter that has genuinely held still still appends.</summary>
+    /// <summary>Equal is not lower, a meter that has genuinely held still still appends.</summary>
     [Fact]
     public void AnEqualReading_IsAppended()
     {
@@ -105,7 +105,7 @@ public class MeterSeriesTests
     /// <summary>
     /// An empty series means no plan history for this window at all. One reported reading is
     /// still one point, so appending would only trade <c>InsufficientActivity</c> for
-    /// <c>RiseNotMeasurable</c> — a different stated reason for the same silence.
+    /// <c>RiseNotMeasurable</c>, a different stated reason for the same silence.
     /// </summary>
     [Fact]
     public void AnEmptySeries_IsNotSeededFromTheReportedReading()
@@ -119,7 +119,7 @@ public class MeterSeriesTests
 
     /// <summary>
     /// Genuine divergence survives the fold. A reported reading that agrees the meter has not
-    /// moved supplies the second point and the verdict stands — this must not become a way to
+    /// moved supplies the second point and the verdict stands, this must not become a way to
     /// silence the detector.
     /// </summary>
     [Fact]

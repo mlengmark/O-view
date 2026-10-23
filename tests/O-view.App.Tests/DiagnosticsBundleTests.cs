@@ -49,7 +49,7 @@ public class DiagnosticsBundleTests : IDisposable
 
     /// <summary>
     /// "appdata root" is a Windows word. On Linux it pointed at ~/.config, so the label
-    /// taught the reader the wrong concept for the path beside it — and the whole reason
+    /// taught the reader the wrong concept for the path beside it, and the whole reason
     /// the roots are printed is to make a wrong resolution visible (rule 6).
     /// </summary>
     [Fact]
@@ -72,7 +72,7 @@ public class DiagnosticsBundleTests : IDisposable
         // The label alone is useless; the point is the value beside it.
         //
         // Compared against the redacted spelling, not the raw one. The bundle now removes
-        // the account name before returning (Redact), so the raw path never appears — but
+        // the account name before returning (Redact), so the raw path never appears, but
         // what this test guards is unchanged: that the RESOLVED value is printed rather
         // than the label alone, because a wrong SpecialFolder resolution is only visible
         // in the value. Redaction replaces the account segment and nothing else, so the
@@ -121,7 +121,7 @@ public class DiagnosticsBundleTests : IDisposable
     /// <summary>
     /// The highest-value field in the whole bundle. "My icon doesn't appear" is the most
     /// likely Linux report by a long way, and an Avalonia tray icon reports success whether
-    /// or not a host exists — so this line is the only written record of the truth.
+    /// or not a host exists, so this line is the only written record of the truth.
     /// </summary>
     [Fact]
     public void ALinuxBundleReportsTheTrayHostDesktopAndSession()
@@ -159,7 +159,7 @@ public class DiagnosticsBundleTests : IDisposable
         Assert.Contains("process", bundle, StringComparison.Ordinal);
         Assert.Contains("account file", bundle, StringComparison.Ordinal);
         Assert.Contains("weekly anchor", bundle, StringComparison.Ordinal);
-        // "installed : True/False" became "install kind", which subsumes it — a portable
+        // "installed : True/False" became "install kind", which subsumes it, a portable
         // build and an installer build are still distinguishable, and now so are the Linux
         // kinds.
         Assert.Contains("install kind", bundle, StringComparison.Ordinal);
@@ -173,7 +173,7 @@ public class DiagnosticsBundleTests : IDisposable
     /// reasoning that the org UUID was a permitted exception because it is the documented
     /// filter key. It is no longer an exception: <see cref="Redact"/> truncates it, which
     /// keeps the comparison the filter key is needed for without publishing the identifier.
-    /// The name went with the reasoning — a test asserting the old rule by name, while the
+    /// The name went with the reasoning, a test asserting the old rule by name, while the
     /// code enforces a stricter one, is a comment that lies.</para>
     /// </summary>
     [Fact]
@@ -190,7 +190,7 @@ public class DiagnosticsBundleTests : IDisposable
     [Fact]
     public void AnUnreadableWeeklyAnchorDoesNotTakeTheBundleDown()
     {
-        // A support bundle that throws is worse than one with a gap in it — the user is
+        // A support bundle that throws is worse than one with a gap in it, the user is
         // already reporting a problem.
         var bundle = DiagnosticsBundle.Build(
             Linux,
@@ -246,7 +246,7 @@ public class DiagnosticsBundleTests : IDisposable
     /// <para>Both figures were already in the bundle, twenty lines apart and written for
     /// different reasons; the machine this came from read 38 and 32 and nobody subtracted them.
     /// <c>0 behind by 0 bytes</c> is only ever a statement about files the store already knows
-    /// about — a file it has never seen is behind by its whole length and appears in none of
+    /// about, a file it has never seen is behind by its whole length and appears in none of
     /// those numbers.</para>
     /// </summary>
     [Fact]
@@ -268,7 +268,7 @@ public class DiagnosticsBundleTests : IDisposable
 
     /// <summary>
     /// A watermark for a transcript Claude Code has since deleted is not a tracked file, and
-    /// must not be counted as one — it would hide a real gap behind a stale row.
+    /// must not be counted as one, it would hide a real gap behind a stale row.
     /// </summary>
     [Fact]
     public void WatermarksForDeletedTranscriptsDoNotCountAsTracked()
@@ -320,7 +320,7 @@ public class DiagnosticsBundleTests : IDisposable
     }
 
     /// <summary>
-    /// Most bundles are produced without it, and say so rather than omitting the section — an
+    /// Most bundles are produced without it, and say so rather than omitting the section, an
     /// absent section cannot be told apart from one that failed to render.
     /// </summary>
     [Fact]
@@ -369,7 +369,7 @@ public class DiagnosticsBundleTests : IDisposable
     /// <summary>
     /// The only part of the bundle that says what the app <i>did</i>. Everything else
     /// describes its inputs, and all of that can read perfectly while no poll has completed
-    /// in days — which is exactly the report that arrived three times, each leading with
+    /// in days, which is exactly the report that arrived three times, each leading with
     /// <c>status : Ok</c>.
     /// </summary>
     [Fact]
@@ -388,7 +388,7 @@ public class DiagnosticsBundleTests : IDisposable
     }
 
     /// <summary>
-    /// On a build that logs by default, "no log lines" is itself a finding — it means the run
+    /// On a build that logs by default, "no log lines" is itself a finding, it means the run
     /// never reached the first write. So it is stated rather than omitted, because an absent
     /// section is indistinguishable from one that failed to render.
     /// </summary>
@@ -405,7 +405,7 @@ public class DiagnosticsBundleTests : IDisposable
 
     /// <summary>
     /// The half of #160 that makes the pruning defensible. The <c>.corrupt-*</c> files were
-    /// retained "so the corruption can still be examined" while nothing surfaced them —
+    /// retained "so the corruption can still be examined" while nothing surfaced them,
     /// <c>--diagnose</c> did not list them, the bundle did not mention them, the panel said
     /// nothing. A backup nobody is told about is residue, not evidence.
     /// </summary>
@@ -433,7 +433,7 @@ public class DiagnosticsBundleTests : IDisposable
     }
 
     /// <summary>
-    /// The count is of files retained, which pruning caps — so the bundle prints the cap
+    /// The count is of files retained, which pruning caps, so the bundle prints the cap
     /// beside it. Without that, a reader takes "2 quarantined" for the number of times the
     /// store has corrupted, which after a prune it is not (rule 6).
     /// </summary>
@@ -450,7 +450,7 @@ public class DiagnosticsBundleTests : IDisposable
     ///
     /// <para>Every other section here reports an input; this reports an assumption. Two wrong
     /// numbers in that table produced money figures 50% high and 28% low, and a bundle could
-    /// read perfectly through both — there was nothing to look at. The date and the source are
+    /// read perfectly through both, there was nothing to look at. The date and the source are
     /// printed unconditionally for that reason, not only once the card is stale.</para>
     /// </summary>
     [Fact]
@@ -465,7 +465,7 @@ public class DiagnosticsBundleTests : IDisposable
 
     /// <summary>
     /// The bundle names the calibration and does not fake it. No file on this machine carries a
-    /// dollar figure Claude Code reported, so O-view cannot run the comparison itself — saying
+    /// dollar figure Claude Code reported, so O-view cannot run the comparison itself, saying
     /// how a maintainer runs it is honest, and printing a number O-view did not compute would
     /// be the fabrication rule 6 is about.
     /// </summary>

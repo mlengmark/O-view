@@ -25,7 +25,7 @@ public class PlanHistoryProviderTests : IDisposable
 
     /// <summary>
     /// <see cref="PlanHistoryFile.NoFile"/> names no file, and a provider built on it is inert
-    /// rather than absent — so nothing downstream has to special-case it.
+    /// rather than absent, so nothing downstream has to special-case it.
     /// </summary>
     [Fact]
     public void NoFile_ReadsNothing_AndReportsAMeterThatIsNotThere()
@@ -55,7 +55,7 @@ public class PlanHistoryProviderTests : IDisposable
         Assert.False(result.IsOffPlan);
     }
 
-    /// <summary>A null path still means the real machine's file — that is production's case.</summary>
+    /// <summary>A null path still means the real machine's file, that is production's case.</summary>
     [Fact]
     public void ANullPathStillResolvesTheRealFile()
     {
@@ -104,7 +104,7 @@ public class PlanHistoryProviderTests : IDisposable
     /// <summary>
     /// The window runs from <b>first use</b>, not from the drop that ended the previous one
     /// (GitHub issue #180). Here the meter resets to 0 an hour ago and nothing is used for
-    /// another 55 minutes — so the current window began at that first use, and the reset is
+    /// another 55 minutes, so the current window began at that first use, and the reset is
     /// five hours after it.
     ///
     /// <para>This previously asserted drop + 5 h, which is the grid model: it treated the
@@ -194,7 +194,7 @@ public class PlanHistoryProviderTests : IDisposable
     [Fact]
     public void MultiOrgFile_AccountMatchesNone_FallsBackToMostRecentOrg()
     {
-        // A genuinely interleaved file whose orgs match neither the account: don't blank —
+        // A genuinely interleaved file whose orgs match neither the account: don't blank,
         // resolve to the most-recently-active org (one org, still de-interleaved).
         var path = WriteSamples(
             (Now.AddMinutes(-15), "org-old", 90, 60),
@@ -217,7 +217,7 @@ public class PlanHistoryProviderTests : IDisposable
     /// sampled at that instant and then went quiet for 14 minutes while ~6% was consumed.
     ///
     /// <para>O-view showed an empty gauge the whole time, because 14 minutes was inside the
-    /// old 15-minute freshness allowance — so the reading was labelled Live and rendered as a
+    /// old 15-minute freshness allowance, so the reading was labelled Live and rendered as a
     /// confident, unqualified 0%. Unknown is the honest answer: the window is not empty, and
     /// O-view has no idea what it holds.</para>
     /// </summary>
@@ -237,7 +237,7 @@ public class PlanHistoryProviderTests : IDisposable
 
     /// <summary>
     /// A zero that is genuinely current still reads zero. This is the normal case immediately
-    /// after a reset — Desktop is sampling every ~5 minutes, so a fresh zero arrives and the
+    /// after a reset, Desktop is sampling every ~5 minutes, so a fresh zero arrives and the
     /// gauge legitimately shows an empty window.
     /// </summary>
     [Fact]
@@ -255,7 +255,7 @@ public class PlanHistoryProviderTests : IDisposable
 
     /// <summary>
     /// Only zero is discarded. A non-zero reading of the same age is a lower bound that is
-    /// still broadly true — 72% drifting to 75% is information, where "at least 0%" is not.
+    /// still broadly true, 72% drifting to 75% is information, where "at least 0%" is not.
     /// </summary>
     [Fact]
     public void AnAgedNonZeroReading_IsKept()
@@ -272,15 +272,15 @@ public class PlanHistoryProviderTests : IDisposable
     /// <summary>
     /// The freshness allowance is anchored to the measured sampling cadence, and the cadence
     /// moved: 5 minutes until 2026-08-10, 15 minutes since (measured across 1,443 gaps in the
-    /// same real file — 31 consecutive 15-minute gaps on 08-23 alone, none at 5).
+    /// same real file, 31 consecutive 15-minute gaps on 08-23 alone, none at 5).
     ///
     /// <para>Eleven minutes was two intervals plus slack at the old cadence and <i>less than
     /// one interval</i> at the new one, which made Live unreachable for four minutes in every
-    /// fifteen — a reading as recent as Desktop can produce, labelled stale. Sixteen is one
+    /// fifteen, a reading as recent as Desktop can produce, labelled stale. Sixteen is one
     /// interval plus slack: stale now means the next sample is overdue.</para>
     ///
     /// <para>Note 14 minutes flipping from Stale to Live. That is the cadence change, not a
-    /// relaxation — at 15-minute sampling a 14-minute-old reading is the newest that can
+    /// relaxation, at 15-minute sampling a 14-minute-old reading is the newest that can
     /// exist. What issue #161 was actually about is a 14-minute-old <b>zero</b>, and that is
     /// still discarded: see <c>ZeroReadingFreshness</c>, which was deliberately left at 6.</para>
     /// </summary>
@@ -319,7 +319,7 @@ public class PlanHistoryProviderTests : IDisposable
     /// <c>fh=0</c>; the zero blanks <see cref="ResetDetector.FindCurrentWindowStart"/>, and the
     /// fallback anchors on the drop that opened the silence. Before bounding, the window handed
     /// to the detector was two days wide and every sample in it was a zero written before the
-    /// gap — a series that spans nine boundaries, which the detector's contract forbids.
+    /// gap, a series that spans nine boundaries, which the detector's contract forbids.
     /// </summary>
     [Fact]
     public void AWindowStartOlderThanTheWindowIsPulledForward()
@@ -339,7 +339,7 @@ public class PlanHistoryProviderTests : IDisposable
     /// <summary>
     /// And the verdict that follows from it. 60,922 output tokens is the volume that was
     /// actually on the machine, and against the unbounded window it read as
-    /// <see cref="DivergenceState.Diverging"/> — a flat meter under load — because the rise was
+    /// <see cref="DivergenceState.Diverging"/>, a flat meter under load, because the rise was
     /// measured from a sample two days older than the reading. One sample cannot support that
     /// claim, and now that is what the window contains.
     /// </summary>
@@ -382,7 +382,7 @@ public class PlanHistoryProviderTests : IDisposable
     /// <summary>
     /// The guard the fix has to survive: bounding must not silence the case the detector exists
     /// for. A window that opened four hours ago is inside the bound, so a genuinely flat meter
-    /// across it still reports — same volume, same flatness, different span.
+    /// across it still reports, same volume, same flatness, different span.
     /// </summary>
     [Fact]
     public void AFlatMeterInsideTheBoundStillReportsDivergence()
@@ -403,7 +403,7 @@ public class PlanHistoryProviderTests : IDisposable
 
     /// <summary>
     /// The measured case. Desktop samples every ~15 minutes, so the window's start is only
-    /// bracketed to that — and forecasting from the upper bound left the reset about half an
+    /// bracketed to that, and forecasting from the upper bound left the reset about half an
     /// interval late (~8m53s against Desktop on 2026-08-23). A local request inside the
     /// bracket proves the window was already running, tightening the bound.
     /// </summary>
@@ -427,7 +427,7 @@ public class PlanHistoryProviderTests : IDisposable
     }
 
     /// <summary>
-    /// No transcript in the bracket — a chat-only or Desktop-only user — falls back to
+    /// No transcript in the bracket, a chat-only or Desktop-only user, falls back to
     /// exactly the plan-history behaviour. This may only ever improve a figure.
     /// </summary>
     [Fact]
@@ -463,13 +463,13 @@ public class PlanHistoryProviderTests : IDisposable
     }
 
     /// <summary>
-    /// The same guarantee, for the exception the real delegate actually throws — and the one
+    /// The same guarantee, for the exception the real delegate actually throws, and the one
     /// the test above did not cover.
     ///
     /// <para>In production <c>earliestActivity</c> is <c>RollupStore.EarliestRequestBetween</c>,
     /// so a store fault surfaces as <see cref="SqliteException"/>. The catch here used to be
     /// filtered to <c>IOException or InvalidOperationException</c>, which that is neither, so
-    /// it escaped <c>GetSnapshot</c> entirely and took the percentages with it — figures read
+    /// it escaped <c>GetSnapshot</c> entirely and took the percentages with it, figures read
     /// from Claude Desktop's file that do not depend on the rollup store in any way. The
     /// rebuildable cache failing is supposed to cost the token tiles; instead it silently cost
     /// the session gauge as well.</para>

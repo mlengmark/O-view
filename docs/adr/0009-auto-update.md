@@ -1,9 +1,9 @@
 # ADR-0009: In-app auto-update via the GitHub release + existing installer
 
-- **Status:** Accepted *(relaunch amended by [0010](0010-post-update-relaunch.md); Linux behaviour, the unified-release model, installer verification, and an opt-in automatic install amended below — 2026-07-30, 2026-08-02, 2026-08-03, 2026-08-18 and 2026-08-19)*
+- **Status:** Accepted *(relaunch amended by [0010](0010-post-update-relaunch.md); Linux behaviour, the unified-release model, installer verification, and an opt-in automatic install amended below, 2026-07-30, 2026-08-02, 2026-08-03, 2026-08-18 and 2026-08-19)*
 - **Date:** 2026-07-24
 - **Deciders:** @mlengmark
-- **Resolves:** [#18](https://github.com/mlengmark/O-view/issues/18) — "No Auto Update Function"
+- **Resolves:** [#18](https://github.com/mlengmark/O-view/issues/18), "No Auto Update Function"
 
 ## Context
 
@@ -14,22 +14,22 @@ O-view ships new versions as tagged GitHub releases ([ADR-0008](0008-installer-d
 
 Constraints inherited from earlier decisions shape the solution space:
 
-- **No code signing, ever** (README, [ADR-0008](0008-installer-distribution.md)) — so any framework that requires a signed update feed or a signed delta package is out.
-- **Zero third-party runtime dependencies** ([ADR-0005](0005-native-tray-integration.md)) — the runtime footprint is the .NET BCL and SQLite, nothing else.
-- **Per-user install, no elevation** ([ADR-0008](0008-installer-distribution.md)) — an updater must work without admin rights.
+- **No code signing, ever** (README, [ADR-0008](0008-installer-distribution.md)), so any framework that requires a signed update feed or a signed delta package is out.
+- **Zero third-party runtime dependencies** ([ADR-0005](0005-native-tray-integration.md)), the runtime footprint is the .NET BCL and SQLite, nothing else.
+- **Per-user install, no elevation** ([ADR-0008](0008-installer-distribution.md)), an updater must work without admin rights.
 - The app already produces exactly the artifact needed to upgrade in place: **`O-view-Setup.exe`**, a per-user Inno installer whose Restart Manager integration already closes the running instance and replaces the exe.
 
 ## Decision
 
-**Build the updater on the two things that already exist — the GitHub releases API and the installer — and add no new dependency.**
+**Build the updater on the two things that already exist, the GitHub releases API and the installer, and add no new dependency.**
 
-**Discovery (in `O-view.Core`, unit-tested).** [`UpdateCheck`](../../src/O-view.Core/Updates/UpdateCheck.cs) takes the running version and the JSON body of GitHub's `releases/latest` endpoint and decides `UpToDate` / `UpdateAvailable` / `Unknown`. Version comparison is a dedicated [`ReleaseVersion`](../../src/O-view.Core/Updates/ReleaseVersion.cs) — numeric per component (so `0.10.0 > 0.9.0`), tolerant of a leading `v` and a four-part assembly version, pre-release suffixes discarded. An `UpdateAvailable` is only returned when the release also carries the `O-view-Setup.exe` asset, so the offer is never dangling. All of this is pure and network-free, so it is covered by [`UpdateCheckTests`](../../tests/O-view.Core.Tests/UpdateCheckTests.cs).
+**Discovery (in `O-view.Core`, unit-tested).** [`UpdateCheck`](../../src/O-view.Core/Updates/UpdateCheck.cs) takes the running version and the JSON body of GitHub's `releases/latest` endpoint and decides `UpToDate` / `UpdateAvailable` / `Unknown`. Version comparison is a dedicated [`ReleaseVersion`](../../src/O-view.Core/Updates/ReleaseVersion.cs), numeric per component (so `0.10.0 > 0.9.0`), tolerant of a leading `v` and a four-part assembly version, pre-release suffixes discarded. An `UpdateAvailable` is only returned when the release also carries the `O-view-Setup.exe` asset, so the offer is never dangling. All of this is pure and network-free, so it is covered by [`UpdateCheckTests`](../../tests/O-view.Core.Tests/UpdateCheckTests.cs).
 
-**IO (in `O-view.Tray`).** [`UpdateService`](../../src/O-view.Tray/Updates/UpdateService.cs) does the HTTP GET (a shared `HttpClient` with a real User-Agent — the GitHub API rejects requests without one — and a 15 s timeout), downloads the installer to a temp file, and launches it. The running build learns its own version from the assembly version stamped at release time (`-p:Version=<tag>` in the release workflow).
+**IO (in `O-view.Tray`).** [`UpdateService`](../../src/O-view.Tray/Updates/UpdateService.cs) does the HTTP GET (a shared `HttpClient` with a real User-Agent, the GitHub API rejects requests without one, and a 15 s timeout), downloads the installer to a temp file, and launches it. The running build learns its own version from the assembly version stamped at release time (`-p:Version=<tag>` in the release workflow).
 
-**Applying the update.** For an **installed** build, the service runs `O-view-Setup.exe /SILENT /update=1` as an independent process and the app exits so it does not hold the exe locked. The installer's Restart Manager finishes closing the old instance, upgrades in place, and a new `/update=1`-gated `[Run]` entry relaunches the app (the normal post-install "Launch now" checkbox is a `postinstall` action and is skipped under `/SILENT`, so a normal user install never double-launches). For a **portable** build — a loose exe cannot overwrite itself while running, and re-running the installer would create a parallel install — the service opens the release page instead.
+**Applying the update.** For an **installed** build, the service runs `O-view-Setup.exe /SILENT /update=1` as an independent process and the app exits so it does not hold the exe locked. The installer's Restart Manager finishes closing the old instance, upgrades in place, and a new `/update=1`-gated `[Run]` entry relaunches the app (the normal post-install "Launch now" checkbox is a `postinstall` action and is skipped under `/SILENT`, so a normal user install never double-launches). For a **portable** build, a loose exe cannot overwrite itself while running, and re-running the installer would create a parallel install, the service opens the release page instead.
 
-**Surfacing it.** A quiet background check runs ~30 s after launch and then daily; when a newer release exists it shows a **balloon once per version** and stops. It never downloads or installs on its own. The **"Check for updates…"** menu item (directly above "Exit O-view", per the issue) runs the same check interactively, always reports an outcome, and — on confirmation — performs the download-and-install. Keeping the actual fetch-and-execute behind an explicit, confirmed user action is deliberate: silently downloading and running an executable from the network in the background is exactly the behaviour a security-conscious user distrusts, and the confirmation costs one click.
+**Surfacing it.** A quiet background check runs ~30 s after launch and then daily; when a newer release exists it shows a **balloon once per version** and stops. It never downloads or installs on its own. The **"Check for updates…"** menu item (directly above "Exit O-view", per the issue) runs the same check interactively, always reports an outcome, and, on confirmation, performs the download-and-install. Keeping the actual fetch-and-execute behind an explicit, confirmed user action is deliberate: silently downloading and running an executable from the network in the background is exactly the behaviour a security-conscious user distrusts, and the confirmation costs one click.
 
 ## Alternatives considered
 
@@ -37,24 +37,24 @@ Constraints inherited from earlier decisions shape the solution space:
 |---|---|
 | **Squirrel.Windows / Clowd.Squirrel** | Purpose-built in-app updater with delta packages and background install. **Rejected:** it is a second packaging toolchain and runtime dependency ([ADR-0005](0005-native-tray-integration.md) chose zero), it wants its own `Setup.exe`/`RELEASES` feed rather than the Inno installer we already ship ([ADR-0008](0008-installer-distribution.md)), and its unsigned-update story is awkward. Heavy for a tray utility. |
 | **Velopack** (Squirrel's successor) | Same shape of objection: a new dependency and a parallel release format duplicating the installer we already build. The delta-update upside is marginal for a single ~small exe. |
-| **MSIX auto-update** | Clean OS-managed updates — but MSIX **cannot install unsigned** ([ADR-0008](0008-installer-distribution.md) rejected it for exactly this), so it is a non-starter here. |
-| **Fully silent background auto-install (Chrome-style)** | Closest to a literal reading of "without the user doing anything," but it silently downloads and executes a network binary with no consent, and can restart the app under the user without warning. Rejected in favour of a background *notification* plus a one-click confirmed install. **Partly revisited on 2026-08-19** — still rejected as a default and still never silent, but permitted as an opt-in the user turns on; see the amendment at the end of this file. |
+| **MSIX auto-update** | Clean OS-managed updates, but MSIX **cannot install unsigned** ([ADR-0008](0008-installer-distribution.md) rejected it for exactly this), so it is a non-starter here. |
+| **Fully silent background auto-install (Chrome-style)** | Closest to a literal reading of "without the user doing anything," but it silently downloads and executes a network binary with no consent, and can restart the app under the user without warning. Rejected in favour of a background *notification* plus a one-click confirmed install. **Partly revisited on 2026-08-19**, still rejected as a default and still never silent, but permitted as an opt-in the user turns on; see the amendment at the end of this file. |
 | **Download the portable exe and swap it in** | Avoids the installer, but a running single-file exe cannot replace itself, would need a helper process and hand-rolled file-swap/relaunch, and leaves the installed build's Start Menu entry and uninstall record stale. The installer already does all of this correctly. |
 | **Documentation only** ("check the releases page")| Zero engineering; does not resolve the issue's actual request for in-app discovery and update. |
 
 ## Consequences
 
 **Positive**
-- Updates are **discovered in-app** and installed in **one confirmed click**, with no new dependency and no new release artifact — it reuses the releases API and the existing installer.
+- Updates are **discovered in-app** and installed in **one confirmed click**, with no new dependency and no new release artifact, it reuses the releases API and the existing installer.
 - The version-comparison and feed-parsing logic lives in `Core` and is **unit-tested** without a network.
-- **Graceful when it cannot check:** any network/HTTP failure degrades to `Unknown` ("Couldn't check for updates") and the background check stays silent — a failed check never crashes or nags.
+- **Graceful when it cannot check:** any network/HTTP failure degrades to `Unknown` ("Couldn't check for updates") and the background check stays silent, a failed check never crashes or nags.
 - Portable users are not left out: they are pointed at the release page rather than given a broken self-replace.
 
 **Negative**
-- **Requires the repository (and its releases) to be public.** The endpoint used is unauthenticated `releases/latest`; while the repo is private it returns 404 and every check degrades to `Unknown`. The feature therefore *activates when O-view goes public* (the `docs/generalize-*` work is preparing exactly that) and is inert, but harmless, until then. No token is added to make it work private — that would reintroduce credential handling the project avoids.
-- **Unsigned installer, unchanged.** The downloaded `O-view-Setup.exe` triggers SmartScreen exactly as a manual download does; the updater does not and cannot bypass it. Integrity rests on HTTPS to `github.com` plus the release being built from this repo by CI — verify, don't trust (README).
+- **Requires the repository (and its releases) to be public.** The endpoint used is unauthenticated `releases/latest`; while the repo is private it returns 404 and every check degrades to `Unknown`. The feature therefore *activates when O-view goes public* (the `docs/generalize-*` work is preparing exactly that) and is inert, but harmless, until then. No token is added to make it work private, that would reintroduce credential handling the project avoids.
+- **Unsigned installer, unchanged.** The downloaded `O-view-Setup.exe` triggers SmartScreen exactly as a manual download does; the updater does not and cannot bypass it. Integrity rests on HTTPS to `github.com` plus the release being built from this repo by CI, verify, don't trust (README).
 - A **daily background HTTP request** to GitHub. Unauthenticated, well within the 60/hour anonymous rate limit, and skipped entirely on failure.
-- One more moving part in the release pipeline: the workflow now stamps the assembly version from the tag (`-p:Version`) so the running build can compare itself. If that stamp is ever dropped, a release build reports `0.0.0` and thinks every release is newer — caught by the version showing in the "up to date" / update balloons.
+- One more moving part in the release pipeline: the workflow now stamps the assembly version from the tag (`-p:Version`) so the running build can compare itself. If that stamp is ever dropped, a release build reports `0.0.0` and thinks every release is newer, caught by the version showing in the "up to date" / update balloons.
 
 ## Verification (2026-07-24)
 
@@ -73,7 +73,7 @@ describes the Windows behaviour and is unchanged.
 
 | Install kind | On a newer release |
 |---|---|
-| Windows installer (`%LOCALAPPDATA%\Programs\O-view`) | Download and hand off, as above — **unchanged** |
+| Windows installer (`%LOCALAPPDATA%\Programs\O-view`) | Download and hand off, as above, **unchanged** |
 | Windows portable exe | Open the release page |
 | Linux `.deb` (apt/dpkg) | **Say a newer version exists, and stop.** `apt upgrade` does the work |
 | Linux tarball | Open the release page |
@@ -86,7 +86,7 @@ this table.
 Files installed by dpkg are owned by dpkg. An app that overwrites them is silently reverted
 by the next `apt upgrade`, or leaves the package database describing a version that is no
 longer on disk. Anthropic's own Claude Desktop for Linux ships through an apt repository and
-does not self-update either — this follows the platform's convention rather than fighting it.
+does not self-update either, this follows the platform's convention rather than fighting it.
 
 Such a build still **checks**, so it can tell the user a newer version exists. What it must
 never do is download or execute anything.
@@ -99,7 +99,7 @@ platforms' assets, a Linux build would have found the Windows installer, reporte
 
 `Evaluate` now takes a `ReleaseAssetSelector` **supplied by the caller**, so Core still has no
 knowledge of the running platform and stays a pure, unit-testable function. The published
-names and the patterns that match them live together in `ReleaseAssets` — one decision, one
+names and the patterns that match them live together in `ReleaseAssets`, one decision, one
 home, because the release workflow writes those names and the checker reads them
 ([#81](https://github.com/mlengmark/O-view/issues/81)).
 
@@ -108,7 +108,7 @@ so renaming it would strand existing users on their current version with no way 
 
 ### Deliberately not done
 
-This assumes **unified releases** — every tag carrying both platforms' assets — which is the
+This assumes **unified releases**, every tag carrying both platforms' assets, which is the
 recommendation in [#81](https://github.com/mlengmark/O-view/issues/81). Under that model
 `releases/latest` is always the right thing to read, because there is always an asset for the
 checking platform.
@@ -132,11 +132,11 @@ architectures and both tarballs, or no release at all.
 
 It makes the update path correct **by construction**. `releases/latest` returns exactly one
 release regardless of what is attached to it, so with unified releases there is always an
-asset for whichever platform is asking — and `releases/latest` stays the right thing to
+asset for whichever platform is asking, and `releases/latest` stays the right thing to
 read.
 
 Publishing only the changed platform breaks that silently. A Windows user on v0.5.11 facing
-`[v0.6.1 (Linux only), v0.6.0 (both)]` reads v0.6.1, finds no `.exe`, and is told nothing —
+`[v0.6.1 (Linux only), v0.6.0 (both)]` reads v0.6.1, finds no `.exe`, and is told nothing,
 never learning that v0.6.0 exists and applies to them. They stay a version behind
 permanently, with no error to notice. That is why the two further changes specified in #79
 (walking `/releases`, and a distinct "no build for your platform" outcome) remain
@@ -144,14 +144,14 @@ permanently, with no error to notice. That is why the two further changes specif
 pair would be worse than neither.
 
 The cost is cosmetic. A Linux-only fix prompts Windows users to reinstall an identical
-binary. If that ever grates, the fix is to not rebuild an unchanged platform's asset — not
+binary. If that ever grates, the fix is to not rebuild an unchanged platform's asset, not
 to publish a partial release.
 
 ### One version line, one tag namespace
 
 Separate prefixes (`v*` for Windows, `linux-v*`) are not an alternative route to the same
 place. `ReleaseVersion.TryParse` strips a leading `v` only, then truncates at the first
-`-`, leaving `"linux"`, which fails to parse — so `Evaluate` returns `Unknown`. Combined
+`-`, leaving `"linux"`, which fails to parse, so `Evaluate` returns `Unknown`. Combined
 with `releases/latest` ignoring tag prefixes, the first `linux-v*` release would stop every
 Windows client being offered updates. It fails safe, in that nothing bad is installed, but
 invisibly, which is the worst way to find out.
@@ -183,7 +183,7 @@ stop. `apt upgrade` does the work."* **Both halves were untrue of the shipped co
    `UpdateCheckDue` event, so it never checked at all. Worse, it *could* not have: an apt build
    was handed `ReleaseAssets.None`, and `UpdateCheck.Evaluate` only reports `UpdateAvailable`
    when the selector matches a published asset. A selector matching nothing returns `Unknown`
-   forever. The design had conflated **detection** with **permission** — using "must never
+   forever. The design had conflated **detection** with **permission**, using "must never
    install this" to mean "must never recognise this".
 
 2. **`apt upgrade` does not do the work.** The `.deb` installs no apt source, and there is no
@@ -197,7 +197,7 @@ the release gate.
 ### The correction
 
 **Detection is separated from permission.** `UpdatePolicy.DetectionAsset` returns the asset a
-build would actually install — the `.deb` for its architecture, the tarball for its RID — so
+build would actually install, the `.deb` for its architecture, the tarball for its RID, so
 the build can *recognise* a newer release. `UpdatePolicy.MayDownloadAndRun` is unchanged and
 remains the only thing deciding whether anything is fetched or executed. A `.deb` build now
 sees the `.deb`, says so once, and still touches nothing.
@@ -214,7 +214,7 @@ memory: the check runs every 24 h in an app designed to run for days, and an in-
 would re-nag after every restart.
 
 **The notice must not say "run `apt upgrade`".** That command would report nothing to do, and
-a user who ran it and saw nothing would reasonably conclude the notification was wrong — rule
+a user who ran it and saw nothing would reasonably conclude the notification was wrong, rule
 6 applied to our own copy. It names the real step instead.
 
 ### What this does not change
@@ -228,7 +228,7 @@ instead of shipping.
 
 Publishing a real apt repository would make the original sentence true, and is the better
 end state. It needs signing keys, hosting and its own ADR, and it is not a prerequisite for
-v0.6.0 — a notification the user can act on is a complete answer, just not the most convenient
+v0.6.0, a notification the user can act on is a complete answer, just not the most convenient
 one. Revisit if `.deb` downloads prove awkward in practice.
 
 ---
@@ -239,7 +239,7 @@ one. Revisit if `.deb` downloads prove awkward in practice.
 
 The original decision reasoned about *which* asset to install and *whether* a given build is
 allowed to install it. It never said anything about whether the bytes that arrived are the
-bytes the release published — and the implementation did not check. `DownloadInstallerAsync`
+bytes the release published, and the implementation did not check. `DownloadInstallerAsync`
 fetched `O-view-Setup.exe` and `LaunchInstaller` handed it to `Process.Start` with
 `/SILENT /update=1`. Since the installer is deliberately unsigned (ADR-0008), nothing anywhere
 in the chain offered a second opinion. The only integrity guarantee was "the bytes arrived
@@ -255,17 +255,17 @@ The release workflow publishes `SHA256SUMS` alongside every asset, and the Windo
 verifies the downloaded installer against it before the installer is ever launched.
 
 **It fails closed.** A missing manifest, an entry that does not parse, an asset the manifest
-does not name, or a digest that does not match — each of these refuses the update. Falling
+does not name, or a digest that does not match, each of these refuses the update. Falling
 back to "install it anyway" when the manifest is absent would mean an attacker who can replace
 the asset simply omits the manifest, and the check would buy nothing.
 
 The cost of failing closed is real and is accepted: a release that forgets to publish
 `SHA256SUMS` strands every user on their current version with no way to be told. That is the
-same failure mode as renaming a frozen asset name, and it is guarded the same way — the
+same failure mode as renaming a frozen asset name, and it is guarded the same way, the
 release job generates the manifest itself rather than staging it, and asserts both that it
 carries an entry per asset and that `sha256sum -c` passes against the staged bytes.
 
-Two smaller decisions travel with it, because they are the same question — *does the app
+Two smaller decisions travel with it, because they are the same question, *does the app
 trust what the feed told it?*
 
 - **The download URL is checked against an allowlist of GitHub hosts.** `browser_download_url`
@@ -273,7 +273,7 @@ trust what the feed told it?*
   trust decision, not a detail. `ReleaseDownloadUrl` requires https and an exact host match.
 - **The temp filename comes from the parsed version, not the raw tag.** `ReleaseVersion.TryParse`
   truncates at the first `-` or `+`, so a tag of `v9.9.9-../../../../Startup/evil` parsed
-  cleanly as 9.9.9 while `AvailableUpdate.Tag` kept the traversal segments — which then went
+  cleanly as 9.9.9 while `AvailableUpdate.Tag` kept the traversal segments, which then went
   into `Path.Combine` and decided where the downloaded executable landed.
 
 ### What this does not establish
@@ -285,7 +285,7 @@ replace `O-view-Setup.exe` can replace `SHA256SUMS` beside it.
 What it does defend against: tampering or corruption between the release and the user, a
 partially-swapped asset set, and a truncated download that would otherwise have been executed.
 
-The control that *does* cover a compromised account is provenance attestation — Sigstore-backed
+The control that *does* cover a compromised account is provenance attestation, Sigstore-backed
 `actions/attest-build-provenance`, verifiable with `gh attestation verify`, free for public
 repositories. It is the better end state and it is deferred rather than rejected: it needs
 `id-token: write` and `attestations: write` on the release job, which pulls against the
@@ -327,7 +327,7 @@ action is deliberate. This amendment does not pretend that was a mistake. It was
 call for the **default**, and the default does not change.
 
 **What it got wrong is treating "confirmed" and "per-release" as the same requirement.** The
-objection is to acting *without consent*. A toggle the user deliberately turns on is consent —
+objection is to acting *without consent*. A toggle the user deliberately turns on is consent,
 given once, knowingly, about a standing behaviour, on a row that says what it will do. That is
 the same consent model this app already accepts for "Run at startup", which likewise changes
 what happens on the machine when nobody is watching.
@@ -338,7 +338,7 @@ than merely re-arguing it:
 - **The installer is checksum-verified before it is launched, and fails closed** (amendment of
   2026-08-18). "Silently downloads and executes a network binary" is now "downloads a binary,
   refuses it unless it matches the digest the release published, and only then runs it". Still
-  not proof the release is honest — that needs provenance attestation, still deferred — but no
+  not proof the release is honest, that needs provenance attestation, still deferred, but no
   longer the same sentence.
 - **The relaunch is a decided, debugged path** ([ADR-0010](0010-post-update-relaunch.md)),
   not an open question. "Restart the app under the user" was a real unknown when it was
@@ -360,7 +360,7 @@ acceptable.
 **2. Offered only where it can actually work.** `UpdatePolicy.MayDownloadAndRun` is true for
 `WindowsInstaller` alone. A portable exe cannot replace itself while running, and a `.deb` or
 tarball build must never overwrite files it does not own. On those builds **the row does not
-appear** — it is not shown disabled, and it is certainly not shown ticked. A menu row implying
+appear**, it is not shown disabled, and it is certainly not shown ticked. A menu row implying
 a behaviour the build cannot perform is a fabricated claim about the machine, which rule 6
 forbids as firmly for settings as for numbers.
 
@@ -374,14 +374,14 @@ A balloon names the version being installed and warns that O-view will close and
 invisibility, not automation, and that half stays rejected.
 
 **4. Every existing failure path is unchanged.** A checksum mismatch still refuses the update,
-still says so, and still does **not** open the releases page — routing the user to download by
+still says so, and still does **not** open the releases page, routing the user to download by
 hand exactly what the check rejected remains wrong whether or not the flow was automatic. A
 network failure still degrades quietly. `UpdateVerificationException` remains catchable
 separately for precisely this reason.
 
 ### Where the setting lives
 
-`TraySettings`, in `settings.json`, alongside the notification preferences — **not** the
+`TraySettings`, in `settings.json`, alongside the notification preferences, **not** the
 registry. Run-at-startup is deliberately kept out of `TraySettings` because the `Run` key is
 its single source of truth and Task Manager edits that key directly, so two stores could
 disagree. Nothing outside O-view has an opinion about this preference, so that reasoning does
@@ -396,7 +396,7 @@ not carry, and inventing a second registry value would create the divergence it 
   carries *Run at startup* and *Exit* and gains nothing here. The 2026-07-30 and 2026-08-03
   amendments stand in full.
 - **Windows portable.** Still sent to the release page.
-- **Verification.** Unchanged, and now load-bearing for a flow with no human in it —
+- **Verification.** Unchanged, and now load-bearing for a flow with no human in it,
   see below.
 
 ### Consequences
@@ -417,7 +417,7 @@ not carry, and inventing a second registry value would create the divergence it 
   "better end state" to something worth scheduling.
 - The app can close and reopen while the user is working. Mitigated by the announcement in
   constraint 3, not eliminated.
-- One more setting, one more menu row, and a menu whose contents now differ by install kind —
+- One more setting, one more menu row, and a menu whose contents now differ by install kind,
   the first time that has been true, and a thing the verification renders must cover.
 
 ### What would make this wrong
@@ -433,7 +433,7 @@ Unauthenticated, well within the 60/hour anonymous rate limit". Both halves of t
 have since been tested against reality, and each moved in a different direction.
 
 **Twenty-four hours is too slow for the app this became.** O-view is designed to sit in a tray
-for days, so the recurring check — not the launch check — is what most users actually rely on.
+for days, so the recurring check, not the launch check, is what most users actually rely on.
 A release cut an hour after an instance's daily check is invisible to it for the next
 twenty-three. That was reported directly: a machine running v0.6.11 had not noticed v0.6.12
 ninety minutes after it was published, and would not have for most of a day.
@@ -448,7 +448,7 @@ ninety minutes after it was published, and would not have for most of a day.
 The budget is therefore **per address, not per user**, and is shared with every other
 unauthenticated GitHub API caller behind the same NAT. At ten minutes each running instance
 consumes 6/hour, so ten copies behind one office, lab or VPN exit node exhaust the address's
-entire allowance — and leave nothing for anything else on it.
+entire allowance, and leave nothing for anything else on it.
 
 The usual mitigation does not reach us. Conditional requests are exempt only when
 authenticated: "Making a conditional request does not count against your primary rate limit if
@@ -464,7 +464,7 @@ worst case of six hours rather than twenty-four. One `releases/latest` response 
 17,491 bytes, so the daily cost per instance is ~70 KB.
 
 Jitter is the part that matters and is easy to skip. A fixed interval keeps instances that
-started together — a mass reboot, a lab, a fleet behind one VPN — arriving in the same second
+started together, a mass reboot, a lab, a fleet behind one VPN, arriving in the same second
 for as long as they run. A single offset at startup de-synchronises them permanently, which is
 the whole objective; re-rolling per tick would add variance nobody benefits from.
 
@@ -474,14 +474,14 @@ was off, it costs one request, and it is the half of the schedule that was never
 ### A rate limit is now a distinct outcome
 
 The original decision's "graceful when it cannot check" degraded *every* HTTP failure to
-`Unknown`. A GitHub throttle is a 403, so it landed there too — indistinguishable from a dead
+`Unknown`. A GitHub throttle is a 403, so it landed there too, indistinguishable from a dead
 network, with `x-ratelimit-reset` ignored and the next check retrying straight into the same
 wall (issue #176). On a busy shared address that could persist indefinitely while the app said
 nothing, which is rule 6 failing quietly.
 
 `UpdateOutcome.RateLimited` now carries the reset instant. `ReleaseFeed` holds the cooldown so
 neither head grows the logic, and the interactive message names the shared limit rather than
-blaming the user's connection — for most people who hit this, the cause is not their machine.
+blaming the user's connection, for most people who hit this, the cause is not their machine.
 
 A 403 must be corroborated by `x-ratelimit-remaining: 0` or a `Retry-After` before it counts:
 GitHub uses 403 for causes a cooldown would not fix, and excusing those as "try again later"
@@ -492,11 +492,11 @@ would bury a real fault behind a wait.
   per-address allowance for a single instance, and the jitter is what keeps that true for a
   fleet.
 - One more outcome for both heads to handle, and a cooldown that is invisible in the UI while
-  it holds — a check skipped before the reset returns the same answer as the one that set it.
+  it holds, a check skipped before the reset returns the same answer as the one that set it.
 
 ### What would make this wrong
 
 A report of O-view being rate-limited on a normal home connection. At four requests a day that
 should be unreachable, and would mean either the jitter is not being applied or something else
-on that address is spending the budget — both worth knowing, and distinguishable now that the
+on that address is spending the budget, both worth knowing, and distinguishable now that the
 log names the throttle instead of calling it a network failure.

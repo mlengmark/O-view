@@ -8,7 +8,7 @@ namespace OView.Core.Tests;
 /// <summary>
 /// The orphaned-journal guard (issue #213).
 ///
-/// <para>The hazard these pin is not an exception anywhere — it is SQLite recovering from a
+/// <para>The hazard these pin is not an exception anywhere, it is SQLite recovering from a
 /// <c>-wal</c> that does not belong to the database beside it and presenting the result as the
 /// truth, with <c>quick_check</c> returning <c>ok</c> throughout. So the assertions are about
 /// row counts and about which files exist, never about anything being thrown.</para>
@@ -95,7 +95,7 @@ public class StaleJournalTests : IDisposable
 
     /// <summary>
     /// <b>Quarantined, never deleted.</b> The journal may hold committed frames, so the guard
-    /// acting wrongly has to be recoverable — and it lands under the same convention the
+    /// acting wrongly has to be recoverable, and it lands under the same convention the
     /// corruption path uses, so the retention that bounds one bounds the other (issue #160).
     /// </summary>
     [Fact]
@@ -158,12 +158,12 @@ public class StaleJournalTests : IDisposable
     /// <summary>
     /// <b>The trap in the obvious implementation.</b> Windows does not update a file's
     /// directory entry while a handle is open, so a journal being written right now can carry
-    /// a last-write time from minutes ago — and quarantining a live journal is the data loss
+    /// a last-write time from minutes ago, and quarantining a live journal is the data loss
     /// this guard exists to prevent, caused by the guard.
     ///
     /// <para>So the timestamps are only read while both files are held exclusively. When they
     /// cannot be, the verdict says nothing was established rather than reporting the journal
-    /// as fine — an unmade check must not read as a clean one.</para>
+    /// as fine, an unmade check must not read as a clean one.</para>
     /// </summary>
     [Fact]
     public void AStoreHeldOpenElsewhere_IsNotTouchedAndNotDeclaredHealthy()
@@ -240,7 +240,7 @@ public class StaleJournalTests : IDisposable
     /// SQLite folds an orphan in as it opens the file, so a check made afterwards is asking
     /// about a store that has already been rolled back.
     ///
-    /// <para>Asserted through the outcome rather than by inspecting call order — the journal
+    /// <para>Asserted through the outcome rather than by inspecting call order, the journal
     /// is gone by the time the store is usable, which can only be true if the guard ran
     /// first.</para>
     /// </summary>
@@ -260,7 +260,7 @@ public class StaleJournalTests : IDisposable
 
     /// <summary>
     /// A store that opens normally must not look like one that was repaired. The guard's
-    /// ordinary verdict is silence — nothing quarantined, nothing logged, nothing in the
+    /// ordinary verdict is silence, nothing quarantined, nothing logged, nothing in the
     /// bundle to chase.
     /// </summary>
     [Fact]
@@ -282,7 +282,7 @@ public class StaleJournalTests : IDisposable
     /// state of this database, frames, checksums and all.
     ///
     /// <para>Every other test here fabricates a journal, which is enough to exercise the
-    /// guard's mechanics but proves nothing about the hazard — SQLite ignores a file with a
+    /// guard's mechanics but proves nothing about the hazard, SQLite ignores a file with a
     /// bad header rather than recovering from it. This produces one it will genuinely
     /// replay.</para>
     /// </summary>
@@ -305,13 +305,13 @@ public class StaleJournalTests : IDisposable
     /// connection with no guard in the way.
     ///
     /// <para>SQLite recovers from it and treats its frames as the newest version of the pages
-    /// they cover, so the store presents itself as it stood when that file was written — the
+    /// they cover, so the store presents itself as it stood when that file was written, the
     /// later rows simply are not there. Nothing reports a problem: <c>quick_check</c> returns
     /// <c>ok</c>, which is what made this six releases of misdiagnosis.</para>
     ///
     /// <para>This test asserts the <i>wrong</i> behaviour on purpose. It is the evidence that
     /// the guard beside it is defending against something real rather than against a file of
-    /// zeroes, and it fails loudly if a future SQLite ever stops doing this — at which point
+    /// zeroes, and it fails loudly if a future SQLite ever stops doing this, at which point
     /// the guard's rationale would need rewriting rather than quietly standing on a premise
     /// that had expired.</para>
     /// </summary>
@@ -340,7 +340,7 @@ public class StaleJournalTests : IDisposable
 
     /// <summary>
     /// The same orphan, through <see cref="RollupStore"/>. Every row survives, and the twenty
-    /// that the connection above could not see are the rows this issue is about — on the
+    /// that the connection above could not see are the rows this issue is about, on the
     /// machine it was measured on, 1,845 of them, unrebuildable for transcripts Claude Code
     /// had since deleted.
     /// </summary>

@@ -7,7 +7,7 @@ namespace OView.App.Rendering;
 /// true of it, and the width it is actually drawn at.
 /// </summary>
 /// <param name="Share">
-/// The kind's <b>exact</b> fraction of the window — never re-derived from
+/// The kind's <b>exact</b> fraction of the window, never re-derived from
 /// <paramref name="Width"/>. The width is floored (see <see cref="TokenBarGeometry"/>);
 /// the share is not, and every label the panel prints comes from here.
 /// </param>
@@ -29,14 +29,14 @@ public readonly record struct TokenBarSegment(
 ///
 /// <para><b>Why a floor exists at all.</b> Drawn strictly to scale on the 370 px track a
 /// 402 px panel affords, a real day's composition gives cache read 327.9 px, cache write
-/// 38.1 px, output <b>4.0 px</b> and input <b>0.01 px</b> — input does not render, and
+/// 38.1 px, output <b>4.0 px</b> and input <b>0.01 px</b>, input does not render, and
 /// output is a hairline. That is the honest width, and it is why the tiles no longer
 /// headline this total (issue #253). The bar's job here is to show what else was billed,
 /// which it cannot do while two of the four kinds are invisible.</para>
 ///
 /// <para><b>The floor is a stated compromise, not a fix.</b> At 3 px, input is overstated by
 /// roughly 300×. The bar therefore stops being strictly proportional, and what makes that
-/// safe is that <b>every exact figure is on screen beside it</b> — the legend names each
+/// safe is that <b>every exact figure is on screen beside it</b>, the legend names each
 /// kind with its token count, the breakdown view carries the share to two decimals, and the
 /// hover card carries all three plus the estimated value. That is the same relief the
 /// per-model tile charts already run on (<c>PanelPalette</c>, series contrast): identity and
@@ -66,12 +66,12 @@ public static class TokenBarGeometry
 
     /// <summary>
     /// Segments for one window's composition, in <see cref="TokenComposition.InDisplayOrder"/>
-    /// order — output first, at the origin, where a 4 px block is still legible because the
+    /// order, output first, at the origin, where a 4 px block is still legible because the
     /// eye starts there.
     ///
     /// <para><b>A kind with no tokens gets no segment.</b> Not a zero-width one: zero and
     /// "floored to 3 px" would be indistinguishable in the output, and a kind that did not
-    /// happen is not the same as a kind too small to draw — the distinction the graph already
+    /// happen is not the same as a kind too small to draw, the distinction the graph already
     /// makes for pre-install days (ADR-0006).</para>
     ///
     /// <para>The last present segment takes whatever the floors left rather than its own
@@ -91,7 +91,7 @@ public static class TokenBarGeometry
 
         // On a track too narrow to afford the floors they are dropped and the bar goes
         // strictly proportional. Overflowing instead would push the bar past the panel it
-        // sits in — a layout break rather than a legibility compromise — and at a width where
+        // sits in, a layout break rather than a legibility compromise, and at a width where
         // three minimum segments do not fit, nothing on the bar is legible anyway.
         var segments = Lay(present, trackWidth, withFloors: true);
         if (segments.Count > 1 && segments[^1].Width <= 0)

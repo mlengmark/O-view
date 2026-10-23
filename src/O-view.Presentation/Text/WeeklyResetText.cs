@@ -17,7 +17,7 @@ public static class WeeklyResetText
     /// <summary>
     /// Names the source rather than describing the field. Anthropic assigns this time per
     /// account and shows it in Claude, so the user is copying a fact rather than estimating
-    /// one — which is the whole reason an entry outranks what O-view derives.
+    /// one, which is the whole reason an entry outranks what O-view derives.
     /// </summary>
     public const string Source =
         "Anthropic assigns each account a fixed weekly reset. Find yours in Claude → Settings "
@@ -29,8 +29,8 @@ public static class WeeklyResetText
 
     /// <summary>
     /// What the field wants, and what happens if it is left alone. Nothing is pre-filled from
-    /// the derived value — a guess the user confirms becomes a fact, which is worse than one
-    /// labelled uncertain — so this is the only thing telling a first-time reader that an
+    /// the derived value, a guess the user confirms becomes a fact, which is worse than one
+    /// labelled uncertain, so this is the only thing telling a first-time reader that an
     /// empty field is a valid answer.
     /// </summary>
     public const string FirstEntryHint =
@@ -48,7 +48,7 @@ public static class WeeklyResetText
     /// wrong.
     /// </summary>
     public static string TimeError(string entered) =>
-        $"'{entered}' is not a 24-hour time. Enter it as HH:mm — 22:59, not 10:59 PM.";
+        $"'{entered}' is not a 24-hour time. Enter it as HH:mm, 22:59, not 10:59 PM.";
 
     /// <summary>Goes back to deriving. Distinct from <see cref="CancelButton"/>.</summary>
     public const string ClearButton = "Clear";

@@ -12,7 +12,7 @@ namespace OView.Tray.Popup;
 /// #186).
 ///
 /// <para>Its own window rather than <see cref="DialogWindow"/>, which confirms and nothing
-/// else. This one collects input, so it needs validation and a third action — clearing the
+/// else. This one collects input, so it needs validation and a third action, clearing the
 /// entry to go back to deriving.</para>
 ///
 /// <para><b>Nothing is pre-filled from the derived value.</b> Offering O-view's own guess as
@@ -55,13 +55,13 @@ public partial class WeeklyResetDialog : Window
         };
 
         // Clearing the error as soon as the field is edited, rather than only on the next
-        // save attempt — an error that outlives the thing it described reads as a bug.
+        // save attempt, an error that outlives the thing it described reads as a bug.
         TimeBox.TextChanged += (_, _) => ErrorText.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
     /// Shows the dialog modally. Returns the entry now in effect, and whether the user asked
-    /// to clear it — which is distinct from cancelling, and cannot be expressed by a null
+    /// to clear it, which is distinct from cancelling, and cannot be expressed by a null
     /// result alone.
     /// </summary>
     public static (ManualWeeklyReset? Entry, bool Changed) Show(
@@ -87,7 +87,7 @@ public partial class WeeklyResetDialog : Window
             : (dialog._saved ? dialog._result : current, dialog._saved);
     }
 
-    /// <summary>Fills the dialog without showing it — also the verification-render path.</summary>
+    /// <summary>Fills the dialog without showing it, also the verification-render path.</summary>
     public void Populate(ManualWeeklyReset? current)
     {
         PanelTheme.Apply(Resources, ThemeOverride ?? PanelTheme.IsAppsLight());
@@ -107,7 +107,7 @@ public partial class WeeklyResetDialog : Window
         var day = DayBox.SelectedItem as string;
         var time = TimeBox.Text.Trim();
 
-        // Empty is "clear", not an error — a user who deletes the value is asking to go back
+        // Empty is "clear", not an error, a user who deletes the value is asking to go back
         // to deriving, and making them hunt for a separate button for that is friction.
         if (time.Length == 0)
         {

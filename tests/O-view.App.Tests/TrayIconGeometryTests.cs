@@ -4,7 +4,7 @@ using OView.Core.Models;
 namespace OView.App.Tests;
 
 /// <summary>
-/// The tray mark's measured decisions. These are not arbitrary numbers to be tidied — the
+/// The tray mark's measured decisions. These are not arbitrary numbers to be tidied, the
 /// ring/pupil ratios and the stroke width came out of a legibility spike
 /// (docs/findings/tray-icon-rendering.md) and two GitHub issues, and they are now shared by
 /// two drawing backends that must not drift apart (ADR-0013).
@@ -57,7 +57,7 @@ public class TrayIconGeometryTests
     }
 
     /// <summary>
-    /// The pupil lives in the ring's hole and must not touch the stroke — that collision is
+    /// The pupil lives in the ring's hole and must not touch the stroke, that collision is
     /// exactly what made "ring plus digits" unreadable at 16 px, and the pupil only works
     /// because it clears the ring at every size.
     /// </summary>
@@ -80,7 +80,7 @@ public class TrayIconGeometryTests
     [Fact]
     public void PupilKeepsTheMasterMarkRatio()
     {
-        // 0.405x the ring radius — from the master mark (pupil 30 / ring 74 at 256 px), so
+        // 0.405x the ring radius, from the master mark (pupil 30 / ring 74 at 256 px), so
         // the tray icon and the exe icon are the same shape at every scale.
         const int size = 256;
         Assert.Equal(0.405f, TrayIconGeometry.PupilRadius(size) / TrayIconGeometry.RingRadius(size), 4);
@@ -116,7 +116,7 @@ public class TrayIconGeometryTests
 
     /// <summary>
     /// CLAUDE.md rule 6. A JSONL-derived estimate is a real number, but the icon has no room
-    /// to label it "estimate" — so drawing a fill would present a guess as a measurement.
+    /// to label it "estimate", so drawing a fill would present a guess as a measurement.
     /// The neutral empty ring is the honest rendering.
     /// </summary>
     [Fact]
@@ -146,7 +146,7 @@ public class TrayIconGeometryTests
 
     // ── colour ──────────────────────────────────────────────────────────────────────
 
-    /// <summary>Bands must match <see cref="UsageLevels"/> exactly — one definition, two surfaces.</summary>
+    /// <summary>Bands must match <see cref="UsageLevels"/> exactly, one definition, two surfaces.</summary>
     [Theory]
     [InlineData(0)]
     [InlineData(49)]
@@ -205,7 +205,7 @@ public class TrayIconGeometryTests
 
     /// <summary>
     /// The reported bug: at 0% no arc is drawn, but the pupil was still painted the green
-    /// <c>Classify(0)</c> yields — an empty gauge wrapped around a live dot.
+    /// <c>Classify(0)</c> yields, an empty gauge wrapped around a live dot.
     /// </summary>
     [Theory]
     [InlineData(false)]
@@ -216,7 +216,7 @@ public class TrayIconGeometryTests
         Assert.NotEqual(TrayIconGeometry.Foreground(Live(0), light), TrayIconGeometry.Pupil(Live(0), light));
     }
 
-    /// <summary>One point of usage restores it — the fade is the empty state, not a new band.</summary>
+    /// <summary>One point of usage restores it, the fade is the empty state, not a new band.</summary>
     [Theory]
     [InlineData(1)]
     [InlineData(47)]
@@ -235,7 +235,7 @@ public class TrayIconGeometryTests
     /// <summary>
     /// The distinction the fade must not eat. With no data the ring is already faint, so the
     /// opaque neutral pupil is the only thing left separating "O-view has no number" from
-    /// "the number is zero" — fading it too would trade one wrong icon for another.
+    /// "the number is zero", fading it too would trade one wrong icon for another.
     /// </summary>
     [Fact]
     public void UnknownAndEstimatedDataKeepTheOpaqueNeutralPupil()

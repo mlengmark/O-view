@@ -14,7 +14,7 @@ namespace OView.Tray.Diagnostics;
 /// #249). <c>--menu-check</c> and <c>--fold-check</c> construct their own windows, so they can
 /// run before the single-instance mutex. These two cannot: driving the real <c>ShowPopup</c> is
 /// the entire point, and that needs the engine, the tray host and the settings that only exist
-/// after startup. So <see cref="App"/> still owns <c>ShowPopup</c> and the popup field — each
+/// after startup. So <see cref="App"/> still owns <c>ShowPopup</c> and the popup field, each
 /// check here is handed both rather than reaching for <c>Application.Current</c>, and shuts the
 /// app down itself when its sequence ends.</para>
 /// </summary>
@@ -55,7 +55,7 @@ internal static class TrayClickChecks
                     Record("after 2nd click (close)");
                     break;
                 case 3:
-                    showPopup();          // the third click — should open again
+                    showPopup();          // the third click, should open again
                     break;
                 case 4:
                     Record("after 3rd click (reopen)");
@@ -77,13 +77,13 @@ internal static class TrayClickChecks
     }
 
     /// <summary>
-    /// Exercises the tray click the way a user does: open, close, open again — each step through
+    /// Exercises the tray click the way a user does: open, close, open again, each step through
     /// the same <c>ShowPopup</c> the icon itself calls, spaced far enough apart that the close
     /// transition and the toggle's grace window have both elapsed. Writes what the panel actually
     /// is at each point, so a "stopped reacting" report becomes a fact rather than a guess.
     ///
     /// <para><b>The reopen is the assertion that matters.</b> A tray click is a toggle, and the
-    /// click itself dismisses an open surface by taking focus from it — so reopening naively made
+    /// click itself dismisses an open surface by taking focus from it, so reopening naively made
     /// the icon a one-way switch that could only ever open. <c>App.CompletedToggle</c> is what
     /// stops that, and its grace window is why the steps are spaced rather than run back to
     /// back.</para>
@@ -141,7 +141,7 @@ internal static class TrayClickChecks
                 report.AppendLine($"first click opened the panel   : {opened[0]}");
                 report.AppendLine($"reopen after dismiss opened it : {opened[1]}");
                 report.AppendLine($"panel open triggered a refresh : {refreshed}" +
-                                  (shell.CanRefreshUsageCache ? "" : "  (no refresher — not required)"));
+                                  (shell.CanRefreshUsageCache ? "" : "  (no refresher, not required)"));
 
                 // The refresh is only required of a build that has a refresher at all; the other
                 // two are required of every build, because they are the click working.

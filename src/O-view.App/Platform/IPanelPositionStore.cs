@@ -10,8 +10,8 @@ public readonly record struct PanelPlace(WorkAreaCorner Corner, double OffsetXDi
 
 /// <summary>
 /// Where <see cref="PanelPlacementMemory"/> keeps the place it remembers. A seam rather than a
-/// direct dependency on a concrete store, so the placement rule's many edge cases — an
-/// unplugged display, a resolution change, nothing stored — can be exercised against an
+/// direct dependency on a concrete store, so the placement rule's many edge cases, an
+/// unplugged display, a resolution change, nothing stored, can be exercised against an
 /// in-memory fake instead of real file I/O, the same way <see cref="IUiDispatcher"/> and the
 /// other interfaces in this folder stand in for something a test should not have to do for
 /// real.

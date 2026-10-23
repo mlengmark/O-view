@@ -10,13 +10,13 @@ public enum TranscriptScopeStatus
 {
     /// <summary>
     /// No transcript files in any location checked. A user whose Claude usage is all chat
-    /// is the normal case here, not an error — chat keeps no local usage record at all.
+    /// is the normal case here, not an error, chat keeps no local usage record at all.
     /// </summary>
     NoTranscripts,
 
     /// <summary>
     /// Transcript files exist. If the tiles still read zero, the suspect is ingestion, not
-    /// the source — which is a different message and a different action for the user.
+    /// the source, which is a different message and a different action for the user.
     /// </summary>
     TranscriptsPresent,
 }
@@ -24,7 +24,7 @@ public enum TranscriptScopeStatus
 /// <summary>
 /// One transcript source as it resolved on this machine.
 /// </summary>
-/// <param name="Label">Which surface writes here — "Claude Code" or "Cowork".</param>
+/// <param name="Label">Which surface writes here, "Claude Code" or "Cowork".</param>
 /// <param name="Roots">The directories actually searched, after root resolution.</param>
 /// <param name="FileCount">Transcript files found across those roots.</param>
 /// <param name="TotalBytes">Their combined size. Fat files beside a zero total mean ingestion, not absence.</param>
@@ -38,7 +38,7 @@ public sealed record TranscriptSource(
 
 /// <summary>
 /// Where O-view's local token counts actually came from on this machine, and what it found
-/// there — the JSONL counterpart to <see cref="PlanHistory.PlanHistoryReport"/>, and built
+/// there, the JSONL counterpart to <see cref="PlanHistory.PlanHistoryReport"/>, and built
 /// for the same reason: so the panel can state an observation instead of an assumption.
 ///
 /// <para>The note it replaces was a string literal naming one hard-coded path
@@ -53,7 +53,7 @@ public sealed record TranscriptSource(
 /// shown a path that is not the one being searched has been actively pointed somewhere
 /// unhelpful. Everything here is resolved, never assumed.</para>
 ///
-/// <para>Contains paths and file sizes only — no conversation content, no token counts,
+/// <para>Contains paths and file sizes only, no conversation content, no token counts,
 /// nothing identifying beyond the profile directory names already in any Windows path.</para>
 /// </summary>
 public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sources)
@@ -62,7 +62,7 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
 
     public long TotalBytes => Sources.Sum(s => s.TotalBytes);
 
-    /// <summary>Every directory searched, across all sources — the evidence behind a "found none".</summary>
+    /// <summary>Every directory searched, across all sources, the evidence behind a "found none".</summary>
     public IReadOnlyList<string> SearchedRoots => Sources.SelectMany(s => s.Roots).ToList();
 
     /// <summary>
@@ -79,24 +79,24 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
         TotalFiles == 0 ? TranscriptScopeStatus.NoTranscripts : TranscriptScopeStatus.TranscriptsPresent;
 
     /// <summary>
-    /// Which surfaces this machine's figures are actually made of — shown inside the token
+    /// Which surfaces this machine's figures are actually made of, shown inside the token
     /// composition disclosure (GitHub issue #171).
     ///
     /// <para>Until now a user could not tell a low number caused by using Claude less from
     /// one caused by O-view not looking where they work. That ambiguity is the shared root
-    /// of three separate bugs — Cowork usage silently uncounted (#44), a Cowork user told
+    /// of three separate bugs, Cowork usage silently uncounted (#44), a Cowork user told
     /// their source was not read (#58), and a CLI-only user told they had no usage data at
-    /// all (#170) — and in every one of them the panel had the facts and did not say
+    /// all (#170), and in every one of them the panel had the facts and did not say
     /// them.</para>
     ///
     /// <para>An absent surface is named rather than omitted: "Claude Code" alone cannot be
     /// distinguished from a build that forgot Cowork existed, which is precisely how #44 stayed
-    /// invisible. Empty when nothing was found at all — <see cref="Explain"/> owns that state and
+    /// invisible. Empty when nothing was found at all, <see cref="Explain"/> owns that state and
     /// says considerably more about it.</para>
     ///
     /// <para><b>"local transcripts" is doing real work in this sentence</b> (issue #245). Naming
     /// Cowork unqualified said all Cowork usage was counted, and it is not: a cloud-container
-    /// session writes no transcript on this machine at all — measured 2026-08-28, no registration
+    /// session writes no transcript on this machine at all, measured 2026-08-28, no registration
     /// and no transcript, only Desktop's web storage moved. The line reports which surfaces left
     /// files <i>here</i>, which is what #171 asked for; it was the missing qualifier that turned
     /// that into an overstatement.</para>
@@ -106,7 +106,7 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
     /// That stopped being true in issue #235: <c>PanelText.TokenScopeCaveat</c> in Presentation now
     /// states it beneath the tiles, always visible, where this line sits inside a disclosure most
     /// readers never open. Two notes saying overlapping things is how the panel's copy drifted
-    /// apart before, so the permanent gap is stated once — in the more visible of the two.</para>
+    /// apart before, so the permanent gap is stated once, in the more visible of the two.</para>
     /// </summary>
     public string CoverageLine()
     {
@@ -117,7 +117,7 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
 
         var absent = Sources.Where(s => s.FileCount == 0).Select(s => s.Label).ToList();
         var missing = absent.Count > 0
-            ? $" — no {string.Join(" or ", absent)} sessions found"
+            ? $", no {string.Join(" or ", absent)} sessions found"
             : "";
 
         return $"Counting local transcripts: {string.Join(" · ", PresentSources)}{missing}.";
@@ -126,7 +126,7 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
     /// <summary>
     /// The panel's note when the token tiles read zero while the plan meters show real
     /// usage. States what was checked and what was found, and names the surfaces rather
-    /// than a path — the exact locations belong in Copy diagnostics, which this points at.
+    /// than a path, the exact locations belong in Copy diagnostics, which this points at.
     ///
     /// <para>It deliberately does not blame "the Claude Desktop app". Claude Code sessions
     /// hosted inside Desktop write to the ordinary user-profile location and ARE counted;
@@ -135,12 +135,12 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
     ///
     /// <para><b>It no longer names what fills the two bars.</b> It said they came from
     /// Claude Desktop's own usage file, which two sources have reported since Claude Code
-    /// began caching the same two figures — and nothing that reaches this report says which
+    /// began caching the same two figures, and nothing that reaches this report says which
     /// of them answered. <see cref="UsageSnapshot.Source"/> carries freshness, not
     /// provenance, and <see cref="CompositeUsageProvider"/> picks whichever reading is the
     /// more complete and recent, so on a machine with both the named source was a coin
-    /// toss. The reassurance the sentence exists for — a zero tile does not mean a wrong
-    /// bar — survives without it: what matters to the reader is that the bars are not fed
+    /// toss. The reassurance the sentence exists for, a zero tile does not mean a wrong
+    /// bar, survives without it: what matters to the reader is that the bars are not fed
     /// by transcripts, and that is true of either source (CLAUDE.md rule 6).</para>
     /// </summary>
     public string Explain() => Status switch
@@ -155,7 +155,7 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
 
         _ =>
             $"O-view found {TotalFiles} local transcript file(s) ({FormatBytes(TotalBytes)}) but "
-            + "recorded no usage from them. That is unexpected — the session and weekly bars "
+            + "recorded no usage from them. That is unexpected, the session and weekly bars "
             + "above are unaffected, but the token figures may be incomplete. "
             + $"{DiagnosticsHint.Instruction} and report this.",
     };
@@ -184,7 +184,7 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
         return text.ToString();
     }
 
-    /// <summary>Inspects the real machine layout — every root ingestion actually reads.</summary>
+    /// <summary>Inspects the real machine layout, every root ingestion actually reads.</summary>
     public static TranscriptScopeReport Inspect() =>
         Inspect(ClaudeProjectsLocator.DefaultRoot, CoworkAuditLocator.DefaultRoots);
 
@@ -194,8 +194,8 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
     /// root and an empty Cowork list each skip that source outright, and neither falls back
     /// to a machine default.
     ///
-    /// <para>Defaults the exclusion to <see cref="ClaudeCliRefresher.OwnProjectFolder"/> —
-    /// the real machine's answer — so every existing caller gets it for free; tests pass the
+    /// <para>Defaults the exclusion to <see cref="ClaudeCliRefresher.OwnProjectFolder"/>,
+    /// the real machine's answer, so every existing caller gets it for free; tests pass the
     /// three-argument overload to pin the exclusion against a synthetic folder instead.</para>
     /// </summary>
     public static TranscriptScopeReport Inspect(string? projectsRoot, IReadOnlyList<string> coworkRoots) =>
@@ -203,7 +203,7 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
 
     /// <summary>
     /// As above, but with the refresher's own project folder named explicitly rather than
-    /// resolved from the live machine — the seam <c>TranscriptScopeReportTests</c>
+    /// resolved from the live machine, the seam <c>TranscriptScopeReportTests</c>
     /// uses to pin the exclusion without touching the real Claude Code configuration
     /// directory. Pass null to count everything, as if no refresher had ever run.
     /// </summary>
@@ -211,7 +211,7 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
         string? projectsRoot, IReadOnlyList<string> coworkRoots, string? ownRefresherFolder)
     {
         // Trimmed once so a trailing separator on either side can't make an exact match miss,
-        // then compared with a separator appended — a file under "...C--Users-X-2" must not be
+        // then compared with a separator appended, a file under "...C--Users-X-2" must not be
         // treated as sitting inside "...C--Users-X".
         var ownPrefix = ownRefresherFolder is null
             ? null
@@ -220,7 +220,7 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
         var projectFiles = projectsRoot is null
             ? []
             : ClaudeProjectsLocator.FindTranscripts(projectsRoot)
-                // Left out of the report only — ingestion reads this folder like any other, so
+                // Left out of the report only, ingestion reads this folder like any other, so
                 // a machine whose only transcripts are the ones O-view's own usage refresh
                 // created is not told that is unexpected (issue #313).
                 .Where(f => ownPrefix is null || !f.StartsWith(ownPrefix, PathIdentity.Comparison))

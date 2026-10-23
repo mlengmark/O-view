@@ -18,20 +18,20 @@ public sealed record ReleaseAssetSelector(string Description, Func<string, bool>
 ///
 /// <para><b>The Windows names are frozen.</b> Every already-installed Windows build looks
 /// for the literal string <c>O-view-Setup.exe</c>. Renaming it would strand every existing
-/// user on their current version — they would never see the release that fixed it. That is
+/// user on their current version, they would never see the release that fixed it. That is
 /// why the Windows names carry no version or architecture while the Linux ones do, and why
 /// matching cannot be a simple equality test on both platforms.</para>
 /// </summary>
 public static class ReleaseAssets
 {
-    /// <summary>Frozen — see the class remarks before changing.</summary>
+    /// <summary>Frozen, see the class remarks before changing.</summary>
     public const string WindowsInstallerName = "O-view-Setup.exe";
 
     /// <summary>Frozen. The portable exe, offered as a manual download.</summary>
     public const string WindowsPortableName = "O-view.Tray.exe";
 
     /// <summary>
-    /// The checksum manifest published beside every release asset. Also a frozen name — a
+    /// The checksum manifest published beside every release asset. Also a frozen name, a
     /// build that verifies against it looks for this exact string, so renaming it fails
     /// every update rather than skipping the check.
     /// </summary>
@@ -61,7 +61,7 @@ public static class ReleaseAssets
                 && name.EndsWith($"-{runtimeIdentifier}.tar.gz", StringComparison.Ordinal));
 
     /// <summary>
-    /// Matches nothing. For a build that must never install anything it finds — an
+    /// Matches nothing. For a build that must never install anything it finds, an
     /// apt-managed Linux install, where overwriting package-manager files is actively
     /// harmful (ADR-0009). Such a build still *checks*, so it can tell the user a newer
     /// version exists; it simply has no asset to act on.

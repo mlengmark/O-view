@@ -10,7 +10,7 @@ namespace OView.Linux.Tests;
 /// folder whether or not the run that invoked it passed, so a Linux failure can be looked at
 /// rather than only read from a log.
 ///
-/// <para>Elsewhere — the ordinary test job, or a developer's own machine — the variable is
+/// <para>Elsewhere, the ordinary test job, or a developer's own machine, the variable is
 /// unset, so this writes nothing and throws nothing rather than failing a run that was never
 /// meant to photograph anything.</para>
 /// </summary>

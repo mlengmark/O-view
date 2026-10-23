@@ -61,7 +61,7 @@ public class TraySettingsTests : IDisposable
     }
 
     /// <summary>
-    /// A settings file written before the field existed — every install upgrading into this
+    /// A settings file written before the field existed, every install upgrading into this
     /// version. It must read back as off, not as "absent so who knows".
     /// </summary>
     [Fact]

@@ -12,7 +12,7 @@ public sealed record TrayIconPixmap(int Width, int Height, byte[] Argb32);
 /// The <c>ToolTip</c> an item published, as the spec shapes it: <c>(sa(iiay)ss)</c>.
 ///
 /// <para>Four fields, of which a notification area draws the last two. An item with nothing to
-/// say publishes all four empty, which is a different fact from the property being absent —
+/// say publishes all four empty, which is a different fact from the property being absent,
 /// hence <see cref="IsEmpty"/> rather than a null.</para>
 /// </summary>
 /// <param name="IconName">A themed icon name for the tooltip, or empty.</param>
@@ -25,7 +25,7 @@ public sealed record TrayIconToolTip(
     string Title,
     string Description)
 {
-    /// <summary>Nothing in any of the four fields — an item that publishes the property and fills none of it.</summary>
+    /// <summary>Nothing in any of the four fields, an item that publishes the property and fills none of it.</summary>
     public bool IsEmpty =>
         IconName.Length == 0 && IconPixmap.Count == 0 && Title.Length == 0 && Description.Length == 0;
 }
@@ -36,7 +36,7 @@ public sealed record TrayIconToolTip(
 /// the bus assigns the sender and an item cannot forge it, whereas the argument is whatever
 /// the item chose to say.
 /// </param>
-/// <param name="Service">The argument as given — a bus name from most items, an object path from some.</param>
+/// <param name="Service">The argument as given, a bus name from most items, an object path from some.</param>
 /// <param name="ObjectPath">
 /// Where to ask the item about itself. The spec lets the argument be either a bus name or an
 /// object path and real watchers accept both, so this is the argument when it looks like a
@@ -50,8 +50,8 @@ public sealed record RegisteredItem(string BusName, string Service, string Objec
 /// with it, and can ask one of them for its icon.
 ///
 /// <para><b>Why a stand-in rather than a mock.</b> Every Linux tray defect that reached a
-/// desktop — the first click deadlocking (#124), the menu taking tens of seconds (#125), the
-/// click segfaulting on the D-Bus thread (#143) — needed a real bus and a real dispatcher
+/// desktop, the first click deadlocking (#124), the menu taking tens of seconds (#125), the
+/// click segfaulting on the D-Bus thread (#143), needed a real bus and a real dispatcher
 /// together, which is exactly what no in-process fake can give. So this talks the actual
 /// protocol over the actual bus, and the <c>linux-runtime</c> job runs it under
 /// <c>dbus-run-session</c>.</para>
@@ -98,7 +98,7 @@ public sealed class StandInTrayHost : IAsyncDisposable
     private StandInTrayHost(DBusConnection connection) => _connection = connection;
 
     /// <summary>
-    /// Every item registered so far, oldest first. A snapshot — registrations arrive on the
+    /// Every item registered so far, oldest first. A snapshot, registrations arrive on the
     /// bus's own thread, so the list behind it keeps changing.
     /// </summary>
     public IReadOnlyList<RegisteredItem> Items
@@ -107,7 +107,7 @@ public sealed class StandInTrayHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// What <c>IsStatusNotifierHostRegistered</c> reports. Always true — see the note on the
+    /// What <c>IsStatusNotifierHostRegistered</c> reports. Always true, see the note on the
     /// class about this being the host as well as the watcher.
     /// </summary>
     public bool IsHostRegistered => true;
@@ -120,7 +120,7 @@ public sealed class StandInTrayHost : IAsyncDisposable
 
     /// <summary>
     /// Connects to the session bus, exports the watcher object and takes the name. Throws if
-    /// the name is already owned — a real notification area on the same bus would mean the
+    /// the name is already owned, a real notification area on the same bus would mean the
     /// test was measuring that one instead of this.
     /// </summary>
     public static async Task<StandInTrayHost> StartAsync()
@@ -168,7 +168,7 @@ public sealed class StandInTrayHost : IAsyncDisposable
     /// peek at the object on this side.
     ///
     /// <para>Returns the value with its variant wrappers taken off, or null when the item could
-    /// not be asked at all — it never answered, or it answered with an error because it does not
+    /// not be asked at all, it never answered, or it answered with an error because it does not
     /// publish that property. Those two are one answer here on purpose: both mean a host has
     /// nothing to draw, which is the only distinction a tooltip question turns on.</para>
     /// </summary>
@@ -199,7 +199,7 @@ public sealed class StandInTrayHost : IAsyncDisposable
     }
 
     /// <summary>
-    /// Asks an item for its <c>IconPixmap</c> — the pixels a notification area would draw.
+    /// Asks an item for its <c>IconPixmap</c>, the pixels a notification area would draw.
     /// Empty when the item publishes an icon name instead, which is equally valid under the
     /// spec; null when it could not be asked at all.
     /// </summary>
@@ -207,7 +207,7 @@ public sealed class StandInTrayHost : IAsyncDisposable
         await ReadPropertyAsync(item, "IconPixmap") is { } value ? ReadPixmaps(value) : null;
 
     /// <summary>
-    /// Asks an item for its <c>Title</c> — the one line a host has to name the item by. Null
+    /// Asks an item for its <c>Title</c>, the one line a host has to name the item by. Null
     /// when it could not be asked, or answered with something that is not a string.
     /// </summary>
     public async Task<string?> ReadTitleAsync(RegisteredItem item) =>
@@ -216,7 +216,7 @@ public sealed class StandInTrayHost : IAsyncDisposable
             : null;
 
     /// <summary>
-    /// Asks an item for its <c>ToolTip</c> — what a host draws on hover. Null when it could not
+    /// Asks an item for its <c>ToolTip</c>, what a host draws on hover. Null when it could not
     /// be asked, or answered with something that is not the spec's four-field structure;
     /// <see cref="TrayIconToolTip.IsEmpty"/> when it published the property and filled none of it.
     /// </summary>
@@ -243,7 +243,7 @@ public sealed class StandInTrayHost : IAsyncDisposable
     /// <summary>
     /// The value inside however many variants it arrived in. One is the ordinary case; some
     /// items nest a second, so unwrap until something else falls out rather than assuming a
-    /// depth — the same shape <c>PortalThemeSource</c> deals with.
+    /// depth, the same shape <c>PortalThemeSource</c> deals with.
     /// </summary>
     private static VariantValue Unwrap(VariantValue value)
     {
@@ -255,7 +255,7 @@ public sealed class StandInTrayHost : IAsyncDisposable
         return value;
     }
 
-    /// <summary>Reads an <c>a(iiay)</c> — an array of pixmaps — out of an already unwrapped value.</summary>
+    /// <summary>Reads an <c>a(iiay)</c>, an array of pixmaps, out of an already unwrapped value.</summary>
     private static IReadOnlyList<TrayIconPixmap> ReadPixmaps(VariantValue value)
     {
         if (value.Type != VariantValueType.Array)
@@ -375,7 +375,7 @@ public sealed class StandInTrayHost : IAsyncDisposable
                 case "Get":
                 {
                     var reader = request.GetBodyReader();
-                    reader.ReadString();                      // interface — only one is exported here
+                    reader.ReadString();                      // interface, only one is exported here
                     var property = reader.ReadString();
 
                     if (Property(property) is not { } value)
@@ -420,7 +420,7 @@ public sealed class StandInTrayHost : IAsyncDisposable
         };
 
         /// <summary>
-        /// The services as the items named themselves, which is what the property carries —
+        /// The services as the items named themselves, which is what the property carries,
         /// <see cref="RegisteredItem.BusName"/> is for talking to one, not for publishing.
         /// </summary>
         private VariantValue RegisteredServices() =>

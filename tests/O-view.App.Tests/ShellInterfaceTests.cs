@@ -9,7 +9,7 @@ namespace OView.App.Tests;
 /// Proves the two interfaces between a skin and the shell (docs/architecture.md)
 /// each stand on their own: a fake skin against <see cref="IShellToSkin"/>, and a fake shell
 /// against <see cref="ISkinToShell"/>, neither touching WPF, Avalonia or a real
-/// <see cref="UsageEngine"/>. No skin is wired to either interface yet — this only names the
+/// <see cref="UsageEngine"/>. No skin is wired to either interface yet, this only names the
 /// shape both already rely on through direct calls and engine events.
 /// </summary>
 public class ShellInterfaceTests
@@ -28,7 +28,7 @@ public class ShellInterfaceTests
         public void RateCheckDue() => RateChecksDue++;
     }
 
-    /// <summary>A shell that answers every query itself — no rollup store, no clock, no disk.</summary>
+    /// <summary>A shell that answers every query itself, no rollup store, no clock, no disk.</summary>
     private sealed class FakeShell : ISkinToShell
     {
         public UsageSnapshot Latest { get; init; } = UsageSnapshot.None;
@@ -105,7 +105,7 @@ public class ShellInterfaceTests
         Assert.Equal(new TraySettings(), seam.Settings);
     }
 
-    /// <summary>The engine itself is a valid <see cref="ISkinToShell"/> — no change to any
+    /// <summary>The engine itself is a valid <see cref="ISkinToShell"/>, no change to any
     /// member's behaviour, just a name a skin could depend on instead.</summary>
     [Fact]
     public void UsageEngineIsAnISkinToShell()

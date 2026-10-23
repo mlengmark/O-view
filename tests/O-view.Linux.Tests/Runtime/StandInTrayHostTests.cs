@@ -7,8 +7,8 @@ namespace OView.Linux.Tests.Runtime;
 /// The stand-in notification area, exercised over a real session bus.
 ///
 /// <para>These run only in the <c>linux-runtime</c> job, which provides the bus
-/// (<c>dbus-run-session</c>) and sets <c>OVIEW_LINUX_RUNTIME=1</c>. Everywhere else —
-/// Windows, and the ordinary test job — there is no bus to talk to, so each test returns
+/// (<c>dbus-run-session</c>) and sets <c>OVIEW_LINUX_RUNTIME=1</c>. Everywhere else,
+/// Windows, and the ordinary test job, there is no bus to talk to, so each test returns
 /// early, the same way <see cref="LinuxRuntimeEnvironmentTests"/> does.</para>
 ///
 /// <para><b>This is the first test anywhere that watches a tray host appear and disappear.</b>
@@ -56,7 +56,7 @@ public class StandInTrayHostTests
         }
 
         // The bus reassigns ownership when it notices the connection has gone, which is not
-        // the same instant as Dispose returning — so poll rather than read once.
+        // the same instant as Dispose returning, so poll rather than read once.
         Assert.Equal(TrayHostState.Absent, await ProbeUntilAsync(TrayHostState.Absent));
     }
 
@@ -101,7 +101,7 @@ public class StandInTrayHostTests
     ///
     /// <para>Here so that reading them from the real head means something. An empty
     /// <c>ToolTip</c> coming back from O-view is a finding about O-view only if this reader is
-    /// known to return a filled one when there is one to return — otherwise it is
+    /// known to return a filled one when there is one to return, otherwise it is
     /// indistinguishable from a reader that cannot parse <c>(sa(iiay)ss)</c> at all.</para>
     /// </summary>
     [Fact]
@@ -149,7 +149,7 @@ public class StandInTrayHostTests
         await using var item = await StandInTrayItem.StartAsync();
         await host.WaitForItemAsync(Patience);
 
-        // Read them as an item would — over the bus — rather than off the host object, which
+        // Read them as an item would, over the bus, rather than off the host object, which
         // would prove only that the C# property works.
         Assert.True(await ReadWatcherPropertyAsync("IsStatusNotifierHostRegistered", v => v.GetBool()));
         Assert.Equal(
@@ -288,7 +288,7 @@ public class StandInTrayHostTests
                 }
 
                 var reader = request.GetBodyReader();
-                reader.ReadString();                       // interface — only one is published here
+                reader.ReadString();                       // interface, only one is published here
                 var property = reader.ReadString();
 
                 // The three a tooltip question needs, and nothing else: an item is free to
@@ -343,7 +343,7 @@ public class StandInTrayHostTests
             }
 
             /// <summary>
-            /// <c>(sa(iiay)ss)</c> inside a variant — icon name, icon pixmaps, title,
+            /// <c>(sa(iiay)ss)</c> inside a variant, icon name, icon pixmaps, title,
             /// description. Written by hand for the reason the pixmap is: the pixmap array
             /// inside it has no factory, so the whole structure has to be written out.
             /// </summary>

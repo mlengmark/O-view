@@ -4,7 +4,7 @@ using OView.Core.Models;
 namespace OView.Presentation.Text;
 
 /// <summary>
-/// Builds the tray tooltip. NotifyIcon.Text caps at 127 characters (measured —
+/// Builds the tray tooltip. NotifyIcon.Text caps at 127 characters (measured,
 /// docs/findings/tray-icon-rendering.md), so output is always truncated defensively.
 /// Times convert to local only here, at the display edge.
 /// </summary>
@@ -42,9 +42,9 @@ public static class TooltipFormatter
             : "";
         // The weekly reset joins the tooltip on different terms from the session one: shown when
         // known, absent when not, and never prefixed "~". It is a reported instant projected
-        // forward by whole weeks (ADR-0014), so there is no bracket to qualify — unlike the
+        // forward by whole weeks (ADR-0014), so there is no bracket to qualify, unlike the
         // session window, which rolls from first use and keeps its marker. Weekday, not clock
-        // time alone — a bare "07:28" a week out would read as today.
+        // time alone, a bare "07:28" a week out would read as today.
         var weeklyReset = s.WeeklyResetAtUtcValue is { Status: not UsageValueStatus.Unavailable, Value: { } wr }
             ? string.Create(CultureInfo.InvariantCulture,
                 $" · resets {ToLocal(wr, zone):ddd HH:mm}")

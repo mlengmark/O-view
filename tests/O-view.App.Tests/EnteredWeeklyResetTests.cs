@@ -8,7 +8,7 @@ namespace OView.App.Tests;
 /// The entered weekly reset (GitHub issue #186) must reach the people it was built for.
 ///
 /// <para><b>It did not.</b> <c>PlanHistoryProvider</c> resolves the entry itself, but returns
-/// <c>None</c> before reaching that code when there is no plan-history file at all — and the
+/// <c>None</c> before reaching that code when there is no plan-history file at all, and the
 /// composite then falls through to the JSONL estimate, whose weekly reset is null. So a user
 /// with no Claude Desktop entered their reset time and saw nothing change: precisely the
 /// population that cannot derive the value instead, and the only reason the feature exists.
@@ -41,7 +41,7 @@ public class EnteredWeeklyResetTests
 
     /// <summary>
     /// The regression. A CLI-only machine has no plan-history file, so the snapshot that wins
-    /// is the JSONL estimate — percentages null, weekly reset null. The entered time must
+    /// is the JSONL estimate, percentages null, weekly reset null. The entered time must
     /// still appear, because it is the one figure that machine can know.
     /// </summary>
     [Fact]
@@ -63,7 +63,7 @@ public class EnteredWeeklyResetTests
         Assert.Equal(DayOfWeek.Monday,
             TimeZoneInfo.ConvertTime(engine.Latest.WeeklyResetAtUtcValue.Value!.Value, TimeZoneInfo.Local).DayOfWeek);
 
-        // The percentages stay null — those genuinely cannot be known without Desktop, and
+        // The percentages stay null, those genuinely cannot be known without Desktop, and
         // inventing one would be the fabrication rule 6 forbids.
         Assert.Null(engine.Latest.WeeklyPercentValue.Value);
         Assert.Null(engine.Latest.SessionPercentValue.Value);
@@ -72,7 +72,7 @@ public class EnteredWeeklyResetTests
     /// <summary>
     /// Only fills a gap. A snapshot that already carries a weekly reset has been through the
     /// provider's entry-versus-evidence rule, which is the one place allowed to choose between
-    /// them — overwriting here would reinstate an entry an observation had just disproved.
+    /// them, overwriting here would reinstate an entry an observation had just disproved.
     /// </summary>
     [Fact]
     public void TheEntryIsUsedEvenWhereADerivedResetWouldOnceHaveWon()
@@ -82,8 +82,8 @@ public class EnteredWeeklyResetTests
         // A snapshot still carrying a bracketed weekly reset. Under ADR-0011 the entry only
         // filled a gap, so this value survived and the user's own answer was ignored.
         //
-        // No provider produces one any more — PlanHistoryProvider returns null for the weekly
-        // window — so this is a snapshot the app cannot actually build, kept here to pin that
+        // No provider produces one any more, PlanHistoryProvider returns null for the weekly
+        // window, so this is a snapshot the app cannot actually build, kept here to pin that
         // the entry wins even against the thing that used to outrank it. What made the old
         // rule wrong is that the derived value was an inference and the entry was read off
         // Claude's own screen; deferring to the inference preferred a guess to an answer.
@@ -122,8 +122,8 @@ public class EnteredWeeklyResetTests
     }
 
     /// <summary>
-    /// A panel with no data at all stays blank rather than growing one lonely populated line
-    /// — a weekly reset beside four empty tiles reads as a half-broken app.
+    /// A panel with no data at all stays blank rather than growing one lonely populated line,
+    /// a weekly reset beside four empty tiles reads as a half-broken app.
     /// </summary>
     [Fact]
     public void ASnapshotWithNoDataAtAllStaysEmpty()
@@ -157,7 +157,7 @@ public class EnteredWeeklyResetTests
         using var dir = new TempDir();
 
         // A real plan-history file, so the plan-only cadence has something authoritative to
-        // publish — it drops anything that is not (see PublishPlanHistory).
+        // publish, it drops anything that is not (see PublishPlanHistory).
         var planPath = dir.File("plan-usage-history.json");
         var sampledAt = T0.AddMinutes(-2).ToUnixTimeMilliseconds();
         File.WriteAllText(planPath,

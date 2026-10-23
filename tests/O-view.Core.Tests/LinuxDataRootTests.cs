@@ -11,7 +11,7 @@ namespace OView.Core.Tests;
 /// while the app is open and working.
 ///
 /// <para>Anthropic's own Linux build ships through apt and does <b>not</b> redirect, so on
-/// a stock supported install these find nothing — they are here for unofficial Snap and
+/// a stock supported install these find nothing, they are here for unofficial Snap and
 /// Flatpak repackagings.</para>
 ///
 /// <para>Each layout is a pure function of a search root, so every case here runs on both
@@ -46,7 +46,7 @@ public class LinuxDataRootTests : IDisposable
     public void SnapStoreIsDiscovered()
     {
         // A snap's $HOME is redirected to ~/snap/<snap>/<revision>, with `current` a
-        // symlink to the live revision — so config lands under current/.config.
+        // symlink to the live revision, so config lands under current/.config.
         Make("snap", "claude-desktop", "current", ".config", "Claude");
 
         var found = ClaudeDataRoots.SnapStores(_home);
@@ -148,7 +148,7 @@ public class LinuxDataRootTests : IDisposable
 
     /// <summary>
     /// Plan history must consider the same redirected roots, or a sandboxed install shows
-    /// "no usage data" while Claude Desktop is open — the exact failure
+    /// "no usage data" while Claude Desktop is open, the exact failure
     /// <see cref="PlanHistoryLocator"/> was written after.
     /// </summary>
     [Fact]

@@ -12,7 +12,7 @@ namespace OView.Presentation.Tests;
 /// as the account's own, which placeholder stands in for a missing one, when a reset row is
 /// worth drawing at all, and what a user-entered reset is labelled. The strings themselves
 /// are <see cref="PanelText"/>'s and are asserted against it rather than re-typed, so a
-/// reworded sentence does not fail here — only a row choosing the wrong sentence does.</para>
+/// reworded sentence does not fail here, only a row choosing the wrong sentence does.</para>
 /// </summary>
 public class PanelSectionTests
 {
@@ -48,8 +48,8 @@ public class PanelSectionTests
     }
 
     /// <summary>
-    /// With no account file read, the name and tier are stand-in sentences rather than blanks
-    /// — a reader must not take either for what their account is called.
+    /// With no account file read, the name and tier are stand-in sentences rather than blanks,
+    /// a reader must not take either for what their account is called.
     /// </summary>
     [Fact]
     public void AnUnreadAccountStandsInRatherThanBlanking()
@@ -93,7 +93,7 @@ public class PanelSectionTests
 
     /// <summary>
     /// A JSONL-derived snapshot can carry percentages, and they are not the account's meters
-    /// (ADR-0002). The row states why instead, and nothing is filled — a zero-width fill
+    /// (ADR-0002). The row states why instead, and nothing is filled, a zero-width fill
     /// beside a number would read as "no usage" when the truth is "not known" (rule 6).
     /// </summary>
     [Fact]
@@ -117,7 +117,7 @@ public class PanelSectionTests
 
     /// <summary>
     /// When the banner has worked out why the meters are empty, its placeholder says so rather
-    /// than the generic one — the whole point of carrying a placeholder per banner.
+    /// than the generic one, the whole point of carrying a placeholder per banner.
     /// </summary>
     [Fact]
     public void TheBannersOwnPlaceholderWinsWhenItHasOne()
@@ -151,8 +151,8 @@ public class PanelSectionTests
     }
 
     /// <summary>
-    /// A figure outside 0–100 is still stated as reported — the panel does not quietly correct
-    /// what a source said — but it is drawn inside the track. Clamping for the fill is a data
+    /// A figure outside 0–100 is still stated as reported, the panel does not quietly correct
+    /// what a source said, but it is drawn inside the track. Clamping for the fill is a data
     /// question and belongs here; how few pixels a 1% fill may shrink to is each head's.
     /// </summary>
     [Theory]
@@ -212,8 +212,8 @@ public class PanelSectionTests
     }
 
     /// <summary>
-    /// Nothing has reported one and nothing was entered. The row names the state — rendering
-    /// nothing is indistinguishable from a bug — and carries the one step that ends it, in the
+    /// Nothing has reported one and nothing was entered. The row names the state, rendering
+    /// nothing is indistinguishable from a bug, and carries the one step that ends it, in the
     /// hint where there is hover and on the line itself where there is not.
     /// </summary>
     [Fact]
@@ -237,7 +237,7 @@ public class PanelSectionTests
 
     /// <summary>
     /// With no plan data there is nothing to act on, and the banner above already explains
-    /// why — so there is no row at all rather than a second copy of the explanation.
+    /// why, so there is no row at all rather than a second copy of the explanation.
     /// </summary>
     [Fact]
     public void WithNoPlanDataTheWeeklyRowIsAbsentEntirely()
@@ -306,7 +306,7 @@ public class PanelSectionTests
         new(usd, usd is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated);
 
     /// <summary>
-    /// Four models, so the fourth is folded into the remainder — the shape that exercises both
+    /// Four models, so the fourth is folded into the remainder, the shape that exercises both
     /// the chromatic slots and the neutral.
     /// </summary>
     private static readonly ModelSlice[] Window =
@@ -371,7 +371,7 @@ public class PanelSectionTests
 
     /// <summary>
     /// A token tile's segments are measured in tokens and a value tile's in money. The same
-    /// rows, two measures — and the figure a reader sees on hover has to be the one the segment
+    /// rows, two measures, and the figure a reader sees on hover has to be the one the segment
     /// was sized from.
     /// </summary>
     [Fact]
@@ -398,7 +398,7 @@ public class PanelSectionTests
 
         Assert.Equal(1.0, tiles.Est31Days.Segments.Sum(s => s.Share), 6);
 
-        // 250 of 425.21 priced dollars, where the same model is 350M of 575.9M tokens — two
+        // 250 of 425.21 priced dollars, where the same model is 350M of 575.9M tokens, two
         // different widths for one model, which is the whole point of splitting by measure.
         var value = tiles.Est31Days.Segments.First(s => s.Identity == "claude-opus-4-8");
         Assert.Equal(250.00 / 425.21, value.Share, 6);
@@ -406,7 +406,7 @@ public class PanelSectionTests
 
     /// <summary>
     /// The fourth model is folded, and the remainder is named by Presentation from the count
-    /// Core set — never from a word Core wrote into the slice, which it leaves empty. It takes
+    /// Core set, never from a word Core wrote into the slice, which it leaves empty. It takes
     /// the neutral slot, because it is not one of the panel's coloured models.
     /// </summary>
     [Fact]
@@ -425,7 +425,7 @@ public class PanelSectionTests
     }
 
     /// <summary>
-    /// An unpriced model cannot go on a value chart — its worth is unknown, not zero — so the
+    /// An unpriced model cannot go on a value chart, its worth is unknown, not zero, so the
     /// caption says the total is short and the hint names it (rule 6).
     /// </summary>
     [Fact]
@@ -441,14 +441,14 @@ public class PanelSectionTests
         Assert.Equal(TokenText.ModelBreakdownCaption(1), tiles.Est31Days.Caption);
         Assert.Equal(TokenText.UnpricedModelsHint(["Brand New 9"]), tiles.Est31Days.CaptionHint);
 
-        // The same model on the token tile is not missing from anything — it recorded tokens.
+        // The same model on the token tile is not missing from anything, it recorded tokens.
         Assert.Equal(TokenText.ModelBreakdownCaption(0), tiles.Tokens31Days.Caption);
         Assert.Null(tiles.Tokens31Days.CaptionHint);
     }
 
     /// <summary>
     /// The identifying line is <b>always</b> there. It was once dropped when it matched the
-    /// friendly name, which is exactly the case for an unrecognised model — so those hover
+    /// friendly name, which is exactly the case for an unrecognised model, so those hover
     /// cards showed a figure with nothing naming it.
     /// </summary>
     [Fact]
@@ -497,7 +497,7 @@ public class PanelSectionTests
 
     /// <summary>
     /// Off-plan work bills at API rates, so the value tiles name the mixture and their label
-    /// flips with it. <b>The token tiles do not</b> — a count is the same count either way.
+    /// flips with it. <b>The token tiles do not</b>, a count is the same count either way.
     ///
     /// <para>This is the one place the two heads disagree, and the Windows reading is what is
     /// built here. The Linux head still overrides it, because taking this would drop a line

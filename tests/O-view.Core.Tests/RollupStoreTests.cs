@@ -24,7 +24,7 @@ public class RollupStoreTests : IDisposable
         new(id, DateTimeOffset.Parse(date + "T12:00:00Z"), model,
             new TokenSplit(10, 0, 100, 0, 200, output), UsageModifiers.Standard);
 
-    /// <summary>Every zone is named explicitly — none of these read the machine's (issue #211).</summary>
+    /// <summary>Every zone is named explicitly, none of these read the machine's (issue #211).</summary>
     private static readonly TimeZoneInfo Utc = TimeZoneInfo.Utc;
 
     private static readonly TimeZoneInfo PlusTwo =
@@ -67,7 +67,7 @@ public class RollupStoreTests : IDisposable
     /// <summary>
     /// The point of the whole change (issue #211): the bucket a request lands in follows the
     /// caller's timezone, not the <c>utc_date</c> it was stored under. Same rows, same store,
-    /// two zones, two answers — and both are right for whoever is reading.
+    /// two zones, two answers, and both are right for whoever is reading.
     /// </summary>
     [Fact]
     public void Rollups_BucketByTheCallersDay_NotTheStoredUtcDate()
@@ -107,8 +107,8 @@ public class RollupStoreTests : IDisposable
     }
 
     // CoverageCount_ReportsDistinctRecordedDays went with CountRecordedDays (issue #142). It
-    // asserted the behaviour that turned out to be the bug — that a day with no usage does not
-    // count as recorded — so it could not be repaired, only removed. Coverage is now derived
+    // asserted the behaviour that turned out to be the bug, that a day with no usage does not
+    // count as recorded, so it could not be repaired, only removed. Coverage is now derived
     // from the day series and covered by PanelStatisticsTests, next to the PreInstall boundary
     // it has to agree with.
 
@@ -136,7 +136,7 @@ public class RollupStoreTests : IDisposable
         // the whole usage display. A rebuildable cache must self-heal, not stay fatal.
         var path = Path.Combine(_dir, "corrupt.db");
         var bytes = new byte[4096];
-        // Valid SQLite magic + page size 4096, then garbage — a malformed file (not merely
+        // Valid SQLite magic + page size 4096, then garbage, a malformed file (not merely
         // "not a database"), which is what real on-disk corruption looks like.
         System.Text.Encoding.ASCII.GetBytes("SQLite format 3\0").CopyTo(bytes, 0);
         bytes[16] = 0x10; bytes[17] = 0x00;
@@ -145,7 +145,7 @@ public class RollupStoreTests : IDisposable
 
         using (var store = new RollupStore(path))
         {
-            // A rebuilt, empty, healthy store — usable, with no leftover rows.
+            // A rebuilt, empty, healthy store, usable, with no leftover rows.
             store.Ingest([Record("r1", "2026-07-20", "claude-opus-4-8", 100)]);
             Assert.Single(store.GetDailyRollups(At("2026-07-20T00:00:00Z"), At("2026-07-21T00:00:00Z"), Utc));
         }

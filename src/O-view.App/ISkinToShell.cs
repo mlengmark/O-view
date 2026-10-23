@@ -6,7 +6,7 @@ using OView.Core.Storage;
 namespace OView.App;
 
 /// <summary>
-/// What a skin asks of the shell — the skin-to-shell half of the seam between
+/// What a skin asks of the shell, the skin-to-shell half of the seam between
 /// <c>O-view.Tray</c>/<c>O-view.Linux</c> and <c>O-view.App</c>
 /// (<see cref="IShellToSkin"/> is the other direction). <see cref="UsageEngine"/> implements
 /// it; nothing here changes what any member does, only that a skin may now depend on this
@@ -14,15 +14,15 @@ namespace OView.App;
 ///
 /// <para>Ported in shape only from <c>mlengmark/oview</c>'s <c>ISkinToShell.cs</c>: there
 /// every member is a one-way command, with the answer arriving later through
-/// <c>IShellToSkin</c>. Here a skin still reads state straight back — <see cref="Latest"/>,
-/// <see cref="Settings"/> and the rest are queries, not commands — because that is what
+/// <c>IShellToSkin</c>. Here a skin still reads state straight back, <see cref="Latest"/>,
+/// <see cref="Settings"/> and the rest are queries, not commands, because that is what
 /// both skins actually do today; this interface only names the shape already in use.</para>
 ///
 /// <para>Both skins hold nothing but this; <see cref="ShellHost"/> owns the engine.</para>
 /// </summary>
 public interface ISkinToShell
 {
-    /// <summary>Most recent snapshot — what the panel opens with.</summary>
+    /// <summary>Most recent snapshot, what the panel opens with.</summary>
     UsageSnapshot Latest { get; }
 
     /// <summary>Current persisted settings. Mutated only through the setters below.</summary>
@@ -49,7 +49,7 @@ public interface ISkinToShell
     /// <summary>Asks Claude Code to refresh its usage cache, if it is allowed and due.</summary>
     void RefreshUsageCache(bool force = false);
 
-    /// <summary>Whether a refresher was supplied at all — the feature being on, not it being allowed.</summary>
+    /// <summary>Whether a refresher was supplied at all, the feature being on, not it being allowed.</summary>
     bool CanRefreshUsageCache { get; }
 
     /// <summary>Why usage refreshing is switched off, or null while it is allowed.</summary>

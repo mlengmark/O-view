@@ -5,7 +5,7 @@ namespace OView.Core.Tests;
 
 /// <summary>
 /// Claude Code caches the figures behind <c>/status</c> → Usage in <c>~/.claude.json</c>, and
-/// they are the only <b>reported</b> session and weekly numbers available locally — percentages
+/// they are the only <b>reported</b> session and weekly numbers available locally, percentages
 /// and, more valuably, exact reset instants.
 ///
 /// <para>Fixtures follow the real shape, with identifying values scrubbed.</para>
@@ -13,7 +13,7 @@ namespace OView.Core.Tests;
 public class CachedUtilizationTests
 {
     /// <summary>
-    /// The repository's all-zero placeholder, not a real account uuid — fixtures are scrubbed
+    /// The repository's all-zero placeholder, not a real account uuid, fixtures are scrubbed
     /// (repo convention), and the CI identifier scan allows only this one.
     /// </summary>
     private const string Account = "00000000-0000-0000-0000-000000000000";
@@ -54,7 +54,7 @@ public class CachedUtilizationTests
 
     /// <summary>
     /// The documented shape, including the sibling bars that read null on a plan with no
-    /// separate meter for them — they are present in every real file and must not confuse the
+    /// separate meter for them, they are present in every real file and must not confuse the
     /// parse.
     /// </summary>
     private static string Document(
@@ -109,7 +109,7 @@ public class CachedUtilizationTests
 
     /// <summary>
     /// The source writes an offset-qualified timestamp. Parsing it as a local
-    /// <see cref="DateTime"/> would silently shift it by the machine's offset — the class of bug
+    /// <see cref="DateTime"/> would silently shift it by the machine's offset, the class of bug
     /// that puts a reset countdown hours out and looks like an arithmetic error somewhere else.
     /// </summary>
     [Fact]
@@ -194,7 +194,7 @@ public class CachedUtilizationTests
     }
 
     /// <summary>
-    /// The provider's rules, which are where the honesty lives — parsing is the easy half.
+    /// The provider's rules, which are where the honesty lives, parsing is the easy half.
     /// </summary>
     public class Provider
     {
@@ -225,7 +225,7 @@ public class CachedUtilizationTests
         }
 
         /// <summary>
-        /// Reported, not inferred — so neither reset carries a bracket, and neither may render
+        /// Reported, not inferred, so neither reset carries a bracket, and neither may render
         /// with the "~" that marks one.
         /// </summary>
         [Fact]
@@ -255,7 +255,7 @@ public class CachedUtilizationTests
         /// <b>The failure mode unique to this source.</b> Claude Code caches while it runs; leave
         /// it closed across a window boundary and the file still reads 91% for a window that
         /// reset to nothing hours ago. The bar carries the instant its own window ends, so this
-        /// is checkable — and checked. Showing the cached figure here would be the worst number
+        /// is checkable, and checked. Showing the cached figure here would be the worst number
         /// O-view could display: confidently near the limit when the truth is near zero.
         /// </summary>
         [Fact]
@@ -279,7 +279,7 @@ public class CachedUtilizationTests
 
         /// <summary>
         /// A passed boundary is not stepped forward to the next one. For the five-hour window
-        /// that would rebuild the bug issue #180 removed — the window starts on first use, so a
+        /// that would rebuild the bug issue #180 removed, the window starts on first use, so a
         /// grid stepped forward describes a window that never existed. For the weekly window the
         /// arithmetic would be sound but the result would be an inference wearing a reported
         /// value's zero uncertainty. Null hands the question back to the derivation that already
@@ -298,7 +298,7 @@ public class CachedUtilizationTests
         /// <summary>
         /// Within a window utilisation only rises, so an aged reading is a lower bound. Zero is
         /// the one value whose bound says nothing at all while looking like a precise finding
-        /// that the window is empty — the same argument, and the same threshold, as
+        /// that the window is empty, the same argument, and the same threshold, as
         /// <c>PlanHistoryProvider.ZeroReadingFreshness</c> (issue #161).
         /// </summary>
         [Fact]
@@ -324,7 +324,7 @@ public class CachedUtilizationTests
         }
 
         /// <summary>
-        /// A provider that throws must not blank the display — it must fall through, so the
+        /// A provider that throws must not blank the display, it must fall through, so the
         /// composite can reach a source that still knows something (issue #16's shape).
         /// </summary>
         [Fact]

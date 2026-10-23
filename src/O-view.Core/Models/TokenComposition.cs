@@ -29,7 +29,7 @@ public enum TokenKind
 /// it would have cost at published API rates.
 /// </summary>
 /// <param name="EstUsdValue">
-/// <see cref="UsageValueStatus.Unavailable"/> when nothing in the window could be priced — the
+/// <see cref="UsageValueStatus.Unavailable"/> when nothing in the window could be priced, the
 /// same "honest unknown" rule <see cref="PanelStatistics"/> applies to the Est. tiles, so a
 /// card and the tile above it cannot disagree about whether a figure is known.
 /// </param>
@@ -41,11 +41,11 @@ public sealed record TokenKindSlice(TokenKind Kind, long Tokens, double Share, E
 ///
 /// <para><b>Why this exists.</b> A user reported the token tiles as inflated: the panel
 /// read <c>235.6M</c> where Claude's own UI showed thousands, and they concluded O-view was
-/// over-counting (GitHub issue #169). It was not — the ingestion path de-duplicates on
+/// over-counting (GitHub issue #169). It was not, the ingestion path de-duplicates on
 /// request id and upserts by replacement, and the sum was arithmetically right. The two
 /// figures simply answer different questions.</para>
 ///
-/// <para>Measured on real transcripts: <b>cache reads were 89.2% of a day's total</b> —
+/// <para>Measured on real transcripts: <b>cache reads were 89.2% of a day's total</b>,
 /// 398,121 of 446,148 tokens across 7 requests. Every turn re-sends the whole conversation
 /// and prompt caching bills that re-send as <c>cache_read_input_tokens</c>, so the
 /// cumulative figure outruns any single conversation's size by orders of magnitude.</para>
@@ -55,14 +55,14 @@ public sealed record TokenKindSlice(TokenKind Kind, long Tokens, double Share, E
 /// <see cref="Output"/> alone, and this type is what sits beneath them explaining what else
 /// was billed. Both halves of #169's reasoning survive the change and neither should be
 /// undone: the sum here is still the whole of what was billed, and
-/// <see cref="Pricing.CostEstimator"/> still prices every kind — dropping cache reads from
+/// <see cref="Pricing.CostEstimator"/> still prices every kind, dropping cache reads from
 /// the <i>cost</i> path would understate real consumption by roughly the share measured
 /// above.</para>
 /// </summary>
 public sealed record TokenComposition(long Input, long CacheCreation, long CacheRead, long Output)
 {
     // Zero tokens is a known fact (Real); nothing to price is the "unknown" EstimateUsd(an
-    // empty rollup set) would also return, per From's own rule below — not a known zero.
+    // empty rollup set) would also return, per From's own rule below, not a known zero.
     public static readonly TokenComposition Empty = new(0, 0, 0, 0)
     {
         InputCount = TokenCount.Measured(0),
@@ -73,7 +73,7 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
 
     /// <summary>
     /// <see cref="Input"/>, paired with its <see cref="UsageValueStatus"/>. Always
-    /// <see cref="UsageValueStatus.Real"/> — every kind here is read directly from the
+    /// <see cref="UsageValueStatus.Real"/>, every kind here is read directly from the
     /// rollups, never modelled, so only the Est. figures beside them can go unavailable.
     /// </summary>
     public TokenCount InputCount { get; init; }
@@ -94,7 +94,7 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
     ///
     /// <para>Unavailable unless <see cref="From"/> prices it, so <see cref="Empty"/> and any
     /// composition built from counts alone read as "nothing was priced" rather than as a known
-    /// zero — the distinction this type's own rule rests on.</para>
+    /// zero, the distinction this type's own rule rests on.</para>
     /// </summary>
     public EstimatedUsd InputValue { get; init; } = EstimatedUsd.Priced(null);
 
@@ -110,7 +110,7 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
     /// <summary>
     /// Everything billed in this window. No longer the tiles' headline (issue #253), and
     /// still identical by construction to the sum of <see cref="DailyRollup.TotalTokens"/>
-    /// over the same rollups — the point of this type is to explain a window, never to
+    /// over the same rollups, the point of this type is to explain a window, never to
     /// compute a different figure for it.
     /// </summary>
     public long Total => Input + CacheCreation + CacheRead + Output;
@@ -131,12 +131,12 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
     public double ShareOf(long tokens) => Total == 0 ? 0 : (double)tokens / Total;
 
     /// <summary>
-    /// The four kinds ready to draw — one shape serving the bar, its legend, the breakdown
+    /// The four kinds ready to draw, one shape serving the bar, its legend, the breakdown
     /// table and the hover cards, on both heads.
     ///
     /// <para>Built here rather than in each panel because the <i>order</i> carries meaning
     /// (see <see cref="TokenKind"/>) and two heads ordering it differently is the same class
-    /// of defect as two heads computing it differently — which is what
+    /// of defect as two heads computing it differently, which is what
     /// <c>PanelText</c> in Presentation exists to prevent for words.</para>
     /// </summary>
     public IReadOnlyList<TokenKindSlice> InDisplayOrder =>
@@ -156,7 +156,7 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
     /// per-kind price computed here from its own multipliers would be a second implementation
     /// of the thing #169 was reported about.</para>
     ///
-    /// <para>Est. values are null whenever <b>nothing</b> could be priced — matching the rule
+    /// <para>Est. values are null whenever <b>nothing</b> could be priced, matching the rule
     /// <c>PanelStatistics.EstimateTotal</c> applies to the tiles, so a card never reads
     /// "unknown" beside a tile showing a figure, or the reverse. A window that could be
     /// priced but happens to hold no tokens is a known zero, not an unknown.</para>
@@ -172,7 +172,7 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
             total += r.Tokens;
 
             // An unpriced model contributes tokens but no value, and is named in
-            // PanelStatistics.UnpricedModels — the tokens are still real.
+            // PanelStatistics.UnpricedModels, the tokens are still real.
             if (CostEstimator.EstimateUsd(
                     r.Model, TokenSplit.Empty with { Input = r.Tokens.Input }, r.Modifiers)
                 is not { } inputPart)
@@ -182,7 +182,7 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
 
             // The remaining three are priceable by construction: EstimateUsd returns null only
             // when the rate card cannot resolve the model or its modifiers, and neither varies
-            // by token kind. The three cache-write buckets are priced together — the bar draws
+            // by token kind. The three cache-write buckets are priced together, the bar draws
             // one "cache write" segment, and its value has to be the whole of what that segment
             // counts, at each bucket's own published rate.
             inputUsd += inputPart;
@@ -194,7 +194,7 @@ public sealed record TokenComposition(long Input, long CacheCreation, long Cache
             pricedAny = true;
         }
 
-        // Unknown, not zero, whenever nothing could be priced — including the no-rollups
+        // Unknown, not zero, whenever nothing could be priced, including the no-rollups
         // case, so From([]) is Empty exactly. Zero would say "this was worth nothing", which
         // is a different claim from "there is nothing here to value" (rule 6).
         var unknown = !pricedAny;

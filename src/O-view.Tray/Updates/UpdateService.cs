@@ -14,7 +14,7 @@ namespace OView.Tray.Updates;
 /// Fetches the latest GitHub release, compares it to the running build, and (when the app
 /// was installed) downloads the installer and hands off to it for a self-replacing update
 /// (ADR-0009). The version comparison and JSON shape live in <see cref="UpdateCheck"/> in
-/// Core; this class is only the IO — HTTP, the temp download, and launching the installer —
+/// Core; this class is only the IO, HTTP, the temp download, and launching the installer,
 /// so it stays out of the unit tests and Core stays free of network dependencies.
 /// </summary>
 public sealed class UpdateService
@@ -31,7 +31,7 @@ public sealed class UpdateService
     /// <summary>
     /// The running build's version, from the assembly version stamped at release time
     /// (<c>-p:Version</c> in the release workflow). A local dev build has no version stamp
-    /// and reports 0.0.0, which compares older than any real release — so a dev build will
+    /// and reports 0.0.0, which compares older than any real release, so a dev build will
     /// always see an "update available"; that is harmless (it is not an installed build, so
     /// the update path opens the releases page rather than replacing anything).
     /// </summary>
@@ -41,7 +41,7 @@ public sealed class UpdateService
     /// <summary>
     /// How this build arrived, which <see cref="UpdatePolicy"/> turns into what it may do.
     ///
-    /// <para>Only the two Windows kinds are reachable from here — this class is the WPF
+    /// <para>Only the two Windows kinds are reachable from here, this class is the WPF
     /// head's, and Linux never reaches it (ADR-0009 as amended: an apt build defers to the
     /// package manager and downloads nothing). The Linux head supplies its own kind.</para>
     ///
@@ -79,7 +79,7 @@ public sealed class UpdateService
 
     /// <summary>
     /// Queries the release feed and returns the comparison result. Any network or HTTP
-    /// failure is swallowed to <see cref="UpdateOutcome.Unknown"/> — a failed update check
+    /// failure is swallowed to <see cref="UpdateOutcome.Unknown"/>, a failed update check
     /// must never crash a tray app that is otherwise working.
     ///
     /// <para>Delegates to the shared <see cref="ReleaseFeed"/> so both heads ask the same URL
@@ -95,24 +95,24 @@ public sealed class UpdateService
 
     /// <summary>
     /// Downloads the installer to a fresh temp file, verifies it against the release's
-    /// published <c>SHA256SUMS</c>, and returns its path. Throws on any failure — a bad
-    /// download, a missing manifest, a digest that does not match — so the caller reports
+    /// published <c>SHA256SUMS</c>, and returns its path. Throws on any failure, a bad
+    /// download, a missing manifest, a digest that does not match, so the caller reports
     /// "couldn't update" rather than launching something unverified.
     ///
     /// <para><b>This fails closed, deliberately.</b> Falling back to "install it anyway"
     /// when the manifest is missing would mean an attacker who can replace the asset simply
     /// omits the manifest, and the check buys nothing. The cost is that a release which
-    /// forgets to publish <c>SHA256SUMS</c> strands every user on their current version —
+    /// forgets to publish <c>SHA256SUMS</c> strands every user on their current version,
     /// the same failure mode as renaming a frozen asset, and the release workflow asserts
     /// against it for the same reason.</para>
     ///
     /// <para><b>What this does and does not establish.</b> The manifest ships from the same
-    /// release as the asset, so it proves the bytes are the ones that release published — not
+    /// release as the asset, so it proves the bytes are the ones that release published, not
     /// that the release itself is honest. A compromised account can replace both. Provenance
     /// attestation is the control for that; this is the one that costs nothing.</para>
     ///
-    /// <para>Sweeps previously downloaded installers out of the temp directory on the way in
-    /// — see <see cref="InstallerDownloads"/> for why that has to happen here rather than
+    /// <para>Sweeps previously downloaded installers out of the temp directory on the way in,
+    /// see <see cref="InstallerDownloads"/> for why that has to happen here rather than
     /// after a successful install.</para>
     /// </summary>
     public async Task<string> DownloadInstallerAsync(AvailableUpdate update, CancellationToken cancellation = default)
@@ -140,12 +140,12 @@ public sealed class UpdateService
         // the success path and nothing can: LaunchInstaller hands the file to another process
         // and this one exits so its exe can be replaced. Since each download is named for its
         // version, every release used to land as a permanent new ~71 MB file. This is the one
-        // moment the process is alive and knows the directory matters — and everything already
+        // moment the process is alive and knows the directory matters, and everything already
         // here is by definition an installer that has already run or already failed.
         InstallerDownloads.Prune(dir, _log);
 
         // Named from the PARSED version, never from update.Tag. The tag is a remote string,
-        // and ReleaseVersion.TryParse truncates at the first '-' or '+' — so a tag of
+        // and ReleaseVersion.TryParse truncates at the first '-' or '+', so a tag of
         // "v9.9.9-../../../../Startup/evil" parses as 9.9.9 and would have carried its
         // traversal segments straight into this path, landing the download outside the temp
         // directory and then executing it.
@@ -168,7 +168,7 @@ public sealed class UpdateService
 
     /// <summary>
     /// Compares the downloaded file against the digest the release recorded for
-    /// <see cref="ReleaseAssets.WindowsInstallerName"/>. Deletes the file on any failure —
+    /// <see cref="ReleaseAssets.WindowsInstallerName"/>. Deletes the file on any failure,
     /// leaving a rejected installer sitting in the temp directory is how it later gets run
     /// by hand.
     /// </summary>
@@ -231,7 +231,7 @@ public sealed class UpdateService
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Best effort. The file is unverified, not dangerous on its own — nothing runs
+            // Best effort. The file is unverified, not dangerous on its own, nothing runs
             // it, and the next attempt overwrites it.
         }
     }

@@ -100,7 +100,7 @@ public class CompositeProviderTests
 
     /// <summary>
     /// The composite picks a snapshot whole and returns it unchanged (see the class summary
-    /// on <see cref="CompositeUsageProvider"/>) — so the status beside each figure survives
+    /// on <see cref="CompositeUsageProvider"/>), so the status beside each figure survives
     /// selection rather than being re-derived or dropped on the way through.
     /// </summary>
     [Fact]
@@ -121,7 +121,7 @@ public class CompositeProviderTests
     /// <summary>
     /// A snapshot built the ordinary, positional way carries both the figure and the reason it
     /// is there on every reading, and a figure that was never read says so. This used to be a
-    /// test that the typed members agreed with their plain twins — the twins defaulted
+    /// test that the typed members agreed with their plain twins, the twins defaulted
     /// independently, so a positionally built snapshot claimed Real with no value on every one
     /// of them. There are no twins left to disagree; what is left to pin is that the pairing
     /// the positional arguments asked for is the pairing the snapshot holds.
@@ -160,7 +160,7 @@ public class CompositeProviderTests
     }
 
     /// <summary>
-    /// Choosing between two sources that report the same meters — Claude Desktop's sampled
+    /// Choosing between two sources that report the same meters, Claude Desktop's sampled
     /// series and Claude Code's cached figures. Before these, the tier was the whole rule and
     /// list position quietly decided the rest; a monitoring tool must prefer the most accurate
     /// reading it has, and fall back to the less reliable one only when it must.
@@ -209,7 +209,7 @@ public class CompositeProviderTests
 
         /// <summary>
         /// A fuller reading beats a fresher one. Blanking a bar to make the other a few minutes
-        /// fresher costs the user a whole figure to gain precision they cannot see — and
+        /// fresher costs the user a whole figure to gain precision they cannot see, and
         /// percentages do go missing for real reasons, an aged zero being discarded rather than
         /// shown in both sources.
         /// </summary>

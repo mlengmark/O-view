@@ -5,7 +5,7 @@ namespace OView.Core.Tests;
 
 /// <summary>
 /// The bundle's view of the rollup store. Every other field in a support bundle describes an
-/// <i>input</i> — which paths exist, how many samples they hold, how fresh they are — and all
+/// <i>input</i>, which paths exist, how many samples they hold, how fresh they are, and all
 /// of them can read perfectly while the token tiles have not moved in a week. Three reports in
 /// a row led with <c>status : Ok</c> while exactly that was happening.
 /// </summary>
@@ -63,7 +63,7 @@ public class RollupStoreReportTests : IDisposable
     /// <summary>
     /// <b>The field this whole report exists for.</b> A tracked transcript longer than the
     /// length recorded beside its offset is content the app believes it has accounted for and
-    /// has not read — the signature of a stalled ingest, and visible nowhere else. Measured in
+    /// has not read, the signature of a stalled ingest, and visible nowhere else. Measured in
     /// the field as 409,501 bytes across two files while the panel looked healthy.
     /// </summary>
     [Fact]
@@ -128,7 +128,7 @@ public class RollupStoreReportTests : IDisposable
 
     /// <summary>
     /// A brand-new install has no database yet. That is ordinary, must not throw, and must be
-    /// stated rather than rendered as an empty section — an absent field is indistinguishable
+    /// stated rather than rendered as an empty section, an absent field is indistinguishable
     /// from one that failed to render.
     /// </summary>
     [Fact]
@@ -142,7 +142,7 @@ public class RollupStoreReportTests : IDisposable
 
     /// <summary>
     /// Writes are probed rather than assumed. <c>PRAGMA quick_check</c> is a read, so a store
-    /// that reads perfectly and refuses every write passes it and then throws on every ingest —
+    /// that reads perfectly and refuses every write passes it and then throws on every ingest,
     /// which is precisely the shape that stayed invisible behind a silent catch.
     /// </summary>
     [Fact]

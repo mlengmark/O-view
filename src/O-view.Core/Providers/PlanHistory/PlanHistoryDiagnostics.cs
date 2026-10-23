@@ -7,13 +7,13 @@ namespace OView.Core.Providers.PlanHistory;
 /// <summary>Why the plan-history file is or isn't yielding usable samples.</summary>
 public enum PlanDataStatus
 {
-    /// <summary>The file is not where we look — Claude Desktop absent, or writing elsewhere.</summary>
+    /// <summary>The file is not where we look, Claude Desktop absent, or writing elsewhere.</summary>
     FileMissing,
 
-    /// <summary>Present but unreadable — locked, or not JSON at all.</summary>
+    /// <summary>Present but unreadable, locked, or not JSON at all.</summary>
     Unreadable,
 
-    /// <summary>Parsed, but no sample matched the expected shape (t / org / u.fh / u.sd) — schema drift.</summary>
+    /// <summary>Parsed, but no sample matched the expected shape (t / org / u.fh / u.sd), schema drift.</summary>
     NoValidSamples,
 
     /// <summary>
@@ -30,7 +30,7 @@ public enum PlanDataStatus
 /// <summary>
 /// Inspects the plan-history file and explains, in one line, why usage is or isn't
 /// available. <see cref="PlanHistoryFile"/> deliberately swallows every failure and
-/// returns an empty list (it must never crash the tray) — which is right for the polling
+/// returns an empty list (it must never crash the tray), which is right for the polling
 /// path but leaves a blank panel with no way to tell "Claude Desktop isn't installed"
 /// from "the file has an unexpected format". Support reports could not be resolved
 /// without asking users to run PowerShell by hand; this turns that into a fact the app
@@ -47,7 +47,7 @@ public sealed record PlanHistoryReport(
     TimeSpan? LatestSampleAge,
     string? Detail)
 {
-    /// <summary>Every location searched, in priority order — the evidence behind a "not found".</summary>
+    /// <summary>Every location searched, in priority order, the evidence behind a "not found".</summary>
     public IReadOnlyList<string> Searched { get; init; } = [];
 
     /// <summary>What the Claude data folder beside the canonical path holds, when it exists.</summary>
@@ -58,14 +58,14 @@ public sealed record PlanHistoryReport(
 
     /// <summary>
     /// Short user-facing explanation for the popup when figures read "unknown".
-    /// States what O-view observed — never what it assumes about the user's setup. The
+    /// States what O-view observed, never what it assumes about the user's setup. The
     /// first version of this text told users to "install and run the Claude Desktop app",
     /// which was flatly wrong for a user who had it open at the time: a file O-view cannot
     /// read is not evidence that Desktop is absent. Report the observation and the path,
     /// and let the reader draw the conclusion (CLAUDE.md rule 6).
     ///
     /// <para><b>Nor does it send anyone to an application.</b> The missing-file sentence
-    /// still said to start Claude Desktop and reopen the panel — the one remedy a Claude
+    /// still said to start Claude Desktop and reopen the panel, the one remedy a Claude
     /// Code user on a machine with no Desktop cannot act on, and the only sentence they
     /// would read. Claude Code caches the same two percentages, so that file is one of two
     /// sources rather than "the source of session and weekly %". Both writers are named,
@@ -82,7 +82,7 @@ public sealed record PlanHistoryReport(
             $"O-view searched {SearchedCount} location(s) for a usage file holding session and "
             + $"weekly % and found none. Last checked: {Path}. Claude Desktop writes that file, "
             + $"and Claude Code caches the same two figures. {DiagnosticsHint.Instruction} to "
-            + "see the exact locations — a packaged install can keep the file somewhere O-view "
+            + "see the exact locations, a packaged install can keep the file somewhere O-view "
             + "did not look.",
         PlanDataStatus.Unreadable =>
             $"O-view could not read {Path}. {DiagnosticsHint.Instruction} to report this.",
@@ -92,12 +92,12 @@ public sealed record PlanHistoryReport(
         // Says which file aged rather than which application went quiet: the samples being
         // old is what was observed, and the reader may be running neither writer.
         PlanDataStatus.Stale =>
-            $"The newest usage sample in {Path} is older than O-view's freshness window — "
+            $"The newest usage sample in {Path} is older than O-view's freshness window, "
             + "session and weekly % may lag until a newer one is written.",
         _ => "",
     };
 
-    /// <summary>Multi-line report for the clipboard — everything needed to diagnose a blank panel.</summary>
+    /// <summary>Multi-line report for the clipboard, everything needed to diagnose a blank panel.</summary>
     public string ToClipboardText(string appVersion)
     {
         var sb = new StringBuilder();
@@ -135,7 +135,7 @@ public static class PlanHistoryDiagnostics
     /// <summary>
     /// Inspects the file without throwing. Counts raw array entries separately from
     /// entries that actually parse, because the gap between the two is precisely the
-    /// signature of schema drift — the case a plain "no data" message cannot express.
+    /// signature of schema drift, the case a plain "no data" message cannot express.
     /// </summary>
     public static PlanHistoryReport Inspect(string? path = null, TimeSpan? freshness = null)
     {
@@ -209,7 +209,7 @@ public static class PlanHistoryDiagnostics
 
     /// <summary>
     /// Names of files in the canonical Claude folder. Distinguishes "Claude Desktop keeps
-    /// data here but no usage file" from "there is no Claude folder here at all" — the two
+    /// data here but no usage file" from "there is no Claude folder here at all", the two
     /// need different answers, and a bare missing-file result cannot tell them apart.
     /// </summary>
     private static IReadOnlyList<string> CanonicalFolderContents()

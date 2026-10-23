@@ -42,7 +42,7 @@ public class ClaudeWriteSurveyTests : IDisposable
 
     /// <summary>
     /// <b>The point of the whole sweep.</b> A transcript somewhere this build does not scan is
-    /// still found and its path printed — which is the difference between "nothing is being
+    /// still found and its path printed, which is the difference between "nothing is being
     /// written" and "it is being written somewhere else".
     /// </summary>
     [Fact]
@@ -60,7 +60,7 @@ public class ClaudeWriteSurveyTests : IDisposable
     /// <summary>
     /// <b>The line that cannot come back empty on a machine where Claude is running.</b>
     ///
-    /// <para>Every other field here — and every scan in the app — asks after a shape someone has
+    /// <para>Every other field here, and every scan in the app, asks after a shape someone has
     /// already thought of, so all of them report "none" identically whether the files moved or
     /// were never written. A session recorded under a name nobody anticipated has to show up as
     /// itself, or the sweep repeats one level up the same blindness it was written to fix.</para>
@@ -115,7 +115,7 @@ public class ClaudeWriteSurveyTests : IDisposable
     }
 
     /// <summary>
-    /// Immediate subdirectories by recency — what separates "Claude is not running" from
+    /// Immediate subdirectories by recency, what separates "Claude is not running" from
     /// "Claude is running and writing no transcripts". Nothing else in the bundle shows the
     /// second.
     /// </summary>
@@ -171,7 +171,7 @@ public class ClaudeWriteSurveyTests : IDisposable
     }
 
     /// <summary>
-    /// A root that does not exist is named as missing rather than skipped — the whole purpose
+    /// A root that does not exist is named as missing rather than skipped, the whole purpose
     /// of printing resolved paths is that a wrong one is visible.
     /// </summary>
     [Fact]
@@ -186,8 +186,8 @@ public class ClaudeWriteSurveyTests : IDisposable
 
     /// <summary>
     /// Claude Code encodes a whole working directory into one folder name, so a session whose
-    /// cwd was itself deep inside Claude's tree produces a segment hundreds of characters long
-    /// — measured at 236 on the development machine. Both ends carry the diagnostic; only the
+    /// cwd was itself deep inside Claude's tree produces a segment hundreds of characters long,
+    /// measured at 236 on the development machine. Both ends carry the diagnostic; only the
     /// middle is expendable.
     /// </summary>
     [Fact]
@@ -213,7 +213,7 @@ public class ClaudeWriteSurveyTests : IDisposable
     ///
     /// <para>This is a privacy property, not a layout one. An encoded working directory carries
     /// the account name near its start (<c>C--Users-ada-work</c>), and eliding the middle of the
-    /// joined path cut wherever the character count happened to land — potentially straight
+    /// joined path cut wherever the character count happened to land, potentially straight
     /// through that name, leaving two halves <c>Redact</c> could match against neither. Keeping
     /// segment heads keeps the name intact, and therefore redactable.
     /// </summary>
@@ -233,7 +233,7 @@ public class ClaudeWriteSurveyTests : IDisposable
 
     /// <summary>
     /// A file written while the sweep runs, or on a machine whose clock has just been
-    /// corrected, must not be reported as "-0.0 h old" — an age that cannot exist and that
+    /// corrected, must not be reported as "-0.0 h old", an age that cannot exist and that
     /// reads as a rendering fault rather than as freshness.
     /// </summary>
     [Fact]

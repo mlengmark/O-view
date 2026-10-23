@@ -5,14 +5,14 @@ namespace OView.Core.Updates;
 /// <summary>
 /// A three-part release version (<c>major.minor.patch</c>) parsed from a Git tag or an
 /// assembly version. Release tags are <c>v0.4.2</c>; an assembly version is <c>0.4.2.0</c>.
-/// Both normalise to the same three components — a trailing revision (the assembly's 4th
+/// Both normalise to the same three components, a trailing revision (the assembly's 4th
 /// part) is ignored, and a leading <c>v</c> and any pre-release suffix (<c>-beta.1</c>,
 /// <c>+build</c>) are stripped so that a plain numeric comparison decides "is newer".
 /// </summary>
 /// <remarks>
 /// Comparison is numeric per component, not lexicographic, so 0.10.0 &gt; 0.9.0. Only the
 /// stable numeric core is compared: a pre-release suffix is discarded rather than ordered,
-/// which is deliberate — O-view ships no pre-releases, and treating an unexpected suffix as
+/// which is deliberate, O-view ships no pre-releases, and treating an unexpected suffix as
 /// "same core version, do not offer an update" is the safe failure (it never nags to
 /// downgrade or side-grade), matching CLAUDE.md rule 6 "never fabricate".
 /// </remarks>

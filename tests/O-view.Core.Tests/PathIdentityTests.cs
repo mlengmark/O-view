@@ -4,7 +4,7 @@ namespace OView.Core.Tests;
 
 /// <summary>
 /// Path identity differs by platform, and getting it wrong on Linux is silent: two
-/// directories differing only in case get folded into one and the second is skipped —
+/// directories differing only in case get folded into one and the second is skipped,
 /// no error, no warning, just missing usage.
 ///
 /// <para>These tests assert the <b>correct behaviour for the platform they run on</b>
@@ -61,7 +61,7 @@ public class PathIdentityTests : IDisposable
     /// The regression, end to end. Two directories whose names differ only in case, each
     /// holding a transcript.
     ///
-    /// <para>The assertion is the same on both platforms — <b>no transcript is lost</b> —
+    /// <para>The assertion is the same on both platforms, <b>no transcript is lost</b>,
     /// but the mechanism differs. On Windows the two names are one directory holding both
     /// files; on Linux they are two directories holding one each. With the old
     /// <c>OrdinalIgnoreCase</c> visited set, Linux would report 1: the second directory

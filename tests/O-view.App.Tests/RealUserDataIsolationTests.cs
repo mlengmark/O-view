@@ -9,8 +9,8 @@ namespace OView.App.Tests;
 /// <para><b>These assert on the resolved path, deliberately, not on the figures.</b> The bug
 /// was silent for exactly that reason: it only ever showed as an outcome, so eight tests failed
 /// for hours and then passed unchanged, and the difference was how much Claude the developer
-/// had used in between. An outcome-shaped test would have been green on a CI runner — which has
-/// no plan history at all — and green on this machine most of the day. A path-shaped one is
+/// had used in between. An outcome-shaped test would have been green on a CI runner, which has
+/// no plan history at all, and green on this machine most of the day. A path-shaped one is
 /// true or false regardless of the weather.</para>
 ///
 /// <para>Measured afterwards by replaying the developer's own file through the real provider
@@ -46,7 +46,7 @@ public class RealUserDataIsolationTests
     }
 
     /// <summary>
-    /// And specifically not a file under the real user profile — the assertion the issue asks
+    /// And specifically not a file under the real user profile, the assertion the issue asks
     /// for by name. Stated separately from the one above because it is the property that
     /// matters: the sentinel is today's way of achieving it, and this survives changing it.
     /// </summary>
@@ -133,7 +133,7 @@ public class RealUserDataIsolationTests
                 Assert.Fail(
                     $"a test resolved '{path}', which is under the real user profile ('{root}'). " +
                     "Whatever reads it will give this suite a result that depends on whose machine " +
-                    "is running it — see issue #212.");
+                    "is running it, see issue #212.");
             }
         }
     }

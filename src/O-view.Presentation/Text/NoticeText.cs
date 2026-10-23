@@ -1,7 +1,7 @@
 namespace OView.Presentation.Text;
 
 /// <summary>
-/// The notifications that are not about updates — those are in <see cref="UpdateText"/>.
+/// The notifications that are not about updates, those are in <see cref="UpdateText"/>.
 ///
 /// <para><b>A notification is the one surface the user cannot go back and re-read.</b> A
 /// balloon is gone in seconds and a freedesktop notification may never be seen at all, so
@@ -29,8 +29,8 @@ public static class NoticeText
 
     /// <summary>
     /// Said when session usage crosses the user's notification threshold (issue #141). The
-    /// title names the feature rather than the crossing — <see cref="ThresholdBody"/> carries
-    /// the number — because it is reused for every threshold a user may set.
+    /// title names the feature rather than the crossing, <see cref="ThresholdBody"/> carries
+    /// the number, because it is reused for every threshold a user may set.
     /// </summary>
     public const string ThresholdTitle = "Claude usage";
 
@@ -61,13 +61,13 @@ public static class NoticeText
     /// on the one configuration where the icon cannot.
     ///
     /// <para>It leads with "O-view is running", because the user has just launched something
-    /// that appears to have done nothing — and that is the fact which reframes the rest from
+    /// that appears to have done nothing, and that is the fact which reframes the rest from
     /// a failure into a missing extension.</para>
     /// </summary>
     public const string NoTrayHostTitle = "O-view is running, but has nowhere to show its icon";
 
     /// <summary>
-    /// Nothing shows this today — the notice only fires when a host is missing — but the
+    /// Nothing shows this today, the notice only fires when a host is missing, but the
     /// probe's three states are three sentences here so a skin never has to invent copy for a
     /// state it was handed.
     /// </summary>
@@ -81,7 +81,7 @@ public static class NoticeText
     /// </summary>
     public const string TrayHostAbsent =
         "O-view found no notification-area host on the session bus, so its icon has nowhere "
-        + "to appear. GNOME does not provide one by default — installing an "
+        + "to appear. GNOME does not provide one by default, installing an "
         + "AppIndicator/KStatusNotifierItem extension adds it, and O-view will pick it up "
         + "without needing a restart.";
 

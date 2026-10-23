@@ -8,7 +8,7 @@ namespace OView.Core.Tests;
 ///
 /// <para>Two failures produced this mechanism and they fail differently. The cache-write
 /// multiplier was a published price collapsed into a constant, which no amount of checking the
-/// table's <i>date</i> would have caught. The Sonnet 5 row was a forecast entered as a fact —
+/// table's <i>date</i> would have caught. The Sonnet 5 row was a forecast entered as a fact,
 /// wrong on the day it was written, so an age check would not have caught that either. Hence a
 /// date that is data <b>and</b> a check that compares values.</para>
 /// </summary>
@@ -56,8 +56,8 @@ public class RateCardTests
     // ── the drift check ─────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// The published table's real shape, trimmed to four rows. Kept verbatim — including the
-    /// parenthesised availability links and the padding — because those are exactly what a
+    /// The published table's real shape, trimmed to four rows. Kept verbatim, including the
+    /// parenthesised availability links and the padding, because those are exactly what a
     /// hand-written fixture would tidy away and a parser would then fail on.
     /// </summary>
     private const string PublishedMarkdown = """
@@ -148,7 +148,7 @@ public class RateCardTests
     }
 
     /// <summary>
-    /// The same table, naming its rows by model id instead of by display name — a page that
+    /// The same table, naming its rows by model id instead of by display name, a page that
     /// parses perfectly and matches nothing.
     /// </summary>
     private const string RenamedMarkdown = """
@@ -163,7 +163,7 @@ public class RateCardTests
     /// <summary>
     /// One missing model is "could not check that row"; every model missing is "could not
     /// check", full stop. Without this the check reports agreement on the strength of zero
-    /// comparisons and goes on doing it weekly — a permanent silent pass, which is worse than
+    /// comparisons and goes on doing it weekly, a permanent silent pass, which is worse than
     /// no check at all because it reads as evidence.
     /// </summary>
     [Fact]
@@ -175,7 +175,7 @@ public class RateCardTests
     /// <summary>
     /// Fast mode is published for Opus 5 and Opus 4.8 and nothing else. Opus 4.6 is pinned by
     /// name because it briefly carried a fast row at standard rates on the reasoning that it
-    /// accepts the flag — accepting a flag is not a published price, and standing the cheaper
+    /// accepts the flag, accepting a flag is not a published price, and standing the cheaper
     /// rate in for a missing one is the failure this design is written against (issue #257).
     /// </summary>
     [Theory]

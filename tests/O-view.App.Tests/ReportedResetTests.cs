@@ -10,13 +10,13 @@ namespace OView.App.Tests;
 /// Reset times that Claude <b>reported</b> beat reset times O-view <b>derived</b>.
 ///
 /// <para>Every other reset time in the app is inferred from a drop in a sampled series, so its
-/// precision is bounded by the gap between samples — about half an interval for the five-hour
+/// precision is bounded by the gap between samples, about half an interval for the five-hour
 /// window, and roughly ten hours for the weekly one, whose resets land overnight while Desktop
 /// is closed (ADR-0011). Claude Code caches the exact instants in <c>~/.claude.json</c>, and
 /// once those are on disk the derived figures are strictly worse answers to the same
 /// question.</para>
 ///
-/// <para>So this fold <b>overrides</b>, where the entered weekly reset only fills a gap — and
+/// <para>So this fold <b>overrides</b>, where the entered weekly reset only fills a gap, and
 /// it runs after it, so it wins over that too.</para>
 /// </summary>
 public class ReportedResetTests
@@ -91,7 +91,7 @@ public class ReportedResetTests
 
     /// <summary>
     /// The entry exists because the derived weekly reset is imprecise (issue #186). A reported
-    /// instant answers that question outright, so it supersedes what the user typed — including
+    /// instant answers that question outright, so it supersedes what the user typed, including
     /// when they typed it wrong, which is the case that matters.
     /// </summary>
     [Fact]
@@ -111,7 +111,7 @@ public class ReportedResetTests
     }
 
     /// <summary>
-    /// With no cache — a machine that has never run Claude Code — everything behaves exactly as
+    /// With no cache, a machine that has never run Claude Code, everything behaves exactly as
     /// it did before this existed.
     /// </summary>
     [Fact]
@@ -126,7 +126,7 @@ public class ReportedResetTests
         Assert.Equal(Derived.WeeklyResetAtUtcValue.Value, engine.Latest.WeeklyResetAtUtcValue.Value);
 
         // The session bracket, not the weekly one. This asserted a weekly uncertainty until
-        // issue #248 removed the field — the weekly reset is a reported instant with nothing to
+        // issue #248 removed the field, the weekly reset is a reported instant with nothing to
         // bracket (ADR-0014), while the session window still rolls from first use and keeps its.
         // Asserting the surviving half is what keeps this test meaning something.
         Assert.Equal(Derived.SessionResetUncertainty, engine.Latest.SessionResetUncertainty);
@@ -137,11 +137,11 @@ public class ReportedResetTests
     ///
     /// <para><b>Session:</b> the refinement must never remove the figure it refines. A five-hour
     /// window that has passed its cached boundary reports nothing, and nothing must stay nothing
-    /// rather than null written over a good derived value — that window rolls from first use, so
+    /// rather than null written over a good derived value, that window rolls from first use, so
     /// a passed instant describes a window that never existed (issue #180).</para>
     ///
-    /// <para><b>Weekly:</b> the opposite. A passed instant is exactly what the anchor is made of
-    /// — the cache is routinely tens of hours stale, so insisting on a future one is insisting
+    /// <para><b>Weekly:</b> the opposite. A passed instant is exactly what the anchor is made of,
+    /// the cache is routinely tens of hours stale, so insisting on a future one is insisting
     /// on the case that rarely holds. It is harvested and projected forward a whole week
     /// (ADR-0014), which is why the derived value is superseded here.</para>
     /// </summary>
@@ -175,7 +175,7 @@ public class ReportedResetTests
     }
 
     /// <summary>
-    /// A panel with no data at all stays blank rather than growing one lonely populated line —
+    /// A panel with no data at all stays blank rather than growing one lonely populated line,
     /// the same rule the entered reset follows.
     /// </summary>
     [Fact]
@@ -193,7 +193,7 @@ public class ReportedResetTests
 
     /// <summary>
     /// The refinement is allowed to fail. A locked or half-written <c>.claude.json</c> costs the
-    /// exact timestamps and nothing else — the poll still succeeds and the panel still fills.
+    /// exact timestamps and nothing else, the poll still succeeds and the panel still fills.
     /// </summary>
     [Fact]
     public void AFailingCacheReadCostsPrecisionRatherThanThePoll()
@@ -222,7 +222,7 @@ public class ReportedResetTests
 
     /// <summary>
     /// The population this was built for: no Claude Desktop, so no plan history and no
-    /// percentages from it — but Claude Code has been running, so both meters and both exact
+    /// percentages from it, but Claude Code has been running, so both meters and both exact
     /// resets are on disk. Before this, these users saw two empty bars all day.
     /// </summary>
     [Fact]

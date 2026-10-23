@@ -11,7 +11,7 @@ namespace OView.Core.Models;
 /// <para>Both the membership test and the caption the UI shows now derive from that one
 /// table. They did not: the caption was a hand-written <c>"Fable"</c> while the classifier
 /// matched Fable <em>and</em> Mythos, so a Mythos user's spend was summed into the credit
-/// total under a note claiming only Fable was included — and a Mythos-only user saw a
+/// total under a note claiming only Fable was included, and a Mythos-only user saw a
 /// non-zero "Est. credit spend" beneath a sentence naming a model they had never run
 /// (GitHub issue #56). A list stated twice is a list that eventually disagrees with
 /// itself.</para>
@@ -19,7 +19,7 @@ namespace OView.Core.Models;
 public static class CreditBilledModels
 {
     /// <summary>
-    /// The covered models, as data — the same entries <see cref="IsCreditBilled"/> matches,
+    /// The covered models, as data, the same entries <see cref="IsCreditBilled"/> matches,
     /// so a caption built from them can never name a different set than the one being
     /// summed.
     ///

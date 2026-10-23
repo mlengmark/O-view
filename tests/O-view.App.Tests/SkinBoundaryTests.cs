@@ -7,14 +7,14 @@ namespace OView.App.Tests;
 ///
 /// <para><b>Why this is asserted over the source.</b> Both skins now ask through
 /// <see cref="ISkinToShell"/> and are told through <see cref="IShellToSkin"/>, and nothing at
-/// runtime would notice if one of them reached past those two for the engine again — it
+/// runtime would notice if one of them reached past those two for the engine again, it
 /// compiles, the tests pass, and the layering is gone. The property worth keeping is about
 /// what the source may <i>name</i>, so that is what is read.</para>
 ///
 /// <para><b>Whole identifiers, not substrings.</b> Both skins legitimately compose the shell's
 /// options and set the usage-cache refresher on them, which a substring scan for
 /// <c>UsageEngine</c> or <c>UsageCacheRefresh</c> would fail on. Word boundaries pass those and
-/// still catch the real thing — and they are also what makes this decidable without parsing:
+/// still catch the real thing, and they are also what makes this decidable without parsing:
 /// a mention in a comment or an XML doc link is as much a breach of the seam as a call,
 /// because it means the skin still knows the name.</para>
 /// </summary>
@@ -42,7 +42,7 @@ public class SkinBoundaryTests
     private static readonly string[] Skins = ["O-view.Tray", "O-view.Linux"];
 
     /// <summary>
-    /// Below this, something has moved and the scan is reading an almost empty directory —
+    /// Below this, something has moved and the scan is reading an almost empty directory,
     /// which would pass while asserting nothing. The smaller skin has fifteen files today.
     /// </summary>
     private const int FewestFilesASkinCanHave = 5;
@@ -59,12 +59,12 @@ public class SkinBoundaryTests
         foreach (var skin in Skins)
         {
             var directory = Path.Combine(root, "src", skin);
-            Assert.True(Directory.Exists(directory), $"no skin at {directory} — the scan below would read nothing");
+            Assert.True(Directory.Exists(directory), $"no skin at {directory}, the scan below would read nothing");
 
             var files = SourceFiles(directory).ToArray();
             Assert.True(files.Length >= FewestFilesASkinCanHave,
                 $"only {files.Length} source files under {directory}, so this test is no longer "
-                + "reading the skin it names — has it moved?");
+                + "reading the skin it names, has it moved?");
 
             foreach (var file in files)
             {
@@ -100,7 +100,7 @@ public class SkinBoundaryTests
     /// <summary>
     /// Walks up from the test binary to the directory holding the solution file, the way
     /// <c>PortalThemeSourceTests</c> does. The tests run from <c>bin/</c>, several levels below,
-    /// and the depth differs by configuration — so the marker is searched for rather than
+    /// and the depth differs by configuration, so the marker is searched for rather than
     /// counted to, and a walk that finds nothing fails here rather than scanning nothing.
     /// </summary>
     private static string RepositoryRoot()

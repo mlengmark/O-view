@@ -12,12 +12,12 @@ namespace OView.Presentation.Text;
 /// </summary>
 public static class OffPlanText
 {
-    /// <summary>U+00A0, as an escape — the literal character is invisible in source.</summary>
+    /// <summary>U+00A0, as an escape, the literal character is invisible in source.</summary>
     private const char NonBreakingSpace = '\u00A0';
 
     /// <summary>
     /// Human-readable list of the credit-billed models, for <see cref="OffPlanHint"/>'s
-    /// caption. Built from <see cref="CreditBilledModels.Models"/> — the same entries
+    /// caption. Built from <see cref="CreditBilledModels.Models"/>, the same entries
     /// <see cref="CreditBilledModels.IsCreditBilled"/> matches, so the caption can never
     /// name a different set than the one being summed (GitHub issue #56).
     ///
@@ -39,10 +39,10 @@ public static class OffPlanText
     /// moving.
     ///
     /// <para><b>It states the observation and stops there.</b> The wording it replaces ended
-    /// "that work is billing elsewhere — most likely extra-usage credits", which is a claim
+    /// "that work is billing elsewhere, most likely extra-usage credits", which is a claim
     /// about the user's billing that O-view cannot see and, on the machine that reported it,
     /// was false: their account had extra usage switched off, and Claude Code's own cache says
-    /// so in <c>extra_usage.user_disabled</c>. Naming a cause is not the panel's job — the two
+    /// so in <c>extra_usage.user_disabled</c>. Naming a cause is not the panel's job, the two
     /// numbers are, and they are what the reader can check (rule 6).</para>
     ///
     /// <para>The wording also names the meter as the thing that did not move, rather than the
@@ -52,7 +52,7 @@ public static class OffPlanText
     public static string DivergenceDetail(long outputTokens, int risePoints) =>
         $"About {UsageFormatter.Tokens(outputTokens)} output tokens ran in this window while the "
         + $"plan meter moved {risePoints} point{(risePoints == 1 ? "" : "s")}. Usage that a plan "
-        + "meter does not account for is billed some other way — O-view cannot see your billing, "
+        + "meter does not account for is billed some other way, O-view cannot see your billing, "
         + "so check Settings → Usage in Claude for what it was.";
 
     /// <inheritdoc cref="DivergenceDetail"/>
@@ -66,7 +66,7 @@ public static class OffPlanText
     /// <summary>
     /// Claude's own usage settings page, which is where every wording below sends the reader
     /// for the figure O-view will not state. Taken from Claude Code's own binary rather than
-    /// guessed — it is the link Claude Code itself uses for this screen.
+    /// guessed, it is the link Claude Code itself uses for this screen.
     /// </summary>
     public const string UsageSettingsUrl = "https://claude.ai/settings/usage";
 
@@ -76,8 +76,8 @@ public static class OffPlanText
     /// <summary>
     /// The off-plan banner's heading.
     ///
-    /// <para><b>The exhausted-window heading used to assert a charge</b> — "Plan limit reached
-    /// — usage is billing beyond your plan" — at every reader whose 5-hour window had run out,
+    /// <para><b>The exhausted-window heading used to assert a charge</b>, "Plan limit reached,
+    /// usage is billing beyond your plan", at every reader whose 5-hour window had run out,
     /// including the ones who had switched extra usage off and could not be billed anything
     /// (issue #259). It read as an emergency, and for that population it was not merely
     /// alarming but false.</para>
@@ -88,15 +88,15 @@ public static class OffPlanText
     /// says why O-view will not go further.</para>
     ///
     /// <para>The diverging heading never asserted a charge and is unchanged. It describes a
-    /// meter that did not move, and the cause may not be billing at all — a Cowork session
+    /// meter that did not move, and the cause may not be billing at all, a Cowork session
     /// running in a cloud container leaves no local record either (rule 9).</para>
     /// </summary>
     public static string OffPlanTitle(DivergenceState state, ExtraUsageState extraUsage) =>
         state == DivergenceState.PlanLimitReached
             ? extraUsage switch
             {
-                ExtraUsageState.Enabled => "Plan limit reached — further work bills as extra usage",
-                ExtraUsageState.Disabled => "Plan limit reached — extra usage is switched off",
+                ExtraUsageState.Enabled => "Plan limit reached, further work bills as extra usage",
+                ExtraUsageState.Disabled => "Plan limit reached, extra usage is switched off",
                 _ => "Plan limit reached",
             }
             : "This session's usage is not drawing from your plan";
@@ -107,7 +107,7 @@ public static class OffPlanText
     ///
     /// <para><b>Relayed and stamped, never asserted in O-view's own voice.</b> This is a cached
     /// answer from another application, and Claude Code refreshes that cache only when
-    /// <c>/usage</c> runs — so it can be days old while looking exactly as current as a fresh
+    /// <c>/usage</c> runs, so it can be days old while looking exactly as current as a fresh
     /// one. The provenance clause is what makes reporting it honest rather than a guess wearing
     /// a fact's clothes, and it is the same treatment, for the same reason, that
     /// <see cref="BoostText.BoostCard"/> gives the promo notice (rule 6).</para>
@@ -118,7 +118,7 @@ public static class OffPlanText
     /// </summary>
     /// <param name="fetchedAtUtc">
     /// When Claude Code last refreshed the block. Null when <paramref name="extraUsage"/> came
-    /// from nowhere — in which case there is nothing to stamp and nothing is claimed.
+    /// from nowhere, in which case there is nothing to stamp and nothing is claimed.
     /// </param>
     public static string OffPlanDetail(
         DivergenceResult divergence,
@@ -163,12 +163,12 @@ public static class OffPlanText
     }
 
     /// <summary>
-    /// The off-plan balloon's title — distinct from <see cref="OffPlanTitle"/>, which is the
+    /// The off-plan balloon's title, distinct from <see cref="OffPlanTitle"/>, which is the
     /// panel banner's heading for the same divergence. The balloon fires once per crossing
     /// (issue #259), so unlike the banner it has no limit-reached state of its own: it covers
     /// what Claude Code says about extra usage on the account, full stop.
     ///
-    /// <para>The claim is made only where the account setting supports it — an account with
+    /// <para>The claim is made only where the account setting supports it, an account with
     /// extra usage switched off cannot be billed anything, and saying otherwise was not a
     /// hedge but a false statement about the reader's money. Unknown gets the same safe
     /// title as Disabled, for the same reason <see cref="OffPlanTitle"/> gives both one
@@ -227,8 +227,8 @@ public static class OffPlanText
     /// (GitHub issue #181).
     ///
     /// <para><b>Moving it must not lose it.</b> Both wordings carry a rule-6 caveat that the
-    /// figure is not what was charged — "Estimated at published API rates" and "check your
-    /// billing page for exact figures" in one, "isn't captured" in the other — and relocating
+    /// figure is not what was charged, "Estimated at published API rates" and "check your
+    /// billing page for exact figures" in one, "isn't captured" in the other, and relocating
     /// a caveat behind a hover is the obvious way to quietly drop it. It lives here so it has
     /// one definition and can be asserted, which is why it moved out of the head rather than
     /// simply being reassigned to a tooltip in place.</para>

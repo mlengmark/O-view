@@ -11,8 +11,8 @@ namespace OView.Core.Providers;
 /// at all. The winning snapshot keeps its own Source so the UI labels it honestly.</para>
 ///
 /// <para>That principle used to stop at the tier, with list position quietly deciding the rest.
-/// It no longer does: two sources now report the same meters — Claude Desktop's sampled series
-/// and Claude Code's cached figures — and within a tier the better answer is whichever describes
+/// It no longer does: two sources now report the same meters, Claude Desktop's sampled series
+/// and Claude Code's cached figures, and within a tier the better answer is whichever describes
 /// the account most completely and most recently, not whichever was passed first. Desktop samples
 /// every 15 minutes; Claude Code refreshes whenever it talks to the API, so during active use it
 /// is routinely the fresher of the two. Preferring the earlier argument meant showing a reading
@@ -30,8 +30,8 @@ public sealed class CompositeUsageProvider : IUsageProvider
     /// seam that is a single <c>Action</c> stays testable without one.
     ///
     /// <para><b>This exists because the catch below is otherwise perfectly silent.</b> A
-    /// provider that throws on every poll is indistinguishable here from one that has no data
-    /// — both become <see cref="UsageSnapshot.None"/> and the chain moves on. Measured in the
+    /// provider that throws on every poll is indistinguishable here from one that has no data,
+    /// both become <see cref="UsageSnapshot.None"/> and the chain moves on. Measured in the
     /// field: transcript ingestion had been failing on every poll for five days behind this
     /// catch while the panel showed live percentages from a sibling provider and the support
     /// bundle reported <c>status : Ok</c>. Nothing anywhere named the failing provider,
@@ -40,7 +40,7 @@ public sealed class CompositeUsageProvider : IUsageProvider
     public Action<string>? Log { get; init; }
 
     /// <param name="providers">
-    /// The sources to consult. Order is a tie-break only — <see cref="MoreAccurate"/> decides
+    /// The sources to consult. Order is a tie-break only, <see cref="MoreAccurate"/> decides
     /// within a tier, and falls back to this order when two snapshots are equally informative
     /// and equally recent.
     /// </param>
@@ -72,8 +72,8 @@ public sealed class CompositeUsageProvider : IUsageProvider
     /// <item><b>How many meters it actually carries.</b> A snapshot reporting both percentages
     /// beats one reporting a single percentage, even when the fuller one is older. The trade is
     /// deliberate: blanking a bar to make the other bar a few minutes fresher costs the user a
-    /// whole figure to gain precision they cannot see. Percentages go missing for real reasons —
-    /// an aged zero is discarded rather than shown, in both sources — so this is a live case, not
+    /// whole figure to gain precision they cannot see. Percentages go missing for real reasons,
+    /// an aged zero is discarded rather than shown, in both sources, so this is a live case, not
     /// a theoretical one.</item>
     /// <item><b>How recently it was captured.</b> Both surviving sources are caches of the same
     /// upstream meter, so between two equally complete readings the later one is simply closer to
@@ -87,7 +87,7 @@ public sealed class CompositeUsageProvider : IUsageProvider
     /// <para>This deliberately does <b>not</b> merge fields across snapshots. Taking the session
     /// figure from one source and the weekly from another would produce a reading that never
     /// existed at any instant, under a single <c>Source</c> label that could only be true of one
-    /// of them — a fabrication of exactly the kind rule 6 forbids, and invisible to the user
+    /// of them, a fabrication of exactly the kind rule 6 forbids, and invisible to the user
     /// because every part of it looks real.</para>
     /// </summary>
     private static UsageSnapshot MoreAccurate(UsageSnapshot incumbent, UsageSnapshot challenger)
@@ -115,12 +115,12 @@ public sealed class CompositeUsageProvider : IUsageProvider
         (snapshot.WeeklyPercentValue.Value is null ? 0 : 1);
 
     /// <summary>
-    /// A provider that throws (e.g. one backed by a corrupt local store — issue #16)
+    /// A provider that throws (e.g. one backed by a corrupt local store, issue #16)
     /// must not blank the whole display. Treat its failure as "no data" so the chain
     /// falls through to the next source instead of propagating.
     ///
-    /// <para><b>Degrading quietly is right; degrading invisibly is not.</b> The swallow stays
-    /// — this is a monitoring tool and one bad provider must not take the panel down — but it
+    /// <para><b>Degrading quietly is right; degrading invisibly is not.</b> The swallow stays,
+    /// this is a monitoring tool and one bad provider must not take the panel down, but it
     /// now says what it caught and which provider it came from. Without that line a provider
     /// failing on every poll for days looks exactly like a provider with nothing to report,
     /// from inside the app and from a support bundle alike.</para>

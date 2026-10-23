@@ -24,8 +24,8 @@ internal sealed class PanelOffPlan(LinuxPanelTheme theme)
     /// the reader to.
     ///
     /// <para><b>The address is printed, not labelled.</b> The Windows banner makes the link's
-    /// label the thing you click; nothing in this head opens a URL — no part of the Linux
-    /// panel does — so a bare "Open usage settings in Claude" here would be an instruction
+    /// label the thing you click; nothing in this head opens a URL, no part of the Linux
+    /// panel does, so a bare "Open usage settings in Claude" here would be an instruction
     /// with no way to follow it. The label still introduces it, because the sentence above
     /// ends by sending the reader somewhere and the address alone does not say where.</para>
     /// </summary>
@@ -41,7 +41,7 @@ internal sealed class PanelOffPlan(LinuxPanelTheme theme)
     /// <para><b>The explanation stands rather than hovering.</b> The Windows panel moved it to
     /// a hover card to save three permanent lines (issue #181), which is the right trade where
     /// hover exists; a compositor may never deliver it here, and what would be lost is the
-    /// rule-6 caveat that this is an estimate and not the charge — the one sentence the
+    /// rule-6 caveat that this is an estimate and not the charge, the one sentence the
     /// section cannot ship without. The same reasoning puts the weekly reset's action on its
     /// row rather than behind a card (<see cref="PanelMeterView.ResetLineWithAction"/>).</para>
     /// </summary>

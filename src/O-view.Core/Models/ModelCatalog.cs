@@ -4,7 +4,7 @@ namespace OView.Core.Models;
 
 /// <summary>
 /// How a model's usage is billed on the tracked plan. Inferred by O-view, not stated by
-/// any local data — see <see cref="ModelCatalog"/> for the evidence behind each
+/// any local data, see <see cref="ModelCatalog"/> for the evidence behind each
 /// <see cref="Credit"/> classification.
 /// </summary>
 public enum BillingClass
@@ -24,7 +24,7 @@ public enum BillingClass
 /// Transcripts carry dated snapshots (<c>claude-opus-5-20260501</c>), so matching is by
 /// prefix rather than by equality.
 /// </param>
-/// <param name="DisplayName">Friendly name for the UI. Never invented — see <see cref="ModelCatalog"/>.</param>
+/// <param name="DisplayName">Friendly name for the UI. Never invented, see <see cref="ModelCatalog"/>.</param>
 /// <param name="Rates">
 /// Anthropic's published prices for this model, one field per published column. Dated by
 /// <see cref="ModelCatalog.AsOf"/> rather than per row: the whole table is read from one page
@@ -42,8 +42,8 @@ public sealed record ModelEntry(
 /// The single table of models O-view recognises: friendly name, published rate, and
 /// billing class, one row per model.
 ///
-/// <para>These three facts used to live in three separate tables — <c>CostEstimator.Rates</c>,
-/// <c>ModelDisplayName.Names</c> and <c>CreditBilledModels.Prefixes</c> — all keyed on the
+/// <para>These three facts used to live in three separate tables, <c>CostEstimator.Rates</c>,
+/// <c>ModelDisplayName.Names</c> and <c>CreditBilledModels.Prefixes</c>, all keyed on the
 /// same prefix strings and all maintained by hand. Adding a model meant editing three files,
 /// and each omission failed differently and silently: no friendly name (renders as a raw id),
 /// no rate (excluded from Est. value), or misclassified as plan-billed. They had already
@@ -52,17 +52,17 @@ public sealed record ModelEntry(
 /// summed under a note claiming only Fable was included (GitHub issue #56).</para>
 ///
 /// <para><b>Rates</b> are Anthropic's published API rates, per million tokens, read on
-/// <see cref="AsOf"/> — which is a <see cref="DateOnly"/> on <see cref="Bundled"/> rather than
+/// <see cref="AsOf"/>, which is a <see cref="DateOnly"/> on <see cref="Bundled"/> rather than
 /// a date in this comment, because nothing derived from a prose date can know the table is
 /// ageing (GitHub issue #255). Every published column is stored; none is derived from another.
-/// They price the "Est. value" figures, which are NOT money charged — within plan limits the
+/// They price the "Est. value" figures, which are NOT money charged, within plan limits the
 /// marginal cost is £0/$0 (CLAUDE.md rule 6). The structure is written down once, in
 /// docs/reference/pricing.md.</para>
 ///
 /// <para><b>An unrecognised model gets no row and therefore no guess.</b> It renders as its
 /// raw id and is named in the "excludes … (no published rate)" caveat rather than being
 /// priced from a pattern. A model Anthropic ships after this table was written is the
-/// expected case, not an edge case — it has happened before, for <c>claude-opus-5</c>.</para>
+/// expected case, not an edge case, it has happened before, for <c>claude-opus-5</c>.</para>
 /// </summary>
 public static class ModelCatalog
 {
@@ -85,7 +85,7 @@ public static class ModelCatalog
     ///
     /// <para>Anthropic publishes its input and output prices in their own table and states that
     /// the prompt-caching multipliers apply on top of them, so the three cache columns here are
-    /// that published rule applied to a published input rate — not a multiplier re-derived from
+    /// that published rule applied to a published input rate, not a multiplier re-derived from
     /// a price we already hold. They come out identical to the Fable row, which shares the $10
     /// base input.</para>
     /// </summary>
@@ -98,16 +98,16 @@ public static class ModelCatalog
     /// on evidence:
     ///
     /// <list type="bullet">
-    /// <item><c>claude-fable-5</c> — VERIFIED. On 2026-07-21, ~174K Fable output tokens moved
+    /// <item><c>claude-fable-5</c>, VERIFIED. On 2026-07-21, ~174K Fable output tokens moved
     /// the plan meter zero points while ~€86 of extra usage was billed; pricing Fable at
     /// published API rates matched that billing. See docs/findings/credit-usage-divergence.md.</item>
-    /// <item><c>claude-mythos-5</c> — same tier, pricing and API surface as Fable (per the
+    /// <item><c>claude-mythos-5</c>, same tier, pricing and API surface as Fable (per the
     /// model catalog); included by parity, not by direct observation.</item>
     /// </list>
     ///
     /// <para>Consequences of this being a heuristic, stated so the UI can caveat honestly: it
     /// is account- and plan-specific, and it will MISS plan-tier usage (e.g. Opus) that goes
-    /// off-plan once the plan limit is reached — that case is caught by the live divergence
+    /// off-plan once the plan limit is reached, that case is caught by the live divergence
     /// detector, not here. Mark a model <see cref="BillingClass.Credit"/> only when there is
     /// evidence it bills to credits on the target plan.</para>
     ///
@@ -130,7 +130,7 @@ public static class ModelCatalog
         new("claude-opus-4-6", "Opus 4.6",  Opus,   BillingClass.Plan),
         new("claude-opus-4-5", "Opus 4.5",  Opus,   BillingClass.Plan),
         new("claude-sonnet-5", "Sonnet 5",  Sonnet5, BillingClass.Plan),
-        // Covers Sonnet 4, 4.5 and 4.6 — three models on one row, correct only because
+        // Covers Sonnet 4, 4.5 and 4.6, three models on one row, correct only because
         // all three share $3/$15. Load-bearing: longest-prefix matching will keep
         // resolving all of them here, so if one diverges it needs its own row rather
         // than a rate change here (GitHub issue #256).
@@ -155,7 +155,7 @@ public static class ModelCatalog
 
     /// <summary>
     /// The entry for a model id, or null when the model is unrecognised. Resolves through
-    /// <see cref="Bundled"/> so there is exactly one prefix matcher — see
+    /// <see cref="Bundled"/> so there is exactly one prefix matcher, see
     /// <see cref="RateCard.Find"/> for why matching is by prefix length rather than by
     /// declaration order.
     /// </summary>

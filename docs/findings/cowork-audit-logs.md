@@ -1,4 +1,4 @@
-# Finding — Cowork writes its transcript somewhere else
+# Finding: Cowork writes its transcript somewhere else
 
 Verified 2026-07-27 on the dev machine (GitHub issue #44).
 
@@ -19,22 +19,22 @@ folder `ClaudeProjectsLocator` looks for *is* present inside the sandbox, it sim
 never holds anything. Scanning it succeeds and returns nothing, which is
 indistinguishable from "no usage".
 
-Claude Code, by contrast, writes to `%USERPROFILE%\.claude\projects` — including
+Claude Code, by contrast, writes to `%USERPROFILE%\.claude\projects`, including
 sessions **hosted inside the Desktop app**. Those are recorded under
 `%APPDATA%\Claude\claude-code-sessions\...\local_*.json`, but that file holds only
 metadata (`sessionId`, `cliSessionId`, `cwd`, `model`, `title`); its `cliSessionId`
 names a transcript in the normal user-profile location. Verified 9 of 9 on this
-machine. So "Desktop" is not the distinction — **Cowork** is.
+machine. So "Desktop" is not the distinction, **Cowork** is.
 
 ## There is more than one Claude data root
 
 `<claude-data-root>` is **not** always `%APPDATA%\Claude`. Claude Desktop ships as an
 MSIX package, and Windows redirects a packaged app's `%APPDATA%` writes into
 `%LOCALAPPDATA%\Packages\<family>\LocalCache\Roaming\Claude`. This is the same hazard
-`PlanHistoryLocator` already exists to handle — it was written after O-view reported
+`PlanHistoryLocator` already exists to handle, it was written after O-view reported
 "no usage data" on a machine where Desktop was open and working.
 
-The dev machine has **both**, and they expose the *same* three sessions — identical
+The dev machine has **both**, and they expose the *same* three sessions, identical
 session ids, identical totals:
 
 ```
@@ -44,7 +44,7 @@ C:\Users\<u>\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Clau
 
 So the union must be scanned (a canonical-only locator finds nothing on a machine where
 only the package store is populated), and overlap must be harmless. It is: request-id
-de-duplication collapses the mirror. Measured across the union of both roots —
+de-duplication collapses the mirror. Measured across the union of both roots,
 
 ```
 audit logs found     : 6
@@ -68,7 +68,7 @@ plus `message.model` and an ISO-8601 `timestamp`. Same models
 (`claude-opus-4-8`, `claude-sonnet-5`, `<synthetic>`).
 
 **One difference, and it is silent:** the id is `request_id`, not `requestId`.
-Keying only on the camelCase spelling parses zero rows — no exception, no partial
+Keying only on the camelCase spelling parses zero rows, no exception, no partial
 total, just a permanently empty tile. `TranscriptReader.ReadRequestId` accepts both.
 
 De-duplication by request id applies exactly as it does to Claude Code transcripts
@@ -76,12 +76,12 @@ De-duplication by request id applies exactly as it does to Claude Code transcrip
 
 Other keys present but not consumed today, worth knowing about:
 `total_cost_usd` (a **reported** cost, not an estimate), `modelUsage`,
-`estimated_tokens`, and `rate_limit_info` as its own event type — potentially a more
+`estimated_tokens`, and `rate_limit_info` as its own event type, potentially a more
 direct session-% source than `plan-usage-history.json`.
 
 ## The junction trap
 
-The Cowork tree contains a **broken directory junction** — a `…-outputs` link whose
+The Cowork tree contains a **broken directory junction**, a `…-outputs` link whose
 target no longer exists. Enumerating it throws `DirectoryNotFoundException`, which
 derives from `IOException`.
 
@@ -123,12 +123,12 @@ actually has two.
 ## What is still not measurable
 
 **Chat has no local usage record at all.** `claude.ai` (web or in the Desktop app)
-persists conversation *content* — `IndexedDB\https_claude.ai_0.indexeddb.leveldb` and
-`Local Storage` — but no token accounting anywhere. Confirmed by byte-scanning the
+persists conversation *content*, `IndexedDB\https_claude.ai_0.indexeddb.leveldb` and
+`Local Storage`, but no token accounting anywhere. Confirmed by byte-scanning the
 whole `%APPDATA%\Claude` tree for `output_tokens`, `input_tokens`,
 `cache_read_input_tokens`, `usage_limit`, `tokensUsed`.
 
-`plan-usage-history.json` holds only `{t, org, u:{fh, sd}}` — two integers per sample.
+`plan-usage-history.json` holds only `{t, org, u:{fh, sd}}`, two integers per sample.
 That is why the plan meters cover chat correctly while no token figure ever can.
 Closing that gap would need the server-side usage API, i.e. credentials, which
 [ADR-0007](../adr/0007-plan-history-primary-provider.md) and CLAUDE.md rule 3 rule out

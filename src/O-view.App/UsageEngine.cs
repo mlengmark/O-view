@@ -14,7 +14,7 @@ namespace OView.App;
 /// <para>Owns provider composition, the polling loop and its cadence, the rollup store and
 /// weekly-reset log lifecycle, threshold and off-plan notification decisions, settings, and
 /// the update-check schedule. None of that is platform-specific, so both heads sit on it
-/// rather than each growing their own copy — which is how the polling cadence, the
+/// rather than each growing their own copy, which is how the polling cadence, the
 /// threshold semantics and the reset-log migration would quietly drift apart (ADR-0012).</para>
 ///
 /// <para>A refresh failure keeps the previous state; it never crashes the app. A monitoring
@@ -24,7 +24,7 @@ namespace OView.App;
 /// touch the network. It says <em>what</em> happened and lets a head decide what that looks
 /// like.</para>
 ///
-/// <para>Also the shell's implementation of <see cref="ISkinToShell"/> — a skin may depend
+/// <para>Also the shell's implementation of <see cref="ISkinToShell"/>, a skin may depend
 /// on that interface instead of this concrete class, with no change in behaviour.</para>
 /// </summary>
 public sealed class UsageEngine : IDisposable, ISkinToShell
@@ -34,7 +34,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
     private readonly PlanHistoryProvider? _planHistory;
 
     /// <summary>
-    /// Claude Code's cached usage figures, held directly as well as through the chain — see
+    /// Claude Code's cached usage figures, held directly as well as through the chain, see
     /// <see cref="WithReportedResets"/> for why the chain alone is not enough.
     /// </summary>
     private readonly IUsageProvider _cachedUtilization;
@@ -48,7 +48,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
     private readonly List<IAppTimer> _timers = [];
     private IAppTimer? _pollTimer;
 
-    /// <summary>The cheap plan-history cadence. Fixed — <see cref="AdjustCadence"/> re-times
+    /// <summary>The cheap plan-history cadence. Fixed, <see cref="AdjustCadence"/> re-times
     /// only the full poll, whose warm-up is already faster than this.</summary>
     private IAppTimer? _planTimer;
 
@@ -62,7 +62,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
 
     /// <summary>
     /// One gate per cadence, so a read already in flight cannot stack another behind it.
-    /// They are deliberately separate — see <see cref="RunOffThread{T}"/>.
+    /// They are deliberately separate, see <see cref="RunOffThread{T}"/>.
     /// </summary>
     private readonly PollRunner.Gate _fullGate = new();
     private readonly PollRunner.Gate _planGate = new();
@@ -76,25 +76,25 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
 
     /// <summary>
     /// The floor, the freshness gate and the latch behind <see cref="RefreshUsageCache"/>
-    /// (issue #234) — its own class purely to keep this file shorter. See
+    /// (issue #234), its own class purely to keep this file shorter. See
     /// <see cref="UsageCacheRefresh"/>.
     /// </summary>
     private readonly UsageCacheRefresh _cacheRefresh;
 
     /// <summary>
-    /// The manual override, the reported instant and the conflict between them (ADR-0014) —
+    /// The manual override, the reported instant and the conflict between them (ADR-0014),
     /// its own class purely to keep this file shorter. See <see cref="WeeklyResetCoordinator"/>.
     /// </summary>
     private readonly WeeklyResetCoordinator _weeklyReset;
 
     /// <summary>
-    /// The plan-history cadence and the panel's statistics — its own class purely to keep this
+    /// The plan-history cadence and the panel's statistics, its own class purely to keep this
     /// file shorter. See <see cref="PlanHistoryPoll"/>.
     /// </summary>
     private readonly PlanHistoryPoll _planHistoryPoll;
 
     /// <summary>
-    /// The threshold and off-plan notification decisions — its own class purely to keep this
+    /// The threshold and off-plan notification decisions, its own class purely to keep this
     /// file shorter. See <see cref="UsageAlerts"/>.
     /// </summary>
     private readonly UsageAlerts _alerts;
@@ -102,7 +102,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
     /// <summary>Raw reader for Claude Code's cached figures, used only to harvest the anchor.</summary>
     private readonly Func<CachedUtilization?> _cachedUtilizationSource;
 
-    /// <summary>Most recent snapshot — what the panel opens with.</summary>
+    /// <summary>Most recent snapshot, what the panel opens with.</summary>
     public UsageSnapshot Latest { get; private set; } = UsageSnapshot.None;
 
     /// <summary>
@@ -126,7 +126,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
 
     /// <summary>
     /// How many <b>plan-history</b> samples the current window holds. Zero when there is no
-    /// plan history to read — the state every test with an injected provider chain must be in
+    /// plan history to read, the state every test with an injected provider chain must be in
     /// (issue #212).
     ///
     /// <para>Deliberately not the size of the series the detector evaluates, which may carry
@@ -165,7 +165,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
 
         // Clamped for the same reason the warm-up is, and it is the same diagnostic that
         // forces it: --interval-ms drives PollInterval alone, so a sub-20 s value would leave
-        // the cheap read as the SLOWER of the two — the plan-history cadence running behind
+        // the cheap read as the SLOWER of the two, the plan-history cadence running behind
         // the full poll it exists to run ahead of.
         _planInterval = Min(_options.PlanPollInterval, _options.PollInterval);
 
@@ -173,7 +173,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
 
         // What stood beside the database when it opened (issue #213). Logged whenever it is
         // anything other than the ordinary case, because a guard that quarantines a file
-        // without saying so is the same class of problem as the silent rollback it prevents —
+        // without saying so is the same class of problem as the silent rollback it prevents,
         // and "the store was open elsewhere, so nothing was checked" has to be as visible as a
         // quarantine, or an unmade check reads as a clean one.
         if (_store.JournalGuard.IsNoteworthy)
@@ -183,7 +183,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
 
         _pollRunner = new PollRunner(_log);
 
-        // The provider chain and the account/Core-seam wiring behind it — split out to
+        // The provider chain and the account/Core-seam wiring behind it, split out to
         // UsageProviders purely to shorten this file. See its own doc for why each source is
         // built the way it is.
         var providers = new UsageProviders(_options, _store, _log);
@@ -258,7 +258,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
 
     /// <summary>
     /// The reset instant Claude reported that disproves the entered weekly reset, or null.
-    /// Surfaced so the head can tell the user once — silently overriding a wrong entry leaves
+    /// Surfaced so the head can tell the user once, silently overriding a wrong entry leaves
     /// them believing the number they typed.
     /// </summary>
     public DateTimeOffset? WeeklyResetConflict => _weeklyReset.WeeklyResetConflict;
@@ -290,7 +290,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
         _pollTimer.Start();
 
         // The cheap read, on its own faster cadence (issue #163). Started after the first full
-        // poll so the opening snapshot still comes from the composite provider — that one has
+        // poll so the opening snapshot still comes from the composite provider, that one has
         // to be able to fall back to the JSONL estimate, which this path deliberately cannot.
         //
         // Not re-timed by AdjustCadence: the warm-up exists to fill the bars quickly before
@@ -319,7 +319,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
         _log?.Write($"update check interval={recheck.TotalMinutes:0} min (base {_options.UpdateCheckInterval.TotalMinutes:0})");
 
         // The rate-card drift check (ADR-0016), on the same two-timer shape and through the
-        // same jitter helper — the endpoint is public and unauthenticated, so the reason to
+        // same jitter helper, the endpoint is public and unauthenticated, so the reason to
         // scatter a fleet is the courtesy one rather than a rate limit, and it costs nothing.
         IAppTimer? firstRateCheck = null;
         firstRateCheck = Track(timers.Create(_options.FirstRateCheckDelay, () =>
@@ -339,10 +339,10 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
     /// evaluate the notification rules.
     ///
     /// <para>Publish-before-notify is deliberate and matches the order the tray has always
-    /// used — the icon reflects the new number before any balloon talks about it.</para>
+    /// used, the icon reflects the new number before any balloon talks about it.</para>
     ///
     /// <para>Synchronous, so a caller that needs <see cref="Latest"/> to be current when it
-    /// returns gets that. The scheduled polls do <b>not</b> use this — see
+    /// returns gets that. The scheduled polls do <b>not</b> use this, see
     /// <see cref="Poll"/>.</para>
     /// </summary>
     public void Refresh() => Publish(Read());
@@ -368,11 +368,11 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
     /// </summary>
     public string? UsageRefreshBlocked => _cacheRefresh.UsageRefreshBlocked;
 
-    /// <summary>Whether a refresher was supplied at all — the feature being on, not it being allowed.</summary>
+    /// <summary>Whether a refresher was supplied at all, the feature being on, not it being allowed.</summary>
     public bool CanRefreshUsageCache => _cacheRefresh.CanRefreshUsageCache;
 
     /// <summary>
-    /// How many refresh attempts have actually been started — not how many times
+    /// How many refresh attempts have actually been started, not how many times
     /// <see cref="RefreshUsageCache"/> was called, since most calls are turned away by the
     /// floor, the freshness gate or the latch.
     ///
@@ -387,7 +387,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
     /// Clears the block set by a suspected charge and allows refreshing again.
     ///
     /// <para>The other half of the trade behind the latch. The guard errs toward stopping, which
-    /// is only the right direction while stopping is undoable — so this exists for the user to
+    /// is only the right direction while stopping is undoable, so this exists for the user to
     /// say the charge was a concurrent session rather than a real one.</para>
     /// </summary>
     /// <returns>True when something was actually cleared.</returns>
@@ -397,7 +397,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
     /// Asks Claude Code to refresh its usage cache, if it is allowed and due.
     ///
     /// <para><b>Call this when the panel opens.</b> That is the moment freshness is observable,
-    /// and it is what makes this event-driven rather than another timer — a tray gauge only has
+    /// and it is what makes this event-driven rather than another timer, a tray gauge only has
     /// to be right when someone looks at it. <paramref name="force"/> bypasses the floor for
     /// exactly that case: a person opening the panel is not a poll.</para>
     ///
@@ -412,7 +412,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
     /// stack another behind it. The mechanics live in <see cref="PollRunner"/>, shared by all
     /// three of this engine's cadences; this call site, and the two beside the constructor's
     /// <see cref="UsageCacheRefresh"/> and <see cref="PlanHistoryPoll"/> wiring, are what keep
-    /// each cadence's own gate separate — see <see cref="PollRunner.Run{T}"/> for why that
+    /// each cadence's own gate separate, see <see cref="PollRunner.Run{T}"/> for why that
     /// separation matters.
     /// </summary>
     private void RunOffThread<T>(PollRunner.Gate gate, string what, Func<T> read, Action<T> publish) =>
@@ -422,7 +422,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
     /// Everything a poll needs from disk, gathered on whatever thread is doing the reading.
     ///
     /// <para>The off-plan figures are built here rather than in <see cref="Publish"/>
-    /// because they are a 31-day SQLite aggregate plus a plan-history parse — the second
+    /// because they are a 31-day SQLite aggregate plus a plan-history parse, the second
     /// most expensive thing a poll does, and it used to run on the UI thread too.</para>
     ///
     /// <para>Never throws: a monitoring tool must not die on a bad poll, and a failure has
@@ -435,7 +435,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
         try
         {
             // Order matters. The entry fills a gap; the reported timestamps then override
-            // whatever is there, entry included — see WithReportedResets.
+            // whatever is there, entry included, see WithReportedResets.
             var snapshot = _weeklyReset.WithWeeklyReset(_provider.GetSnapshot(utcNow), utcNow);
             snapshot = _weeklyReset.WithReportedResets(snapshot, utcNow);
             return new PollResult(snapshot, _alerts.ReadOffPlan(), utcNow, Failed: false);
@@ -448,7 +448,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
     }
 
     /// <summary>
-    /// Claude Code's cached block as it stands now, or null when there is none to read —
+    /// Claude Code's cached block as it stands now, or null when there is none to read,
     /// which is also what a caller that injected its own <c>Provider</c> gets, because the
     /// source is wired to return null for those (see the constructor).
     ///
@@ -480,10 +480,10 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
     /// slow one, so it is the one most likely to lose the race: it can start reading, spend
     /// seconds ingesting, and post a snapshot it took <i>before</i> a plan tick that has
     /// already published. Guarding only the fast path leaves exactly the jump backwards the
-    /// guard exists to prevent — measured, the session percentage went 77 → 30.</para>
+    /// guard exists to prevent, measured, the session percentage went 77 → 30.</para>
     ///
     /// <para><b>The cadence and the off-plan check run either way.</b> Both belong to this
-    /// poll alone — nothing else evaluates them — so skipping them when the snapshot happens
+    /// poll alone, nothing else evaluates them, so skipping them when the snapshot happens
     /// to be superseded would leave the engine stuck on its warm-up interval with nothing to
     /// re-time it, and the divergence edge trigger unvisited.</para>
     /// </summary>
@@ -508,7 +508,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
         }
         else
         {
-            _log?.Write($"refresh superseded — read a sample older than the one displayed " +
+            _log?.Write($"refresh superseded, read a sample older than the one displayed " +
                         $"({result.Snapshot.CapturedAtUtcValue.Value:u} < {Latest.CapturedAtUtcValue.Value:u})");
         }
 
@@ -518,7 +518,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
 
         // The slow background beat, hung off the poll rather than given a fourth timer. The
         // floor inside decides whether anything actually runs, so the effective cadence is the
-        // floor and not this — and a successful refresh scheduling a Poll cannot recur, because
+        // floor and not this, and a successful refresh scheduling a Poll cannot recur, because
         // the attempt was stamped before it started.
         RefreshUsageCache();
     }
@@ -537,7 +537,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
 
     /// <summary>
     /// Applies and persists the threshold-notification preference, returning the state as it
-    /// actually stands afterwards — a failed write must not be reported as success
+    /// actually stands afterwards, a failed write must not be reported as success
     /// (CLAUDE.md rule 6).
     /// </summary>
     public bool SetNotifyOnThreshold(bool enable) => _alerts.SetNotifyOnThreshold(enable);
@@ -563,7 +563,7 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
     {
         if (_pollTimer is null)
         {
-            return;   // Refresh() called outside a Start()ed engine — nothing to re-time.
+            return;   // Refresh() called outside a Start()ed engine, nothing to re-time.
         }
 
         var next = PollingCadence.Next(source, utcNow - _startedAt, _warmupInterval, _normalInterval);

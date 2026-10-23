@@ -1,7 +1,7 @@
 <!--
   Prepended to every release's auto-generated notes by .github/workflows/release.yml.
 
-  It is deliberately EVERGREEN — facts that stay true release to release: which asset to
+  It is deliberately EVERGREEN, facts that stay true release to release: which asset to
   download, which platforms are supported, the GNOME requirement, and how updates arrive on
   each platform. Do not put "what changed in this version" here; that is what the generated
   section below it is for.
@@ -12,8 +12,8 @@
   why this file exists.
 
   The off-plan banner section is here on the same terms, and it is worth saying why it is not
-  a changelog entry in disguise. What it states is standing behaviour — what the banner claims
-  and what it deliberately does not — which is true of every release from v0.9.1 on. The one
+  a changelog entry in disguise. What it states is standing behaviour, what the banner claims
+  and what it deliberately does not, which is true of every release from v0.9.1 on. The one
   backward-looking sentence in it stays true forever too: someone on an older build reading a
   much later release still needs to know that the message they are looking at is wrong for
   them. If it ever needs a "and in this version we changed…", that belongs in the release body,
@@ -31,7 +31,7 @@
 | Any other Linux, x64 | `o-view-<version>-linux-x64.tar.gz` | Extract and run `./o-view`. |
 | Any other Linux, arm64 | `o-view-<version>-linux-arm64.tar.gz` | Same, for aarch64. |
 
-Every release carries every platform's assets, whether or not that platform's code changed —
+Every release carries every platform's assets, whether or not that platform's code changed,
 that is what keeps "check for updates" correct on both. A release with no visible change for
 your platform is expected, not a mistake.
 
@@ -48,8 +48,8 @@ sha256sum -c SHA256SUMS --ignore-missing
 (Get-FileHash .\O-view-Setup.exe -Algorithm SHA256).Hash
 ```
 
-O-view is **not code-signed** — an Authenticode certificate costs more than a free tool
-justifies — so Windows SmartScreen will warn on first run. The checksum is what you have
+O-view is **not code-signed**, an Authenticode certificate costs more than a free tool
+justifies, so Windows SmartScreen will warn on first run. The checksum is what you have
 instead: it confirms the file you have is the file this release published. It cannot tell you
 anything about a release itself being wrong, only that your copy arrived intact.
 
@@ -71,7 +71,7 @@ stopped drawing from the plan allowance.** Whether it is being *charged* is a se
 question, and the answer is your account's extra-usage setting rather than anything the meter
 can tell you.
 
-So O-view reads that setting from Claude Code's own local cache and says which way it is set —
+So O-view reads that setting from Claude Code's own local cache and says which way it is set,
 stamped with the time Claude Code last read it, because that cache refreshes only when `/usage`
 runs and can be days old. Where there is nothing to read it says so instead of guessing. It
 never asserts a charge it cannot see, and the banner links to your usage settings in Claude for
@@ -80,16 +80,16 @@ the figure it will not state.
 **Before v0.9.1 the banner asserted "usage is billing beyond your plan" at everyone whose
 window ran out**, including accounts with auto-billing switched off, which could not be billed
 anything. **On v0.9.1 and earlier it could also raise the "not drawing from your plan" banner
-during the first quarter of an hour of a new 5-hour window** — the meter had moved, but had
+during the first quarter of an hour of a new 5-hour window**, the meter had moved, but had
 only been sampled once, so there was no movement to see yet. **On v0.9.4 and earlier it could
-raise that same banner after Claude Desktop had been closed for a while** — the window it
+raise that same banner after Claude Desktop had been closed for a while**, the window it
 measured against was anchored on the last reset Desktop had seen, which after an outage can be
 days back, so a flat run of stale readings was weighed against work done since. If you are on
 an older build, any of these may be wrong for you and upgrading is the fix.
 
 ## Linux: read this before you file a bug about a missing icon
 
-**GNOME ships no notification-area support by default** — including stock Ubuntu. The Linux
+**GNOME ships no notification-area support by default**, including stock Ubuntu. The Linux
 tray is a protocol (StatusNotifierItem, over D-Bus) and something has to implement the *host*
 side; KDE Plasma, XFCE and Cinnamon do, GNOME deliberately does not.
 
@@ -102,7 +102,7 @@ o-view --probe
 ```
 
 **Linux builds notify; they never update themselves.** When a newer release exists O-view
-tells you once, and stops there — overwriting files dpkg owns would be silently reverted by
+tells you once, and stops there, overwriting files dpkg owns would be silently reverted by
 the next `apt upgrade`, so it does not touch them.
 
 Note that **there is no O-view apt repository**, so `apt upgrade` will *not* find a new

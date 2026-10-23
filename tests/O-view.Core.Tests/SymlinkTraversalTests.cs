@@ -3,8 +3,8 @@ using OView.Core.Providers.Jsonl;
 namespace OView.Core.Tests;
 
 /// <summary>
-/// Link traversal in the transcript walk. The Windows shape of this — a broken junction
-/// zeroing an entire scan — is covered by
+/// Link traversal in the transcript walk. The Windows shape of this, a broken junction
+/// zeroing an entire scan, is covered by
 /// <see cref="CoworkIngestionTests.BrokenJunction_SkipsThatNodeOnly_DoesNotZeroTheScan"/>
 /// (issue #44). These are the Linux shapes, which behave differently enough to need their
 /// own cases: symlinks can point at their own ancestors, and a dangling one resolves to a
@@ -28,7 +28,7 @@ public class SymlinkTraversalTests : IDisposable
 
     /// <summary>
     /// Creating a symlink needs elevation or Developer Mode on Windows. Linux never fails
-    /// here, so callers assert that a failure could only have been Windows — a silent skip
+    /// here, so callers assert that a failure could only have been Windows, a silent skip
     /// on Linux would hide the very cases these tests exist for.
     /// </summary>
     private static bool TryCreateSymlink(string link, string target)
@@ -47,13 +47,13 @@ public class SymlinkTraversalTests : IDisposable
     private static void SkipOnlyIfWindows() =>
         Assert.True(
             OperatingSystem.IsWindows(),
-            "symlink creation must succeed on Linux — a skip here would hide the case under test");
+            "symlink creation must succeed on Linux, a skip here would hide the case under test");
 
     /// <summary>
     /// The loop. <c>deep/link -> root</c> makes the tree infinitely deep, and every path
     /// through it looks different from the last: root/deep/link/deep/link/... Comparing
     /// paths as walked never matches, so before links were resolved at push time only the
-    /// depth ceiling stopped this — after enumerating an enormous number of directories.
+    /// depth ceiling stopped this, after enumerating an enormous number of directories.
     /// </summary>
     [Fact]
     public void SymlinkLoopTerminatesAndStillFindsEveryTranscript()
@@ -77,7 +77,7 @@ public class SymlinkTraversalTests : IDisposable
         Assert.Equal(2, found.Count);
     }
 
-    /// <summary>A link pointing at its own parent — the tightest possible loop.</summary>
+    /// <summary>A link pointing at its own parent, the tightest possible loop.</summary>
     [Fact]
     public void SelfReferentialLinkDoesNotRepeatFiles()
     {
@@ -99,7 +99,7 @@ public class SymlinkTraversalTests : IDisposable
     /// <summary>
     /// The Linux restatement of issue #44: one unreadable node must cost only itself, not
     /// the whole tree. A dangling symlink resolves to a path that does not exist, so
-    /// enumerating it throws <see cref="DirectoryNotFoundException"/> — an
+    /// enumerating it throws <see cref="DirectoryNotFoundException"/>, an
     /// <see cref="IOException"/>, which is exactly the shape that used to swallow an entire
     /// scan into "no transcripts on this machine".
     /// </summary>
@@ -148,7 +148,7 @@ public class SymlinkTraversalTests : IDisposable
     }
 
     /// <summary>
-    /// A link to a directory that is NOT otherwise reachable must still be followed — the
+    /// A link to a directory that is NOT otherwise reachable must still be followed, the
     /// loop guard must not turn into "ignore links".
     /// </summary>
     [Fact]

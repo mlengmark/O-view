@@ -6,12 +6,12 @@ namespace OView.Core.Providers.Jsonl;
 
 /// <summary>
 /// Fallback provider (ADR-0002): scans local transcripts, feeds the rollup store, and
-/// reports what it honestly can. Session and weekly percentages are null — the plan's
+/// reports what it honestly can. Session and weekly percentages are null, the plan's
 /// token allowance is unpublished, so no true percentage-of-limit can be derived from
 /// token counts, and fabricating a denominator would violate CLAUDE.md rule 6. Token
 /// figures for the stats tiles come from the <see cref="RollupStore"/> directly.
 ///
-/// Scans **both** local transcript sources — Claude Code and Cowork. Chat remains out of
+/// Scans **both** local transcript sources, Claude Code and Cowork. Chat remains out of
 /// reach at any price: claude.ai persists conversation content locally but no usage
 /// accounting at all, so there is nothing to read (issue #44).
 /// </summary>
@@ -24,7 +24,7 @@ public sealed class JsonlUsageProvider : IUsageProvider
 
     /// <summary>
     /// Where each poll's ingestion result is recorded. A delegate, so <c>Core</c> stays free
-    /// of the app's logging — the same seam <see cref="CompositeUsageProvider.Log"/> uses.
+    /// of the app's logging, the same seam <see cref="CompositeUsageProvider.Log"/> uses.
     ///
     /// <para><b>The one line this writes is the one that was missing.</b> Ingestion has three
     /// ways to produce nothing and they need different fixes: no transcript files were found
@@ -58,7 +58,7 @@ public sealed class JsonlUsageProvider : IUsageProvider
     /// Cowork's <c>claude-code-sessions</c> directories, used to tell which transcripts under
     /// the Claude Code root Cowork actually wrote (<see cref="CoworkSessionIndex"/>).
     ///
-    /// <para>Empty — the default — reclassifies nothing, so every existing caller keeps the
+    /// <para>Empty, the default, reclassifies nothing, so every existing caller keeps the
     /// behaviour it had. Stated rather than defaulted to a machine path for the same reason as
     /// the roots above: a test that silently picked up this developer's own registry would be
     /// measuring his sessions, not its fixture.</para>
@@ -79,10 +79,10 @@ public sealed class JsonlUsageProvider : IUsageProvider
     /// Every local transcript, across both places Claude writes them: Claude Code under
     /// %USERPROFILE%\.claude\projects, and Cowork under its sandboxed session root. The
     /// downstream pipeline is keyed by file path and request id, so a second source needs
-    /// no other change — offsets, de-duplication and idempotent upserts all still hold,
+    /// no other change, offsets, de-duplication and idempotent upserts all still hold,
     /// including for a request id that appears in both (issue #44).
     /// </summary>
-    /// <param name="Source">Which surface writes it — a <see cref="TranscriptSources"/> label.</param>
+    /// <param name="Source">Which surface writes it, a <see cref="TranscriptSources"/> label.</param>
     /// <param name="Path">The file itself.</param>
     private readonly record struct Transcript(string Source, string Path);
 
@@ -100,7 +100,7 @@ public sealed class JsonlUsageProvider : IUsageProvider
         //
         // Labelling by location was true when it was written and is not true now: Cowork runs
         // its sessions through Claude Code, so its transcripts land under the Claude Code root.
-        // Measured on the development machine, 28 of 30 files there — 107.7 MB of 107.9 MB —
+        // Measured on the development machine, 28 of 30 files there, 107.7 MB of 107.9 MB,
         // belong to registered Cowork sessions, while the bundle reported "Cowork: 0 rows"
         // (issue #218). A registration names the id its transcript is written under, which is
         // exact and survives Claude Code moving the file again.
@@ -134,7 +134,7 @@ public sealed class JsonlUsageProvider : IUsageProvider
     /// <summary>
     /// Feeds new transcript content into the store, reading only what each file has
     /// gained since the last poll. Idempotent upserts still make a full re-read safe,
-    /// so offsets are purely an optimisation — but a necessary one: transcripts grew
+    /// so offsets are purely an optimisation, but a necessary one: transcripts grew
     /// 0.2 MB to 6.7 MB in a single day of use, and a full rescan every 60 s scales
     /// with total history rather than with new activity.
     /// </summary>
@@ -167,7 +167,7 @@ public sealed class JsonlUsageProvider : IUsageProvider
             tally.Files++;
 
             // From an open handle, never from the cached directory entry. Windows documents
-            // GetFileAttributesEx — which FileInfo.Length uses — as not necessarily current for
+            // GetFileAttributesEx, which FileInfo.Length uses, as not necessarily current for
             // a file that is open and being written, and every transcript here is exactly that.
             // A stale entry makes a growing file look untouched, so the "unchanged" test below
             // skips it on every poll for as long as the session holds it open: no error, no
@@ -216,7 +216,7 @@ public sealed class JsonlUsageProvider : IUsageProvider
             _store.SetFileOffset(file, nextOffset, length, source, records.Count, offset);
         }
 
-        // One line per poll, always — including the all-quiet case, because "0 changed" is
+        // One line per poll, always, including the all-quiet case, because "0 changed" is
         // the answer to "is it stuck or is there simply nothing new?" and only says so when
         // it is written down. A throw above never reaches here, which is itself the signal:
         // the composite's own catch names the provider, and the absence of this line dates
@@ -224,7 +224,7 @@ public sealed class JsonlUsageProvider : IUsageProvider
         Log?.Invoke(
             $"jsonl sync: {seen} file(s), {changed} changed, {bytesRead:N0} bytes read, "
             + $"{ingested} record(s) ingested{(unreadable > 0 ? $", {unreadable} unreadable" : "")}"
-            // Printed only when it happens, because on a healthy machine it never does — and a
+            // Printed only when it happens, because on a healthy machine it never does, and a
             // zero every minute would train the reader to skip the line that matters.
             + $"{(staleStat > 0 ? $", {staleStat} stale stat(s)" : "")} "
             + $"in {Environment.TickCount64 - startedAt} ms"
@@ -232,7 +232,7 @@ public sealed class JsonlUsageProvider : IUsageProvider
     }
 
     /// <summary>
-    /// The length the cached directory entry claims. Diagnostic only — it is the value that
+    /// The length the cached directory entry claims. Diagnostic only, it is the value that
     /// cannot be trusted, kept solely so disagreements with the handle can be counted.
     /// </summary>
     private static long? StatLength(string path)
@@ -247,7 +247,7 @@ public sealed class JsonlUsageProvider : IUsageProvider
         }
     }
 
-    /// <summary>One surface's share of a single poll. Mutable by design — it is a counter.</summary>
+    /// <summary>One surface's share of a single poll. Mutable by design, it is a counter.</summary>
     private sealed class SourceTally
     {
         public int Files;

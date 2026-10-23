@@ -21,7 +21,7 @@
              border, an Aero dropdown. On a dark themed panel that is not a small mismatch,
              it is the only thing on screen that looks like a different program. Both are
              re-templated onto the shared palette, which is also why the panel has no other
-             input controls to copy from — these are the first. -->
+             input controls to copy from, these are the first. -->
         <Style x:Key="ThemedTextBox" TargetType="TextBox">
             <Setter Property="Foreground" Value="{DynamicResource TextPrimary}"/>
             <Setter Property="CaretBrush" Value="{DynamicResource TextPrimary}"/>

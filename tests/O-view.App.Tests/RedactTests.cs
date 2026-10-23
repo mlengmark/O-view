@@ -4,7 +4,7 @@ namespace OView.App.Tests;
 
 /// <summary>
 /// The bundle is pasted into public GitHub issues, so what these assert is not a formatting
-/// preference — it is what does and does not become permanently searchable when a user asks
+/// preference, it is what does and does not become permanently searchable when a user asks
 /// for help with a tray icon.
 ///
 /// <para>Two properties are in tension throughout: nothing identifying may survive, and the
@@ -45,7 +45,7 @@ public class RedactTests
     /// directory into one directory name by replacing every separator with a hyphen, so the
     /// account name appears mid-token in every transcript path under a user's home. While only
     /// slashes counted as boundaries, this looked correct and published the name out of every
-    /// bundle that printed such a path — which the write survey does by design.
+    /// bundle that printed such a path, which the write survey does by design.
     /// </summary>
     [Theory]
     [InlineData(@"projects\C--Users-ada\session.jsonl", @"projects\C--Users-<user>\session.jsonl")]
@@ -71,7 +71,7 @@ public class RedactTests
     public void ASegmentThatMerelyContainsTheNameIsLeftAlone(string input)
     {
         // A substring replace would mangle paths that mention nobody, and a mangled path is
-        // a misleading diagnostic — worse than a verbose one.
+        // a misleading diagnostic, worse than a verbose one.
         Assert.Equal(input, Redact.Bundle(input, ["ada", "max"]));
     }
 

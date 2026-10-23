@@ -8,14 +8,14 @@ namespace OView.Linux.Tests.Runtime;
 ///
 /// <para><b>Why this exists.</b> Hovering the icon on GNOME shows nothing
 /// (<a href="https://github.com/mlengmark/O-view/issues/314">#314</a>), and the report could
-/// only say what one VM did on one evening. The text is built correctly — that is held by
-/// <c>TooltipFormatterTests</c> — and the head sets it on every poll, so the question left over
+/// only say what one VM did on one evening. The text is built correctly, that is held by
+/// <c>TooltipFormatterTests</c>, and the head sets it on every poll, so the question left over
 /// is which <c>org.kde.StatusNotifierItem</c> property carries it once the toolkit has
 /// published the item. That is a fact about the bus, and this is the only place in the
 /// repository that can read one.</para>
 ///
-/// <para><b>What it found.</b> The text arrives as <c>Title</c>. <c>ToolTip</c> — the property a
-/// notification area draws on hover — is published empty, because Avalonia's tray backend
+/// <para><b>What it found.</b> The text arrives as <c>Title</c>. <c>ToolTip</c>, the property a
+/// notification area draws on hover, is published empty, because Avalonia's tray backend
 /// hard-codes it so: <c>StatusNotifierItemDbusObj</c> answers <c>ToolTip</c> with
 /// <c>("", [], "", "")</c> and its one setter, <c>SetTitleAndTooltip</c>, fills <c>Id</c>,
 /// <c>Category</c> and <c>Title</c> and nothing else (Avalonia 12.1.3,
@@ -24,12 +24,12 @@ namespace OView.Linux.Tests.Runtime;
 /// <para><b>Why that is not worked around.</b> The property is published by the toolkit's own
 /// bus object, which O-view does not own, and the desktop the report came from would not draw
 /// it anyway: Ubuntu's AppIndicators extension has <c>ToolTip</c> and <c>NewToolTip</c>
-/// commented out of its interface description — "<i>We disable this as we don't support
-/// tooltip</i>" — so it never asks for the property at all. The README's support matrix says
+/// commented out of its interface description, "<i>We disable this as we don't support
+/// tooltip</i>", so it never asks for the property at all. The README's support matrix says
 /// so, and names the panel as where the exact figures live on that desktop.</para>
 ///
 /// <para><b>Both assertions are meant to fail if that changes.</b> A filled <c>ToolTip</c> from
-/// a later Avalonia is good news, and the README line and #314 then need revisiting — which is
+/// a later Avalonia is good news, and the README line and #314 then need revisiting, which is
 /// a red test, not a quiet one.</para>
 ///
 /// <para>Runs only in the <c>linux-runtime</c> job, which provides the display
@@ -68,7 +68,7 @@ public class TrayTooltipRuntimeTests(ITestOutputHelper output)
         if (!InRuntimeJob) return;
 
         // Recording from before the app starts, so the capture the job uploads carries the
-        // property reads below and their replies — the evidence for issue #314, in the bus's
+        // property reads below and their replies, the evidence for issue #314, in the bus's
         // own words rather than this test's.
         await using var traffic = await BusTraffic.StartAsync(
             nameof(TheTooltipTextReachesTheBusAsTitleAndTheToolTipPropertyIsEmpty), output);

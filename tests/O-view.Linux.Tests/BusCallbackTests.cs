@@ -6,10 +6,10 @@ namespace OView.Linux.Tests;
 
 /// <summary>
 /// The marshalling that stops a bus callback touching the toolkit from the wrong thread
-/// (issue #143 — <c>segmentation fault (core dumped)</c> on the first left click).
+/// (issue #143, <c>segmentation fault (core dumped)</c> on the first left click).
 ///
 /// <para>Nothing here can prove the app no longer crashes: that needs a live session bus and
-/// an Avalonia dispatcher in one process, which no machine in this project has — the gap that
+/// an Avalonia dispatcher in one process, which no machine in this project has, the gap that
 /// let the #124 deadlock ship in the first place. What it can prove is that the work is
 /// <b>handed to the dispatcher instead of run where the bus raised it</b>, which is the whole
 /// of the fix and the part a later edit could quietly undo.</para>
@@ -74,8 +74,8 @@ public class BusCallbackTests
 
     /// <summary>
     /// "Exit O-view" is itself one of these callbacks, so a dispatcher that has already gone
-    /// is reachable rather than theoretical. Dropping the work is right — there is no UI
-    /// thread left to run it on — but it must not throw back across the bus.
+    /// is reachable rather than theoretical. Dropping the work is right, there is no UI
+    /// thread left to run it on, but it must not throw back across the bus.
     /// </summary>
     [Fact]
     public void ADeadDispatcherIsSurvivedAndNamedInTheLog()

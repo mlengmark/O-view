@@ -67,7 +67,7 @@ public class UsageFormatterTests
     // ── PanelText's private copies agree with this class ──────────────────────────────
     //
     // PanelText.Caveat, PanelText.TokenCardCaption and PanelText.DivergenceDetail each embed a
-    // formatted figure, but PanelText lives in Core and Core may not reference Presentation —
+    // formatted figure, but PanelText lives in Core and Core may not reference Presentation,
     // so each keeps a private one-line copy of these two rules rather than calling this class
     // (docs/architecture.md). These three tests are the guard that keeps the copies honest: the
     // next person to change a rule here gets a red test instead of a tile that silently drifts

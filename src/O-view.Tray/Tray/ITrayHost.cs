@@ -10,17 +10,17 @@ namespace OView.Tray.Tray;
 /// </summary>
 public interface ITrayHost : IDisposable
 {
-    /// <summary>Replace the tray icon and tooltip. Takes ownership of nothing — the bitmap may be disposed by the caller after return.</summary>
+    /// <summary>Replace the tray icon and tooltip. Takes ownership of nothing, the bitmap may be disposed by the caller after return.</summary>
     void Update(Bitmap icon, string tooltip);
 
-    /// <summary>Left-click on the icon — opens the popup.</summary>
+    /// <summary>Left-click on the icon, opens the popup.</summary>
     event EventHandler? IconClicked;
 
-    /// <summary>Right-click on the icon — opens the context menu.</summary>
+    /// <summary>Right-click on the icon, opens the context menu.</summary>
     event EventHandler? IconRightClicked;
 
     /// <summary>
-    /// Show a balloon. Balloon-tip path — legacy but dependency-free (ADR-0005).
+    /// Show a balloon. Balloon-tip path, legacy but dependency-free (ADR-0005).
     ///
     /// <para><paramref name="kind"/> chooses the glyph. It is a parameter rather than a
     /// property of this host because a single host serves every notification the app raises,

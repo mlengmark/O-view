@@ -15,7 +15,7 @@ namespace OView.Tray;
 /// guards that keep two checks or two installs from overlapping.
 ///
 /// <para>Shutting the app down after handing off to the installer arrives as a callback, so
-/// the flow drives the app's lifetime without owning it — the WPF <c>Application</c> stays
+/// the flow drives the app's lifetime without owning it, the WPF <c>Application</c> stays
 /// the skin's.</para>
 /// </summary>
 public sealed class UpdateFlow
@@ -44,7 +44,7 @@ public sealed class UpdateFlow
 
     /// <summary>
     /// Quiet check: only *notifies* when a newer release exists, and only once per version
-    /// (re-notifying every day would be nagging). It never downloads or installs anything —
+    /// (re-notifying every day would be nagging). It never downloads or installs anything,
     /// that stays behind the explicit menu action and its confirmation.
     /// </summary>
     public async Task BackgroundCheckAsync()
@@ -87,9 +87,9 @@ public sealed class UpdateFlow
     /// <para><b>Automatic is not silent.</b> The balloon goes out <i>before</i> anything is
     /// downloaded, naming the version and warning that O-view will close and reopen.
     /// Invisibility was the worst property of the alternative ADR-0009 rejected, and it stays
-    /// rejected — what this removes is the per-release click, not the user's knowledge.</para>
+    /// rejected, what this removes is the per-release click, not the user's knowledge.</para>
     ///
-    /// <para>Every failure path is the confirmed flow's, unchanged — including the deliberate
+    /// <para>Every failure path is the confirmed flow's, unchanged, including the deliberate
     /// refusal to open the releases page after a checksum mismatch, which would hand the user
     /// exactly the file the check just rejected.</para>
     /// </summary>
@@ -143,8 +143,8 @@ public sealed class UpdateFlow
         {
             // _checkActive covers the whole interactive flow, including the modal
             // confirmation; _flowActive only covers the download that follows it. A
-            // second click while the first check is still awaiting the network — or sitting
-            // on the confirm dialog — would otherwise start an independent flow and stack a
+            // second click while the first check is still awaiting the network, or sitting
+            // on the confirm dialog, would otherwise start an independent flow and stack a
             // second modal behind the first.
             return;
         }
@@ -211,7 +211,7 @@ public sealed class UpdateFlow
         {
             // A running single-file exe cannot overwrite itself, and the installer would
             // create a parallel install rather than update the loose one. On Linux this
-            // branch also covers an apt build, which must never overwrite dpkg's files —
+            // branch also covers an apt build, which must never overwrite dpkg's files,
             // but that head has its own copy and never reaches this method.
             if (ConfirmUpdate(update, UpdateText.OpenPageQuestion, UpdateText.OpenPageConfirm))
             {
@@ -237,7 +237,7 @@ public sealed class UpdateFlow
         {
             // Deliberately does NOT open the releases page. Every other failure here means
             // "try again by hand", but this one means the file that arrived was not the file
-            // the release published — sending the user to download it manually would hand
+            // the release published, sending the user to download it manually would hand
             // them the thing the check just rejected. Say what was observed and stop
             // (CLAUDE.md rule 6); the installer has already been deleted, and nothing on the
             // machine has changed.
@@ -260,7 +260,7 @@ public sealed class UpdateFlow
     }
 
     /// <summary>
-    /// The update prompt, on the app's own dialog rather than a system MessageBox — that
+    /// The update prompt, on the app's own dialog rather than a system MessageBox, that
     /// box was raw Win32 chrome with a stock glyph and nothing identifying which app was
     /// asking. The primary button names the action ("Update now") instead of answering
     /// "Yes" to a question the user has to re-read to be sure of.
