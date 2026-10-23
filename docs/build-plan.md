@@ -1,6 +1,8 @@
-# Build plan
+# Build plan (historical)
 
-Session-sized phases. Each ends in something **runnable and verifiable** — not just compiling. Do not start a phase before its predecessor's acceptance criteria pass.
+> **Every phase on this page is complete.** It is kept as the record of how the app was built and in what order, with the assumptions each phase was built under. For what the app is today read the [README](../README.md); for what has been seen working on each platform read [platform-status.md](platform-status.md). Nothing here is a to-do list.
+
+Session-sized phases. Each ends in something **runnable and verifiable**, not just compiling. Do not start a phase before its predecessor's acceptance criteria pass.
 
 Read [CLAUDE.md](../CLAUDE.md) and [docs/adr/README.md](adr/README.md) before phase 1.
 

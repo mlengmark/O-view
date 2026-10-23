@@ -1,382 +1,168 @@
-# CLAUDE.md — O-view
+# CLAUDE.md
 
-Guidance for AI coding assistants working in this repository. Read this before writing code.
+Guidance for anyone, human or AI, working in this repository. Read it before writing code.
 
 ## What this is
 
-A **desktop notification-area (system tray) application** that displays Claude AI token usage and time until the next usage-limit reset. **Windows 11 and Linux are both supported targets as of v0.6.0** ([ADR-0012](docs/adr/0012-linux-support.md)).
+A desktop notification-area app that shows Claude usage and the time until the next usage-limit reset, for Windows 11 and Linux ([ADR-0012](docs/adr/0012-linux-support.md)). What the app does and shows is in the [README](README.md); what has actually been seen working on each platform is in [docs/platform-status.md](docs/platform-status.md), and nothing else restates it. Do not describe Linux behaviour as verified unless that page says it was.
 
-Status: all build phases complete (see [docs/build-plan.md](docs/build-plan.md)). Windows has been working end to end and in daily use since v0.1.0. Linux shipped in v0.6.0 and **has now been run on a physical desktop twice** — Arch-based, KDE Plasma, Wayland, tarball install, reporting against v0.6.1 and again against v0.6.5.
-
-Those two reports are the whole of what anyone has seen on hardware, and together they split three ways:
-
-- **Confirmed working:** data resolution (every path, 5,645 of 5,645 plan-history samples, Cowork logs, account tier) and the tray icon appearing.
-- **Fixed, four of them — two now re-tested live, two still not:** the first left click deadlocked the app (#124) and the menu took tens of seconds (#125), both found by the report and fixed in v0.6.4; CI's `linux-runtime` job now drives both end to end over a real session bus and a real notification area, under a virtual display and Avalonia 12.1.3, and both pass inside their budgets. Reading that code then turned up a third nobody had hit, the panel dismissing itself when a compositor refuses to focus it (#129), fixed in v0.6.5. A second report then found the left click **segfaulting** — Avalonia raises SNI callbacks on the D-Bus thread and the head built its window there (#143); the menu items had the same defect and were fixed with it. **#129 and #143 are still only reasoned from the code and guarded by structural tests — `linux-runtime` cannot retest either one:** it has no live case for a compositor refusing focus, and it cannot catch #143's defect because in that job the click already arrives on the UI thread, so there is no wrong-thread moment to catch. The mocked `BusCallbackTests` guard #143 instead, by choosing the thread themselves.
-- **Seen only on a VM:** the panel itself — blocked first behind the deadlock, then behind the crash — has since been opened five times on an Ubuntu 24.04 VM, GNOME on Wayland through XWayland, most recently on 2026-10-19: dragged by its header, reopening where it was left, reset by "Reset panel position", moved with Alt and an arrow key, and a drop pulled back onto the work area or snapped flush to the dock while the panel stayed open — all working as expected, with one defect seen, the first Alt+arrow press right after clicking the header does nothing and the presses after it work. Xorg was not re-tested against any of these fixes — last run 2026-10-15, against an earlier build — and reads as not re-tested, never as verified. **Nobody has opened it on a physical Linux desktop.**
-- **Still never observed at all:** the panel's work-area corner placement, added in #144 and never seen on a compositor; the tooltip, notifications, GNOME without an AppIndicator extension, and the `.deb` on hardware. **X11 has been drawn on** — through XWayland on the runs up to 2026-10-19, and on a native Xorg GNOME session on 2026-10-15. What has not been re-tested against the fixes made since is an Ubuntu-**on-Xorg** login session: last run 2026-10-15, against an earlier build. **Not theme following either** — the 2026-10-15 VM run saw GNOME's default "no preference" stay dark and `prefer-light` switch to light ([#316](https://github.com/mlengmark/O-view/issues/316), a deliberate choice, not a defect); an explicit `prefer-dark` setting and a live switch while the panel is open were not exercised.
-
-**Released is not the same as verified, and neither is fixed. Do not describe Linux panel or theme behaviour as working, and do not describe #124, #125, #129 or #143 as confirmed fixed** until a re-test lands. The README's support matrix carries these three states deliberately, and rule 6 applies to our own claims about our own app as much as to usage numbers.
-
-**Threading on the Linux head is not a detail.** Anything the session bus raises — `TrayIcon.Clicked`, `NativeMenuItem.Click` — arrives on Tmds.DBus's thread, because `DBusHelper` clears the `SynchronizationContext` when it builds the connection. Touching the toolkit from there is a SIGSEGV, not an exception, so no `try/catch` will save it and no log will name it. Route every such callback through `BusCallback` (`Post`, never a blocking invoke — waiting on the UI thread from a bus reply is #124 pointed the other way).
-
-The ADRs in `docs/adr/` are decided, not drafts — follow them. If you believe one is wrong, say so and propose superseding it; do not silently deviate. ADR-0009 carries a worked example of why: its Linux amendment asserted that `apt upgrade` handled updates, which was untrue in both halves and survived undetected until the release gate.
+The ADRs in `docs/adr/` are decided, not drafts. Follow them. If you believe one is wrong, say so and propose superseding it rather than deviating quietly.
 
 ## Hard rules
 
-### 1. Two platforms — and the layer decides what you may use
+### 1. Two platforms, and the layer decides what you may use
 
-**Windows 11 and Linux** (Ubuntu 22.04+ / Debian 12+, x64 + arm64). **macOS is out of scope.** This is [ADR-0012](docs/adr/0012-linux-support.md), which supersedes *only* the target scope of [ADR-0003](docs/adr/0003-windows-tray-constraints.md) — ADR-0003's icon analysis and its ten platform behaviours still govern the Windows head.
-
-Where code lives decides what it may touch:
+Windows 11 and Linux (Ubuntu 22.04+, Debian 12+, x64 and arm64). macOS is out of scope.
 
 | Layer | Target | May use |
 |---|---|---|
-| `O-view.Core` | `net10.0` | BCL and SQLite only. No UI, no Win32, no `System.Drawing`, no `Microsoft.Win32`. **Must build and pass its tests on Linux.** |
+| `O-view.Core` | `net10.0` | The BCL and SQLite only. No UI, no Win32, no `System.Drawing`, no `Microsoft.Win32`. Must build and pass its tests on Linux. |
 | `O-view.App` | `net10.0` | The same. Orchestration only; platform behaviour arrives through injected interfaces. |
-| `O-view.Presentation` | `net10.0` | Everything a user reads or sees, shared by both heads: wording, number and date formats, and a view model per panel section, tooltip and menu, plus the shared sample states the goldens are rendered from. Core only, never WPF or Avalonia (a test enforces it). |
-| `O-view.Tray` — Windows head | `net10.0-windows` | Win32, WPF, WinForms `NotifyIcon`, **directly. No abstraction tax.** |
-| `O-view.Linux` — Linux head | `net10.0` | D-Bus, StatusNotifierItem, Avalonia + SkiaSharp ([ADR-0013](docs/adr/0013-linux-ui-toolkit.md)). |
+| `O-view.Presentation` | `net10.0` | Everything a user reads or sees, shared by both heads: wording, number and date formats, a view model per panel section, tooltip and menu, and the sample states the goldens render. Core only, never WPF or Avalonia; a test enforces it. |
+| `O-view.Tray`, the Windows head | `net10.0-windows` | Win32, WPF and WinForms `NotifyIcon`, directly. |
+| `O-view.Linux`, the Linux head | `net10.0` | D-Bus, StatusNotifierItem, Avalonia and SkiaSharp ([ADR-0013](docs/adr/0013-linux-ui-toolkit.md)). |
 
-The layering — the panel's content built once per section in Presentation, with each head only laying it out — is described in [docs/architecture.md](docs/architecture.md).
+The layering, with the panel's content built once per section in Presentation and each head only laying it out, is in [docs/architecture.md](docs/architecture.md). The test for any change: a new panel section is added once, in Presentation, and each head needs only layout to show it. Anything a Linux user and a Windows user would expect to behave identically belongs in App or Presentation, never in both heads.
 
-**Before every PR, run `powershell -File tools/check.ps1`.** It builds, runs every test (including the smoke test against `tests/fixtures/claude-home`), renders both panels' shared sample states, and compares them pixel by pixel with `tests/golden`. A change that alters what a panel looks like updates the goldens with `-UpdateGolden`, and the PR shows them before and after. The PR format is `.github/pull_request_template.md`. CI's `pr-format`, `merge-order` and `guard-ratchet` checks enforce it, and [docs/feature-checklist.md](docs/feature-checklist.md) lists what must never silently break.
+Resolve platform differences by which implementation gets constructed, not with `#if` or `OperatingSystem.IsLinux()` in logic. The one deliberate runtime check is data-root discovery, in `ClaudeDataRoots`.
 
-Resolve platform differences by **which implementation gets constructed**, not with `#if` or `OperatingSystem.IsLinux()` sprinkled through logic. Where a runtime check genuinely is the simplest correct answer — data-root discovery is the real case — it lives in exactly one named place, and an ADR says where.
+Watch for macOS assumptions, because the closest prior art is a Mac app and none of its answers are right on either target:
 
-> **All four layers now exist.** The rule that binds hardest is still the first row — nothing Windows-specific enters `Core` or `App` — and CI enforces it by building and testing both on `ubuntu-latest`. The second-hardest is that neither head may grow logic the other needs: see *Intended structure* below.
-
-Watch for macOS assumptions leaking in from AI training data, because the closest prior art is a Mac app. None of the left column is right on **either** target:
-
-| Wrong (macOS) | Right (Windows) | Right (Linux) |
+| Wrong (macOS) | Windows | Linux |
 |---|---|---|
-| Tray icon can show a text label | **It cannot.** `Shell_NotifyIcon` takes an `HICON` only. Text must be rasterised into a 16/20/24 px bitmap. | **Also cannot.** StatusNotifierItem takes an icon name or ARGB32 pixmap. |
-| Keychain | DPAPI / Windows Credential Manager | Secret Service (libsecret) — and v1 still handles no credentials at all (rule 3) |
-| `~/Library/Application Support` | `%APPDATA%` / `%LOCALAPPDATA%` | XDG: `~/.config`, `~/.local/share` |
-| LaunchAgents / `SMAppService` | `HKCU\...\CurrentVersion\Run` | `~/.config/autostart/*.desktop` |
-| `NSPopover` anchors itself | Position manually via `Shell_NotifyIconGetRect` + work area | **Worse than manual:** SNI cannot report where its icon was drawn, so *anchoring to the icon* is impossible. A work-area **corner** is achievable and is what ships (#144) — `Screens` gives both rectangles and `WorkAreaPlacement` is shared with Windows. Setting the position is still only a request a compositor may refuse |
-| Menu bar item always visible | Windows 11 hides new tray icons in the overflow flyout | **GNOME has no tray at all** without a third-party AppIndicator extension |
+| A tray icon can show a text label | It cannot. `Shell_NotifyIcon` takes an `HICON`; text has to be drawn into a bitmap | It cannot either. StatusNotifierItem takes an icon name or an ARGB pixmap |
+| `~/Library/Application Support` | `%APPDATA%` and `%LOCALAPPDATA%` | XDG: `~/.config` and `~/.local/share` |
+| LaunchAgents | `HKCU\...\CurrentVersion\Run` | `~/.config/autostart/*.desktop` |
+| A popover anchors itself to its item | Position it yourself from `Shell_NotifyIconGetRect` and the work area | SNI cannot report where the icon was drawn, so anchoring is impossible; the panel takes the work-area corner, and placing it is a request a compositor may refuse |
+| The menu bar item is always visible | Windows 11 hides new tray icons in the overflow flyout | GNOME has no tray at all without an AppIndicator extension |
 
-### 2. Clean-room — do not read existing usage monitors
+**Before every PR, run `powershell -File tools/check.ps1`.** It builds, runs every test including the smoke test against `tests/fixtures/claude-home`, renders both panels' sample states, and compares them pixel by pixel with `tests/golden`. A change that alters what a panel looks like updates the goldens with `-UpdateGolden` and shows them in the PR. The PR format is `.github/pull_request_template.md`; CI's `pr-format`, `merge-order` and `guard-ratchet` checks enforce it, and [docs/feature-checklist.md](docs/feature-checklist.md) lists what must never silently break.
 
-This project was inspired by the *product concept* of existing macOS menu-bar apps that track AI token usage (macOS/Swift). **Do not read, clone, fetch, or browse the source code** of any such app, and do not reproduce its naming or file layout. If asked "how does [an existing usage monitor] do X", decline and reason from first-party platform documentation instead — Microsoft's for Windows, and the freedesktop/XDG specifications for Linux. Full policy: [ADR-0004](docs/adr/0004-clean-room-provenance.md).
+### 2. Clean room
 
-Those macOS designs are not merely encumbered — they are *incorrect* for this platform.
+The project was inspired by the product concept of macOS menu-bar apps that track AI token usage. Do not read, clone or browse the source of any such app, and do not reproduce its naming or layout. Reason from first-party platform documentation instead: Microsoft's for Windows, freedesktop and XDG for Linux. Full policy: [ADR-0004](docs/adr/0004-clean-room-provenance.md).
 
-### 3. No subscription credentials — ever, and on policy grounds
+### 3. No subscription credentials, ever
 
-**O-view handles no Claude subscription credential.** Not a token, not a browser cookie, not a keychain item, not a "sign in with Claude" button. This is [ADR-0015](docs/adr/0015-no-credential-based-usage-sources.md).
+O-view handles no Claude subscription credential: no token, no cookie, no keychain item, no sign-in button ([ADR-0015](docs/adr/0015-no-credential-based-usage-sources.md)). The reason is policy: using a Free, Pro or Max credential in a third-party product is prohibited by Anthropic's consumer terms. That Claude Code's token location is now documented changes nothing.
 
-**The reason changed, and the change matters.** This rule used to rest on the token being unlocatable. Anthropic now documents exactly where Claude Code stores it, so that reason expired — and the rule holds anyway, because using a Free/Pro/Max credential in a third-party product is prohibited by the Consumer Terms. Anyone proposing it on the old premise is arguing against a reason nobody is using.
-
-**`OAuthUsageProvider` is not deferred. It is closed** — deleted from the provider design rather than left listed, because "deferred" reads as "planned", and the question was re-proposed twice in a single planning session.
-
-Two source categories are permitted. Both keep the credential inside the vendor's own client:
+Two source categories are permitted, and both keep the credential inside the vendor's own client:
 
 | Permitted | Example |
 |---|---|
-| **Read a file Claude's own apps write** | `plan-usage-history.json`, `~/.claude.json`, transcripts |
-| **Invoke Claude's own approved client and read what it produces** | `claude -p "/usage"` — [findings](docs/findings/cli-usage-refresh.md) |
+| Read a file Claude's own apps write | `plan-usage-history.json`, `~/.claude.json`, transcripts |
+| Invoke Claude's own client and read what it produces | `claude -p "/usage"` ([findings](docs/findings/cli-usage-refresh.md)) |
 
-**"No network call" is no longer true, and the distinction is exact.** O-view still sends nothing to Anthropic and still holds no credential — but it now *causes* Claude Code to make a request, and a network trace of the machine will show it. Claude Code authenticates as itself, as the client Anthropic approves. `SECURITY.md` states this; keep it stated.
+O-view sends nothing to Anthropic and holds no credential, but it does cause Claude Code to make a request, and a network trace will show it. `SECURITY.md` states this; keep it stated. The invocation was measured at zero tokens, and O-view checks after every run that it stayed free; if a charge is ever detected the feature stops itself. An argument Claude Code does not recognise reaches the model and costs real tokens, so the argument is exactly the slash command and nothing else.
 
-That invocation is free — **measured at zero tokens** — and O-view checks after every one that it stayed free. An argument Claude Code does not recognise reaches the model and cost 49,094 cache-write + 97,456 cache-read + 470 output for one trivial exchange. If a charge is ever detected the feature stops itself; the latch is resettable, because the guard errs toward reporting one.
+Never write to Claude's files. `plan-usage-history.json` and `~/.claude.json` belong to other applications and are read-only, always.
 
-**Never write to Claude's files** — `%APPDATA%\Claude\plan-usage-history.json` and `~/.claude.json` both belong to another application. Read-only, always. O-view *causes* Claude Code to write the second; it never writes it itself.
+### 4. De-duplicate transcripts by request id
 
-### 4. De-duplicate JSONL by `requestId`
+Assistant records are written several times as a response streams, so a naive sum overcounts by about 2.3×. Group by request id and keep the last occurrence ([findings/jsonl-schema.md](docs/findings/jsonl-schema.md)). The id has two spellings: Claude Code writes `requestId`, Cowork audit logs write `request_id`. Reading only one ingests nothing from the other, with no error.
 
-Non-negotiable, and the single easiest way to ship a silently broken app. Assistant records are written multiple times as responses stream; the sample file had **28 records for 12 distinct `requestId`s** — a naive sum overcounts by ~2.3×. Group by `requestId`, keep the last occurrence. Details: [docs/findings/jsonl-schema.md](docs/findings/jsonl-schema.md).
+### 5. Tray integration differs by head
 
-**The id has two spellings.** Claude Code transcripts write `requestId`; **Cowork** audit logs write `request_id` on an otherwise identical record. Reading only one spelling ingests *nothing* from the other source — no error, just an empty tile. See rule 9.
+**Windows:** first-party `System.Windows.Forms.NotifyIcon`, no third-party tray package ([ADR-0005](docs/adr/0005-native-tray-integration.md)). WinForms is for `NotifyIcon` only. `Bitmap.GetHicon()` allocates a GDI handle `Icon` does not own, so call `DestroyIcon` on every refresh or the process leaks one handle per update. `WpfNativeLibraries.Pin()` loads WPF's native DLLs at startup and must stay: the single-file exe extracts them to `%TEMP%`, a tray app does not touch them until the first click, and temp cleaners delete them in between.
 
-### 5. Tray integration — the rules differ by head
+**Linux:** Avalonia, SkiaSharp and `Tmds.DBus.Protocol`; the zero-dependency rule is scoped to Windows ([ADR-0013](docs/adr/0013-linux-ui-toolkit.md)). Two measured facts: an Avalonia `TrayIcon` reports `IsVisible = true` whether or not a notification-area host exists, so `SniHostProbe` asks the bus and the app tells the user when there is none; and the probe runs before the toolkit starts, because blocking Avalonia's UI thread on a D-Bus round trip deadlocks the app. Everything the session bus raises arrives on Tmds.DBus's thread, and touching the toolkit from there is a segmentation fault, not an exception. Route every such callback through `BusCallback` with `Post`, never a blocking invoke.
 
-**Windows: no third-party tray library, and free the GDI handle.** Tray integration uses the **first-party `System.Windows.Forms.NotifyIcon`** (`<UseWPF>` + `<UseWindowsForms>` together). Do not add H.NotifyIcon or any other tray package; the dependency was evaluated and deliberately dropped ([ADR-0005](docs/adr/0005-native-tray-integration.md)). WinForms is for `NotifyIcon` **only** — no WinForms controls, forms, or `Application.Run`.
-
-`Bitmap.GetHicon()` allocates an unmanaged GDI handle that `Icon` does not own. **Call `DestroyIcon` on every icon refresh** or the process leaks a handle per update — a slow leak in an app designed to run for days.
-
-**Pin WPF's native DLLs at startup, and leave the pin in.** The single-file exe self-extracts `wpfgfx_cor3.dll` and friends into `%TEMP%\.net\O-view.Tray\…`, and a tray app loads none of them until the first click — so for days they are unloaded files in a temp folder, which is what Storage Sense and temp cleaners delete. The first click then raised WinForms' "Unhandled exception" box reading *"Add value to collection of type 'System.Windows.Controls.UIElementCollection' threw an exception"* (inner: `DllNotFoundException`). `WpfNativeLibraries.Pin()` loads them in `OnStartup`, which Windows then refuses to let anything delete; the host re-extracts missing files on every launch, so a click that still hits one restarts the app (`OpenFromTray`). Reproduced and verified, not reasoned.
-
-**Linux: ADR-0005's zero-dependency guarantee does not extend here** ([ADR-0013](docs/adr/0013-linux-ui-toolkit.md) scopes it to Windows). There is no first-party option: the head uses Avalonia, SkiaSharp and `Tmds.DBus.Protocol`. Two things about it are counter-intuitive and both are measured, not assumed:
-
-- **An Avalonia `TrayIcon` reports `IsVisible = true` whether or not a notification-area host exists.** The toolkit cannot be asked whether the icon is actually anywhere. Ask the *bus* — `SniHostProbe` checks for an owner of `org.kde.StatusNotifierWatcher` — and tell the user when there is none, because silently invisible is indistinguishable from broken ([findings](docs/findings/linux-tray-spike.md)).
-- **Probe before the toolkit starts.** Blocking Avalonia's UI thread on a D-Bus round trip deadlocks the app outright. `Program.Main` does it first, deliberately.
-
-Do not "simplify" either back out.
-
-**Icon design (measured, not assumed):** the tray icon is the O-view **brand mark** — a colour-coded **ring gauge with a centre pupil** (the "eye"), **no digits**. Colour carries urgency (green <50, amber 50–69, red ≥70; `OView.Core.UsageLevels`), the exact number lives in the tooltip. The history: digits alone were the spike's winner, but a ring *plus* digits starved each other at 16 px, so when product direction required a graph the digits were dropped and the ring kept (GitHub issue #1). The pupil (added 2026-07-22 to unify the tray icon with the exe icon) is **not** a second signal — it carries no number and takes the arc's colour, so it coexists with the ring where digits could not. Scale the geometry to the icon size — never hard-code, a fixed size clips at some DPI scales. See [findings/tray-icon-rendering.md](docs/findings/tray-icon-rendering.md) and [IconRenderer.cs](src/O-view.Tray/Tray/IconRenderer.cs).
+**The icon** is the brand mark: a colour-coded ring gauge with a centre pupil and no digits. Green below 50%, amber from 50%, red from 70% (`UsageLevels`); the exact number lives in the tooltip. Scale the geometry to the icon size; never hard-code one ([findings](docs/findings/tray-icon-rendering.md)).
 
 ### 6. Never fabricate a number
 
-If data is unavailable, show a neutral icon and explain in the popup. If data is estimated (JSONL-derived), label it **"local estimate"**. A monitoring tool that confidently displays a wrong number is worse than one that admits uncertainty.
+If data is unavailable, show the neutral icon and explain in the panel. If data is estimated, label it "local estimate". This is enforced in the types: a session percentage, a reset time, a token count and a modelled USD figure are each a status-paired type (`UsagePercent`, `UsageInstant`, `TokenCount`, `EstimatedUsd`) carrying `Real`, `Estimated` or `Unavailable`, never a bare nullable, and `CoreModelsHoldNoBareNullablesTests` fails if one is reintroduced.
 
-**This is enforced in the types, not just in prose.** A session percentage, a reset time, a token count and a modelled USD figure are each one of Core's status-paired types (`UsagePercent`, `UsageInstant`, `TokenCount`, `EstimatedUsd` — `src/O-view.Core/Models/`), carrying a `UsageValueStatus` of `Real`, `Estimated` or `Unavailable` beside the figure itself, instead of a bare nullable a reader has to guess the meaning of. `CoreModelsHoldNoBareNullablesTests` fails if a public member of `OView.Core.Models` reintroduces one.
-
-Five specific applications of this rule:
-
-- **"Est. value" tiles are not money charged.** Within plan limits the marginal cost is £0; these figures price tokens at public API rates. Always prefix `Est.`
-- **Partial history must state its coverage** — `3 of 31 days recorded`. A small 31-day number without that caveat reads as low usage rather than short history.
-- **Days before install have no data, not zero data.** Never render them as zero-height bars in the graph.
-- **An unpriced model yields a labelled partial, not a blank tile.** `CostEstimator` has no rate for a model Anthropic released after the table was last updated, so `PanelStatistics` sums what it *can* price and names the rest in `UnpricedModels` (`excludes claude-x (no published rate)`); it returns null only when **nothing** was priceable. Do **not** "restore" the older rule of nulling the whole total on any unpriced model — that blanked both Est. tiles for every user the moment one new model id appeared (it did, for `claude-opus-5`), with no explanation. And never invent a rate to fill the gap: look it up, or leave it labelled. `<synthetic>` is not a model — it is Claude Code's marker for locally generated messages, and it is **dropped at parse time by `TranscriptReader`**, so it never reaches the store, the estimator or the breakdown. That filter is the single treatment: do not add a "price it at 0" or "call it Local" branch downstream, which is what issue #57 removed — those were unreachable and disagreed with the reader on case sensitivity. Measured on real transcripts, every synthetic record carries all-zero usage, so storing them would add nothing to any total while inflating `RequestCount` with messages no model produced.
-- **Never assert something about the user's machine that O-view hasn't observed.** The "no usage data" banner once read *"Install and run the Claude Desktop app"* at a user who had it open — a file O-view cannot read is not evidence the app is absent. State the observation and the path checked ([ADR-0010](docs/adr/0010-post-update-relaunch.md)).
+- "Est." figures are not money charged; always prefix `Est.`
+- Partial history states its coverage: `3 of 31 days recorded`.
+- Days before install have no data, not zero data; never draw them as zero-height bars.
+- An unpriced model yields a labelled partial, never a blank tile, and never an invented rate. `<synthetic>` is not a model; `TranscriptReader` drops it at parse time, and that is the only treatment.
+- Never assert something about the user's machine that O-view has not observed. State what was checked and what was found.
 
 ### 7. Ingestion must be idempotent
 
-The rollup store ([ADR-0006](docs/adr/0006-local-rollup-store.md)) is re-fed from JSONL on every poll. Upsert by natural key or track a per-file watermark — never blind `INSERT`. Together with `requestId` de-duplication this is one of two silent double-counting bugs the design is exposed to; **both need explicit tests.**
+The rollup store ([ADR-0006](docs/adr/0006-local-rollup-store.md)) is re-fed from transcripts on every poll. Upsert by natural key or track a per-file watermark; never blind-insert. With rule 4 this is one of two silent double-counting bugs the design is exposed to, and both have explicit tests.
 
 ### 8. Read the fields that actually hold data
 
-Account info comes from `~/.claude.json` → `oauthAccount` (no token, no network). **Tier is `organizationType`** (e.g. `claude_pro`). `seatTier` and `userRateLimitTier` are empty strings on the dev account — the obvious-looking fields are the wrong ones and silently render a blank badge.
+Account info comes from `~/.claude.json` under `oauthAccount`. The tier is `organizationType`; `seatTier` and `userRateLimitTier` are empty strings and would render a blank badge.
 
-### 9. Tokens come from two places, and two surfaces write nothing local at all
-
-Local token counts have **two** sources, and scanning one of them is the historical bug ([findings/cowork-audit-logs.md](docs/findings/cowork-audit-logs.md), issue #44):
+### 9. Tokens come from two places, and two surfaces write nothing local
 
 | Surface | Transcript |
 |---|---|
-| Claude Code (CLI **and** hosted in Desktop) | `%USERPROFILE%\.claude\projects\**\*.jsonl` |
-| Claude Code **sub-agents** | `%USERPROFILE%\.claude\projects\<mangled-cwd>\<parent-session>\subagents\agent-*.jsonl` — one directory **below** the session file |
-| **Cowork**, older builds | `<claude-data-root>\local-agent-mode-sessions\…\<session>\audit.jsonl` |
-| **Cowork**, current builds, running locally | `%USERPROFILE%\.claude\projects\**\*.jsonl` — the **same files as Claude Code** |
-| **Cowork**, running in a cloud container | **none reachable** — see below |
-| Chat | **none — no local usage record exists** |
+| Claude Code, CLI or hosted in Desktop | `~/.claude/projects/**/*.jsonl` |
+| Claude Code sub-agents | one directory below the session file, under `subagents/` |
+| Cowork, older builds | `<claude-data-root>/local-agent-mode-sessions/.../*.jsonl` |
+| Cowork, current builds running locally | the same files as Claude Code |
+| Cowork running in a cloud container | nothing reachable |
+| Chat | nothing |
 
-**A Cowork session can execute in an ephemeral cloud container, and then nothing lands on this
-machine.** The transcript is written inside the container at `/root/.claude/projects/<slug>/<session>.jsonl`,
-in the same schema as any other, and is destroyed when the session is reclaimed. Confirmed by
-Claude Desktop itself on the machine that reported issue #218, whose plan meter sat at 100% while
-its newest local record was two days old.
+Which surface wrote a transcript is decided by Cowork's own session register, through `CoworkSessionIndex`, never from the path. Sub-agent transcripts are found only because `TranscriptFileScan` walks recursively; do not narrow that scan. `<claude-data-root>` is not always `%APPDATA%\Claude`: a packaged Desktop is redirected into its package store, and `ClaudeDataRoots` is the one place that is known. Each Cowork sandbox contains a `.claude/projects` tree with a broken directory junction in it; `Directory.GetFiles` aborts on it, so always enumerate per directory, which `TranscriptFileScan` does.
 
-This is the row that matters most when a user reports "the token tiles have stopped", because
-every other explanation is a bug and this one is not. **No scan fixes it**, and reaching for a
-wider search is the wrong instinct: three of the defects found while diagnosing #218 came from
-assuming a local file must exist somewhere. The plan meters are account-wide and *do* cover this
-usage, so the bars stay correct while the tiles cannot.
+A Cowork session in a cloud container leaves no local record while the plan meters still move. When a user reports that the token tiles have stopped, that is the first explanation to rule in, and no wider scan fixes it.
 
-**The panel does not currently explain that pairing, and that is a deliberate gap.** The
-session-window line and its "Why is this empty?" disclosure said so beneath the bar; both were
-removed in issue #232, pending a different treatment. What is left is the token-scope note, which
-only covers a machine that has recorded **nothing at all** — a machine with history and an empty
-current window now shows a high bar over low tiles with nothing beside it. Do not re-add a
-replacement line here without checking #232 first.
+## Provider design
 
-**Location is not authorship, and this table is why that had to be said twice.** Cowork now runs
-its sessions through Claude Code, so its transcripts land in the Claude Code row. Reading the
-table as "a file under `.claude\projects` is Claude Code usage" is what made `JsonlUsageProvider`
-label by locator — and on the development machine that reported `Cowork: 0 rows` while **28 of 30
-transcripts there, 107.7 MB of 107.9 MB, belonged to registered Cowork sessions** (issue #218).
+```
+IUsageProvider
+ ├─ PlanHistoryProvider        Claude Desktop's sampled series: session and weekly %, derived session reset
+ ├─ CachedUtilizationProvider  Claude Code's cache: the same two %, plus exact reset instants
+ ├─ JsonlUsageProvider         local token counts from transcripts (Claude Code and Cowork)
+ └─ CompositeUsageProvider     resolution and source labelling
 
-The authority on which surface wrote a transcript is Cowork's own register:
-`<claude-data-root>\claude-code-sessions\…\local_<id>.json` names the `cliSessionId` its session
-writes under, and that id is the transcript's file name. `CoworkSessionIndex` is the one place
-that match is made; do not re-derive a surface from a path.
+ ClaudeCliRefresher            not a provider: asks Claude Code to refresh its cache by running /usage
+```
 
-**Sub-agent transcripts sit one directory below the session file, and their tokens draw on the
-same plan window.** Claude Code gives each sub-agent its own file at
-`<mangled-cwd>\<parent-session>\subagents\agent-<agent-id>.jsonl`, carrying `isSidechain`,
-`agentId`, `attributionAgent`, `attributionSkill`, an ordinary `requestId` and a full `usage`
-block ([findings/jsonl-schema.md](docs/findings/jsonl-schema.md)). They are ingested only because
-`TranscriptFileScan` walks recursively — **do not narrow the projects scan to a top-level
-enumeration, a tighter pattern or a shallower depth**, which would drop every sub-agent token in
-silence. `SubAgentTranscriptTests` fails if the walk stops descending (issue #271). Measured:
-2026-08-31 ingested 230 sub-agent requests worth 62.0M tokens.
-
-**Known gap, breakdown only:** a sub-agent transcript is always labelled Claude Code, even when
-its parent was a Cowork session. `CoworkSessionIndex.Wrote` matches the register on the file's
-name, and `agent-<agent-id>` is never a `cliSessionId` — a sub-agent gets no session of its own,
-so its `sessionId` is the parent's. **Totals are unaffected**; only the per-source split in the
-support bundle is. The parent's id is right there as the containing directory name, so the fix is
-to ask the register about that rather than about the file — but it is a change to
-`CoworkSessionIndex`'s contract, not a one-liner, and it is not done.
-
-Three traps, all silent:
-
-- **`<claude-data-root>` is not always `%APPDATA%\Claude`.** Desktop ships as MSIX and Windows redirects it into `%LOCALAPPDATA%\Packages\<family>\LocalCache\Roaming\Claude`. Use `ClaudeDataRoots` — never hard-code the canonical path, which is how O-view once reported "no usage data" at a user running Desktop. Roots can mirror each other; scanning the union is safe because ingestion de-duplicates on request id.
-
-- Each Cowork sandbox contains a `.claude\projects` directory. It was documented here as **always
-  empty**, and that was wrong: a session that runs Claude Code inside its sandbox writes its
-  transcript there. Measured — 4 such files on the dev machine, **38** on the machine that
-  reported #218, none of them ever scanned (issue #224). `CoworkAuditLocator` therefore takes
-  `*.jsonl` under a session root, not the single name `audit.jsonl`.
-
-  It stayed invisible because a plain recursive enumeration of that tree returns nothing — it
-  contains the broken junction below — so a hand-rolled check agreed with this paragraph and only
-  `TranscriptFileScan` disagreed. Its presence still makes a projects-only scan look like it
-  succeeded, which is the original trap; it is now *also* a place real usage hides.
-- That tree contains a **broken directory junction**. `Directory.GetFiles(..., AllDirectories)` aborts the entire walk on it and `DirectoryNotFoundException` derives from `IOException`, so the usual catch turns one bad folder into "no transcripts on this machine". Always enumerate per-directory — use `TranscriptFileScan`, don't hand-roll it again.
-
-"Claude Desktop" is **not** the dividing line — Claude Code sessions hosted in Desktop write to the normal user-profile location. Cowork is the odd one out, and chat is the one that genuinely cannot be measured. Don't write UI copy that blames "Desktop".
+- Within a tier the most accurate reading wins: the snapshot carrying more meters, then the more recently captured one. Do not reintroduce a fixed precedence between Desktop and Claude Code.
+- Snapshots are chosen whole, never merged field by field.
+- Do not write Claude Desktop's sampling interval into code as a constant. It was 5 minutes, then 15, and it is undocumented. Derive it from the samples.
+- The weekly reset is a reported constant on a static grid ([ADR-0014](docs/adr/0014-weekly-reset-is-a-reported-constant.md)): take `seven_day.resets_at`, persist it as an anchor, project it forward by whole weeks, and never show it with a `~`. The 5-hour window rolls from first use, stays derived from drops in the sampled series, and is still bracketed. Never project a passed `five_hour.resets_at` forward.
+- A cached percentage whose own window has rolled over is not a reading; report unknown rather than the stale figure.
+- Before anything is known, a reset time is unknown. Show it as unknown and say what the user can do about it.
 
 ## Prerequisites
 
-**.NET 10 SDK `10.0.302` is installed and verified** (2026-07-20), including `Microsoft.WindowsDesktop.App 10.0.10` for WPF. Verified end to end: a `net10.0-windows` WPF project scaffolds and builds clean.
+The .NET 10 SDK. On Linux, build the projects rather than the solution: `O-view.Tray` is WPF and will not build there. Python is not used for tooling in this repository; scripts are PowerShell or C#, and the CI gate scripts run under Python on the runner only.
 
-Available: `git`, `gh` (authenticated as `mlengmark`), `dotnet` 10.0.302. Not available: Node, Rust. The `python` on PATH is the non-functional Microsoft Store alias stub — do not use it for tooling scripts; use PowerShell or C#.
+The Linux head is verified by unit tests, by the offscreen render hooks (`--samples`, `--panel-samples`, `--probe`, `--diagnose`, which need no display and no bus), by CI's `linux-runtime` job under a virtual display with a real session bus, and by container installs in the packaging workflow. When adding a Linux code path a desktop could break, ask what a bug report against it would need to contain, and make sure `--diagnose` and `--probe` can carry it in one round trip.
 
-Older runtimes (3.1, 6.0) are also present on the machine. Ignore them. Target **`net10.0`** everywhere except `O-view.Tray`, which is WPF and must be `net10.0-windows`. Everything else carries nothing Windows-specific and must build on Linux; CI enforces that on `ubuntu-latest`.
-
-**The development machine is Windows, and no Linux hardware is available here.** The Linux head is therefore verified by unit tests, by offscreen render hooks (`--samples`, `--panel-samples`, `--probe`, `--diagnose` — all of which run with no display and no bus), and by container installs in the packaging workflow. None of that is a desktop session — unlike the Ubuntu 24.04 VM runs described in *What this is* above, which are, even though they are neither on hardware nor run from this machine either.
-
-The first of the two hardware reports (see *What this is* above) covers the tray icon and data resolution only. **Do not describe Linux panel or theme behaviour as verified on hardware, and do not treat the #124, #125, #129 or #143 fixes as confirmed on a desktop** — none of them has run on real hardware since. CI's `linux-runtime` job now drives #124's click and #125's menu over a real session bus and dispatcher, under a virtual display, and both pass; it does not retest #129 or #143 — see *What this is* above for exactly what it does and does not prove. The README's support matrix distinguishes *seen working* from *never observed* from *fixed but not re-tested* deliberately, and rule 6 applies to our own claims about our own app.
-
-`--diagnose` and `--probe` earned their keep here: that first report was legible enough to diagnose two distinct bugs without a follow-up question. When adding a Linux code path that a desktop could break, ask what a bug report against it would need to contain, and make sure one round trip can carry it.
-
-## Intended structure
+## Structure
 
 ```
 O-view.slnx
 ├── src/
-│   ├── O-view.Core/          # net10.0        Providers, rollup store, window math — no UI, no Win32.
-│   │                         #                PanelPositionFile is where a dragged panel's place is
-│   │                         #                kept on disk, one entry per display.
-│   ├── O-view.Presentation/  # net10.0        Wording, formatting and view models shared by both
-│   │                         #                heads — PanelText, BoostText, TokenText, OffPlanText,
-│   │                         #                a view model per panel section (PanelSections), and
-│   │                         #                the sample states the goldens render. Core only.
-│   ├── O-view.App/           # net10.0        The shell. UsageEngine implements ISkinToShell (what
-│   │                         #                a skin asks) and is split into UsageCacheRefresh,
-│   │                         #                WeeklyResetCoordinator, PlanHistoryPoll, UsageAlerts,
-│   │                         #                PollRunner and UsageProviders, each owning one of
-│   │                         #                its former pieces. ShellHost builds and owns the
-│   │                         #                engine, and posts every IShellToSkin push (what the
-│   │                         #                shell tells a skin) through IUiDispatcher. PanelFit
-│   │                         #                answers the one question of how tall a panel's
-│   │                         #                window may be and whether its content must scroll,
-│   │                         #                for both heads. PanelPlacementMemory answers where a
-│   │                         #                dragged panel goes, over the IPanelPositionStore seam
-│   │                         #                each head's drag and keyboard wiring reads and writes.
-│   ├── O-view.Tray/          # net10.0-windows  WPF + WinForms NotifyIcon, icon rendering, popup —
-│   │                         #                  PopupScroll puts the sections in a scroll viewport
-│   │                         #                  once PanelFit says the panel has been capped.
-│   └── O-view.Linux/         # net10.0        Avalonia + SkiaSharp, SNI over D-Bus, freedesktop
-│                             #                notifications, XDG autostart, portal theme —
-│                             #                PanelContent.ScrollContent is the same response to
-│                             #                a PanelFit cap, with its own hand-drawn scroll bar.
+│   ├── O-view.Core/            Providers, the rollup store, pricing, window maths. No UI, no Win32.
+│   ├── O-view.Presentation/    Wording, formatting and a view model per panel section; the sample states.
+│   ├── O-view.App/             The shell: UsageEngine and its pieces, ShellHost, the shared rendering rules
+│   │                           (PanelFit, PanelMetrics, PanelPlacementMemory, TrayIconGeometry, PanelPalette).
+│   ├── O-view.Tray/            The Windows head: WPF, NotifyIcon, the registry, the updater.
+│   └── O-view.Linux/           The Linux head: Avalonia, SNI over D-Bus, notifications, XDG autostart.
 ├── tests/
-│   ├── O-view.Core.Tests/          # xUnit, 689
-│   ├── O-view.Presentation.Tests/  # xUnit, 327
-│   ├── O-view.App.Tests/           # xUnit, 385
-│   └── O-view.Linux.Tests/         # xUnit, 174
-└── packaging/linux/build.sh  # .deb + tarball; the same script CI runs
+│   ├── O-view.Core.Tests/, O-view.Presentation.Tests/, O-view.App.Tests/, O-view.Linux.Tests/
+│   ├── O-view.TestSupport/     Fakes and temp directories shared by the test projects.
+│   ├── fixtures/claude-home/   The smoke test's hand-written Claude home.
+│   └── golden/                 The rendered sample states both heads are compared with.
+├── tools/check.ps1             The gate: build, test, render, compare.
+└── packaging/linux/build.sh    The .deb and tarball, the same script CI runs.
 ```
 
-Those counts are a **snapshot, not a contract** — measured 2026-08-21, with #163 merged, and
-nothing enforces them. Re-measured 2026-08-28, 2026-10-14 after Phase B's shell/skin split, and
-again 2026-10-21. They are here for the shape they show (Core carries most of the logic,
-and that is the design working) rather than as figures to cite. If one matters to an argument,
-run the suite and use what it says; do not quote this block as evidence. The ADRs' own test
-counts are different and correctly so — those record what was true when each decision was
-taken.
-
-**Five source files are over 600 lines, measured on `main` at 2026-10-20:** the Windows
-sample renderer (`src/O-view.Tray/Diagnostics/SampleRenderer.cs`) 1,001; the Linux panel
-window (`src/O-view.Linux/Panel/PanelWindow.cs`) 933; the rollup store
-(`src/O-view.Core/Storage/RollupStore.cs`) 752; the Linux app (`src/O-view.Linux/LinuxApp.cs`)
-742; and the usage refresher (`src/O-view.Core/Providers/CachedUsage/ClaudeCliRefresher.cs`)
-608. The sample renderer stays over 600 even counting only lines that are neither blank nor
-a comment: 637. The under-600 expectation in [docs/architecture.md](docs/architecture.md)
-covers only the two files that assemble a whole panel, `PopupWindow.xaml.cs` and
-`PanelContent.cs` — both under it — and says nothing about these five.
-
-**Both heads are thin.** Anything a Linux user and a Windows user would expect to behave
-identically — what the countdown says, which release asset to offer, the tray icon's
-geometry — belongs in `App`, not duplicated into each head. Wording itself — what the panel's
-text reads — belongs in `Presentation` instead, shared the same way. `TrayIconGeometry` exists
-in `App` because icon-geometry duplication had already started; `PanelText` (now split into
-`PanelText`, `BoostText`, `TokenText` and `OffPlanText`) lives in `Presentation` for the same
-reason.
-
-On Linux, build the projects, not the solution: `O-view.Tray` is WPF and will not build there.
-
-The full UI contract is [docs/ui-spec.md](docs/ui-spec.md) — read it before building any panel.
-Phased work breakdown with acceptance criteria: [docs/build-plan.md](docs/build-plan.md).
-
-Keep `Core` free of UI and Win32 dependencies so the accounting logic stays testable without a desktop session.
-
-### Provider design
-
-```
-IUsageProvider
- ├─ PlanHistoryProvider       (primary)  → session/weekly %, derived SESSION reset only
- ├─ CachedUtilizationProvider (primary)  → session/weekly % AND exact reset times, from
- │                                         Claude Code's ~/.claude.json cache
- ├─ JsonlUsageProvider        (fallback) → local token counts, offline (Claude Code + Cowork)
- └─ CompositeUsageProvider               → resolution, caching, source labelling
-
- ClaudeCliRefresher                      → not a provider. Asks Claude Code to refresh the
-                                           cache above, because it does so only on /usage
-```
-
-Resolution: authoritative percentages → JSONL (labelled estimate) → no data. See [ADR-0002](docs/adr/0002-usage-data-providers.md) and [ADR-0007](docs/adr/0007-plan-history-primary-provider.md). **There is no OAuth tier and there will not be** (rule 3).
-
-**Within a tier, the most accurate reading wins — not the first one listed.** Two sources now report the same meters (Desktop's sampled series and Claude Code's cache), so `CompositeUsageProvider` picks the snapshot that carries **more meters** first, and among equals the one **captured most recently**; ties fall back to argument order so the result stays deterministic. Desktop samples on a timer while the cache refreshes only when `/usage` runs, so neither is reliably fresher and neither gets a standing preference. Do not reintroduce a fixed precedence between them.
-
-**Do not write a sampling interval into code as a constant.** ADR-0007 recorded 5 minutes, measured in July 2026; it was **15 minutes** when measured again in August. It is Claude Desktop's cadence, it is undocumented, and it changes. Derive it from the samples wherever it matters.
-
-**Snapshots are chosen whole, never merged field-by-field.** A session figure from one source beside a weekly figure from another describes an account state that existed at no instant, under a single `Source` label that can only be true of one of them — a rule 6 fabrication that looks entirely real on screen.
-
-**The percentages are no longer Desktop-only.** Claude Code caches the figures behind `/status` → Usage in `~/.claude.json` → `cachedUsageUtilization`, so a machine with no Claude Desktop can fill the top two bars from a local file — the population that used to see two permanently empty gauges. Same rules as every other source: local, read-only, no token (rule 3). Details and the shape: [findings/cached-usage-utilization.md](docs/findings/cached-usage-utilization.md).
-
-**But Claude Code refreshes that block only when `/usage` runs** — not on startup, and not while a session is open. Measured 2026-08-28: 4.43 days stale on a machine that had been running Claude Code all morning, with both `resets_at` passed, so the stale-window rule below correctly rejected it and the panel read *unknown*. That is why `ClaudeCliRefresher` exists (issue #234). Do not gate a refresh on "a session is running" — that premise was measured false.
-
-**The two windows are different shapes, and one rule for both is the mistake** ([ADR-0014](docs/adr/0014-weekly-reset-is-a-reported-constant.md), which supersedes [ADR-0011](docs/adr/0011-weekly-reset-derivation.md) in full):
-
-- **Weekly — a static grid.** Same weekday, same time, every week; five observations over five weeks all matched. Take `cachedUsageUtilization.utilization.seven_day.resets_at`, **persist it as an anchor, and project it forward by whole weeks — including when the stored instant is in the past.** It carries **zero uncertainty**, renders without a `~`, and the field that once carried that uncertainty is gone (issue #248). Persisting is the substance: the cache goes stale, so a value read only while fresh is a value usually absent.
-- **Session — rolls from first use, and is not a grid.** Still derived by detecting a decrease of ≥2 points in `fh` and stepping forward 5h. Still bracketed, still marked `~` when the observation crossed a sampling gap. **Never project a passed `five_hour.resets_at` forward** — that rebuilds the grid bug #180 removed, describing a window that never existed.
-
-Before anything is known, the reset time is genuinely **unknown** — show it as unknown, never guessed, and say what the user can do about it.
-
-**A cached percentage whose window has rolled over is not a reading.** Claude Code refreshes that file only on `/usage`, so a block can sit days old across many boundaries and still report the old window's figure — 91% for a window that reset to nothing hours ago. Each bar carries its own `resets_at`, so this is checkable; check it, and report unknown rather than the stale number. That check is about the **percentage**, not the reset instant — the weekly instant is deliberately projected forward from the past, per the rule above.
-
-Two things about the weekly one are easy to "tidy up" back into the bug they fix. **Both bullets here described ADR-0011's derivation until 2026-09-01** — a gap-crossing `sd` drop stored as a bracket, in `weekly-resets.json` — which ADR-0014 deleted along with `WeeklyResetDetector`. Preserving deleted code is what this section was telling you to do:
-
-- **The anchor is `%LOCALAPPDATA%\O-view\weekly-reset.json`, one instant, not a log of observations.** It is scoped by org and re-readable from `~/.claude.json` whenever Claude Code refreshes, so losing it costs a wait rather than a week. That is why it is *not* the unrebuildable state ADR-0011 kept out of the rollup store, and why the argument for its predecessor's location does not carry over.
-- **A weekly reset O-view has never been told is unknown, and the panel says so with the step that fixes it.** Do not re-derive it from `sd` drops to fill the gap: an overnight bracket is ~10 hours wide, which on the machine that prompted ADR-0014 meant a time 11.5 hours late and on the wrong day, wearing no uncertainty the user could act on. The honest row names the action instead — run `/usage`, or enter the time — and `PanelText.WeeklyResetUnknownHint` picks which from an observation, never from the presence of an account file.
-
-## Build order
-
-Deliberately **not** in order of importance — in order of ascending unknowns:
-
-1. ~~Icon rasterisation spike~~ — **done, and its conclusion has since been superseded twice.** The shipped icon carries **no digits**: it is the ring-gauge brand mark (ring + pupil) with the number in the tooltip. Rule 5 above is the current design. The spike's "digits only" result is history — digits were dropped when product direction required the icon to show a graph (issue #1). See [findings](docs/findings/tray-icon-rendering.md), whose later sections are marked historical for the same reason.
-2. ~~Token-discovery spike~~ — **no longer needed.** Superseded by `PlanHistoryProvider` ([ADR-0007](docs/adr/0007-plan-history-primary-provider.md)).
-2b. **`PlanHistoryProvider`** — parse `%APPDATA%\Claude\plan-usage-history.json`, plus the reset-drop detector. This is the primary source; build it first.
-3. **`JsonlUsageProvider`** — no auth, no network, fully testable. First test is the `requestId` de-duplication test.
-4. **Rolling-window math** — 5h window rolls from first use, not a wall clock. UTC throughout.
-4b. **Rollup store** (ADR-0006) — SQLite daily aggregates; idempotency test alongside.
-5. **Tray shell** — icon, tooltip, popup positioning, `TaskbarCreated` re-registration, single-instance mutex.
-6. ~~`OAuthUsageProvider`~~ — **dropped, not pending.** Prohibited (rule 3, ADR-0015). What took its place is `ClaudeCliRefresher`: ask Claude Code to refresh its own cache, hold no credential.
-7. **Polish** — notifications, startup registration, settings, publish.
+Test counts are not recorded here; run the suite for a number.
 
 ## Conventions
 
-- C# nullable reference types enabled; treat warnings as errors in `Core`
-- All external data (JSONL fields, HTTP responses) parsed defensively — assume every field can be absent
-- Times stored and computed in UTC; converted to local only at the display edge
-- Tests use fixtures derived from real session files, with any identifying content scrubbed
+- Nullable reference types on; warnings are errors in `Core`.
+- Parse all external data defensively; assume every field can be absent.
+- Times are stored and computed in UTC and converted to local only at the display edge.
+- Tests use fixtures derived from real session files, with identifying content scrubbed.
+- Code comments explain why. No issue keys, ADR numbers or phase names in code; GitHub issue numbers are fine where a comment explains a fix.
+- No em dashes anywhere in the repository; use a comma, a colon, a full stop or parentheses.
+- Commit messages carry no co-author trailer.
+- Versions are compared through `ReleaseVersion`, never as text. The tag rules are in the README.
 
-### Version numbers
+## Reference
 
-Tags are `vMAJOR.LARGE.MINOR` — major generation, substantial change, fix. **Not semver**: this
-is an application, nothing consumes it as an API, and no vector carries a breaking-change
-contract. Higher numbers are newer, compared **left to right, numerically per vector**.
-
-Four rules bind, and three of them exist because of a failure mode rather than a preference:
-
-- **Never compare a version as text.** `0.6.10` is newer than `0.6.9`; a string comparison says
-  the opposite, and the result is not an error — every installed copy reports "up to date"
-  forever. `ReleaseVersion` parses each vector to an `int`, and `ReleaseVersionTests` pins the
-  width-crossing cases (9→10, 99→100) in all three positions. Any new code that touches version
-  ordering goes through `ReleaseVersion`; do not hand-roll a comparison.
-- **No cap on a vector.** Any non-negative integer. There is no 0–99 ceiling, because nothing
-  enforces one and a cap only ever forces a higher vector to move for no reason.
-- **No leading zeros.** `release.yml` rejects them. `0.06.10` parses to 0.6.10, so the app would
-  report one string while the published asset names — built from the raw tag — carry another.
-- **Publish in ascending order.** The updater reads `releases/latest`, which is the most recently
-  *published* release, not the highest-numbered. A fix published to an older line after a newer
-  release is offered to everyone as an upgrade. ADR-0009 leans on this being true.
-
-## Reference docs
-
-- [docs/adr/](docs/adr/) — decisions and their rationale
-- [docs/findings/jsonl-schema.md](docs/findings/jsonl-schema.md) — verified local data schema
-- [docs/reference/pricing.md](docs/reference/pricing.md) — how tokens are priced: the five published columns per model, the `speed` and `inference_geo` modifiers, and fail-to-unknown. Point at it rather than restating a rate — two copies of a rate is how the cache-write comment stayed accurate about itself while being wrong about the data (issue #255)
+- [docs/adr/](docs/adr/): decisions and their rationale.
+- [docs/findings/jsonl-schema.md](docs/findings/jsonl-schema.md): the verified local data schema.
+- [docs/reference/pricing.md](docs/reference/pricing.md): how tokens are priced. Point at it rather than restating a rate.
+- [docs/cli.md](docs/cli.md): every command-line flag.
