@@ -92,13 +92,9 @@ public sealed class JsonlUsageProvider : IUsageProvider
             ? []
             : ClaudeProjectsLocator.FindTranscripts(_projectsRoot);
 
-        // Distinct by path: the same root can appear twice through MSIX redirection, and
-        // re-reading one file per poll is pointless work even though ingestion would
-        // de-duplicate its records anyway. Platform path identity, because on a
-        // case-sensitive filesystem two names differing only in case are two files.
-        IEnumerable<string> audits = CoworkAuditLocator
-            .FindTranscripts(_coworkRoots)
-            .Distinct(PathIdentity.Comparer);
+        // The locator collapses the mirrors MSIX redirection creates, so each file is read
+        // once per poll even though ingestion would de-duplicate its records anyway.
+        IEnumerable<string> audits = CoworkAuditLocator.FindTranscripts(_coworkRoots);
 
         // The surface is decided by Cowork's own register, not by which locator found the file.
         //

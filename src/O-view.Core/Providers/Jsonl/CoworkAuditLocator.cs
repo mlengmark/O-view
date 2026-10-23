@@ -72,6 +72,10 @@ public static class CoworkAuditLocator
     ///
     /// <para>Relative path, not file name: <c>audit.jsonl</c> repeats in every session directory,
     /// so collapsing on the name alone would discard real transcripts.</para>
+    ///
+    /// <para>The result carries each path once, so callers need no further de-duplication;
+    /// ingestion, the ingest audit and the scope report all read this list as it stands and
+    /// therefore agree on how many files there are.</para>
     /// </summary>
     public static IReadOnlyList<string> FindTranscripts(IEnumerable<string> roots) =>
         roots

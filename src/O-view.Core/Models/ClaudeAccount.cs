@@ -78,10 +78,10 @@ public sealed record ClaudeAccount(
             }
 
             return new ClaudeAccount(
-                ReadString(account, "displayName"),
-                ReadString(account, "emailAddress"),
-                ReadString(account, "organizationType"),
-                ReadString(account, "organizationUuid"));
+                JsonFields.NonEmptyString(account, "displayName"),
+                JsonFields.NonEmptyString(account, "emailAddress"),
+                JsonFields.NonEmptyString(account, "organizationType"),
+                JsonFields.NonEmptyString(account, "organizationUuid"));
         }
         catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException)
         {
@@ -89,9 +89,4 @@ public sealed record ClaudeAccount(
         }
     }
 
-    private static string? ReadString(JsonElement obj, string name) =>
-        obj.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String &&
-        v.GetString() is { Length: > 0 } s
-            ? s
-            : null;
 }

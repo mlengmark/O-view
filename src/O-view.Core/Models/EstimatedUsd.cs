@@ -25,4 +25,12 @@ public readonly record struct EstimatedUsd(decimal? Value, UsageValueStatus Stat
 
     /// <summary>The trust status of <see cref="Value"/>. Never <see cref="UsageValueStatus.Real"/>.</summary>
     public UsageValueStatus Status { get; } = UsageValueRule.NeverReal(Status);
+
+    /// <summary>
+    /// A priced figure: <see cref="UsageValueStatus.Unavailable"/> when <paramref name="value"/>
+    /// is null (nothing could be priced), <see cref="UsageValueStatus.Estimated"/> otherwise,
+    /// which is the same null/non-null split the cost estimator returns.
+    /// </summary>
+    public static EstimatedUsd Priced(decimal? value) =>
+        new(value, value is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated);
 }

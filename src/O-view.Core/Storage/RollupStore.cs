@@ -23,11 +23,8 @@ namespace OView.Core.Storage;
 /// </summary>
 public sealed class RollupStore : IDisposable
 {
-    /// <summary>Default location: %LOCALAPPDATA%\O-view\usage.db</summary>
-    public static string DefaultPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-        "O-view",
-        "usage.db");
+    /// <summary>Default location: <c>usage.db</c> under <see cref="OViewDataDirectory"/>.</summary>
+    public static string DefaultPath => OViewDataDirectory.File("usage.db");
 
     private readonly string _path;
     private SqliteConnection _connection;
@@ -299,17 +296,9 @@ public sealed class RollupStore : IDisposable
     private static bool AddColumnIfMissing(
         SqliteConnection connection, string table, string column, string type)
     {
-        using (var probe = connection.CreateCommand())
+        if (SqliteSchema.HasColumn(connection, table, column))
         {
-            probe.CommandText = $"PRAGMA table_info({table});";
-            using var reader = probe.ExecuteReader();
-            while (reader.Read())
-            {
-                if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
-                {
-                    return false;
-                }
-            }
+            return false;
         }
 
         using var alter = connection.CreateCommand();
@@ -543,9 +532,7 @@ public sealed class RollupStore : IDisposable
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
-                if (!DateTimeOffset.TryParse(
-                        reader.GetString(0), CultureInfo.InvariantCulture,
-                        DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var at))
+                if (!UtcInstant.TryParse(reader.GetString(0), out var at))
                 {
                     continue;   // an unparseable stamp is one row, not a failed panel
                 }
@@ -600,14 +587,10 @@ public sealed class RollupStore : IDisposable
                 SELECT MIN(last_timestamp) FROM ingested_requests
                 WHERE last_timestamp > $after AND last_timestamp <= $through
                 """;
-            cmd.Parameters.AddWithValue("$after", afterUtc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
-            cmd.Parameters.AddWithValue("$through", throughUtc.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
+            cmd.Parameters.AddWithValue("$after", UtcInstant.Format(afterUtc));
+            cmd.Parameters.AddWithValue("$through", UtcInstant.Format(throughUtc));
 
-            return cmd.ExecuteScalar() is string text
-                && DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var at)
-                ? at
-                : null;
+            return UtcInstant.ParseOrNull(cmd.ExecuteScalar() as string);
         }
     }
 
@@ -696,17 +679,8 @@ public sealed class RollupStore : IDisposable
         reader.IsDBNull(column) ? 0 : reader.GetInt64(column);
 
     /// <summary>Timestamp of the newest ingested record, or null when the store is empty.</summary>
-    public DateTimeOffset? LatestActivityUtc()
-    {
-        lock (_gate)
-        {
-            using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "SELECT MAX(last_timestamp) FROM ingested_requests";
-            return cmd.ExecuteScalar() is string s
-                ? DateTimeOffset.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal)
-                : null;
-        }
-    }
+    public DateTimeOffset? LatestActivityUtc() =>
+        ScalarInstant("SELECT MAX(last_timestamp) FROM ingested_requests");
 
     /// <summary>
     /// Timestamp of the oldest ingested record, or null when the store is empty.
@@ -716,15 +690,17 @@ public sealed class RollupStore : IDisposable
     /// differently. An instant rather than a date, because which calendar day it lands on
     /// depends on the reader's timezone (issue #211).</para>
     /// </summary>
-    public DateTimeOffset? EarliestActivityUtc()
+    public DateTimeOffset? EarliestActivityUtc() =>
+        ScalarInstant("SELECT MIN(last_timestamp) FROM ingested_requests");
+
+    /// <summary>One stored instant from a scalar query, or null when the query returns none.</summary>
+    private DateTimeOffset? ScalarInstant(string sql)
     {
         lock (_gate)
         {
             using var cmd = _connection.CreateCommand();
-            cmd.CommandText = "SELECT MIN(last_timestamp) FROM ingested_requests";
-            return cmd.ExecuteScalar() is string s
-                ? DateTimeOffset.Parse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal)
-                : null;
+            cmd.CommandText = sql;
+            return UtcInstant.ParseOrNull(cmd.ExecuteScalar() as string);
         }
     }
 

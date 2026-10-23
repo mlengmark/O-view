@@ -216,8 +216,8 @@ public static class PlanHistoryDiagnostics
     {
         try
         {
-            var dir = Path.GetDirectoryName(PlanHistoryLocator.CanonicalPath);
-            return dir is not null && Directory.Exists(dir)
+            var dir = ClaudeDataRoots.Canonical;
+            return Directory.Exists(dir)
                 ? Directory.EnumerateFiles(dir).Select(Path.GetFileName).OfType<string>().Take(25).ToList()
                 : [];
         }

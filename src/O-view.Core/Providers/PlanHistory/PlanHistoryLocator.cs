@@ -30,10 +30,7 @@ public static class PlanHistoryLocator
     public const string FileName = "plan-usage-history.json";
 
     /// <summary>The documented location, used when nothing else is found.</summary>
-    public static string CanonicalPath => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "Claude",
-        FileName);
+    public static string CanonicalPath => Path.Combine(ClaudeDataRoots.Canonical, FileName);
 
     /// <summary>
     /// Every location worth checking, in priority order. Always non-empty — the canonical
