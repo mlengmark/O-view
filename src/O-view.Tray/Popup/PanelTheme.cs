@@ -41,7 +41,7 @@ internal static class PanelTheme
     {
         // Values and the reasoning behind them live in OView.App.Rendering.PanelPalette,
         // shared with the Linux panel. The accent contrast ratios and the CVD separation
-        // figures for the categorical series are recorded there — restating the hex here
+        // figures for the categorical series are recorded there, restating the hex here
         // would carry the colour but not the constraint that produced it (issue #52).
         foreach (var (key, hex) in PanelPalette.All(light))
         {

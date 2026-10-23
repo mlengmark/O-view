@@ -12,7 +12,7 @@ namespace OView.Tray;
 /// touches the tray icon from them, so publishing off the UI thread would be a
 /// thread-affinity violation.</para>
 ///
-/// <para>Windows has never reported the freeze that prompted this (issue #125) — the
+/// <para>Windows has never reported the freeze that prompted this (issue #125), the
 /// exposure is identical, and no Windows machine has yet arrived with a transcript history
 /// large enough to make a first ingest visible. Wiring both heads the same way is what
 /// keeps it that way, and stops the two drifting apart on something neither user should

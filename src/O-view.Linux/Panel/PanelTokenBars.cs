@@ -59,7 +59,7 @@ public sealed class PanelTokenBars(LinuxPanelTheme theme)
 
     /// <summary>
     /// The Bars/Breakdown switch. Two buttons rather than a disclosure, so the Linux panel
-    /// offers the same two views the Windows one does — and, on a head where a compositor may
+    /// offers the same two views the Windows one does, and, on a head where a compositor may
     /// never deliver hover at all, the breakdown is the only route to a segment's exact share
     /// and estimated value that needs no pointer.
     ///
@@ -117,7 +117,7 @@ public sealed class PanelTokenBars(LinuxPanelTheme theme)
     }
 
     /// <summary>
-    /// Which half reads as the selected one — the filled pill and the brighter word, the same
+    /// Which half reads as the selected one, the filled pill and the brighter word, the same
     /// two cues the Windows switch shows.
     /// </summary>
     private void Paint(Button half, bool active)
@@ -130,7 +130,7 @@ public sealed class PanelTokenBars(LinuxPanelTheme theme)
     /// What a half of the switch is drawn as: the pill, and the word inside it.
     ///
     /// <para><b>Why the word sits in the template rather than in the button's content.</b> This
-    /// head registers no Avalonia theme, so a button falls back to a bare content presenter —
+    /// head registers no Avalonia theme, so a button falls back to a bare content presenter,
     /// and a presenter fills itself from the content only once the tree it belongs to reaches a
     /// window. The sample images are rendered offscreen, from a tree that never does, so both
     /// halves came out as empty pills while the Windows panel read Bars | Breakdown. A control
@@ -159,7 +159,7 @@ public sealed class PanelTokenBars(LinuxPanelTheme theme)
     /// One composition bar: heading and billed total, the segmented track, and the legend
     /// carrying every exact figure the track's floors do not.
     ///
-    /// <para>Widths come from <see cref="TokenBarGeometry"/> — shared with the Windows head,
+    /// <para>Widths come from <see cref="TokenBarGeometry"/>, shared with the Windows head,
     /// because the segment order and the minimum width are measured decisions and two copies
     /// of a measured decision is how they drift.</para>
     /// </summary>
@@ -189,7 +189,7 @@ public sealed class PanelTokenBars(LinuxPanelTheme theme)
             var piece = new Border
             {
                 Background = brush,
-                // Rounded only at the ends — a Border does not clip children to its corner
+                // Rounded only at the ends, a Border does not clip children to its corner
                 // radius, so a rounded container over square segments shows through.
                 CornerRadius = new CornerRadius(
                     i == 0 ? 3 : 0, i == slices.Count - 1 ? 3 : 0,
@@ -216,7 +216,7 @@ public sealed class PanelTokenBars(LinuxPanelTheme theme)
         };
         block.Children.Add(track);
 
-        // Every figure the bar cannot draw honestly. Not decoration — see TokenBarGeometry.
+        // Every figure the bar cannot draw honestly. Not decoration, see TokenBarGeometry.
         var legend = new WrapPanel();
         for (var i = 0; i < slices.Count; i++)
         {

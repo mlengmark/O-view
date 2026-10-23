@@ -11,7 +11,7 @@ namespace OView.App.Updates;
 /// <para><b>Shared because the endpoint is one decision.</b> Both heads need to ask the same
 /// URL with the same User-Agent and swallow the same failures; restating that in each head
 /// is how the two quietly come to check different things. The comparison itself stays in
-/// Core's <see cref="UpdateCheck"/> — this class is only the IO.</para>
+/// Core's <see cref="UpdateCheck"/>, this class is only the IO.</para>
 ///
 /// <para><b>It returns a result and does nothing with it.</b> Downloading and executing are
 /// separate steps that only the Windows-installer build may take, gated by
@@ -32,7 +32,7 @@ public sealed class ReleaseFeed
 
     /// <summary>
     /// When GitHub's rate limit lifts. Held here rather than in either head so both get the
-    /// cooldown without either growing the logic — and because this class is the only one
+    /// cooldown without either growing the logic, and because this class is the only one
     /// that ever sees the headers (GitHub issue #176).
     /// </summary>
     private DateTimeOffset? _rateLimitedUntilUtc;
@@ -48,7 +48,7 @@ public sealed class ReleaseFeed
     /// (<c>-p:Version</c> in the release workflow).
     ///
     /// <para>A local dev build carries no stamp and reports 0.0.0, which is older than any
-    /// real release — so a dev build always sees an update. That is harmless: a dev build is
+    /// real release, so a dev build always sees an update. That is harmless: a dev build is
     /// neither an installer build nor a package, so nothing is permitted to act on it.</para>
     /// </summary>
     public static string VersionOf(Assembly assembly) =>
@@ -60,7 +60,7 @@ public sealed class ReleaseFeed
 
     /// <summary>
     /// Queries the feed and compares. Any network or HTTP failure becomes
-    /// <see cref="UpdateOutcome.Unknown"/> — a failed update check must never take down a
+    /// <see cref="UpdateOutcome.Unknown"/>, a failed update check must never take down a
     /// tray app that is otherwise working, and "I could not tell" is an honest answer where
     /// "up to date" would be a fabricated one (CLAUDE.md rule 6).
     /// </summary>
@@ -73,7 +73,7 @@ public sealed class ReleaseFeed
         // again. The old code retried straight back into the limit on every check.
         if (_rateLimitedUntilUtc is { } until && _utcNow() < until)
         {
-            _log?.Write($"update check skipped — rate limited until {until:u}");
+            _log?.Write($"update check skipped, rate limited until {until:u}");
             return UpdateCheckResult.RateLimited(until);
         }
 
@@ -83,7 +83,7 @@ public sealed class ReleaseFeed
 
             // Before EnsureSuccessStatusCode, which cannot tell a throttle from a dead
             // network once it has thrown. A 403 needs the headers to agree before it counts
-            // as one — GitHub uses 403 for things a cooldown would not fix.
+            // as one, GitHub uses 403 for things a cooldown would not fix.
             if (RateLimitResponse.IsRateLimited(
                     (int)response.StatusCode,
                     Header(response, "x-ratelimit-remaining"),

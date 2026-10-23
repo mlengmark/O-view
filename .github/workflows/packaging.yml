@@ -1,6 +1,6 @@
 # Builds the Linux packages and proves they actually install.
 #
-# Separate from CI because it is slow — two publishes plus container installs — and it only
+# Separate from CI because it is slow, two publishes plus container installs, and it only
 # needs to run when the packaging or the Linux head changes. The release workflow (#81)
 # calls the same script, so what is verified here is what ships.
 #
@@ -26,7 +26,7 @@ on:
 
 # This workflow builds and install-tests packages; it publishes nothing. Without this block
 # it inherits whatever the repository default is, which on a repo that has not been switched
-# to the read-only default is a write-capable token — handed to a job that runs a shell
+# to the read-only default is a write-capable token, handed to a job that runs a shell
 # script from a pull request branch and executes downloaded artifacts inside containers.
 permissions:
   contents: read
@@ -38,11 +38,11 @@ env:
 # of six hours: on 2026-08-19 four jobs across two runs sat on the Lintian step for over an
 # hour each, and a job's logs are not retrievable while it is still in progress, so the
 # stall was invisible from the outside until it was cancelled. The numbers are several times
-# each job's observed duration — they exist to cap a hang, not to police a slow runner.
+# each job's observed duration, they exist to cap a hang, not to police a slow runner.
 jobs:
   build:
     runs-on: ubuntu-latest
-    # 45 rather than 30 because this job now carries two 900 s inner bounds — apt and lintian
+    # 45 rather than 30 because this job now carries two 900 s inner bounds, apt and lintian
     # (#131). At 30 the two could add up to the job's own cap, and the job timeout kills the
     # step before it can print the process trees that are the entire point of the inner
     # bounds. The outer bound is the backstop; the inner ones are the diagnostic, so the
@@ -68,7 +68,7 @@ jobs:
           ./packaging/linux/build.sh "$VERSION" "${{ matrix.rid }}" dist
 
       # The payload must be for the architecture the control file claims, or the package
-      # installs cleanly and then refuses to run — the worst possible combination.
+      # installs cleanly and then refuses to run, the worst possible combination.
       - name: The binary is genuinely ${{ matrix.arch }}
         run: |
           mkdir -p probe && dpkg-deb -x dist/o-view_*_${{ matrix.arch }}.deb probe
@@ -96,8 +96,8 @@ jobs:
       # Its OWN step, split out of Lintian on 2026-08-19 after the stall recurred (#131).
       #
       # The split is the diagnostic, and it costs nothing. When two jobs wedged again, every
-      # guard added after the first occurrence — the 900 s bound, the process sampler, the
-      # environment capture — sat AFTER this apt install inside one combined step, so none of
+      # guard added after the first occurrence, the 900 s bound, the process sampler, the
+      # environment capture, sat AFTER this apt install inside one combined step, so none of
       # them fired: the step ran 25 minutes without exiting 124, without a process tree, and
       # without printing the environment. The wedged job's log then turned out not to be
       # retrievable at all, even after cancelling.
@@ -107,8 +107,8 @@ jobs:
       #
       # And the successful sibling legs of those same two runs say this half is the suspect:
       # apt took 621 s and 197 s while lintian itself took 7.5 s and 7.4 s, against 32 s for
-      # the whole step once it cleared. The standing hypothesis — lintian forking helpers
-      # over a few hundred files including large native .so's — predicts lintian being slow,
+      # the whole step once it cleared. The standing hypothesis, lintian forking helpers
+      # over a few hundred files including large native .so's, predicts lintian being slow,
       # and lintian was not slow.
       #
       # 900 s matches the lintian bound and is comfortably above the worst apt that actually
@@ -119,7 +119,7 @@ jobs:
 
           # Printed BEFORE apt runs, deliberately: a hung step still shows everything written
           # before the hang, so these survive exactly the failure they exist to diagnose. The
-          # lintian version cannot be among them — it is not installed yet — so it is printed
+          # lintian version cannot be among them, it is not installed yet, so it is printed
           # by the step below instead.
           echo "--- environment (see #131) ---"
           echo "runner image: ${ImageOS:-unknown} ${ImageVersion:-unknown}"
@@ -210,7 +210,7 @@ jobs:
             test -f /usr/share/applications/o-view.desktop
             test -f /usr/share/icons/hicolor/48x48/apps/o-view.png
 
-            # Starts, loads ICU and libSkiaSharp, and renders — no display needed. This is
+            # Starts, loads ICU and libSkiaSharp, and renders, no display needed. This is
             # the check that catches a missing runtime dependency, which is otherwise only
             # discovered by the first user to try it.
             o-view --samples /tmp/icons
@@ -231,7 +231,7 @@ jobs:
   # Every job above installs onto a clean image, which is the one thing no real user after
   # the first release ever does. This one upgrades.
   #
-  # What it guards is not the binary — dpkg replaces that — but the three files in
+  # What it guards is not the binary, dpkg replaces that, but the three files in
   # ~/.local/share/O-view that outlive the package. The weekly-reset log is the one that
   # matters: it cannot be rebuilt from anything on disk and costs a week to re-observe
   # (ADR-0011), so losing it once is unrecoverable in a way losing the rollup store is not.
@@ -242,7 +242,7 @@ jobs:
   # up after itself. The comment in build.sh saying not to is the only thing standing there.
   #
   # Run across the full matrix rather than one image, because the upgrade re-resolves
-  # Depends — and the ICU and OpenSSL alternatives differ on every one of these releases.
+  # Depends, and the ICU and OpenSSL alternatives differ on every one of these releases.
   upgrade:
     needs: build
     runs-on: ubuntu-latest
@@ -307,7 +307,7 @@ jobs:
             # The point of the whole job: all three files byte-identical across the upgrade.
             sha256sum -c /tmp/before.sha256
 
-            # And the upgraded install is not merely present but working — a preserved
+            # And the upgraded install is not merely present but working, a preserved
             # weekly-reset log is no use behind a binary that will not start.
             test -x /usr/bin/o-view
             o-view --samples /tmp/icons
@@ -359,7 +359,7 @@ jobs:
           docker run --rm -v "$PWD/dist:/dist" fedora:latest bash -euxc '
             dnf install -y -q tar libicu openssl libX11 fontconfig >/dev/null
             mkdir -p /opt/ov && tar -xzf /dist/o-view-*-linux-x64.tar.gz -C /opt/ov --strip-components=1
-            # The execute bit must survive the archive — a tarball built on Windows loses it.
+            # The execute bit must survive the archive, a tarball built on Windows loses it.
             test -x /opt/ov/o-view
             /opt/ov/o-view --samples /tmp/icons
             test "$(ls /tmp/icons/*.png | wc -l)" -gt 0

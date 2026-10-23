@@ -7,8 +7,8 @@ namespace OView.App.Diagnostics;
 /// name embedded in every path, and organization UUIDs.
 ///
 /// <para><b>Why this is one pass over the finished text rather than a change at each field.</b>
-/// The bundle is assembled from three sources — <see cref="DiagnosticsBundle"/> itself, the
-/// plan-history report and the transcript scope report — and each emits paths independently.
+/// The bundle is assembled from three sources, <see cref="DiagnosticsBundle"/> itself, the
+/// plan-history report and the transcript scope report, and each emits paths independently.
 /// Redacting at every site means the next field someone adds leaks by default, and the
 /// failure is silent: nobody notices a username in a bug report until it is already public.
 /// Applied once at the funnel, a new field is redacted whether or not its author thought
@@ -21,7 +21,7 @@ namespace OView.App.Diagnostics;
 /// which still shows the drive, the profile container and everything below it.</para>
 ///
 /// <para><b>UUIDs keep a prefix rather than vanishing.</b> The org UUID's diagnostic job is
-/// to be compared — the one in <c>~/.claude.json</c> against the ones in the plan-history
+/// to be compared, the one in <c>~/.claude.json</c> against the ones in the plan-history
 /// file, to explain an org filter dropping every sample. Eight hex characters is enough to
 /// tell "these match" from "these differ" at a glance, and is not the identifier.</para>
 ///
@@ -45,7 +45,7 @@ public static partial class Redact
 
     /// <param name="accountNames">
     /// Every spelling of the account name worth removing. Normally the login name and the
-    /// profile directory's own name, which are usually but not always identical — a display
+    /// profile directory's own name, which are usually but not always identical, a display
     /// name of <c>ada.lovelace</c> can own a profile folder called <c>ada</c>, and a bundle
     /// that redacted only one of those would still carry the other.
     /// </param>
@@ -60,8 +60,8 @@ public static partial class Redact
 
         // Longest first, because one account name can be a prefix of another. A login of
         // "ada.lovelace" beside a profile folder "ada" is the real case: taking "ada" first
-        // matches the prefix inside "ada.lovelace" — the trailing dot is a valid segment
-        // boundary — and leaves "<user>.lovelace", which publishes the surname while looking
+        // matches the prefix inside "ada.lovelace", the trailing dot is a valid segment
+        // boundary, and leaves "<user>.lovelace", which publishes the surname while looking
         // redacted. Longest match wins, so the more specific spelling is consumed first.
         foreach (var name in accountNames.OrderByDescending(n => n?.Length ?? 0))
         {
@@ -77,7 +77,7 @@ public static partial class Redact
             //
             // A HYPHEN counts as a segment boundary, and that is not cosmetic. Claude Code
             // encodes a whole working directory into a single directory name by replacing every
-            // separator with one — `C:\Users\ada\work` becomes `C--Users-ada-work` — so the
+            // separator with one, `C:\Users\ada\work` becomes `C--Users-ada-work`, so the
             // account name appears mid-token in every transcript path under a user's home. With
             // only slashes as boundaries this rule looked correct and leaked the name out of
             // every bundle that printed such a path, which the write survey does by design.
@@ -120,8 +120,8 @@ public static partial class Redact
         return names;
     }
 
-    // Canonical 8-4-4-4-12. Anchored on non-hex boundaries so a longer hex run — a SHA-256
-    // in a checksum line, say — is not mistaken for one.
+    // Canonical 8-4-4-4-12. Anchored on non-hex boundaries so a longer hex run, a SHA-256
+    // in a checksum line, say, is not mistaken for one.
     [GeneratedRegex(
         @"(?<![0-9a-fA-F-])[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(?![0-9a-fA-F-])")]
     private static partial Regex UuidPattern();

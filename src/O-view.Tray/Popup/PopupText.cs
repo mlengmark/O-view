@@ -7,7 +7,7 @@ namespace OView.Tray.Popup;
 internal static class PopupText
 {
     /// <summary>
-    /// Sets a line's text and hides it when there is none. The empty string is the signal —
+    /// Sets a line's text and hides it when there is none. The empty string is the signal,
     /// every text member that can have nothing to say returns one, so the decision
     /// lives with the text rather than being re-derived from the statistics at each call site.
     /// A visible but empty <see cref="TextBlock"/> leaves a gap that reads as a figure which

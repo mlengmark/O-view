@@ -6,13 +6,13 @@ namespace OView.Core.Tests;
 /// The real cost guard, against a real directory (issue #234).
 ///
 /// <para><b>These exist because their absence shipped a bug.</b> Every test of
-/// <see cref="ClaudeCliRefresher"/> injects a fake guard, so the guard's own rule — which files
-/// count as this invocation's — was never exercised. The first version filtered on "created or
+/// <see cref="ClaudeCliRefresher"/> injects a fake guard, so the guard's own rule, which files
+/// count as this invocation's, was never exercised. The first version filtered on "created or
 /// written since a watermark", which is wrong in the one way that matters: a Claude Code session
 /// that is already running writes its transcript continuously and carries request ids on every
 /// line. Measured on the development machine, an active session's transcript created at 12:23 and
 /// still being written at 15:41 would have matched. The guard would have reported a charge on the
-/// first refresh and permanently disabled the feature — on exactly the machines it is for.</para>
+/// first refresh and permanently disabled the feature, on exactly the machines it is for.</para>
 ///
 /// <para>The fix is identity, not time: only a file that did not exist before the invocation can
 /// be the invocation's. <see cref="AnAlreadyRunningSessionIsNotACharge"/> is the regression.</para>
@@ -35,7 +35,7 @@ public class TranscriptCostGuardTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>A transcript that reached the model — the shape measured on a billed invocation.</summary>
+    /// <summary>A transcript that reached the model, the shape measured on a billed invocation.</summary>
     private string Billed(string name, string idField = "requestId")
     {
         var path = Path.Combine(_root, name);
@@ -50,7 +50,7 @@ public class TranscriptCostGuardTests : IDisposable
 
     /// <summary>
     /// A transcript from a locally handled slash command. Six lines, no request id, no usage
-    /// record — the measured shape of a free <c>claude -p "/usage"</c> invocation.
+    /// record, the measured shape of a free <c>claude -p "/usage"</c> invocation.
     /// </summary>
     private string Free(string name)
     {
@@ -114,7 +114,7 @@ public class TranscriptCostGuardTests : IDisposable
 
     /// <summary>
     /// Cowork writes <c>request_id</c> on an otherwise identical record (CLAUDE.md rule 4).
-    /// Checking one spelling is how a whole source goes unseen — here it would be a missed charge.
+    /// Checking one spelling is how a whole source goes unseen, here it would be a missed charge.
     /// </summary>
     [Fact]
     public void TheUnderscoreSpellingCountsToo()
@@ -128,7 +128,7 @@ public class TranscriptCostGuardTests : IDisposable
     }
 
     /// <summary>
-    /// Nested per-project directories are the real layout — Claude Code encodes a cwd into a
+    /// Nested per-project directories are the real layout, Claude Code encodes a cwd into a
     /// directory name. A guard that only looked at the top level would miss every charge.
     /// </summary>
     [Fact]
@@ -147,7 +147,7 @@ public class TranscriptCostGuardTests : IDisposable
 
     /// <summary>
     /// Two projects can hold transcripts with the same file name. Keying the snapshot on names
-    /// would treat a genuinely new file as pre-existing — a missed charge, which is the direction
+    /// would treat a genuinely new file as pre-existing, a missed charge, which is the direction
     /// that costs money.
     /// </summary>
     [Fact]

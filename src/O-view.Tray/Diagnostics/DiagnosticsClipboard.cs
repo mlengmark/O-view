@@ -26,10 +26,10 @@ public sealed class DiagnosticsClipboard
 
     /// <summary>
     /// Puts a support bundle on the clipboard: what the app reads, from where, and what it
-    /// found. Covers both usage sources — the plan-history file (session/weekly %) and the
-    /// JSONL transcripts (token tiles) — plus whether account info resolved, because which
+    /// found. Covers both usage sources, the plan-history file (session/weekly %) and the
+    /// JSONL transcripts (token tiles), plus whether account info resolved, because which
     /// of those are blank narrows the cause immediately. Contains no token and no
-    /// conversation content, and is redacted before it leaves — the account name is replaced
+    /// conversation content, and is redacted before it leaves, the account name is replaced
     /// in every path and org UUIDs are truncated to eight characters, because this goes on
     /// the clipboard on its way to a public issue (see <c>Redact</c>).
     /// </summary>
@@ -58,13 +58,13 @@ public sealed class DiagnosticsClipboard
         try
         {
             // No shell: the hook runs before the app is assembled, which is also what makes
-            // the deep audit affordable — a deliberate command-line run has no UI to freeze
+            // the deep audit affordable, a deliberate command-line run has no UI to freeze
             // and nothing polling to interrupt (issue #218).
             File.WriteAllText(target, Build(shell: null, deepAudit: true));
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Diagnostic hook — a failure here must not surface as a crash dialog.
+            // Diagnostic hook, a failure here must not surface as a crash dialog.
         }
     }
 
@@ -73,7 +73,7 @@ public sealed class DiagnosticsClipboard
     /// a report reads the same on either platform and cannot drift. What is supplied here
     /// is only what this head knows: its version and how it was installed. Windows has no
     /// desktop-environment or session-type question, and its notification area is part of
-    /// the shell and cannot be absent — so those fields are omitted rather than padded with
+    /// the shell and cannot be absent, so those fields are omitted rather than padded with
     /// "n/a".
     /// </summary>
     private static string Build(ISkinToShell? shell, bool deepAudit = false)
@@ -83,7 +83,7 @@ public sealed class DiagnosticsClipboard
             InstallKind: UpdateService.CurrentInstallKind.ToString());
 
         // When there is a running shell, the store is read through the connection that shell is
-        // actually using — so the bundle reports what the app believes rather than what a
+        // actually using, so the bundle reports what the app believes rather than what a
         // reader opened for the occasion finds. The --diagnose hook has no shell and takes the
         // other path, and the two label themselves differently on purpose.
         return shell is null

@@ -6,7 +6,7 @@ namespace OView.App.Rendering;
 public readonly record struct IconColor(byte R, byte G, byte B, byte A = 255);
 
 /// <summary>
-/// Every measurement and colour the tray icon is made of — the O-view brand mark, a
+/// Every measurement and colour the tray icon is made of, the O-view brand mark, a
 /// proportional ring gauge with a filled centre pupil (the "eye"), and **no digits**
 /// (GitHub issue #1).
 ///
@@ -20,13 +20,13 @@ public readonly record struct IconColor(byte R, byte G, byte B, byte A = 255);
 /// <para>The pupil is drawn at every size, including 16 px. This revisits issue #1's
 /// ring-only note deliberately: the pupil unifies the live tray icon with the static exe
 /// icon so the app reads as one thing everywhere. It does NOT reopen the original spike
-/// (docs/findings/tray-icon-rendering.md), which rejected ring *plus digits* — two
+/// (docs/findings/tray-icon-rendering.md), which rejected ring *plus digits*, two
 /// competing signals starving each other. A pupil is not a second signal: it sits in the
 /// ring's empty hole and carries no data. The exact percentage lives in the tooltip.</para>
 ///
 /// <para><b>Colour is never the sole signal.</b> The arc's sweep encodes the percentage
 /// independently of its colour, for colour-blind users, for monochrome and high-contrast
-/// taskbars, and — on Linux — for SNI hosts that recolour icons themselves.</para>
+/// taskbars, and, on Linux, for SNI hosts that recolour icons themselves.</para>
 /// </summary>
 public static class TrayIconGeometry
 {
@@ -44,7 +44,7 @@ public static class TrayIconGeometry
 
     /// <summary>
     /// Stroke width: ~1/7 of the icon, floored at 2 px. Bold enough to read at 16 px, thin
-    /// enough to leave a clear hole for the pupil. <b>Scaled, never hard-coded</b> — a fixed
+    /// enough to leave a clear hole for the pupil. <b>Scaled, never hard-coded</b>, a fixed
     /// width clips at some DPI scales.
     /// </summary>
     public static float Stroke(int size) => Math.Max(2f, size / 7f);
@@ -95,7 +95,7 @@ public static class TrayIconGeometry
             ? Math.Clamp((int)p, 0, 100)
             : null;
 
-    /// <summary>The arc colour for a snapshot — neutral when there is no authoritative percentage.</summary>
+    /// <summary>The arc colour for a snapshot, neutral when there is no authoritative percentage.</summary>
     public static IconColor Foreground(UsageSnapshot snapshot, bool lightTaskbar) =>
         FillPercent(snapshot) is { } percent
             ? LevelColor(UsageLevels.Classify(percent), lightTaskbar)
@@ -106,12 +106,12 @@ public static class TrayIconGeometry
     /// <see cref="Track"/>'s so an empty gauge is uniformly empty (GitHub issue #139).
     ///
     /// <para>At 0% there is no arc, and a full-saturation green pupil inside a faint grey ring
-    /// made the icon read as two states at once — an empty gauge wrapped around a live dot.
+    /// made the icon read as two states at once, an empty gauge wrapped around a live dot.
     /// <c>UsageLevels.Classify(0)</c> is <c>Normal</c>, so the pupil was simply taking the
     /// green it would have at 1%.</para>
     ///
     /// <para><b>Only an authoritative zero fades.</b> <see cref="FillPercent"/> returns null
-    /// rather than 0 for unknown and estimated data, so those keep the opaque neutral pupil —
+    /// rather than 0 for unknown and estimated data, so those keep the opaque neutral pupil,
     /// which is the whole of what still distinguishes "O-view has no number" from "the number
     /// is zero" once both rings are drawn faint. Collapsing the two would trade one wrong icon
     /// for another.</para>

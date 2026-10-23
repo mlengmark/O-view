@@ -6,7 +6,7 @@ namespace OView.Linux.Tests;
 /// The linux-runtime job's install step (.github/workflows/ci.yml) adds the shared libraries
 /// Avalonia's X11 backend and SkiaSharp need to start under Xvfb, plus one screenshot tool to
 /// photograph that display. This test loads each library exactly as the toolkit itself would
-/// and checks the tool is on PATH, naming whichever is missing — so a gap shows up here
+/// and checks the tool is on PATH, naming whichever is missing, so a gap shows up here
 /// rather than as the app's own startup failure further down the job.
 ///
 /// <para>Elsewhere there is nothing to check, so it returns early, same as
@@ -39,7 +39,7 @@ public class RuntimePrerequisitesTests
         if (loaded) NativeLibrary.Free(handle);
 
         Assert.True(loaded,
-            $"{library} did not load (apt package {package}) — add it to the linux-runtime job's install step");
+            $"{library} did not load (apt package {package}), add it to the linux-runtime job's install step");
     }
 
     [Fact]
@@ -48,7 +48,7 @@ public class RuntimePrerequisitesTests
         if (!InRuntimeJob) return;
 
         Assert.True(IsOnPath("scrot"),
-            "scrot is not on PATH — the linux-runtime job's install step must add it so the virtual display can be photographed");
+            "scrot is not on PATH, the linux-runtime job's install step must add it so the virtual display can be photographed");
     }
 
     private static bool IsOnPath(string tool) =>

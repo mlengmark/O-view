@@ -9,7 +9,7 @@ namespace OView.App.Tests;
 /// <para>Both numbers here are constrained from outside the app. GitHub allows an
 /// unauthenticated caller 60 requests an hour <b>per IP address</b>, shared with everyone
 /// behind the same NAT, and conditional requests earn no exemption without an
-/// <c>Authorization</c> header — which rule 3 forbids this app from holding. So the interval
+/// <c>Authorization</c> header, which rule 3 forbids this app from holding. So the interval
 /// cannot drop to minutes, and instances that start together must not stay in step.</para>
 /// </summary>
 public class UpdateScheduleTests
@@ -69,7 +69,7 @@ public class UpdateScheduleTests
             .Select(seed => UpdateSchedule.Jittered(interval, new Random(seed)))
             .ToList();
 
-        // Not merely "some differ" — a implementation that jittered only occasionally would
+        // Not merely "some differ", a implementation that jittered only occasionally would
         // pass that. Nearly all of them must be distinct.
         Assert.True(intervals.Distinct().Count() >= 45,
             $"only {intervals.Distinct().Count()} of 50 instances got a distinct interval");
@@ -105,7 +105,7 @@ public class UpdateScheduleTests
         Assert.Equal(interval, UpdateSchedule.Jittered(interval, new Random(1)));
     }
 
-    /// <summary>The launch check is unchanged — it is what catches a release cut while you were off.</summary>
+    /// <summary>The launch check is unchanged, it is what catches a release cut while you were off.</summary>
     [Fact]
     public void TheFirstCheckStillRunsShortlyAfterLaunch()
     {

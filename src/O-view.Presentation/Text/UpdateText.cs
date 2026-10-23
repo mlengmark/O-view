@@ -7,8 +7,8 @@ namespace OView.Presentation.Text;
 /// notices a build that cannot replace itself sends instead.
 ///
 /// <para><b>Why all of it belongs together.</b> ADR-0009 gives the same release three endings
-/// depending on how O-view was installed — install it, open the download page, or name the
-/// file to fetch by hand — and the honesty of each one is relative to the others. A failure
+/// depending on how O-view was installed, install it, open the download page, or name the
+/// file to fetch by hand, and the honesty of each one is relative to the others. A failure
 /// that promises a retry must not appear on the path that has no retry; a checksum mismatch
 /// must not offer the releases page, because that hands the user exactly the file the check
 /// rejected. Those are decisions about the <i>set</i>, and they were spread across two heads
@@ -43,7 +43,7 @@ public static class UpdateText
         $"Installing O-view {newVersion}";
 
     /// <summary>Warns that the app will disappear and come back, and says how to stop this
-    /// happening again — the one thing a user who did not expect it needs.</summary>
+    /// happening again, the one thing a user who did not expect it needs.</summary>
     public static string InstallingBody(string currentVersion) =>
         $"You have {currentVersion}. O-view will close briefly and reopen. "
         + "Turn this off with Update automatically in the tray menu.";
@@ -116,7 +116,7 @@ public static class UpdateText
     /// </summary>
     public static string DialogMessage(
         ReleaseVersion newVersion, string currentVersion, string question) =>
-        $"O-view {newVersion} is available — you have {currentVersion}. {question}";
+        $"O-view {newVersion} is available, you have {currentVersion}. {question}";
 
     /// <summary>Asked of a build the user or a package manager owns, which O-view must not
     /// overwrite.</summary>

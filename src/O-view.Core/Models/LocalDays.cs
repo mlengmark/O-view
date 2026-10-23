@@ -4,8 +4,8 @@ namespace OView.Core.Models;
 /// Where a local calendar day starts and stops, taken from the timezone rather than assumed.
 ///
 /// <para><b>Why this is not arithmetic.</b> A local day is 23 or 25 hours twice a year, so
-/// stepping back in 24-hour blocks from midnight drifts by an hour for the rest of the window
-/// — and it drifts <i>silently</i>, moving usage between two adjacent bars rather than
+/// stepping back in 24-hour blocks from midnight drifts by an hour for the rest of the window,
+/// and it drifts <i>silently</i>, moving usage between two adjacent bars rather than
 /// producing anything that looks wrong. Every consumer of a local day boundary in this app
 /// goes through here so that only one piece of code has to get it right: the rollup buckets,
 /// the graph's columns, and the gridlines drawn over those columns
@@ -27,7 +27,7 @@ public static class LocalDays
     /// <para>Local midnight is not guaranteed to exist or to be unique. Where the clock jumps
     /// forward <i>over</i> midnight the day begins at the jump, so the first local time that
     /// exists is the answer. Where it falls back across midnight the hour is lived twice and
-    /// the day begins at the <b>first</b> of them — the larger offset — because taking the
+    /// the day begins at the <b>first</b> of them, the larger offset, because taking the
     /// second would leave that hour outside every day.</para>
     ///
     /// <para>Both cases are rare (a handful of zones, twice a year) and neither raises an

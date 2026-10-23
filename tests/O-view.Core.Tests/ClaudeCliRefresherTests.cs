@@ -6,7 +6,7 @@ namespace OView.Core.Tests;
 /// Asking Claude Code to refresh its own usage cache (issue #234).
 ///
 /// <para>Most of these tests are about the <b>cost guard</b> rather than the refresh, and
-/// deliberately so. Getting the refresh wrong leaves the panel where it already is — saying
+/// deliberately so. Getting the refresh wrong leaves the panel where it already is, saying
 /// <i>unknown</i>, which is today's behaviour. Getting the guard wrong spends the user's plan:
 /// <c>/usage</c> is handled locally and costs nothing, but an argument Claude Code does not
 /// recognise reaches the model and cost <b>49,094 cache-write + 97,456 cache-read + 470
@@ -68,7 +68,7 @@ public class ClaudeCliRefresherTests
 
     /// <summary>
     /// The state this feature exists for. On the development machine the block was 4.43 days old
-    /// while <c>~/.claude.json</c> had been written twelve minutes earlier — the file moves
+    /// while <c>~/.claude.json</c> had been written twelve minutes earlier, the file moves
     /// constantly, the block does not, so "the process ran" is not evidence of anything.
     /// </summary>
     [Fact]
@@ -94,7 +94,7 @@ public class ClaudeCliRefresherTests
 
     /// <summary>
     /// The state that hid the defect: Claude Code ran, exited 0, and there is still no block
-    /// to read. Reported as Unchanged until v0.9.3 — which findings/cli-usage-refresh.md
+    /// to read. Reported as Unchanged until v0.9.3, which findings/cli-usage-refresh.md
     /// explicitly teaches as ordinary, so a refresh that had never once worked logged exactly
     /// like a healthy no-op. Observed on a v0.9.1 machine whose weekly reset stayed unknown
     /// while the log said "usage refresh unchanged" on repeat.
@@ -111,7 +111,7 @@ public class ClaudeCliRefresherTests
 
     /// <summary>
     /// <b>The test this class is for.</b> Every <c>claude -p</c> invocation writes a transcript,
-    /// including the free one, so the file appearing proves nothing — what separates them is a
+    /// including the free one, so the file appearing proves nothing, what separates them is a
     /// request id, which only a run that reached the model carries.
     /// </summary>
     [Fact]
@@ -127,7 +127,7 @@ public class ClaudeCliRefresherTests
     }
 
     /// <summary>
-    /// A run can refresh the block <i>and</i> be billed — that is exactly what a future Claude
+    /// A run can refresh the block <i>and</i> be billed, that is exactly what a future Claude
     /// Code would do if it kept serving usage but stopped handling the argument locally. Reporting
     /// the refresh would let the feature keep running at ~50K tokens a poll, which is the whole
     /// failure this guards. The charge outranks the success.
@@ -195,8 +195,8 @@ public class ClaudeCliRefresherTests
     }
 
     /// <summary>
-    /// A process that never started cannot have been billed, and the guard must not be consulted
-    /// — otherwise an unrelated transcript from a concurrent session would disable the feature on
+    /// A process that never started cannot have been billed, and the guard must not be consulted,
+    /// otherwise an unrelated transcript from a concurrent session would disable the feature on
     /// a machine that has no <c>claude</c> at all.
     /// </summary>
     [Fact]
@@ -214,7 +214,7 @@ public class ClaudeCliRefresherTests
 
     /// <summary>
     /// <see cref="IBilledTranscriptGuard"/> only ever sees a transcript that did not exist before
-    /// the invocation — <see cref="ContinueArgumentIsExactlyContinue"/> below is why one can now
+    /// the invocation, <see cref="ContinueArgumentIsExactlyContinue"/> below is why one can now
     /// exist beforehand on purpose. This is the other half: a request id appended to the one file
     /// this invocation could have continued.
     /// </summary>
@@ -249,7 +249,7 @@ public class ClaudeCliRefresherTests
 
     /// <summary>
     /// A request id already in the continued file from a charge the user has since resumed past
-    /// must not be re-reported on every later refresh — only one that was not there a moment ago
+    /// must not be re-reported on every later refresh, only one that was not there a moment ago
     /// is evidence of anything happening <i>this</i> call.
     /// </summary>
     [Fact]
@@ -271,7 +271,7 @@ public class ClaudeCliRefresherTests
         }
     }
 
-    /// <summary>No continued file exists yet (this refresher has never run) — nothing to check.</summary>
+    /// <summary>No continued file exists yet (this refresher has never run), nothing to check.</summary>
     [Fact]
     public void NoContinuedFileIsNoEvidenceOfAnything()
     {
@@ -335,7 +335,7 @@ public class ClaudeCliRefresherTests
 
     /// <summary>
     /// Not an error. Most machines have no <c>claude</c>, and saying so is what lets the caller
-    /// tell "not installed" from "installed and broken" — ADR-0010's rule that O-view never
+    /// tell "not installed" from "installed and broken", ADR-0010's rule that O-view never
     /// asserts something about the machine it has not observed.
     /// </summary>
     [Fact]
@@ -368,7 +368,7 @@ public class ClaudeCliRefresherTests
 
     /// <summary>
     /// This runs inside the poll loop, where an escaped exception leaves a gate held for the life
-    /// of the process and every later tick is silently dropped — the failure
+    /// of the process and every later tick is silently dropped, the failure
     /// <c>UsageEngine.RunOffThread</c> documents as observed in the field.
     /// </summary>
     [Fact]
@@ -387,7 +387,7 @@ public class ClaudeCliRefresherTests
     }
 
     /// <summary>
-    /// A reader that throws must not blank the outcome, only the comparison — and must not be
+    /// A reader that throws must not blank the outcome, only the comparison, and must not be
     /// read as NoBlockProduced either. An unreadable file is unknown (locked, mid-write,
     /// permissions), not evidence that nothing was written, so it stays Unchanged and claims
     /// nothing about the machine (rule 6).
@@ -408,7 +408,7 @@ public class ClaudeCliRefresherTests
     /// handles locally; anything else it does not recognise becomes a billed prompt. It was
     /// measured going wrong: run through a shell, MSYS path-translates <c>/usage</c> into
     /// <c>C:/Program Files/Git/usage</c>, which reached the model and was charged. A future edit
-    /// that "tidies" this constant — a space, a flag, a prefix — has a five-figure token cost per
+    /// that "tidies" this constant, a space, a flag, a prefix, has a five-figure token cost per
     /// poll and no other test would notice.
     /// </summary>
     [Fact]
@@ -431,7 +431,7 @@ public class ClaudeCliRefresherTests
 
     /// <summary>
     /// Claude Code names the transcript's folder after the process's working directory, so an
-    /// inherited one puts a meaningless slug in the user's project list — measured, a run from a
+    /// inherited one puts a meaningless slug in the user's project list, measured, a run from a
     /// temp path produced <c>C--Users-…-Temp-claude-…-spawncheck</c>. O-view's own data directory
     /// is used instead, because the slug it produces names O-view.
     /// </summary>
@@ -451,7 +451,7 @@ public class ClaudeCliRefresherTests
 
     /// <summary>
     /// A working directory that does not exist makes the spawn throw, which would be reported as
-    /// <see cref="RefreshOutcome.NotFound"/> — "no Claude Code on this machine", because of a
+    /// <see cref="RefreshOutcome.NotFound"/>, "no Claude Code on this machine", because of a
     /// missing folder of our own. The data directory is created when the rollup store opens, and
     /// this must not depend on that ordering.
     /// </summary>

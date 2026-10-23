@@ -12,13 +12,13 @@ namespace OView.Presentation.Panel;
 /// once, for both heads.
 ///
 /// <para><b>Why this exists above <see cref="PanelText"/>.</b> That class already held every
-/// sentence, and the heads still disagreed — not about wording but about which sentence a
+/// sentence, and the heads still disagreed, not about wording but about which sentence a
 /// state calls for. Each one decided for itself when a figure counted as authoritative, when
 /// a reset row was worth showing, which placeholder stood in for a missing percentage, and
 /// what day it was for the purpose of a promo. Those are the same class of decision as the
 /// wording (issues #55, #56): a statement about the user's usage, made twice.</para>
 ///
-/// <para>What stays with each head is everything a toolkit has an opinion about — fonts,
+/// <para>What stays with each head is everything a toolkit has an opinion about, fonts,
 /// spacing, how few pixels a fill may shrink to, whether a hover card can exist at all. A
 /// view model here carries the band a figure falls in, never the colour it is painted.</para>
 /// </summary>
@@ -28,8 +28,8 @@ public static class PanelSections
     /// Whether the snapshot's percentages are the account's own figures rather than a local
     /// estimate or nothing at all.
     ///
-    /// <para>It gates more than the meters — the no-data banner and the token-scope note ask
-    /// it too — so it is stated once here rather than spelled out beside each use. Both heads
+    /// <para>It gates more than the meters, the no-data banner and the token-scope note ask
+    /// it too, so it is stated once here rather than spelled out beside each use. Both heads
     /// had their own copy of this expression, which is one edit away from two panels
     /// disagreeing about whether a reading may be shown as fact.</para>
     /// </summary>
@@ -137,17 +137,17 @@ public static class PanelSections
             PanelText.Freshness(snapshot, utcNow, local),
             account?.DisplayName ?? PanelText.AccountUnknown,
             // Null means "no row", and an empty string means the same thing. The two heads
-            // tested it differently — one for null, one for length — and agreed only because
+            // tested it differently, one for null, one for length, and agreed only because
             // ClaudeAccount.ReadString already maps an empty property to null. This states the
             // rule rather than resting on that.
             account?.Email is { Length: > 0 } email ? email : null,
-            // Tier from organizationType — seatTier is empty and would render blank (rule 8).
+            // Tier from organizationType, seatTier is empty and would render blank (rule 8).
             account?.Tier ?? PanelText.TierUnknown);
 
     /// <summary>
     /// The rolling five-hour meter. Its reset line is unknown until a window start has been
     /// observed, and carries a <c>~</c> when the start was only bracketed (ADR-0011, issue
-    /// #180) — both of which <see cref="PanelText.SessionReset"/> decides.
+    /// #180), both of which <see cref="PanelText.SessionReset"/> decides.
     /// </summary>
     public static PanelMeterView SessionMeter(
         UsageSnapshot snapshot, PanelBanner? banner, DateTimeOffset utcNow, TimeZoneInfo local)
@@ -168,17 +168,17 @@ public static class PanelSections
     /// <para>The reset line has three states, and the middle one is the point of the feature
     /// (ADR-0014):</para>
     /// <list type="bullet">
-    /// <item><b>Known</b> — the session line's shape plus the weekday, and labelled when the
+    /// <item><b>Known</b>, the session line's shape plus the weekday, and labelled when the
     /// user entered it, so an unexpectedly precise time is explained rather than mysterious
     /// (issue #186). Never marked <c>~</c>: both remaining sources report the instant.</item>
-    /// <item><b>Not known</b> — nothing has reported one and nothing was entered. The row says
+    /// <item><b>Not known</b>, nothing has reported one and nothing was entered. The row says
     /// so and carries the one step that ends it, in the hint or inline.</item>
-    /// <item><b>No plan data</b> — nothing to act on, and the banner above already explains
+    /// <item><b>No plan data</b>, nothing to act on, and the banner above already explains
     /// why, so there is no line at all.</item>
     /// </list>
     /// </summary>
     /// <param name="settings">
-    /// The user's settings, for the manually entered reset alone — null from a head that does
+    /// The user's settings, for the manually entered reset alone, null from a head that does
     /// not receive them, which reads the same as not having entered one.
     /// </param>
     public static PanelMeterView WeeklyMeter(
@@ -233,7 +233,7 @@ public static class PanelSections
     /// The four statistics tiles, each with the per-model split behind its total.
     ///
     /// <para>Both today tiles share <see cref="PanelStatistics.ModelsToday"/> and both 31-day
-    /// tiles share <see cref="PanelStatistics.Models31Days"/> — one list per window, split two
+    /// tiles share <see cref="PanelStatistics.Models31Days"/>, one list per window, split two
     /// ways, because a token breakdown and a value breakdown of the same usage are the same
     /// rows measured differently.</para>
     ///
@@ -244,7 +244,7 @@ public static class PanelSections
     /// </summary>
     public static PanelTilesView Tiles(PanelStatistics stats)
     {
-        // Partial history states its coverage — a small number without this caveat reads as
+        // Partial history states its coverage, a small number without this caveat reads as
         // low usage rather than short history (ADR-0006). An unpriced model is the same class
         // of caveat: the total is real but incomplete.
         var coverage = TokenText.Caveat(stats);
@@ -300,7 +300,7 @@ public static class PanelSections
     /// stamp on it can never describe different reads.</para>
     /// </summary>
     /// <param name="cachedUsage">
-    /// What Claude Code last cached, or null from a machine where nothing was readable — which
+    /// What Claude Code last cached, or null from a machine where nothing was readable, which
     /// reads as <see cref="ExtraUsageState.Unknown"/> and claims nothing either way.
     /// </param>
     public static PanelOffPlanView OffPlan(
@@ -312,8 +312,8 @@ public static class PanelSections
         var (valueTileLabel, valueTileNote) = ValueTile(stats);
         var extraUsage = (cachedUsage?.ExtraUsage ?? ExtraUsageStatus.Unknown).State;
 
-        // Guarded on the divergence rather than on IsOffPlan alone. The two cannot disagree —
-        // IsOffPlan reads the same field — but the banner needs the result itself, and a null
+        // Guarded on the divergence rather than on IsOffPlan alone. The two cannot disagree,
+        // IsOffPlan reads the same field, but the banner needs the result itself, and a null
         // check states that it is the result, not the verdict, the wording is built from.
         var banner = stats.Divergence is { IsOffPlan: true } divergence
             ? new PanelOffPlanBannerView(
@@ -343,7 +343,7 @@ public static class PanelSections
     }
 
     /// <summary>
-    /// The value tile's label and caveat for the window's off-plan state — read both by
+    /// The value tile's label and caveat for the window's off-plan state, read both by
     /// <see cref="Tiles"/>, which draws the tile, and by <see cref="OffPlan"/>, which is where
     /// the state is otherwise described. One definition, because a tile labelled "Est. spend"
     /// beside a banner that is not showing describes a different window than the banner does.
@@ -353,7 +353,7 @@ public static class PanelSections
 
     /// <summary>
     /// One tile, both faces. Public because the Windows verification renders build tiles
-    /// directly from hand-made slices — a sample assembled any other way would be a picture of
+    /// directly from hand-made slices, a sample assembled any other way would be a picture of
     /// something other than the shipped tile.
     /// </summary>
     /// <param name="slices">
@@ -363,7 +363,7 @@ public static class PanelSections
     /// none would imply its total was the whole picture (rule 6).
     /// </param>
     /// <param name="colourOrder">
-    /// <see cref="PanelStatistics.ModelColourOrder"/> — the panel-wide slot order, so a model
+    /// <see cref="PanelStatistics.ModelColourOrder"/>, the panel-wide slot order, so a model
     /// keeps one colour across all four tiles.
     /// </param>
     public static PanelTileView Tile(
@@ -377,7 +377,7 @@ public static class PanelSections
         var segments = ModelBreakdown.Segments(slices, measure, colourOrder);
         var total = segments.Sum(s => ModelBreakdown.Measure(s, measure));
 
-        // Only a value chart can exclude a model — a token count exists for every model that
+        // Only a value chart can exclude a model, a token count exists for every model that
         // recorded one, so asking on a token tile would always answer "none" and the caption
         // would be deciding something it had no say in.
         var unpriced = measure == BreakdownMeasure.EstValue
@@ -396,13 +396,13 @@ public static class PanelSections
     private static PanelTileSegmentView Segment(
         ModelSlice slice, BreakdownMeasure measure, double total, IReadOnlyList<string> colourOrder) =>
         new(
-            // A non-null FoldedCount is what marks the remainder — never a word in Model or
+            // A non-null FoldedCount is what marks the remainder, never a word in Model or
             // DisplayName, both of which Core leaves empty on that segment.
             slice.FoldedCount is not null ? TokenText.OtherSegmentLabel : slice.DisplayName,
             Figure(slice, measure),
             slice.FoldedCount is int folded ? TokenText.FoldedModelsLabel(folded) : slice.Model,
             // Guarded rather than assumed non-zero: Segments drops zero-measure models, so a
-            // zero total means no segments at all and this never runs — but a share is a
+            // zero total means no segments at all and this never runs, but a share is a
             // division and the guard costs less than finding out that changed.
             total > 0 ? ModelBreakdown.Measure(slice, measure) / total : 0,
             ModelBreakdown.SlotFor(slice.Model, colourOrder));
@@ -420,7 +420,7 @@ public static class PanelSections
     /// card worded (<see cref="PanelGraphView"/>).
     ///
     /// <para>An empty series gives a view with no columns, which is a chart neither head
-    /// draws. It is not an error state — a store that has recorded nothing is a new install —
+    /// draws. It is not an error state, a store that has recorded nothing is a new install,
     /// and the no-data banner above the chart is what says so.</para>
     /// </summary>
     /// <param name="zone">
@@ -496,7 +496,7 @@ public static class PanelSections
     /// through that column, since a plan reset happens at a time of day rather than at
     /// midnight.
     ///
-    /// <para>Both answers are taken in the column's own frame — a <b>local</b> day, of
+    /// <para>Both answers are taken in the column's own frame, a <b>local</b> day, of
     /// whatever length the timezone says it was (issue #211). Dividing by a flat 24 hours
     /// would put the line up to an hour off its true position on the two DST days, and off in
     /// the same direction for every day after them.</para>
@@ -513,14 +513,14 @@ public static class PanelSections
     ///
     /// <para>Originally these were calendar weeks (Mon–Sun) with a stated reason: the plan's
     /// true weekly boundary was not derivable, so Monday was an honest visual reference rather
-    /// than a claim about the plan. That premise no longer holds — ADR-0011 derives the weekly
-    /// reset — so the bands follow the plan's own boundary wherever it is known, which is what
+    /// than a claim about the plan. That premise no longer holds, ADR-0011 derives the weekly
+    /// reset, so the bands follow the plan's own boundary wherever it is known, which is what
     /// the graph was always trying to convey. Mondays remain the fallback, and say so on
     /// hover, because until a reset has been observed the real boundary is still genuinely
     /// unknown (rule 6).</para>
     ///
     /// <para>Boundaries are derived by stepping the cadence back from the predicted next
-    /// reset, so they cover the whole window including days before O-view was installed — the
+    /// reset, so they cover the whole window including days before O-view was installed, the
     /// log only holds resets it was running for.</para>
     /// </summary>
     private sealed class PlanWeeks
@@ -545,7 +545,7 @@ public static class PanelSections
         {
             // The span the columns actually cover, taken from the timezone. The columns are
             // local days, so their first and last instants are not local midnight interpreted
-            // as UTC — which would clip or over-collect boundaries by the offset.
+            // as UTC, which would clip or over-collect boundaries by the offset.
             var fromUtc = LocalDays.StartUtc(series[0].Date, zone);
             var toUtc = LocalDays.EndUtc(series[^1].Date, zone);
 
@@ -570,7 +570,7 @@ public static class PanelSections
         /// <summary>
         /// Which band a day belongs to, for the purpose of normalising its colour.
         ///
-        /// <para>A day that contains a boundary genuinely belongs to neither band — its tokens
+        /// <para>A day that contains a boundary genuinely belongs to neither band, its tokens
         /// are split across two weeks and the rollups are daily, so the split is not
         /// recoverable. It is assigned to whichever band holds the majority of the day, which
         /// is what testing the MIDPOINT does. That is an approximation, and the only one
@@ -586,13 +586,13 @@ public static class PanelSections
 
     /// <summary>
     /// What both meters share: the figure, the band and the fill, or the placeholder that
-    /// stands in for all three. A percentage is shown only when the snapshot is authoritative
-    /// — an estimate has no meter to fill (ADR-0002).
+    /// stands in for all three. A percentage is shown only when the snapshot is authoritative,
+    /// an estimate has no meter to fill (ADR-0002).
     /// </summary>
     private static PanelMeterView Meter(
         string label, UsagePercent reported, UsageSnapshot snapshot, PanelBanner? banner)
     {
-        // Integer precision only, which is what the meter has always carried — the typed value
+        // Integer precision only, which is what the meter has always carried, the typed value
         // widens to a double so one percent type can serve figures that are not whole numbers,
         // and these two are.
         var percent = IsAuthoritative(snapshot) ? (int?)reported.Value : null;

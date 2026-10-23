@@ -14,7 +14,7 @@ namespace OView.Linux.Updates;
 /// cannot replace itself still <i>checks</i>, so it can say a newer version is out. Until
 /// v0.6.0 that half was simply missing: the Linux head never subscribed to the engine's
 /// update-check event, so it never checked. Combined with the <c>.deb</c> installing no apt
-/// source — <c>apt upgrade</c> cannot learn about a version it has no repository for — a
+/// source, <c>apt upgrade</c> cannot learn about a version it has no repository for, a
 /// Linux user had <b>no update path at all</b>. Install once, and never find out anything
 /// had shipped.</para>
 ///
@@ -51,7 +51,7 @@ public sealed class LinuxUpdateNotice
     }
 
     /// <summary>
-    /// One check. Safe to call on a timer; safe to call when offline. Never throws — a
+    /// One check. Safe to call on a timer; safe to call when offline. Never throws, a
     /// failed update check must not disturb an app that is otherwise working.
     /// </summary>
     public async Task CheckAsync(CancellationToken cancellation = default)
@@ -98,7 +98,7 @@ public sealed class LinuxUpdateNotice
         UpdateText.NoticeTitle(update.Version);
 
     /// <summary>
-    /// What the user should actually do — which differs by how they installed, and is the
+    /// What the user should actually do, which differs by how they installed, and is the
     /// whole reason this says more than "an update is available".
     ///
     /// <para>Both sentences are in <see cref="UpdateText"/>, beside the rest of the update

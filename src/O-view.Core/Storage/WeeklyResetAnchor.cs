@@ -9,7 +9,7 @@ namespace OView.Core.Storage;
 /// told again (ADR-0014).
 ///
 /// <para><b>Why this is persisted at all.</b> The instant comes from Claude Code's
-/// <c>cachedUsageUtilization</c>, which refreshes only when Claude Code fetches usage —
+/// <c>cachedUsageUtilization</c>, which refreshes only when Claude Code fetches usage,
 /// measured at <b>43 hours stale</b> on the development machine while the file holding it was
 /// being rewritten every few minutes. A value read only while fresh is a value that is
 /// usually absent. Read once and stored, it is correct forever after, because the reset is a
@@ -17,7 +17,7 @@ namespace OView.Core.Storage;
 ///
 /// <para><b>This replaces <c>WeeklyResetLog</c>, and the justification for its predecessor's
 /// existence does not carry over.</b> ADR-0011 kept observed resets outside the rebuildable
-/// rollup store because an observation was unrepeatable — a reset seen and then lost cost a
+/// rollup store because an observation was unrepeatable, a reset seen and then lost cost a
 /// full week before another could be caught. An anchor is not like that: it can be re-read
 /// from <c>~/.claude.json</c> the next time Claude Code refreshes. Losing this file costs a
 /// wait, not a week.</para>
@@ -48,7 +48,7 @@ public sealed class WeeklyResetAnchor
 
     /// <summary>
     /// Where a stored anchor, or a failed write, is recorded. A delegate rather than a log
-    /// interface, so <c>Core</c> keeps knowing nothing about how the app logs — the same seam
+    /// interface, so <c>Core</c> keeps knowing nothing about how the app logs, the same seam
     /// the providers use.
     /// </summary>
     public Action<string>? Log { get; init; }
@@ -104,7 +104,7 @@ public sealed class WeeklyResetAnchor
     /// <para><b>Equivalent, not identical.</b> Claude reports the same weekly boundary with a
     /// different date every week, so comparing instants would rewrite the file on every
     /// refresh forever. Two instants that sit on the same weekly grid describe the same
-    /// schedule, so only a genuine schedule change causes a write — which also makes the
+    /// schedule, so only a genuine schedule change causes a write, which also makes the
     /// file's timestamp meaningful.</para>
     /// </summary>
     /// <returns>Whether anything was written.</returns>
@@ -141,7 +141,7 @@ public sealed class WeeklyResetAnchor
     }
 
     /// <summary>
-    /// Whether two instants describe the same weekly schedule — the same weekday and time of
+    /// Whether two instants describe the same weekly schedule, the same weekday and time of
     /// day, to within a minute of slack for the sub-second jitter Claude reports.
     /// </summary>
     public static bool OnSameGrid(DateTimeOffset a, DateTimeOffset b)
@@ -157,7 +157,7 @@ public sealed class WeeklyResetAnchor
     }
 
     /// <summary>
-    /// Best-effort: a leftover observation log is litter, never an error — but a swallowed
+    /// Best-effort: a leftover observation log is litter, never an error, but a swallowed
     /// failure is how the last three releases' worth of bugs stayed invisible, so it says so
     /// (issue #204). Observed on the development machine: the anchor stored successfully and
     /// the legacy file was still there afterwards, with nothing recorded either way.

@@ -22,7 +22,7 @@ public class CostEstimatorTests
     /// <summary>
     /// <b>Both cache-write TTLs, pinned separately</b> (GitHub issue #255).
     ///
-    /// <para>The estimator priced every cache write at 1.25× input — the 5-minute rate — while
+    /// <para>The estimator priced every cache write at 1.25× input, the 5-minute rate, while
     /// the transcripts it was reading were almost entirely 1-hour, which Anthropic publishes at
     /// 2×. A fixture of pure-5m writes and one of pure-1h writes are both here so neither rate
     /// can silently become the other: replacing one published price with the other, in either
@@ -108,7 +108,7 @@ public class CostEstimatorTests
     [Fact]
     public void Sonnet5_IsPriced_AtPublishedRate()
     {
-        // The table recorded $3/$15 — a price increase that had been scheduled for
+        // The table recorded $3/$15, a price increase that had been scheduled for
         // 2026-09-01 when the table was written, and was later cancelled. It was a
         // forecast, not a stale rate, so no freshness check would have caught it; this
         // test pins the published figure so a future edit has to be deliberate
@@ -150,7 +150,7 @@ public class CostEstimatorTests
     /// <summary>
     /// <b>An unpriceable modifier yields a labelled unknown, never a fallback to standard
     /// rates</b> (GitHub issue #257). Fast mode has no published price on Sonnet, so a request
-    /// reporting it must return null and be named in the caveat — silently charging the
+    /// reporting it must return null and be named in the caveat, silently charging the
     /// standard, cheaper rate is the failure mode the whole rate card exists to prevent.
     /// </summary>
     [Fact]
@@ -199,11 +199,11 @@ public class CostEstimatorTests
     /// <summary>
     /// The check that found issue #256, run against the sample that found it: Claude Code
     /// reported $56.50 for these Sonnet 5 tokens, and the cancelled-forecast $3/$15 row priced
-    /// them at $84.71 — 50% high. At the published $2/$10 the same comparison lands within a
+    /// them at $84.71, 50% high. At the published $2/$10 the same comparison lands within a
     /// rounding error of the reported figure.
     ///
     /// <para>The cache writes are attributed to the 5-minute bucket because that is the
-    /// attribution under which the reported total reconciles — the issue solved for a single
+    /// attribution under which the reported total reconciles, the issue solved for a single
     /// input rate assuming a 1.25× write, and got $2.001 against a published $2. Attributing
     /// the same writes to the 1-hour bucket puts this 9% out, which is the point of the method
     /// taking a whole rate row rather than solving for one column: a wrong TTL mix and a wrong

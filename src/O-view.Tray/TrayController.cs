@@ -19,7 +19,7 @@ namespace OView.Tray;
 /// <para>This is the Windows skin: the shell pushes at it through <see cref="IShellToSkin"/>,
 /// always on this thread, and it asks back through <see cref="ISkinToShell"/>. The three
 /// pushes it does not draw itself arrive as plain callbacks, so the controller holds neither
-/// the update flow nor the menu — it stays the thing that paints the icon.</para>
+/// the update flow nor the menu, it stays the thing that paints the icon.</para>
 ///
 /// <para>A rendering failure must not break the poll loop, so it is caught here and logged
 /// rather than allowed to escape back into the shell.</para>
@@ -52,12 +52,12 @@ public sealed class TrayController : IShellToSkin
         _rateCheckDue = rateCheckDue;
     }
 
-    /// <summary>Most recent snapshot — what the popup opens with.</summary>
+    /// <summary>Most recent snapshot, what the popup opens with.</summary>
     public UsageSnapshot Latest => _shell.Latest;
 
     /// <summary>
     /// A new snapshot: the icon first, then whatever else rides this signal. That order is the
-    /// one the tray has always had — the gauge reflects the new number before anything talks
+    /// one the tray has always had, the gauge reflects the new number before anything talks
     /// about it.
     /// </summary>
     public void ShowSnapshot(UsageSnapshot snapshot)

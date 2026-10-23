@@ -5,8 +5,8 @@ namespace OView.App.Tests;
 /// <summary>
 /// A scheduled poll reads off the UI thread and publishes back onto it (issue #125).
 ///
-/// <para>The bug these pin was not a crash. The read — file discovery, JSON parsing, SQLite
-/// writes — ran on the dispatcher, and its cost scales with total transcript history on a
+/// <para>The bug these pin was not a crash. The read, file discovery, JSON parsing, SQLite
+/// writes, ran on the dispatcher, and its cost scales with total transcript history on a
 /// first run. The first machine with a large enough history spent that whole ingest with a
 /// frozen tray icon and an unresponsive menu, and nothing in the suite noticed because
 /// every test drives the engine on one thread anyway.</para>
@@ -49,7 +49,7 @@ public class PollThreadingTests
         engine.Start(new FakeTimerFactory(), dispatcher);
 
         // Start has returned with the provider still inside GetSnapshot. Nothing has been
-        // published yet, and the UI thread — this one — is free.
+        // published yet, and the UI thread, this one, is free.
         Assert.Equal(UsageSnapshot.None, engine.Latest);
         Assert.Equal(0, dispatcher.Pending);
 
@@ -60,7 +60,7 @@ public class PollThreadingTests
     }
 
     /// <summary>
-    /// The read runs somewhere else; the publish runs here. Both halves matter — a read on
+    /// The read runs somewhere else; the publish runs here. Both halves matter, a read on
     /// the UI thread is the freeze, and a publish off it is a thread-affinity violation in
     /// both heads, which subscribe to these events and touch their tray icons directly.
     /// </summary>
@@ -172,7 +172,7 @@ public class PollThreadingTests
     ///
     /// <para>What that looked like in the field: a tray process alive for 35 minutes on a 60 s
     /// cadence, holding its store open, with 409 KB of unread transcript and a ledger whose
-    /// newest row was five days old — while the store passed every health check, the panel
+    /// newest row was five days old, while the store passed every health check, the panel
     /// went on drawing its last snapshot, and nothing was written anywhere to say why.</para>
     ///
     /// <para><b>The assertion that matters is the last one: the poll AFTER the failed one
@@ -200,7 +200,7 @@ public class PollThreadingTests
         clock.ThrowOnNext = new InvalidOperationException("the clock is unavailable");
         timers.Poll.Tick();
 
-        // Wait for the failed poll to finish rather than racing it — and assert on the way
+        // Wait for the failed poll to finish rather than racing it, and assert on the way
         // past that the failure was recorded at all, because a silent one is what made this
         // undiagnosable from a support bundle.
         Assert.True(

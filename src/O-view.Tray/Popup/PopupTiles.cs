@@ -10,7 +10,7 @@ namespace OView.Tray.Popup;
 /// Fills the four statistics tiles, each with the per-model split behind its total
 /// (issue #37), and the scope note beneath them.
 ///
-/// Both today tiles share ModelsToday and both 31-day tiles share Models31Days —
+/// Both today tiles share ModelsToday and both 31-day tiles share Models31Days,
 /// one list per window, split two ways, because a token breakdown and a value
 /// breakdown of the same usage are the same rows measured differently.
 /// </summary>

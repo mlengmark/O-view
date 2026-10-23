@@ -81,8 +81,8 @@ public class ResetDetectorTests
 
     /// <summary>
     /// The reported case (GitHub issue #180). A drop, then a long sampling gap, then a run
-    /// that begins at zero and climbs. There is <b>no drop</b> in the new run — the meter had
-    /// already reset while Desktop was closed — so the old detector stayed anchored on the
+    /// that begins at zero and climbs. There is <b>no drop</b> in the new run, the meter had
+    /// already reset while Desktop was closed, so the old detector stayed anchored on the
     /// pre-gap drop and stepped it forward on a five-hour grid.
     /// </summary>
     [Fact]
@@ -93,7 +93,7 @@ public class ResetDetectorTests
             At(0, 78),
             At(15, 0),                       // the old window resets, then Desktop closes
             At(2 * 24 * 60, 0),              // two days later: back, still nothing used
-            At(2 * 24 * 60 + 15, 7),         // first use — THIS starts the current window
+            At(2 * 24 * 60 + 15, 7),         // first use, THIS starts the current window
             At(2 * 24 * 60 + 30, 16),
             At(2 * 24 * 60 + 45, 26),
         };
@@ -131,7 +131,7 @@ public class ResetDetectorTests
 
     /// <summary>
     /// The regression itself. A window whose end has passed yields <c>unknown</c>, never a
-    /// grid-stepped guess — the old code always produced a confident time and was wrong by
+    /// grid-stepped guess, the old code always produced a confident time and was wrong by
     /// up to five hours.
     /// </summary>
     [Fact]
@@ -144,7 +144,7 @@ public class ResetDetectorTests
     }
 
     /// <summary>
-    /// <c>fh = 0</c> means nothing has been used, and the window starts on first use — so no
+    /// <c>fh = 0</c> means nothing has been used, and the window starts on first use, so no
     /// window is running and there is no reset to predict. Reporting one would describe a
     /// window that has not begun.
     /// </summary>
@@ -232,8 +232,8 @@ public class ResetDetectorTests
     }
 
     /// <summary>
-    /// Activity at or before the lower bound belongs to the <i>previous</i> window — the one
-    /// that was ending — so it says nothing about this one and must be ignored rather than
+    /// Activity at or before the lower bound belongs to the <i>previous</i> window, the one
+    /// that was ending, so it says nothing about this one and must be ignored rather than
     /// used to widen the bracket downwards.
     /// </summary>
     [Fact]
@@ -267,7 +267,7 @@ public class ResetDetectorTests
         Assert.Equal(bracket, bracket.NarrowedTo(null));
     }
 
-    /// <summary>The latest boundary wins, not the first — several can sit in one series.</summary>
+    /// <summary>The latest boundary wins, not the first, several can sit in one series.</summary>
     [Fact]
     public void TheMostRecentBoundaryWins()
     {

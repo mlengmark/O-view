@@ -9,7 +9,7 @@ namespace OView.Core.Tests;
 /// The typed token counts and Est. figures <see cref="PanelStatistics"/>, <see cref="ModelSlice"/>
 /// and <see cref="TokenComposition"/> now carry beside their long-standing plain ones. The plain
 /// members are pinned elsewhere (<c>OView.Presentation.Tests.PanelStatisticsTests</c>) and are
-/// unchanged by this file — these cases are only about the <see cref="UsageValueStatus"/> each
+/// unchanged by this file, these cases are only about the <see cref="UsageValueStatus"/> each
 /// typed figure carries.
 /// </summary>
 public class PanelStatisticsTests : IDisposable
@@ -69,12 +69,12 @@ public class PanelStatisticsTests : IDisposable
 
         Assert.Equal(UsageValueStatus.Real, stats.TokensTodayCount.Status);
         Assert.Equal(2_000_000, stats.TokensTodayCount.Value);
-        // The priced half is still reported, as a real Estimated figure — not unavailable.
+        // The priced half is still reported, as a real Estimated figure, not unavailable.
         Assert.Equal(UsageValueStatus.Estimated, stats.EstTodayValue.Status);
         Assert.Equal(25.00m, stats.EstTodayValue.Value);
     }
 
-    /// <summary>When nothing at all can be priced, the Est. figure says so — absent, not zero.</summary>
+    /// <summary>When nothing at all can be priced, the Est. figure says so, absent, not zero.</summary>
     [Fact]
     public void NothingPriceable_MakesTheEstimateUnavailable_NotTheCount()
     {
@@ -91,8 +91,8 @@ public class PanelStatisticsTests : IDisposable
     [Fact]
     public void CreditBilledFigures_AreTypedTheSameWay()
     {
-        Seed("r1", "2026-07-21", 1_000_000, "claude-opus-4-8");  // plan model — excluded
-        Seed("r2", "2026-07-21", 1_000_000, "claude-fable-5");   // credit-billed — counted
+        Seed("r1", "2026-07-21", 1_000_000, "claude-opus-4-8");  // plan model, excluded
+        Seed("r2", "2026-07-21", 1_000_000, "claude-fable-5");   // credit-billed, counted
 
         var stats = PanelStatistics.Build(_store, Now, Utc);
 

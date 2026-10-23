@@ -1,14 +1,14 @@
 namespace OView.Core.Providers.PlanHistory;
 
 /// <summary>
-/// The weekly window's arithmetic — and, since ADR-0014, nothing else.
+/// The weekly window's arithmetic, and, since ADR-0014, nothing else.
 ///
 /// <para>This replaces <c>WeeklyResetDetector</c>, which inferred the reset from drops in
 /// Claude Desktop's sampled <c>sd</c> series. That inference is gone: the reset is reported
 /// exactly by Claude Code and is a <b>static weekly grid</b>, so there is nothing left to
 /// detect. Measured across five weeks on one account, the exact instant projected backwards
 /// in whole weeks landed inside all five brackets the old detector had independently
-/// observed — while the detector's own prediction was 11.5 hours late and on the wrong
+/// observed, while the detector's own prediction was 11.5 hours late and on the wrong
 /// day.</para>
 ///
 /// <para>What survives is the part that was never in doubt: the window is seven days, and the
@@ -17,7 +17,7 @@ namespace OView.Core.Providers.PlanHistory;
 public static class WeeklyWindow
 {
     /// <summary>
-    /// Seven days. Measured, not assumed — <c>sd</c> climbed 2 → 70 monotonically across
+    /// Seven days. Measured, not assumed, <c>sd</c> climbed 2 → 70 monotonically across
     /// seven days of continuous sampling, which disproves the rival 72-hour hypothesis
     /// outright (ADR-0011's one finding that outlived it).
     /// </summary>
@@ -29,7 +29,7 @@ public static class WeeklyWindow
     ///
     /// <para>Kept for the <b>session</b> reset, which is still bracketed by Desktop's sampling
     /// cadence and still earns the marker. Every weekly reset now carries zero uncertainty, so
-    /// on that row the comparison is always false — see ADR-0014's consequences for why the
+    /// on that row the comparison is always false, see ADR-0014's consequences for why the
     /// now-unreachable rendering path is removed separately rather than here.</para>
     /// </summary>
     public static readonly TimeSpan PreciseBracket = TimeSpan.FromMinutes(15);
@@ -41,7 +41,7 @@ public static class WeeklyWindow
     /// <para><b>An anchor in the past is projected forward, and that is the point.</b> The old
     /// rule refused to step a passed <c>resets_at</c> forward, on the grounds that doing so
     /// dressed an inference in a reported value's zero uncertainty. For the five-hour window
-    /// that is right — it rolls from first use and is not a grid (issue #180). For this one it
+    /// that is right, it rolls from first use and is not a grid (issue #180). For this one it
     /// is wrong: the schedule is fixed to the account, so the same weekday and time of day
     /// recur exactly, and projecting is arithmetic rather than inference.</para>
     ///
@@ -80,7 +80,7 @@ public static class WeeklyWindow
         }
 
         // Jump straight to the first boundary at or before the end of the range rather than
-        // walking there — the prediction can be a long way past a short window.
+        // walking there, the prediction can be a long way past a short window.
         var overshoot = Math.Max(0, Math.Ceiling((nextResetUtc - toUtc) / period));
         var cursor = nextResetUtc - period * overshoot;
 

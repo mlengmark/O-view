@@ -17,7 +17,7 @@ namespace OView.App.Diagnostics;
 /// to be running on.</para>
 /// </summary>
 /// <param name="Version">The running build's version.</param>
-/// <param name="InstallKind">How this build arrived — installer, portable, deb, tarball.</param>
+/// <param name="InstallKind">How this build arrived, installer, portable, deb, tarball.</param>
 /// <param name="Desktop">Desktop environment. Null on Windows, where there is only one.</param>
 /// <param name="SessionType">X11 or Wayland. Null on Windows.</param>
 /// <param name="TrayHost">
@@ -40,7 +40,7 @@ public sealed record DiagnosticsEnvironment(
 ///
 /// <para><b>It is redacted before it is returned, because of where it goes.</b> Users are
 /// told to paste this into a public GitHub issue, and it previously carried the account name
-/// in every path and the organization UUID in full — both the one from <c>~/.claude.json</c>
+/// in every path and the organization UUID in full, both the one from <c>~/.claude.json</c>
 /// and the whole list found in the plan-history file. That is a real identifier and a real
 /// person's account name, published permanently and searchably, to diagnose a tray icon.
 /// This project already treated an org UUID as sensitive when one was committed to the repo
@@ -49,11 +49,11 @@ public sealed record DiagnosticsEnvironment(
 ///
 /// <para><see cref="Redact"/> runs once over the finished text rather than at each field, so
 /// a field added later is covered whether or not its author thought about it. Path shape and
-/// a UUID prefix survive, because those are what the bundle is read for — see that class for
+/// a UUID prefix survive, because those are what the bundle is read for, see that class for
 /// the reasoning.</para>
 ///
 /// <para><b>Labels name what a path is, not which platform's vocabulary it came from.</b>
-/// This block used to say <c>appdata root</c>, which on Linux points at <c>~/.config</c> —
+/// This block used to say <c>appdata root</c>, which on Linux points at <c>~/.config</c>,
 /// a Windows word over a Linux path. The whole reason the resolved roots are printed is so
 /// that a wrong <c>SpecialFolder</c> resolution is visible, and a misleading label defeats
 /// exactly that (CLAUDE.md rule 6).</para>
@@ -116,7 +116,7 @@ public static class DiagnosticsBundle
 
         // And if it is in neither place, where is it? The two sections above only ever look
         // where this build already believes the answer is, so a layout that has moved reads as
-        // an absence with no explanation — identical to a machine sitting idle. This sweeps
+        // an absence with no explanation, identical to a machine sitting idle. This sweeps
         // Claude's own directories and prints what is actually being written (issue #218).
         text.Append((writeSurvey ?? ClaudeWriteSurvey.Empty).ToClipboardText(utcNow));
 
@@ -124,7 +124,7 @@ public static class DiagnosticsBundle
         AppendCorruptBackups(text, corruptBackups ?? CorruptBackupReport.Empty);
 
         // Placed before the log tail so the store's state and the poll lines that produced it
-        // read together — "0 changed" means one thing beside a ledger that is current and
+        // read together, "0 changed" means one thing beside a ledger that is current and
         // quite another beside one that is five days stale.
         var storeReport = store ?? RollupStoreReport.Unavailable(
             RollupStore.DefaultPath, RollupStoreReport.OpenedForReport, "not inspected");
@@ -142,7 +142,7 @@ public static class DiagnosticsBundle
         AppendRecentLog(text, logTail ?? []);
 
         // The single funnel. Every field above, and every field added below it later, is
-        // redacted here rather than at its own call site — see the class remarks.
+        // redacted here rather than at its own call site, see the class remarks.
         return Redact.Bundle(text.ToString());
     }
 
@@ -182,7 +182,7 @@ public static class DiagnosticsBundle
     /// <summary>
     /// The resolved roots. If <see cref="Environment.SpecialFolder"/> resolution ever
     /// returns something unexpected, every path above is wrong and every other field is a
-    /// consequence — so the roots are printed rather than assumed.
+    /// consequence, so the roots are printed rather than assumed.
     /// </summary>
     private static void AppendRoots(StringBuilder text)
     {
@@ -198,7 +198,7 @@ public static class DiagnosticsBundle
     /// <para>One line saying "not readable" was actively misleading on 2026-08-24: Claude Code
     /// had created a second <c>.claude.json</c> carrying only migration keys, O-view resolved to
     /// it because it existed, and the bundle reported a failure to read a file that read
-    /// perfectly — while the populated one sat unmentioned. A resolution that picks between
+    /// perfectly, while the populated one sat unmentioned. A resolution that picks between
     /// candidates has to show the picking, or the next report of this costs another round trip
     /// to discover which file was even opened.</para>
     /// </summary>
@@ -225,13 +225,13 @@ public static class DiagnosticsBundle
     /// The stored weekly-reset anchor and what it projects to (ADR-0014).
     ///
     /// <para>This replaces a list of derived observations with their brackets. That list was
-    /// the right report while the reset was inferred from drops in a sampled series — it
+    /// the right report while the reset was inferred from drops in a sampled series, it
     /// separated "no reset seen yet" from "drops detected and discarded". None of those states
     /// exist any more: either an exact instant has been reported and stored, or it has not.
     /// Printing the anchor's weekday alongside it makes a wrong one obvious at a glance, which
     /// a bare timestamp does not.</para>
     ///
-    /// <para>Timestamps only — no usage figures, nothing identifying.</para>
+    /// <para>Timestamps only, no usage figures, nothing identifying.</para>
     /// </summary>
     private static void AppendWeeklyReset(StringBuilder text, WeeklyResetAnchor anchor, DateTimeOffset utcNow)
     {
@@ -243,8 +243,8 @@ public static class DiagnosticsBundle
             {
                 // Not a fault. It means Claude Code has never reported one on this machine,
                 // which is exactly when the user should be entering it by hand.
-                text.AppendLine("    anchor      : none stored — never reported by Claude Code");
-                text.AppendLine("  next weekly   : unknown — no anchor and no entered value");
+                text.AppendLine("    anchor      : none stored, never reported by Claude Code");
+                text.AppendLine("  next weekly   : unknown, no anchor and no entered value");
                 return;
             }
 
@@ -263,7 +263,7 @@ public static class DiagnosticsBundle
     ///
     /// <para>Every other field here reports a file: which paths exist, how many samples they
     /// hold, how old they are. All of it can read perfectly while the app has not completed a
-    /// poll in days — that is exactly the report that arrived three times over, each one
+    /// poll in days, that is exactly the report that arrived three times over, each one
     /// leading with <c>status : Ok</c>. Three lines per poll turn that ambiguity into a fact
     /// the user pastes without being asked for it, which matters because the alternative is a
     /// round trip asking someone to re-run with a flag and reproduce a stall on demand.</para>
@@ -287,7 +287,7 @@ public static class DiagnosticsBundle
         {
             // Distinguished from a log that exists and is empty only by the path above, and
             // deliberately not explained away: "no log" on a build that logs by default is
-            // itself a finding — it means this run never reached the first write.
+            // itself a finding, it means this run never reached the first write.
             text.AppendLine("    (no log lines yet)");
             return;
         }
@@ -303,7 +303,7 @@ public static class DiagnosticsBundle
     /// against transcripts the store has ever recorded a watermark for (issue #218).
     ///
     /// <para>The two figures already sit in this bundle, twenty lines apart, in sections written
-    /// for different reasons — and on the machine this was added from they read 38 and 32, with
+    /// for different reasons, and on the machine this was added from they read 38 and 32, with
     /// three of the 32 belonging to files Claude Code has since deleted. Nine transcripts had
     /// never been ingested at all, and nothing said so. <c>0 behind by 0 bytes</c> is only ever
     /// a statement about files the store already knows about; a file it has never seen is behind
@@ -323,7 +323,7 @@ public static class DiagnosticsBundle
         }
 
         // Watermarks whose file is still on disk. The rest point at transcripts Claude Code has
-        // deleted since — ordinary, already counted as "gone", and not evidence of a gap.
+        // deleted since, ordinary, already counted as "gone", and not evidence of a gap.
         var tracked = Math.Max(0, store.TrackedFiles - store.FilesGone);
         var untracked = Math.Max(0, scope.TotalFiles - tracked);
 
@@ -336,13 +336,13 @@ public static class DiagnosticsBundle
     ///
     /// <para><b>Every other section here reports an input; this one reports an assumption.</b>
     /// Two of the three defects that produced GitHub issues #255, #256 and #257 were wrong
-    /// numbers in this table, and neither was visible anywhere — a bundle could read perfectly
+    /// numbers in this table, and neither was visible anywhere, a bundle could read perfectly
     /// while every money figure in the panel was 50% high. The date and the source are printed
     /// unconditionally for that reason, not only once the card is stale.</para>
     ///
     /// <para>The last line names the calibration rather than performing it. Claude Code prints
     /// token counts <i>and</i> a dollar total in its own usage summary, which makes the rates
-    /// the only unknown in the comparison — that is how #256 was found, and
+    /// the only unknown in the comparison, that is how #256 was found, and
     /// <see cref="CostEstimator.RelativeError"/> is the function that completes it. O-view
     /// cannot run it on its own: no file on this machine carries a reported dollar figure
     /// (<c>used_dollars</c> and <c>spend.used</c> are null and zero on the account measured),
@@ -357,7 +357,7 @@ public static class DiagnosticsBundle
         text.AppendLine($"  rate card     : {card.Models.Count} model(s), {card.SourceLabel}, "
                         + $"as of {card.AsOf:yyyy-MM-dd} ({age} day(s) ago"
                         + $"{(card.IsStaleOn(today) ? ", stated on the Est. tiles" : "")})");
-        text.AppendLine($"    drift check : weekly against {PublishedRates.PricingUrl} — "
+        text.AppendLine($"    drift check : weekly against {PublishedRates.PricingUrl}, "
                         + "reports differences, never installs rates; see the log above");
         text.AppendLine("    calibrate   : compare an Est. figure against the dollar total in "
                         + "Claude Code's own /usage summary (CostEstimator.RelativeError)");

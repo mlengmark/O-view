@@ -10,7 +10,7 @@ namespace OView.App;
 /// The weekly reset end to end (ADR-0014): the manual override, the instant Claude Code
 /// reported, and the conflict between the two.
 ///
-/// <para>Split out of <see cref="UsageEngine"/> purely to shorten that file — same members,
+/// <para>Split out of <see cref="UsageEngine"/> purely to shorten that file, same members,
 /// same behaviour, same logging. Settings stays with the engine, since every other
 /// preference is saved through the same property; this reads and writes it through the
 /// <paramref name="getSettings"/>/<paramref name="saveSettings"/> delegates the constructor
@@ -47,7 +47,7 @@ public sealed class WeeklyResetCoordinator
 
         // The weekly reset, since ADR-0014: one instant Claude reported, stored once and
         // projected forward by whole weeks forever. There is no observation log any more and
-        // nothing to import from the rollup store — the derivation those existed to feed was
+        // nothing to import from the rollup store, the derivation those existed to feed was
         // removed for producing an answer 11.5 hours wrong while the exact one sat unread.
         var logLine = log is null ? (Action<string>?)null : log.Write;
         _weeklyAnchor = new WeeklyResetAnchor(weeklyResetAnchorPath) { Log = logLine };
@@ -56,13 +56,13 @@ public sealed class WeeklyResetCoordinator
     /// <summary>
     /// Pushes the user's entered weekly reset into the provider (GitHub issue #186). Called
     /// on construction and after every change, so the two can never disagree about what is
-    /// set — the shape of bug where a preference is saved and does not take effect until a
+    /// set, the shape of bug where a preference is saved and does not take effect until a
     /// restart.
     /// </summary>
     public void ApplyWeeklyResetSetting()
     {
         // The entry is read straight from Settings on every poll now (see WithWeeklyReset), so
-        // there is no provider-side copy left to keep in step — the class of bug this method
+        // there is no provider-side copy left to keep in step, the class of bug this method
         // existed to prevent is removed rather than maintained. Clearing the recorded conflict
         // stays: a new entry is a fresh claim and deserves a fresh verdict.
         _weeklyResetConflict = null;
@@ -85,13 +85,13 @@ public sealed class WeeklyResetCoordinator
         _saveSettings(settings);
         ApplyWeeklyResetSetting();
 
-        _log?.Write($"weekly reset {(reset is null ? "cleared — deriving" : $"set to {reset.DayText} {reset.TimeText} local")}");
+        _log?.Write($"weekly reset {(reset is null ? "cleared, deriving" : $"set to {reset.DayText} {reset.TimeText} local")}");
         return settings.WeeklyReset;
     }
 
     /// <summary>
     /// The reset instant Claude reported that disproves the entered weekly reset, or null.
-    /// Surfaced so the head can tell the user once — silently overriding a wrong entry leaves
+    /// Surfaced so the head can tell the user once, silently overriding a wrong entry leaves
     /// them believing the number they typed.
     /// </summary>
     public DateTimeOffset? WeeklyResetConflict => _weeklyResetConflict;
@@ -111,8 +111,8 @@ public sealed class WeeklyResetCoordinator
     /// Carries the user's entered weekly reset onto a snapshot that has none.
     ///
     /// <para><b>The case this exists for is the one the feature was built for.</b>
-    /// <c>PlanHistoryProvider</c> resolves the entry itself — including checking it against
-    /// observed resets — but it returns <c>None</c> before reaching that code when there is
+    /// <c>PlanHistoryProvider</c> resolves the entry itself, including checking it against
+    /// observed resets, but it returns <c>None</c> before reaching that code when there is
     /// no plan-history file at all, and the composite then falls through to the JSONL
     /// estimate, whose weekly reset is null. So a user with no Claude Desktop entered their
     /// reset time and saw nothing change: exactly the population issue #186 was written for,
@@ -136,7 +136,7 @@ public sealed class WeeklyResetCoordinator
             return snapshot;
         }
 
-        // Harvest first. Whenever Claude Code has reported an instant, store it — including
+        // Harvest first. Whenever Claude Code has reported an instant, store it, including
         // one already in the past, which is the case that matters: the cache refreshes only
         // when Claude Code fetches usage, measured at 43 hours stale on a machine whose file
         // was being rewritten every few minutes. Read once, it is correct forever after.
@@ -152,7 +152,7 @@ public sealed class WeeklyResetCoordinator
         var settings = _getSettings();
 
         // A discovered anchor outranks a typed entry, because it comes from the source rather
-        // than from transcription — but it must never silently replace one. Disagreement is
+        // than from transcription, but it must never silently replace one. Disagreement is
         // recorded so the head can say so once; a wrong entry quietly overridden leaves the
         // user believing the number they typed.
         if (anchor is { } stored && settings.WeeklyReset is { } entered &&
@@ -166,7 +166,7 @@ public sealed class WeeklyResetCoordinator
             : settings.WeeklyReset?.NextAfter(utcNow, TimeZoneInfo.Local);
 
         // Genuinely unknown: no reported instant has ever been seen and nothing was entered.
-        // The panel says so and points at the entry dialog rather than showing a guess — which
+        // The panel says so and points at the entry dialog rather than showing a guess, which
         // is what the derivation used to do, wrongly and without saying so (rule 6).
         if (next is null)
         {
@@ -175,7 +175,7 @@ public sealed class WeeklyResetCoordinator
 
         return snapshot with
         {
-            // Both the stored anchor and the user's own entry are exact — same standing as any
+            // Both the stored anchor and the user's own entry are exact, same standing as any
             // other source read directly, so the instant carries Real with it. Replacing the
             // whole pair is what keeps the two from parting company: a figure assigned on its
             // own used to leave the old status beside it, which is how a snapshot ended up
@@ -212,11 +212,11 @@ public sealed class WeeklyResetCoordinator
     /// from a drop in a sampled series, so its precision is bounded by the gap between samples:
     /// about half an interval for the five-hour window even after local transcripts narrow the
     /// bracket (issue #185), and roughly ten hours for the weekly one, whose resets land
-    /// overnight while Desktop is closed (ADR-0011) — the imprecision that made the manual entry
+    /// overnight while Desktop is closed (ADR-0011), the imprecision that made the manual entry
     /// of issue #186 worth building in the first place. A reported timestamp needs none of that
     /// machinery. It is simply correct.</para>
     ///
-    /// <para><b>So this overrides rather than fills a gap</b> — the opposite of
+    /// <para><b>So this overrides rather than fills a gap</b>, the opposite of
     /// <see cref="WithWeeklyReset"/>, and the difference is the point. A derived bracket
     /// and a typed-in time are both attempts to recover a number that this source states
     /// outright; leaving either in place ahead of it would be preferring a guess to the
@@ -268,7 +268,7 @@ public sealed class WeeklyResetCoordinator
         }
 
         // The weekly reset is deliberately not touched here. WithWeeklyReset owns it end to
-        // end now, working from the stored anchor rather than from this snapshot — which
+        // end now, working from the stored anchor rather than from this snapshot, which
         // drops a resets_at the moment it passes, the exact case the anchor exists to survive.
         return snapshot;
     }

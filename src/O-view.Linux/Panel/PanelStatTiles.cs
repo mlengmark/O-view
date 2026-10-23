@@ -35,7 +35,7 @@ public sealed class PanelStatTiles(LinuxPanelTheme theme)
     /// <summary>
     /// The flip of every tile that has a second face, in the order the panel places them.
     ///
-    /// <para>Rebuilt by each <see cref="AddTo"/>, like the tiles themselves — a flip left over
+    /// <para>Rebuilt by each <see cref="AddTo"/>, like the tiles themselves, a flip left over
     /// from a previous open would be holding controls no longer on screen.</para>
     /// </summary>
     public IReadOnlyList<TileFlip> Flips => _flips;
@@ -43,7 +43,7 @@ public sealed class PanelStatTiles(LinuxPanelTheme theme)
     /// <summary>
     /// One tile's flip: which face is showing, and how loud the affordance is.
     ///
-    /// <para>The opacities are the Windows tile's — faint at rest, clearer under the pointer,
+    /// <para>The opacities are the Windows tile's, faint at rest, clearer under the pointer,
     /// clearest while the breakdown is open. The affordance should be findable and never louder
     /// than the number it sits beside.</para>
     /// </summary>
@@ -67,13 +67,13 @@ public sealed class PanelStatTiles(LinuxPanelTheme theme)
         /// resets its own expansion too.</summary>
         public bool IsExpanded { get; private set; }
 
-        /// <summary>The total's face, as the panel built it — for tests.</summary>
+        /// <summary>The total's face, as the panel built it, for tests.</summary>
         public Control Summary => _summary;
 
-        /// <summary>The per-model face, as the panel built it — for tests.</summary>
+        /// <summary>The per-model face, as the panel built it, for tests.</summary>
         public Control Breakdown => _breakdown;
 
-        /// <summary>The affordance, as the panel built it — for tests.</summary>
+        /// <summary>The affordance, as the panel built it, for tests.</summary>
         public Control Glyph => _glyph;
 
         public void Toggle()
@@ -128,7 +128,7 @@ public sealed class PanelStatTiles(LinuxPanelTheme theme)
         // that pass; this is the standing shape of the data, and a note appearing only sometimes
         // would teach a reader that its absence means full coverage.
         //
-        // Not the line issue #232 removed — that one sat under the session BAR, described the
+        // Not the line issue #232 removed, that one sat under the session BAR, described the
         // session window alone, and carried a disclosure.
         root.Children.Add(Muted(_theme, TokenText.TokenScopeCaveat));
     }
@@ -153,7 +153,7 @@ public sealed class PanelStatTiles(LinuxPanelTheme theme)
         {
             // No second face is built at all, rather than one built and kept out of sight.
             // Both faces share a cell and are therefore both measured, so an empty breakdown
-            // would still have a say in the tile's height — and a tile that cannot flip has to
+            // would still have a say in the tile's height, and a tile that cannot flip has to
             // stay exactly the tile it was.
             return TileShell(SummaryFace(view));
         }
@@ -163,7 +163,7 @@ public sealed class PanelStatTiles(LinuxPanelTheme theme)
         var glyph = FlipGlyph();
 
         // Both faces in one cell, so the tile measures to the taller of the two and keeps one
-        // height however often it is flipped — the sections below it must not jump (the same
+        // height however often it is flipped, the sections below it must not jump (the same
         // reason the Windows tile uses Hidden rather than Collapsed). Avalonia has no "hidden
         // but still measured" visibility, so the face that is not showing is held at zero
         // opacity instead of being collapsed out of the layout.
@@ -179,8 +179,8 @@ public sealed class PanelStatTiles(LinuxPanelTheme theme)
 
         // PointerPressed rather than a Button: this head's tile is a Border, and wrapping it
         // in a templated Button to get a click would also inherit that template's own
-        // background and padding, which is the card's. Keyboard activation is what this costs
-        // — noted on the slice, and the Windows tile keeps it.
+        // background and padding, which is the card's. Keyboard activation is what this costs,
+        // noted on the slice, and the Windows tile keeps it.
         shell.PointerPressed += (_, _) => flip.Toggle();
         shell.PointerEntered += (_, _) => flip.PointerOver(true);
         shell.PointerExited += (_, _) => flip.PointerOver(false);
@@ -216,13 +216,13 @@ public sealed class PanelStatTiles(LinuxPanelTheme theme)
     ///
     /// <para>The tile's <b>label</b> is dropped here to buy the room for the chart, as the
     /// issue allows, and the total stays so the tile still answers its own question at a
-    /// glance. The <b>caveat</b> is not expendable in the same way — "465.3M" without "8 of 31
+    /// glance. The <b>caveat</b> is not expendable in the same way, "465.3M" without "8 of 31
     /// days recorded" reads as low usage rather than short history, which is the exact
     /// misreading rule 6 exists to prevent.</para>
     ///
     /// <para>The legend is mandatory rather than optional polish: on the light surface two of
     /// the series sit below 3:1 against the tile, which the colour rules allow only when
-    /// visible labels ship alongside. It is also the colour-vision fallback — identity never
+    /// visible labels ship alongside. It is also the colour-vision fallback, identity never
     /// rests on hue alone, and this head has no hover card to fall back on.</para>
     /// </summary>
     private StackPanel BreakdownFace(PanelTileView view)
@@ -271,7 +271,7 @@ public sealed class PanelStatTiles(LinuxPanelTheme theme)
             }
             bar.ColumnDefinitions.Add(new ColumnDefinition(segments[i].Share, GridUnitType.Star));
 
-            // Square at the baseline, rounded at the data end — the bar grows from the left,
+            // Square at the baseline, rounded at the data end, the bar grows from the left,
             // so only the last segment's right corners are rounded.
             var segment = new Border
             {
@@ -291,8 +291,8 @@ public sealed class PanelStatTiles(LinuxPanelTheme theme)
     /// The legend: a swatch, the model's name, and its figure.
     ///
     /// <para><b>The figure is here, unlike on Windows.</b> That head drops it from the legend
-    /// because its hover card carries it, and a compositor may never deliver hover at all here
-    /// — so a figure only reachable by pointer would be a figure some users cannot read. It is
+    /// because its hover card carries it, and a compositor may never deliver hover at all here,
+    /// so a figure only reachable by pointer would be a figure some users cannot read. It is
     /// the same decision the composition breakdown's table made for this head.</para>
     /// </summary>
     private Control Legend(IReadOnlyList<PanelTileSegmentView> segments)
@@ -317,7 +317,7 @@ public sealed class PanelStatTiles(LinuxPanelTheme theme)
                 VerticalAlignment = VerticalAlignment.Center,
             });
 
-            // Text wears text colours — the swatch beside it carries the identity, and a light
+            // Text wears text colours, the swatch beside it carries the identity, and a light
             // categorical hue is illegible as small text.
             var label = Text($"{segment.Name} {segment.Figure}", 9, _theme["TextSecondary"]);
             label.TextWrapping = TextWrapping.NoWrap;
@@ -335,12 +335,12 @@ public sealed class PanelStatTiles(LinuxPanelTheme theme)
     ///
     /// <para>Two opposed arrows rather than a chart glyph (issue #179): the tile does not draw
     /// a chart, it swaps between two views of one figure, and a bar-chart icon said the wrong
-    /// thing about what clicking does. Strokes with no fill — a filled or boxed icon reads as a
+    /// thing about what clicking does. Strokes with no fill, a filled or boxed icon reads as a
     /// button pasted onto the tile, and the tile is the button.</para>
     ///
     /// <para>Built from four shapes rather than one parsed path, which is the only difference
     /// from the Windows glyph. <c>Geometry.Parse</c> needs a rendering platform, and CI has
-    /// none — a tile that could not be constructed in a test could not have its flip proved by
+    /// none, a tile that could not be constructed in a test could not have its flip proved by
     /// one, and this head's flip has no golden image to prove it instead.</para>
     /// </summary>
     private Control FlipGlyph()
@@ -354,7 +354,7 @@ public sealed class PanelStatTiles(LinuxPanelTheme theme)
             Margin = new Thickness(0, 1, 0, 0),
         };
 
-        // Top arrow points right, bottom arrow points left — a shaft and a two-stroke head
+        // Top arrow points right, bottom arrow points left, a shaft and a two-stroke head
         // each, with the heads left open.
         glyph.Children.Add(Stroke(new Line { StartPoint = new Point(0, 2.5), EndPoint = new Point(8, 2.5) }));
         glyph.Children.Add(Stroke(new Polyline
@@ -370,7 +370,7 @@ public sealed class PanelStatTiles(LinuxPanelTheme theme)
         return glyph;
     }
 
-    /// <summary>The glyph's shared stroke — rounded, unfilled, in the muted text colour.</summary>
+    /// <summary>The glyph's shared stroke, rounded, unfilled, in the muted text colour.</summary>
     private Shape Stroke(Shape shape)
     {
         shape.Stroke = _theme["TextMuted"];

@@ -23,7 +23,7 @@ The decisive difference:
 
 > **macOS:** `NSStatusItem` exposes a `title` property. Text renders natively in the menu bar at variable width. `"47% · 2h14m"` is a supported, trivial case.
 >
-> **Windows:** `Shell_NotifyIcon` accepts an **`HICON` only** — 16×16, 20×20, or 24×24 px depending on DPI. **There is no text label.** Any text must be rasterised into the icon bitmap.
+> **Windows:** `Shell_NotifyIcon` accepts an **`HICON` only**, 16×16, 20×20, or 24×24 px depending on DPI. **There is no text label.** Any text must be rasterised into the icon bitmap.
 
 At 16×16 px roughly **two characters** are legible. The macOS presentation is not reproducible, and no amount of effort makes it so.
 
@@ -53,7 +53,7 @@ Information is tiered across three surfaces by available space:
 >
 > Tooltip capacity also corrected: `NotifyIcon.Text` caps at **127** characters, not 128.
 
-**Colour must never be the sole signal** — the arc's fill *level* (how far it sweeps round the ring) encodes the percentage independently of its colour, for colour-blind users and for monochrome/high-contrast taskbar themes.
+**Colour must never be the sole signal**, the arc's fill *level* (how far it sweeps round the ring) encodes the percentage independently of its colour, for colour-blind users and for monochrome/high-contrast taskbar themes.
 
 ### Platform behaviours that must be handled explicitly
 
@@ -74,18 +74,18 @@ These have no macOS analogue and are each a real work item:
 
 - Multi-provider support (the reference tracks 60+; O-view tracks Claude)
 - A bundled CLI
-- Browser cookie extraction — Chrome/Edge App-Bound Encryption makes this both fragile and improper
-- ~~macOS or Linux builds~~ — **Linux is now in scope** ([ADR-0012](0012-linux-support.md), 2026-07-29). macOS is still not.
+- Browser cookie extraction, Chrome/Edge App-Bound Encryption makes this both fragile and improper
+- ~~macOS or Linux builds~~, **Linux is now in scope** ([ADR-0012](0012-linux-support.md), 2026-07-29). macOS is still not.
 
 ## Alternatives considered
 
 | Option | Why rejected |
 |---|---|
-| **Cross-platform (Avalonia/MAUI)** | Adds abstraction cost for platforms with no requirement, and tray behaviour is precisely where cross-platform frameworks are weakest — the abstraction would leak on the one feature that matters most. **Half of this expired on 2026-06-30**: there is now a requirement ([ADR-0012](0012-linux-support.md)). The other half did not — Linux tray behaviour really is the weak spot. Reopened by a spike, and decided on its evidence in ADR-0013, rather than reversed by assertion. |
+| **Cross-platform (Avalonia/MAUI)** | Adds abstraction cost for platforms with no requirement, and tray behaviour is precisely where cross-platform frameworks are weakest, the abstraction would leak on the one feature that matters most. **Half of this expired on 2026-06-30**: there is now a requirement ([ADR-0012](0012-linux-support.md)). The other half did not, Linux tray behaviour really is the weak spot. Reopened by a spike, and decided on its evidence in ADR-0013, rather than reversed by assertion. |
 | **Taskbar toolbar / deskband** | Would allow wide text like macOS. Rejected: the deskband API is **deprecated and non-functional on Windows 11**. |
 | **Widgets board / desktop widget** | More display space. Rejected: not always-visible, which defeats an at-a-glance monitor. |
 | **Ring gauge + digits** (as originally specified here) | Rejected after measurement: the ring and digits starve each other of space at 16 px. See the icon-design revision note above. |
-| **Digits only, no graphic** | The spike's first winner (digits are legible at 16 px, 13.5 px font), but superseded: product direction required the icon to show a graph, and digits-plus-bar then read as cluttered — so the icon dropped digits for the ring-gauge mark and moved the number to the tooltip (issue #1). |
+| **Digits only, no graphic** | The spike's first winner (digits are legible at 16 px, 13.5 px font), but superseded: product direction required the icon to show a graph, and digits-plus-bar then read as cluttered, so the icon dropped digits for the ring-gauge mark and moved the number to the tooltip (issue #1). |
 
 ## Consequences
 
@@ -95,6 +95,6 @@ These have no macOS analogue and are each a real work item:
 - Clear scope boundary prevents drift toward a cross-platform rewrite
 
 **Negative**
-- Nothing is reusable for a future macOS version — accepted; that is not a goal
-- The tiered-information design had to be validated by a **rasterisation spike before UI work began** — done ([findings](../findings/tray-icon-rendering.md)). The spike and the issues that followed reshaped the icon from the original ring-plus-digits spec into the current ring-gauge brand mark; the decision table above reflects that outcome.
+- Nothing is reusable for a future macOS version, accepted; that is not a goal
+- The tiered-information design had to be validated by a **rasterisation spike before UI work began**, done ([findings](../findings/tray-icon-rendering.md)). The spike and the issues that followed reshaped the icon from the original ring-plus-digits spec into the current ring-gauge brand mark; the decision table above reflects that outcome.
 - Items 1–7 above are individually small but collectively a meaningful slice of the build. They are easy to underestimate because they are all invisible when they work.

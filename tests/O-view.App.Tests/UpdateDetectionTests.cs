@@ -5,7 +5,7 @@ using OView.Core.Updates;
 namespace OView.App.Tests;
 
 /// <summary>
-/// Detection versus permission — the distinction that silently disabled the Linux update
+/// Detection versus permission, the distinction that silently disabled the Linux update
 /// notice.
 ///
 /// <para>An apt build was given <see cref="ReleaseAssets.None"/> because it must never
@@ -16,7 +16,7 @@ namespace OView.App.Tests;
 /// </summary>
 public class UpdateDetectionTests
 {
-    /// <summary>A release carrying every platform's assets — what unified releases publish.</summary>
+    /// <summary>A release carrying every platform's assets, what unified releases publish.</summary>
     private const string UnifiedRelease = """
         {
           "tag_name": "v0.7.0",

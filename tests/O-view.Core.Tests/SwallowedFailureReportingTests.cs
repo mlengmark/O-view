@@ -7,12 +7,12 @@ using OView.Core.Storage;
 namespace OView.Core.Tests;
 
 /// <summary>
-/// Four places swallow a failure and carry on. Every one of them is right to — this is a
-/// monitoring tool and a bad provider must not blank the panel — but each was also silent,
+/// Four places swallow a failure and carry on. Every one of them is right to, this is a
+/// monitoring tool and a bad provider must not blank the panel, but each was also silent,
 /// and silence is what made a five-day ingestion stall undiagnosable from the outside.
 ///
 /// <para>These pin the distinction the field case turned on: <b>degrading quietly is the
-/// contract; degrading invisibly is the bug.</b> So each test asserts both halves — the
+/// contract; degrading invisibly is the bug.</b> So each test asserts both halves, the
 /// failure is still absorbed, and it is now named.</para>
 /// </summary>
 public class SwallowedFailureReportingTests : IDisposable
@@ -37,7 +37,7 @@ public class SwallowedFailureReportingTests : IDisposable
 
     /// <summary>
     /// The field case exactly: one provider throwing on every poll while a sibling keeps the
-    /// panel looking healthy. The chain must still fall through — and must now say which
+    /// panel looking healthy. The chain must still fall through, and must now say which
     /// provider went, because "no data" and "threw for five days" are the same blank.
     /// </summary>
     [Fact]
@@ -73,7 +73,7 @@ public class SwallowedFailureReportingTests : IDisposable
 
     /// <summary>
     /// No log wired is the ordinary case for a caller that does not want one, and it must not
-    /// change behaviour — the seam is a report, not a dependency.
+    /// change behaviour, the seam is a report, not a dependency.
     /// </summary>
     [Fact]
     public void WithNoLogTheCompositeStillAbsorbsTheFailure()
@@ -87,8 +87,8 @@ public class SwallowedFailureReportingTests : IDisposable
     // ── ingestion ───────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Ingestion has three ways to produce nothing — no files found, files found but none
-    /// grown, or reading threw — and from outside all three are a token tile that does not
+    /// Ingestion has three ways to produce nothing, no files found, files found but none
+    /// grown, or reading threw, and from outside all three are a token tile that does not
     /// move. The summary separates them, and the "nothing found" case is the one that most
     /// needs saying, because it is indistinguishable from a quiet machine.
     /// </summary>
@@ -143,7 +143,7 @@ public class SwallowedFailureReportingTests : IDisposable
     /// A transcript that grows while its handle is held open is still ingested.
     ///
     /// <para>Change detection used <see cref="FileInfo.Length"/>, which reads the cached
-    /// directory entry — and Windows documents that as not necessarily current for a file being
+    /// directory entry, and Windows documents that as not necessarily current for a file being
     /// written. Every transcript here is exactly that: held open by Claude for the length of a
     /// session. Where the entry goes stale, a growing file looks untouched and the "unchanged
     /// since the last poll" test skips it on every poll for as long as the session lasts. The
@@ -190,7 +190,7 @@ public class SwallowedFailureReportingTests : IDisposable
     /// were Cowork, and "9 record(s) ingested" was equally consistent with Cowork being counted
     /// and with only the Claude Code slice reaching the store.
     ///
-    /// <para>A surface with no files says "none" rather than printing three zeroes — using only
+    /// <para>A surface with no files says "none" rather than printing three zeroes, using only
     /// one surface is the ordinary case, not a failure, and the line is read at a glance.</para>
     /// </summary>
     [Fact]
@@ -214,7 +214,7 @@ public class SwallowedFailureReportingTests : IDisposable
     }
 
     /// <summary>
-    /// The second poll over an unchanged file reports zero changed rather than zero found —
+    /// The second poll over an unchanged file reports zero changed rather than zero found,
     /// which is precisely the distinction between "stuck" and "nothing new", and the question
     /// a stalled machine needs answered first.
     /// </summary>
@@ -261,7 +261,7 @@ public class SwallowedFailureReportingTests : IDisposable
 
     /// <summary>
     /// And the success case, so a silent run reads as "nothing changed" rather than "the write
-    /// is failing again" — which matters more here than it used to, because the anchor is
+    /// is failing again", which matters more here than it used to, because the anchor is
     /// written once and then stays quiet for good.
     /// </summary>
     [Fact]
@@ -279,7 +279,7 @@ public class SwallowedFailureReportingTests : IDisposable
     /// <summary>
     /// Claude reports the same boundary with a different date every week, so an anchor already
     /// on that grid is not news. Rewriting the file on every refresh forever would make its
-    /// timestamp meaningless — and that timestamp is how a support bundle dates the anchor.
+    /// timestamp meaningless, and that timestamp is how a support bundle dates the anchor.
     /// </summary>
     [Fact]
     public void AnAnchorAlreadyOnTheSameGridIsNotRewritten()

@@ -18,7 +18,7 @@ namespace OView.Linux.Tests;
 /// threshold and the settling, <see cref="PanelWindow.Settle"/> for what a release stores and
 /// where the panel then goes, and <see cref="ClientPlacement"/> for whether any of it is
 /// offered at all. What is left over is the handful of event subscriptions in
-/// <c>PanelWindow.MakeHeaderTheDragHandle</c> and the window manager itself — the same gap
+/// <c>PanelWindow.MakeHeaderTheDragHandle</c> and the window manager itself, the same gap
 /// <see cref="PanelDismissalTests"/> names, and the reason the <c>linux-runtime</c> job
 /// exists.</para>
 /// </summary>
@@ -57,7 +57,7 @@ public class PanelDragTests
     [InlineData(0, 3.9, false)]
     [InlineData(4, 0, true)]
     [InlineData(0, -4, true)]
-    [InlineData(3, 3, true)]            // 4.24 away, diagonally — a distance, not an axis
+    [InlineData(3, 3, true)]            // 4.24 away, diagonally, a distance, not an axis
     [InlineData(2.8, 2.8, false)]       // 3.96 away: just inside, so still a click
     public void APressBecomesAMoveOnlyOnceThePointerHasTravelledFarEnough(
         double dx, double dy, bool begins)
@@ -139,7 +139,7 @@ public class PanelDragTests
     }
 
     /// <summary>
-    /// Once the move has settled, clicking away closes the panel as it always did — the guard
+    /// Once the move has settled, clicking away closes the panel as it always did, the guard
     /// is a window, not a switch. A panel that stopped closing on click-away would be the
     /// feature breaking dismissal.
     /// </summary>
@@ -187,7 +187,7 @@ public class PanelDragTests
     }
 
     /// <summary>
-    /// Released near an edge, the shared rule snaps it flush — and because the release reads the
+    /// Released near an edge, the shared rule snaps it flush, and because the release reads the
     /// place straight back, the panel moves to the snap rather than only the file knowing about
     /// it.
     /// </summary>
@@ -226,7 +226,7 @@ public class PanelDragTests
     /// <summary>
     /// The defect B15 is: the settled place reached the log and the file, and the panel stayed
     /// where it was dropped until the next open. These are the three drops that run reported,
-    /// against a window manager that does as it is told — the panel ends at the settled place
+    /// against a window manager that does as it is told, the panel ends at the settled place
     /// with no reopen.
     /// </summary>
     [Theory]
@@ -250,7 +250,7 @@ public class PanelDragTests
     }
 
     /// <summary>
-    /// A request made while the window manager still owns the move is discarded in silence — no
+    /// A request made while the window manager still owns the move is discarded in silence, no
     /// move, and no position change to notice the refusal by. That is why the place is read back:
     /// a second request a grace later, once the button is up, lands.
     /// </summary>
@@ -269,7 +269,7 @@ public class PanelDragTests
     }
 
     /// <summary>
-    /// Every request says in the log what became of it, word for word as a keyboard nudge does —
+    /// Every request says in the log what became of it, word for word as a keyboard nudge does,
     /// a reader comparing a drop with a nudge is comparing the same question, and B15 reached a
     /// VM precisely because a drop said nothing.
     /// </summary>
@@ -308,7 +308,7 @@ public class PanelDragTests
         Assert.False(manager.Settling.AwaitingAnswer);
 
         Assert.Equal(
-            "panel left at 791,571 — 624,56 was asked for 2 times and refused; the next open "
+            "panel left at 791,571, 624,56 was asked for 2 times and refused; the next open "
             + "will use it instead",
             manager.Log[^1]);
     }
@@ -332,7 +332,7 @@ public class PanelDragTests
     }
 
     /// <summary>
-    /// A release on the fourth run's desktop, asked of <paramref name="manager"/> — the pair of
+    /// A release on the fourth run's desktop, asked of <paramref name="manager"/>, the pair of
     /// calls <c>PanelWindow.FinishMove</c> makes, through the one method it makes them with.
     /// </summary>
     private static PanelPlacementMemory.Resolved? Drop(
@@ -384,7 +384,7 @@ public class PanelDragTests
 
     /// <summary>
     /// Which keys move the panel: Alt and an arrow key, and Alt with Shift for the fine step.
-    /// Nothing else is this panel's to take — a bare arrow key belongs to whatever is scrolling,
+    /// Nothing else is this panel's to take, a bare arrow key belongs to whatever is scrolling,
     /// and a press this does not claim is left unhandled for the content.
     /// </summary>
     [Theory]
@@ -415,7 +415,7 @@ public class PanelDragTests
 
     /// <summary>
     /// A step on this head's own desktop: ten DIP, through the shared rule, saved. The figures
-    /// are <c>PanelPlacementMemory</c>'s for both heads — what is asserted here is that this
+    /// are <c>PanelPlacementMemory</c>'s for both heads, what is asserted here is that this
     /// head asks it rather than working out dips of its own.
     /// </summary>
     [Theory]
@@ -466,7 +466,7 @@ public class PanelDragTests
     /// release's snap pulled the panel straight back to the edge it started against, and the
     /// first assertion below is the press that did nothing.
     ///
-    /// <para>Each press is exactly one step, so it takes as many presses back to return — which
+    /// <para>Each press is exactly one step, so it takes as many presses back to return, which
     /// is what the last two assertions walk, ending flush under the top bar.</para>
     /// </summary>
     [Fact]
@@ -501,7 +501,7 @@ public class PanelDragTests
     /// <summary>
     /// Native Wayland takes the keyboard move away with the drag, and by the same gate: no
     /// store means no <c>PanelPlacementMemory</c>, which is what both the header handle and the
-    /// arrow keys are hung on — see <see cref="NativeWaylandRemembersNothing"/> for the store
+    /// arrow keys are hung on, see <see cref="NativeWaylandRemembersNothing"/> for the store
     /// itself. <see cref="PanelWindow.NudgeOf"/> still names the key, since what a press means
     /// does not depend on the session; what the panel does with it does.
     /// </summary>
@@ -518,7 +518,7 @@ public class PanelDragTests
 
     /// <summary>
     /// The file store round-trips a place, and forgetting one brings the panel's open back to
-    /// the corner — the two halves of the menu's reset row.
+    /// the corner, the two halves of the menu's reset row.
     /// </summary>
     [Fact]
     public void TheFileStoreRoundTripsAPlaceAndForgetsIt()
@@ -596,7 +596,7 @@ public class PanelDragTests
     }
 
     /// <summary>
-    /// A window manager holding a window, which may be told where to put it and may refuse — the
+    /// A window manager holding a window, which may be told where to put it and may refuse, the
     /// stand-in for the only part of a drop that needs a real one.
     ///
     /// <para>Refusing in silence is the behaviour worth standing in for: that is what the VM's
@@ -614,7 +614,7 @@ public class PanelDragTests
             Settling = new PanelMoveSettling(() => Position, Request, Log.Add);
         }
 
-        /// <summary>Where the manager is holding the window — what the panel reads back.</summary>
+        /// <summary>Where the manager is holding the window, what the panel reads back.</summary>
         public PixelPoint Position { get; private set; }
 
         /// <summary>How many times it has been told, refusals included.</summary>

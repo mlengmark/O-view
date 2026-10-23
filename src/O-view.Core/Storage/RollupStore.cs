@@ -8,17 +8,17 @@ namespace OView.Core.Storage;
 
 /// <summary>
 /// Persistent usage history (ADR-0006). Claude Code deletes its own transcripts after
-/// ~30 days, so 31-day figures can never be served from JSONL directly — this store
+/// ~30 days, so 31-day figures can never be served from JSONL directly, this store
 /// accumulates from install date and survives that cleanup.
 ///
 /// Idempotency and requestId de-duplication share one mechanism: a per-request ledger
-/// with request_id as PRIMARY KEY, upserted on every ingest (never blind INSERT —
+/// with request_id as PRIMARY KEY, upserted on every ingest (never blind INSERT,
 /// CLAUDE.md rule 7). Re-ingesting the same transcript rewrites identical rows;
 /// streaming duplicates of a request overwrite in file order so the last occurrence
-/// wins. Daily (local date × model) rollups are served by aggregation over the ledger —
+/// wins. Daily (local date × model) rollups are served by aggregation over the ledger,
 /// bucketed from last_timestamp at query time, because a local day straddles two UTC
 /// ones and the stored utc_date cannot answer for it (issue #211).
-/// Ledger rows hold ids, dates, models, and token counts only — no conversation
+/// Ledger rows hold ids, dates, models, and token counts only, no conversation
 /// content (ADR-0006 privacy rationale).
 /// </summary>
 public sealed class RollupStore : IDisposable
@@ -35,7 +35,7 @@ public sealed class RollupStore : IDisposable
     /// <para>Needed since the poll moved off the UI thread (issue #125): a scheduled poll
     /// ingests on the thread pool while a panel opened at the same moment aggregates on the
     /// UI thread. <see cref="SqliteConnection"/> is not thread-safe, and two commands on
-    /// one handle is not a race that surfaces as an exception — it corrupts the reader
+    /// one handle is not a race that surfaces as an exception, it corrupts the reader
     /// state and returns wrong numbers, which rule 6 treats as the worst possible failure
     /// mode for this app.</para>
     ///
@@ -69,8 +69,8 @@ public sealed class RollupStore : IDisposable
 
         _connection = Connect(_path);
 
-        // The rollup store is a derived cache — rebuildable from JSONL and the plan
-        // history — so a corrupt file must never be fatal. A malformed DB otherwise
+        // The rollup store is a derived cache, rebuildable from JSONL and the plan
+        // history, so a corrupt file must never be fatal. A malformed DB otherwise
         // throws SQLITE_CORRUPT on every query, and because the snapshot path touches
         // the store that blanks the ENTIRE usage display, not just history (issue #16).
         // Detect corruption up front and rebuild from empty, keeping the bad file.
@@ -92,7 +92,7 @@ public sealed class RollupStore : IDisposable
     }
 
     /// <summary>
-    /// Whole-database integrity probe. Returns false on a malformed file — either
+    /// Whole-database integrity probe. Returns false on a malformed file, either
     /// quick_check reports errors, or the read itself throws SQLITE_CORRUPT/NOTADB.
     /// </summary>
     private static bool IsHealthy(SqliteConnection connection)
@@ -122,7 +122,7 @@ public sealed class RollupStore : IDisposable
     /// so the corruption can still be examined. Best-effort: a file that cannot be moved
     /// is deleted instead, and even a total failure leaves a usable empty DB behind.
     ///
-    /// <para>The stamp makes each set unique, which is the point — two corruptions a week
+    /// <para>The stamp makes each set unique, which is the point, two corruptions a week
     /// apart must not overwrite each other. It also means the directory only ever grows, so
     /// older generations are pruned here, immediately after the move: this is the exact
     /// moment the directory is known to have gained one, and nothing else in the app ever
@@ -169,7 +169,7 @@ public sealed class RollupStore : IDisposable
             );
             CREATE INDEX IF NOT EXISTS ix_requests_date ON ingested_requests(utc_date);
             -- Every time-ranged read goes through last_timestamp now: the panel's daily
-            -- buckets (local days, so utc_date cannot answer — issue #211), the session
+            -- buckets (local days, so utc_date cannot answer, issue #211), the session
             -- window, and the window-start narrowing. ix_requests_date still serves the
             -- store report's MIN/MAX over the ingested day.
             CREATE INDEX IF NOT EXISTS ix_requests_timestamp ON ingested_requests(last_timestamp);
@@ -189,14 +189,14 @@ public sealed class RollupStore : IDisposable
     /// The columns that say <b>how</b> a ledger row is priced (issues #255 and #257): which TTL
     /// each cache write used, and the two published pricing modifiers.
     ///
-    /// <para>Added the same way the attribution columns are, and nullable for the same reason —
+    /// <para>Added the same way the attribution columns are, and nullable for the same reason,
     /// NULL means "written before this build was tracking it", which is a different fact from
     /// zero. A NULL TTL pair is not "no cache writes"; it is a cache-write total with no
     /// attribution, which <see cref="GetDailyRollups"/> reports as
     /// <see cref="TokenSplit.CacheWriteTtlUnrecorded"/> and the panel names in its caveat.</para>
     ///
     /// <para><b>Adding the TTL columns re-reads the transcripts.</b> Existing rows cannot be
-    /// back-filled from the store — the attribution is in the transcripts, and the ones that
+    /// back-filled from the store, the attribution is in the transcripts, and the ones that
     /// would answer for the oldest rows are the ones Claude Code has since deleted. Resetting
     /// the watermarks makes the next poll read every transcript still on disk from byte 0 and
     /// upsert its rows with the split, which recovers recent history exactly; what is out of
@@ -211,7 +211,7 @@ public sealed class RollupStore : IDisposable
         added |= AddColumnIfMissing(connection, "ingested_requests", "cache_write_1h_tokens", "INTEGER");
 
         // usage.speed and usage.inference_geo. NULL is the standard case as well as the
-        // never-recorded one — see UsageModifiers.SpeedText for why those share a value.
+        // never-recorded one, see UsageModifiers.SpeedText for why those share a value.
         AddColumnIfMissing(connection, "ingested_requests", "speed", "TEXT");
         AddColumnIfMissing(connection, "ingested_requests", "inference_geo", "TEXT");
 
@@ -228,7 +228,7 @@ public sealed class RollupStore : IDisposable
     /// and when it last yielded a record, and losing that to a migration would blank the
     /// attribution section of the support bundle for no reason. The counters are zeroed and
     /// <c>counted_from</c> is cleared so the next <see cref="SetFileOffset"/> pins the fresh
-    /// zero — a count carried over from before the rewind would describe a different read.</para>
+    /// zero, a count carried over from before the rewind would describe a different read.</para>
     ///
     /// <para>Costs one full re-parse of every transcript on the first poll after upgrade. That
     /// is the first-run cost this store already pays once, and it runs off the UI thread
@@ -250,8 +250,8 @@ public sealed class RollupStore : IDisposable
     /// <para>Added rather than rebuilt into the CREATE statements above: a store that already
     /// exists is never re-created, so a column only listed there would reach a fresh install and
     /// no other. The ledger is rebuildable in principle, but a rebuild costs every day of
-    /// history older than Claude Code's own ~30-day cleanup — precisely what ADR-0006 exists to
-    /// keep — so a migration that adds a column is the only acceptable shape here.</para>
+    /// history older than Claude Code's own ~30-day cleanup, precisely what ADR-0006 exists to
+    /// keep, so a migration that adds a column is the only acceptable shape here.</para>
     ///
     /// <para><b>Every one of them is nullable with no default, and that is the design.</b> NULL
     /// means "written before this build was tracking it", which is a different fact from zero
@@ -264,7 +264,7 @@ public sealed class RollupStore : IDisposable
         // Which surface the request was parsed from.
         AddColumnIfMissing(connection, "ingested_requests", "source", "TEXT");
 
-        // Same, for the watermark — so the per-source file accounting needs no path parsing,
+        // Same, for the watermark, so the per-source file accounting needs no path parsing,
         // and stays right if a root ever moves.
         AddColumnIfMissing(connection, "file_offsets", "source", "TEXT");
 
@@ -288,7 +288,7 @@ public sealed class RollupStore : IDisposable
     /// tolerate the first is how a corrupt database gets treated as an up-to-date one.
     /// </summary>
     /// <returns>
-    /// True when the column was actually added — that is, when this store is being migrated
+    /// True when the column was actually added, that is, when this store is being migrated
     /// rather than opened. A migration that also has to re-read data needs to know the
     /// difference, and doing that work on every launch would re-parse every transcript every
     /// time (see <see cref="AddPricingColumns"/>).
@@ -315,7 +315,7 @@ public sealed class RollupStore : IDisposable
     /// disagreeing is a finding rather than a detail. On the machine this was written for they
     /// did disagree, repeatedly, about the same directory.</para>
     ///
-    /// <para>Under the same lock as every other command here — <see cref="SqliteConnection"/>
+    /// <para>Under the same lock as every other command here, <see cref="SqliteConnection"/>
     /// is not thread-safe, and two commands on one handle corrupt the reader state and return
     /// wrong numbers rather than throwing, which is the worst failure this app can have.</para>
     /// </summary>
@@ -338,7 +338,7 @@ public sealed class RollupStore : IDisposable
 
     /// <summary>
     /// Resume point for a transcript: how far it was parsed, and how long it was at
-    /// the time. Both are needed — a file shorter than recorded was replaced, and its
+    /// the time. Both are needed, a file shorter than recorded was replaced, and its
     /// offset must not be trusted. Zeroes when the file is unknown.
     /// </summary>
     public (long Offset, long KnownLength) GetFileOffset(string path)
@@ -360,7 +360,7 @@ public sealed class RollupStore : IDisposable
     /// <para><paramref name="recordsAdded"/> and <paramref name="countedFrom"/> exist together
     /// or not at all: a record count is meaningless without the offset it was counted from
     /// (issue #218). Counting from byte 0 means the number covers the whole file, so a zero is
-    /// evidence — the file was read end to end and produced nothing. A count that began
+    /// evidence, the file was read end to end and produced nothing. A count that began
     /// mid-file, because an earlier build had already advanced the watermark, can only ever say
     /// "nothing since", and <see cref="RollupStoreReport"/> prints it as exactly that.</para>
     ///
@@ -417,8 +417,8 @@ public sealed class RollupStore : IDisposable
     /// Which surface these were parsed from (<see cref="TranscriptSources"/>), stored beside
     /// each row so the ledger can be summed per source in the support bundle (issue #218).
     ///
-    /// <para>Null writes NULL, which reads back as <see cref="TranscriptSources.Unattributed"/>
-    /// — the honest answer for every row an older build wrote, and for any caller that does not
+    /// <para>Null writes NULL, which reads back as <see cref="TranscriptSources.Unattributed"/>,
+    /// the honest answer for every row an older build wrote, and for any caller that does not
     /// know. It is deliberately not defaulted to the likelier surface.</para>
     /// </param>
     public void Ingest(IEnumerable<TranscriptRecord> records, string? source = null)
@@ -471,7 +471,7 @@ public sealed class RollupStore : IDisposable
                 pModel.Value = r.Model;
                 pInput.Value = r.Tokens.Input;
                 // The flat total stays the authority on how much was written, and the two TTL
-                // columns say how it split — a row re-read by this build always agrees with
+                // columns say how it split, a row re-read by this build always agrees with
                 // itself, and one written by an older build has a total with NULLs beside it.
                 pCacheW.Value = r.Tokens.CacheWrite;
                 pCacheW5m.Value = r.Tokens.CacheWrite5m;
@@ -493,7 +493,7 @@ public sealed class RollupStore : IDisposable
     ///
     /// <para><b>Bucketed by the caller's local day, not by <c>utc_date</c></b> (issue #211).
     /// Users mean local days, and one of those straddles two UTC ones, so the column the rows
-    /// are stored under cannot answer the question — the bucket comes from
+    /// are stored under cannot answer the question, the bucket comes from
     /// <c>last_timestamp</c>, which <c>ingested_requests</c> already carries in full. No
     /// schema change, and nothing about ingestion moves: storing a local date at ingest time
     /// would bake this machine's offset into the row, which is wrong for anyone who travels
@@ -502,7 +502,7 @@ public sealed class RollupStore : IDisposable
     /// <para><b>What it costs.</b> Filtering on <c>last_timestamp</c> gives up
     /// <c>ix_requests_date</c>, so <c>ix_requests_timestamp</c> was added to serve this range
     /// scan. SQLite cannot do the timezone conversion, so the rows come back at request grain
-    /// and are grouped here — one pass over a 31-day slice of the ledger. Measured rather than
+    /// and are grouped here, one pass over a 31-day slice of the ledger. Measured rather than
     /// assumed: see <c>RollupStoreQueryCostTests</c>, which builds a ledger the size of a real
     /// one and holds this to the same order as the UTC-keyed query it replaced.</para>
     ///
@@ -565,8 +565,8 @@ public sealed class RollupStore : IDisposable
     /// activity in that span.
     ///
     /// <para>Exists to narrow the five-hour window's start bracket (GitHub issue #185). A
-    /// request at time T proves the window was already running at T, so T is a valid — and
-    /// usually much tighter — upper bound than the plan-history sample that first observed
+    /// request at time T proves the window was already running at T, so T is a valid, and
+    /// usually much tighter, upper bound than the plan-history sample that first observed
     /// the new window. The bound is only ever moved <i>down</i>, so this cannot make a
     /// forecast later or claim a reset earlier than the evidence allows.</para>
     ///
@@ -575,8 +575,8 @@ public sealed class RollupStore : IDisposable
     /// bracket instead of narrowing it.</para>
     ///
     /// <para>The column holds the <i>last</i> occurrence of each request id (rule 4's
-    /// de-duplication keeps the final streamed row). That is still a valid upper bound —
-    /// the request demonstrably existed by then — and is at most a few seconds late.</para>
+    /// de-duplication keeps the final streamed row). That is still a valid upper bound,
+    /// the request demonstrably existed by then, and is at most a few seconds late.</para>
     /// </summary>
     public DateTimeOffset? EarliestRequestBetween(DateTimeOffset afterUtc, DateTimeOffset throughUtc)
     {
@@ -641,7 +641,7 @@ public sealed class RollupStore : IDisposable
     /// output.
     ///
     /// <para><b>The unrecorded bucket is derived here rather than stored.</b> The flat total is
-    /// the authority — it has been written by every build — and whatever it carries beyond the
+    /// the authority, it has been written by every build, and whatever it carries beyond the
     /// two TTL columns has no attribution, which is exactly one case at a fresh install and the
     /// whole of a pre-migration row. Deriving it means a NULL pair and a zero pair cannot
     /// disagree with the total, and a row an older build wrote needs no back-fill to be priced
@@ -686,7 +686,7 @@ public sealed class RollupStore : IDisposable
     /// Timestamp of the oldest ingested record, or null when the store is empty.
     ///
     /// <para>This is where recorded history begins, and it draws the line between a day with
-    /// no usage and a day with no data — the distinction rule 6 makes the graph render
+    /// no usage and a day with no data, the distinction rule 6 makes the graph render
     /// differently. An instant rather than a date, because which calendar day it lands on
     /// depends on the reader's timezone (issue #211).</para>
     /// </summary>

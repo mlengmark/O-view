@@ -16,7 +16,7 @@ namespace OView.Tray.Popup;
 /// to <c>HoverCard.xaml</c> and the construction moved here.</para>
 ///
 /// <para>The two shapes are deliberate and cover everything the panel needs. <see
-/// cref="Figure"/> leads with the number and names it underneath — the reading order for
+/// cref="Figure"/> leads with the number and names it underneath, the reading order for
 /// "what am I pointing at, and how much"; <see cref="Text"/> carries a sentence, for
 /// caveats and explanations. Anything else should reuse one of these rather than hand-roll
 /// a third.</para>
@@ -24,12 +24,12 @@ namespace OView.Tray.Popup;
 internal static class HoverCard
 {
     // Timing is applied per element, never inherited. Setting it once on a container looks
-    // right and silently does not work — the children resolve framework values instead,
+    // right and silently does not work, the children resolve framework values instead,
     // which is invisible in a screenshot. --tile-samples reports what actually resolves on
     // a bar segment for exactly this reason.
 
     /// <summary>
-    /// 400 ms — the Windows convention, and a real change: the unset value measured on this
+    /// 400 ms, the Windows convention, and a real change: the unset value measured on this
     /// machine was 1000 ms, which reads as sluggish for a deliberate point-at. The delay
     /// still exists to require *lingering*, since the pointer crosses these marks on its way
     /// elsewhere and anything much shorter flashes tooltips during ordinary movement.
@@ -37,7 +37,7 @@ internal static class HoverCard
     public const int InitialDelayMs = 400;
 
     /// <summary>
-    /// 3 s — the one that matters most for a row of adjacent marks. Within this window of
+    /// 3 s, the one that matters most for a row of adjacent marks. Within this window of
     /// the last tooltip the next shows with NO delay, so sliding along the bars or segments
     /// reads as one continuous reveal rather than re-waiting on each. The 100 ms default
     /// makes traversing them feel broken.
@@ -45,7 +45,7 @@ internal static class HoverCard
     public const int BetweenDelayMs = 3000;
 
     /// <summary>
-    /// 20 s — set for determinism, not to extend anything. The documented WPF default is
+    /// 20 s, set for determinism, not to extend anything. The documented WPF default is
     /// 5 s, but the unset value measured here was int.MaxValue, i.e. effectively unlimited;
     /// so this is a deliberate CAP rather than the extension it might look like. 20 s still
     /// far outlasts reading a two-field card, so WCAG 1.4.13 (Content on Hover or Focus) is
@@ -67,7 +67,7 @@ internal static class HoverCard
     /// optional colour swatch tying it to the mark being pointed at.
     /// </summary>
     /// <param name="owner">Element whose resources resolve the palette.</param>
-    /// <param name="figure">The headline — a token count, a value, a total.</param>
+    /// <param name="figure">The headline, a token count, a value, a total.</param>
     /// <param name="caption">What the figure describes: a date, a model id.</param>
     /// <param name="swatch">
     /// Optional. Carries identity where a card floats clear of a coloured mark and would
@@ -113,7 +113,7 @@ internal static class HoverCard
         return Card(owner, content);
     }
 
-    /// <summary>A card carrying a sentence — caveats, explanations, and anything unmeasured.</summary>
+    /// <summary>A card carrying a sentence, caveats, explanations, and anything unmeasured.</summary>
     public static ToolTip Text(FrameworkElement owner, string text) =>
         Card(owner, new TextBlock
         {

@@ -9,12 +9,12 @@ namespace OView.App.Tests;
 /// account (issue #259).
 ///
 /// <para>The balloon read "Usage is billing beyond your plan" at everyone whose session window
-/// ran out — including the population that had extra usage switched off and could not be billed
+/// ran out, including the population that had extra usage switched off and could not be billed
 /// anything. It is the worse of the two surfaces to be wrong on: the panel has room to qualify
 /// a claim, and a notification is three lines with nothing beside them.</para>
 ///
 /// <para>The setting is read through <c>CachedUtilizationSource</c>, which is null whenever a
-/// test supplies its own <c>Provider</c> — so a test that does not describe this gets Unknown
+/// test supplies its own <c>Provider</c>, so a test that does not describe this gets Unknown
 /// rather than the developer's own <c>~/.claude.json</c>. That guard is the reason these
 /// fixtures have to be explicit, and it is the right way round.</para>
 /// </summary>
@@ -79,7 +79,7 @@ public class OffPlanNotificationTests
     }
 
     /// <summary>
-    /// The Est. figure is the API-rate VALUE of the work, not a charge — a distinction the panel
+    /// The Est. figure is the API-rate VALUE of the work, not a charge, a distinction the panel
     /// carries in a label and a hover, and a balloon cannot. Beside "extra usage is switched
     /// off" it contradicts the sentence next to it, and the half a reader carries away from a
     /// contradiction is the money.
@@ -93,7 +93,7 @@ public class OffPlanNotificationTests
             OffPlanBalloon(dir, ExtraUsageState.Disabled).Message, StringComparison.Ordinal);
     }
 
-    /// <summary>Where the account can be billed, the original claim stands — and now it is evidenced.</summary>
+    /// <summary>Where the account can be billed, the original claim stands, and now it is evidenced.</summary>
     [Fact]
     public void AnAccountWithExtraUsageOnKeepsTheBillingClaim()
     {
@@ -106,7 +106,7 @@ public class OffPlanNotificationTests
     }
 
     /// <summary>
-    /// No block to read — a machine with no Claude Code, or one whose cache predates the field.
+    /// No block to read, a machine with no Claude Code, or one whose cache predates the field.
     /// It states what O-view observed and claims nothing about billing either way, which is the
     /// only honest position when the answer is genuinely absent (rule 6).
     /// </summary>

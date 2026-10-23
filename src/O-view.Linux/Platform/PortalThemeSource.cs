@@ -13,24 +13,24 @@ namespace OView.Linux.Platform;
 /// fallback for a desktop with no portal.</para>
 ///
 /// <para>Linux exposes <b>one</b> colour scheme for everything, so the tray surface and the
-/// panel get the same answer — unlike Windows, where <c>SystemUsesLightTheme</c> and
+/// panel get the same answer, unlike Windows, where <c>SystemUsesLightTheme</c> and
 /// <c>AppsUseLightTheme</c> are genuinely two settings. That is a fact about the platform,
 /// said out loud here so a reader does not wonder which one was forgotten.</para>
 ///
 /// <para><b>Reads never block the caller, and this is the whole design.</b> The seam is
-/// called from the left-click handler, which arrives on Avalonia's UI thread — and a
+/// called from the left-click handler, which arrives on Avalonia's UI thread, and a
 /// synchronous D-Bus round trip there does not merely stall, it deadlocks the process
 /// outright: the reply continuation is posted back to the very thread that is blocked
 /// waiting for it. That was measured during the spike
 /// (<see href="../../docs/findings/linux-tray-spike.md">findings</see>, item 5), stated in
-/// <see cref="Tray.SniHostProbe"/>'s doc, restated in CLAUDE.md rule 5 — and then shipped
+/// <see cref="Tray.SniHostProbe"/>'s doc, restated in CLAUDE.md rule 5, and then shipped
 /// here anyway in v0.6.1, where it froze the app on the first click on real hardware
 /// (issue #124). So the bus is asked <b>only</b> off the calling thread, and callers read a
 /// value that is already known.</para>
 ///
 /// <para><b>The cache is static on purpose.</b> The colour scheme is one machine-wide
 /// setting, not a property of an instance, and one shared value is what lets
-/// <see cref="PrimeAsync"/> fill it from <c>Program.Main</c> — before the toolkit exists
+/// <see cref="PrimeAsync"/> fill it from <c>Program.Main</c>, before the toolkit exists
 /// and therefore at the only moment in the process's life when waiting for D-Bus is safe.
 /// Every read after that is a field load.</para>
 ///
@@ -58,7 +58,7 @@ public sealed class PortalThemeSource : IThemeSource
     ///
     /// <para>Necessary even off the UI thread. A portal service that is on the bus but
     /// cannot be activated leaves <c>CallMethodAsync</c> waiting for D-Bus's own 25 s reply
-    /// timeout, and <see cref="PrimeAsync"/> is awaited during startup — so without a bound
+    /// timeout, and <see cref="PrimeAsync"/> is awaited during startup, so without a bound
     /// here, a broken portal delays the icon appearing by almost half a minute.</para>
     /// </summary>
     private static readonly TimeSpan LookupTimeout = TimeSpan.FromSeconds(2);
@@ -75,7 +75,7 @@ public sealed class PortalThemeSource : IThemeSource
     /// </summary>
     private static int _refreshing;
 
-    /// <summary>Same answer for both surfaces — Linux has one colour scheme, not two.</summary>
+    /// <summary>Same answer for both surfaces, Linux has one colour scheme, not two.</summary>
     public bool IsTrayLight() => Current();
 
     /// <inheritdoc cref="IsTrayLight"/>
@@ -215,7 +215,7 @@ public sealed class PortalThemeSource : IThemeSource
         }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
         {
-            return null;   // gsettings not installed — normal on a non-GNOME desktop
+            return null;   // gsettings not installed, normal on a non-GNOME desktop
         }
     }
 }

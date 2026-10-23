@@ -12,13 +12,13 @@ namespace OView.Tray.Popup;
 /// These are not invented. Windows' own Quick Settings flyout was recorded frame by
 /// frame on this platform and the numbers below come from that trace: its top edge rises
 /// while its bottom stays pinned to the taskbar, travelling the full height in ~230 ms,
-/// with almost no fade — it is a *geometric reveal*, not a zoom and not a dissolve.
+/// with almost no fade, it is a *geometric reveal*, not a zoom and not a dissolve.
 ///
 /// Sampled progress of that reveal, as a fraction of total travel:
 ///
 ///     8 ms → 0.15    24 ms → 0.35    57 ms → 0.60    115 ms → 0.84    230 ms → 1.00
 ///
-/// The easing below is FITTED to those samples rather than picked by name — a search
+/// The easing below is FITTED to those samples rather than picked by name, a search
 /// over cubic-Bezier control points, scored by RMSE against the trace. The winner and
 /// the obvious guesses, with predicted progress at three checkpoints:
 ///
@@ -30,7 +30,7 @@ namespace OView.Tray.Popup;
 ///
 /// The third line was this file's first attempt, on the reasoning that Windows uses
 /// cubic-bezier(0,0,0,1). Measured against the real thing it is twenty times further out
-/// than the fit and visibly too abrupt — it reached ~70% before the platform reaches 15%,
+/// than the fit and visibly too abrupt, it reached ~70% before the platform reaches 15%,
 /// which reads as a pop rather than a rise. Named curves were not close enough to trust.
 ///
 /// An earlier attempt scaled the whole surface from 97%. Smooth but wrong: it read as a
@@ -140,7 +140,7 @@ internal static class FlyoutAnimation
 
         // Completed MUST be attached before BeginAnimation. WPF takes its own copy of the
         // timeline when the animation starts, so a handler added afterwards is attached to
-        // an object nothing will ever raise — which is precisely what broke the toggle:
+        // an object nothing will ever raise, which is precisely what broke the toggle:
         // Hide() never ran, the window sat visible at zero opacity, and every later click
         // saw it as "open" and tried to close it again. The icon looked dead.
         var fade = BuildFade(window.Opacity, 0, CloseDuration, Accelerate);
@@ -149,7 +149,7 @@ internal static class FlyoutAnimation
 
         // Backstop. The symptom of a missed completion is not a dropped frame, it is a
         // permanently unresponsive tray icon, so the hide does not depend on the event
-        // alone. Firing twice is harmless — Finish() is idempotent and the caller
+        // alone. Firing twice is harmless, Finish() is idempotent and the caller
         // re-checks whether it still wants to be hidden.
         var guard = new DispatcherTimer
         {
@@ -169,7 +169,7 @@ internal static class FlyoutAnimation
     ///
     /// <para><b>Why this is needed at all.</b> <see cref="Open"/> clips the content to a
     /// <see cref="Rect"/> measured when the flyout opened, and that rectangle is a fixed
-    /// number — it does not track the content. A surface that then grows is drawn only as far
+    /// number, it does not track the content. A surface that then grows is drawn only as far
     /// as the old height and sliced off below it. The tray menu hit this the moment the
     /// threshold list could expand: the window grew correctly and re-docked correctly, and
     /// the card was still rendered at its former height, so the rows past the fold lost their
@@ -177,7 +177,7 @@ internal static class FlyoutAnimation
     ///
     /// <para><b>Releasing the animation first is mandatory, not tidiness.</b>
     /// <c>BeginAnimation</c> defaults to <c>FillBehavior.HoldEnd</c>, so the animated
-    /// <c>Rect</c> goes on overriding local values for as long as it is attached — assigning
+    /// <c>Rect</c> goes on overriding local values for as long as it is attached, assigning
     /// <c>clip.Rect</c> without clearing it first is silently ignored, and the fix would look
     /// like it had been applied while changing nothing.</para>
     /// </summary>
@@ -268,7 +268,7 @@ internal static class FlyoutAnimation
     }
 
     /// <summary>
-    /// Builds the fade without starting it, so a caller can attach Completed first —
+    /// Builds the fade without starting it, so a caller can attach Completed first,
     /// which is mandatory, not stylistic. See <see cref="Close"/>.
     /// </summary>
     private static DoubleAnimationUsingKeyFrames BuildFade(

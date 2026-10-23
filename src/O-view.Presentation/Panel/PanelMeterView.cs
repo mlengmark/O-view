@@ -4,7 +4,7 @@ namespace OView.Presentation.Panel;
 
 /// <summary>
 /// One of the two usage meters, as a head has to place it: a label, the figure beside it, the
-/// fill, the line under it, and — on the weekly meter — the boost chip.
+/// fill, the line under it, and, on the weekly meter, the boost chip.
 ///
 /// <para><b>Why the figure and the fill are separate.</b> <see cref="Value"/> is what the row
 /// says; <see cref="FillPercent"/> is how wide to draw. They part company exactly where it
@@ -14,7 +14,7 @@ namespace OView.Presentation.Panel;
 /// </summary>
 /// <param name="Label">The meter's name, above the bar.</param>
 /// <param name="Percent">
-/// The reported figure, or null when there is none. The figure as stated, not as drawn — a
+/// The reported figure, or null when there is none. The figure as stated, not as drawn, a
 /// head sizes its fill from <see cref="FillPercent"/>.
 /// </param>
 /// <param name="Value">
@@ -38,10 +38,10 @@ namespace OView.Presentation.Panel;
 /// <param name="ResetLineWithAction">
 /// The same line for a surface with no hover, where the action in <see cref="ResetHint"/> has
 /// to ride on the line itself or never appear. Identical to <see cref="ResetLine"/> except in
-/// the one state that has an action to offer — an unknown weekly reset.
+/// the one state that has an action to offer, an unknown weekly reset.
 /// </param>
 /// <param name="ResetHint">The hover card for that line, or null when it needs none.</param>
-/// <param name="Chip">The boost chip beside the label, or null — which is the usual case.</param>
+/// <param name="Chip">The boost chip beside the label, or null, which is the usual case.</param>
 public sealed record PanelMeterView(
     string Label,
     int? Percent,

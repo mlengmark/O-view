@@ -16,7 +16,7 @@ internal interface IFlyout
 {
     bool IsVisible { get; }
 
-    /// <summary>True when this dismissed itself a moment ago — see <see cref="DockedFlyout.ClosedByClickAway"/>.</summary>
+    /// <summary>True when this dismissed itself a moment ago, see <see cref="DockedFlyout.ClosedByClickAway"/>.</summary>
     bool ClosedByClickAway { get; }
 
     void DismissNow();
@@ -33,13 +33,13 @@ internal interface IFlyout
 /// code with the worst track record in the app: both copies carry comments describing
 /// regressions where the panel or the menu sat visible at zero opacity and the tray icon
 /// looked permanently dead. <c>--toggle-check</c> and <c>--menu-check</c> exist because a
-/// single activation can never catch that class of fault — it only shows on the SECOND
+/// single activation can never catch that class of fault, it only shows on the SECOND
 /// open. Two copies meant reasoning about it twice and fixing it once (GitHub issue
 /// #54).</para>
 ///
 /// <para>They had already diverged. The menu grew <c>_suppressDeactivate</c> and a pending
-/// action queue; the panel got neither. The queue is genuinely menu-only — the panel has no
-/// action rows — and stays on <see cref="MenuWindow"/>. The re-entrancy guard is not:
+/// action queue; the panel got neither. The queue is genuinely menu-only, the panel has no
+/// action rows, and stays on <see cref="MenuWindow"/>. The re-entrancy guard is not:
 /// hiding a foreground window raises <c>Deactivated</c>, which re-enters the close on ANY
 /// host, so it belongs here. See <see cref="BeginClose"/>.</para>
 /// </summary>
@@ -92,7 +92,7 @@ internal sealed class DockedFlyout(Window host)
     public bool PinForVerification { get; set; }
 
     /// <summary>
-    /// Where the user last dragged this surface, or null for one that cannot be dragged — the
+    /// Where the user last dragged this surface, or null for one that cannot be dragged, the
     /// tray menu, which has no handle and docks to the tray corner always.
     ///
     /// <para>Handed straight to <see cref="PopupPositioner.Place"/> on every placement, so a
@@ -101,7 +101,7 @@ internal sealed class DockedFlyout(Window host)
     /// </summary>
     public PanelPlacementMemory? PlacementMemory { get; set; }
 
-    /// <summary>Whether a close transition is in flight — the state that made menu rows dead.</summary>
+    /// <summary>Whether a close transition is in flight, the state that made menu rows dead.</summary>
     public bool IsClosing => _closing;
 
 
@@ -112,7 +112,7 @@ internal sealed class DockedFlyout(Window host)
     public void OnDeactivated()
     {
         // A move takes the pointer off the surface and, while the system's own move loop is
-        // running, can take the activation with it — so without this the panel would dismiss
+        // running, can take the activation with it, so without this the panel would dismiss
         // itself the instant it was dragged, which is the whole feature failing. The grace
         // covers the release: the click that ends a drag lands wherever the panel now is, and
         // arrives after the loop has already given the activation back.
@@ -139,7 +139,7 @@ internal sealed class DockedFlyout(Window host)
     /// <para><b>The threshold is what keeps the handle's own clicks.</b> WPF's
     /// <c>DragMove</c> hands the press to the system's move loop and never gives it back, so
     /// calling it on mouse-down would swallow every click on the handle. Waiting for movement
-    /// first means a press that does not move is a press the handle's content sees normally —
+    /// first means a press that does not move is a press the handle's content sees normally,
     /// and the handlers are <c>Preview</c> only to see the press before a child does, never
     /// marking it handled.</para>
     /// </summary>
@@ -174,7 +174,7 @@ internal sealed class DockedFlyout(Window host)
     /// Runs the system's move loop until the user lets go, then saves where the surface ended up
     /// and re-places it from the saved value.
     ///
-    /// <para><c>DragMove</c> refuses — <c>InvalidOperationException</c> — unless the left button
+    /// <para><c>DragMove</c> refuses, <c>InvalidOperationException</c>, unless the left button
     /// is still down, which it may no longer be by the time a queued move event is handled.
     /// Nothing moved in that case, so there is nothing to save and the surface is left exactly
     /// as it was rather than re-placed for no reason.</para>
@@ -283,7 +283,7 @@ internal sealed class DockedFlyout(Window host)
     /// the tree has been laid out.
     /// </param>
     /// <param name="takeForeground">
-    /// Explicitly take the foreground after showing. The menu needs it — a tray-resident app
+    /// Explicitly take the foreground after showing. The menu needs it, a tray-resident app
     /// owns no activated window, so <c>Activate()</c> alone is not guaranteed, and without
     /// the foreground the flyout never receives the deactivation that dismisses it on an
     /// outside click (issue #11). The panel has always relied on <c>Activate()</c> and does
@@ -324,10 +324,10 @@ internal sealed class DockedFlyout(Window host)
     }
 
     /// <summary>
-    /// Re-places an already-open surface for a new size — at the tray corner, or at the place it
+    /// Re-places an already-open surface for a new size, at the tray corner, or at the place it
     /// was dragged to, whichever <see cref="PopupPositioner.Place"/> answers with.
     ///
-    /// <para>For content that grows or shrinks while the flyout is open — the menu's threshold
+    /// <para>For content that grows or shrinks while the flyout is open, the menu's threshold
     /// list. The card is <c>SizeToContent</c> and docked by its top-left, so growing it without
     /// this pushes the new rows down into the taskbar, which is precisely the failure the
     /// docked placement replaced a cursor-placed <c>ContextMenu</c> to avoid (issue #33).</para>
@@ -344,7 +344,7 @@ internal sealed class DockedFlyout(Window host)
 
         // Before moving it, not after, and not left to the caller: the open transition clipped
         // the content to the size it had when the flyout opened, so a surface that has grown
-        // is drawn with everything past that line sliced off — the window is the right size
+        // is drawn with everything past that line sliced off, the window is the right size
         // and the card inside it is not. Re-placing a surface and re-fitting it are the same
         // event, so they live together rather than in two places one of which gets forgotten.
         FlyoutAnimation.FitClipToContent(host);
@@ -353,7 +353,7 @@ internal sealed class DockedFlyout(Window host)
     }
 
     /// <summary>
-    /// Fades and shrinks back into the docked corner, then hides — and only then runs
+    /// Fades and shrinks back into the docked corner, then hides, and only then runs
     /// <paramref name="after"/>. Waiting the ~110 ms costs nothing perceptible and keeps the
     /// guarantee that an action's balloon or modal never appears behind a still-visible
     /// topmost surface.
@@ -362,7 +362,7 @@ internal sealed class DockedFlyout(Window host)
     {
         // A close already in flight must not swallow the action. An early return used to
         // drop it outright, so a row activated while the flyout was mid-close did nothing
-        // at all and the click simply vanished — the hardest kind of fault to report,
+        // at all and the click simply vanished, the hardest kind of fault to report,
         // because the menu looks like it worked. Queue it onto the running close instead.
         if (_closing)
         {
@@ -387,7 +387,7 @@ internal sealed class DockedFlyout(Window host)
                 _closing = false;
 
                 // Hiding the foreground window raises Deactivated, which re-enters this
-                // method — by which point _closing is already false, so it would start a
+                // method, by which point _closing is already false, so it would start a
                 // SECOND close transition on an already-hidden window and, worse, push
                 // _closedAt forward by another ~150 ms, silently stretching the toggle's
                 // grace window. The menu guarded against this; the panel did not.

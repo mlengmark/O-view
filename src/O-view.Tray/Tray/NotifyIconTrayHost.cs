@@ -7,7 +7,7 @@ using OView.Presentation.Text;
 namespace OView.Tray.Tray;
 
 /// <summary>
-/// First-party NotifyIcon implementation (ADR-0005 — no third-party tray package).
+/// First-party NotifyIcon implementation (ADR-0005, no third-party tray package).
 /// NotifyIcon owns the hidden message window and re-registers itself after Explorer
 /// restarts (TaskbarCreated), which ADR-0003 item 5 relies on.
 /// </summary>
@@ -42,7 +42,7 @@ public sealed class NotifyIconTrayHost : ITrayHost
     /// <summary>
     /// The severity the app decided, in the four values <c>Shell_NotifyIcon</c> offers.
     ///
-    /// <para>There is no "upgrading" glyph to reach for — <see cref="ToolTipIcon"/> is
+    /// <para>There is no "upgrading" glyph to reach for, <see cref="ToolTipIcon"/> is
     /// <c>None</c>, <c>Info</c>, <c>Warning</c> and <c>Error</c>, and ADR-0005 rules out
     /// adding a toast package to get a richer one. <c>Info</c> is the friendly one, and the
     /// balloon already carries O-view's own icon in its header, so an update notification now
@@ -61,7 +61,7 @@ public sealed class NotifyIconTrayHost : ITrayHost
     public void Update(Bitmap icon, string tooltip)
     {
         // Shell_NotifyIcon copies the icon into the shell on assignment, so the
-        // PREVIOUS handle is destroyed after the swap — destroying the current one
+        // PREVIOUS handle is destroyed after the swap, destroying the current one
         // early would blank the tray icon.
         var newHandle = icon.GetHicon();
         var newIcon = Icon.FromHandle(newHandle);
@@ -98,12 +98,12 @@ public sealed class NotifyIconTrayHost : ITrayHost
     /// <summary>
     /// Backstop, not the primary cap. <see cref="TooltipFormatter.Format"/> already
     /// truncates to <see cref="TooltipFormatter.MaxLength"/>, and today it is the only
-    /// producer of this string — so this never fires in practice.
+    /// producer of this string, so this never fires in practice.
     ///
     /// <para>It stays because the 127-character limit is <c>NotifyIcon.Text</c>'s, i.e.
     /// this class's platform constraint rather than Core's formatting choice, and
     /// <see cref="ITrayHost.Update"/> accepts any string from any caller. Deliberate
-    /// redundancy at the boundary that owns the constraint — not an oversight.</para>
+    /// redundancy at the boundary that owns the constraint, not an oversight.</para>
     /// </summary>
     private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max];
 }

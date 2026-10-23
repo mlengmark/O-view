@@ -8,9 +8,9 @@ namespace OView.Tray.Popup;
 /// <summary>
 /// Lays out a detached visual and renders it to a bitmap.
 ///
-/// <para>This existed three times over — once each in <see cref="PopupWindow"/>,
-/// <see cref="MenuWindow"/> and <see cref="DialogWindow"/>, the latter two byte-identical
-/// — plus five more open-coded <see cref="RenderTargetBitmap"/> constructions in the
+/// <para>This existed three times over, once each in <see cref="PopupWindow"/>,
+/// <see cref="MenuWindow"/> and <see cref="DialogWindow"/>, the latter two byte-identical,
+/// plus five more open-coded <see cref="RenderTargetBitmap"/> constructions in the
 /// sample renderers (GitHub issue #53). The <c>Measure</c> → <c>Arrange</c> →
 /// <c>UpdateLayout</c> order is load-bearing rather than incidental, and only one of the
 /// three copies said so, which is exactly the shape of duplication that drifts.</para>
@@ -31,7 +31,7 @@ internal static class VisualRenderer
     /// followed by a second. The detail panel needs it and the other two do not: its chart
     /// is a <c>Canvas</c>, so its <c>ActualWidth</c> is unknown until the tree has been laid
     /// out once, and drawing the graph before that silently falls back to a hard-coded
-    /// default width and puts the week gridlines in the wrong places — which is the very
+    /// default width and puts the week gridlines in the wrong places, which is the very
     /// fault the offscreen render exists to catch.</para>
     /// </summary>
     public static BitmapSource RenderContent(
@@ -40,7 +40,7 @@ internal static class VisualRenderer
 
     /// <summary>
     /// Renders any laid-out-on-demand element. Used for the sample surfaces that are not
-    /// windows — a bare <c>Border</c> of stat tiles, or a <c>ToolTip</c>, which cannot be
+    /// windows, a bare <c>Border</c> of stat tiles, or a <c>ToolTip</c>, which cannot be
     /// given a parent and so has to be measured standalone.
     /// </summary>
     public static BitmapSource Render(

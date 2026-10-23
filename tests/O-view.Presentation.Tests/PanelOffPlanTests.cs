@@ -13,14 +13,14 @@ namespace OView.Presentation.Tests;
 /// allowed to carry, whether the detail line is stamped with when the setting was read, and
 /// what the section says when nothing credit-billed was recorded. The sentences themselves are
 /// <see cref="OffPlanText"/>'s and are asserted against it rather than re-typed, so a reworded
-/// sentence does not fail here — only a face choosing the wrong one does.</para>
+/// sentence does not fail here, only a face choosing the wrong one does.</para>
 /// </summary>
 public class PanelOffPlanTests
 {
     private static readonly TimeZoneInfo Utc = TimeZoneInfo.Utc;
     private static readonly DateTimeOffset Now = new(2026, 7, 31, 12, 0, 0, TimeSpan.Zero);
 
-    /// <summary>31 days, all of them recorded — so the coverage caveat is silent unless a test
+    /// <summary>31 days, all of them recorded, so the coverage caveat is silent unless a test
     /// asks for a partial window.</summary>
     private static readonly IReadOnlyList<DayUsage> Series =
         [.. Enumerable.Range(0, 31).Select(i => new DayUsage(
@@ -91,7 +91,7 @@ public class PanelOffPlanTests
     }
 
     /// <summary>
-    /// The three billing wordings, each one the heading the account setting licenses — this is
+    /// The three billing wordings, each one the heading the account setting licenses, this is
     /// the claim issue #259 was about, and it is now made in one place for both faces.
     /// </summary>
     [Theory]
@@ -113,7 +113,7 @@ public class PanelOffPlanTests
     /// <summary>
     /// The three headings are three different sentences. Asserted directly, because the test
     /// above would pass just as well if <see cref="OffPlanText.OffPlanTitle"/> collapsed them
-    /// into one hedge — which is the wording it exists to have replaced.
+    /// into one hedge, which is the wording it exists to have replaced.
     /// </summary>
     [Fact]
     public void TheEnabledHeadingIsTheOnlyOneThatAssertsACharge()
@@ -143,7 +143,7 @@ public class PanelOffPlanTests
 
         Assert.NotNull(offPlan.Banner);
         // The stamp is the cached block's OWN read time, 11:40, not the moment the panel was
-        // drawn — taking the two readings from one object is what makes that unmissable.
+        // drawn, taking the two readings from one object is what makes that unmissable.
         Assert.Contains("reported by Claude Code, read 11:40", offPlan.Banner.Detail);
         Assert.Equal(
             OffPlanText.OffPlanDetail(stats.Divergence!, state, cached.FetchedAtUtc, Now, Utc),
@@ -166,8 +166,8 @@ public class PanelOffPlanTests
     }
 
     /// <summary>
-    /// The address travels with the label. Each head then shows whichever its surface supports
-    /// — the Windows banner makes the label clickable, the Linux one prints the address — and
+    /// The address travels with the label. Each head then shows whichever its surface supports,
+    /// the Windows banner makes the label clickable, the Linux one prints the address, and
     /// neither has to know the URL.
     /// </summary>
     [Fact]
@@ -181,7 +181,7 @@ public class PanelOffPlanTests
     }
 
     /// <summary>
-    /// A diverging window — a meter that is not moving rather than one that is spent — gets the
+    /// A diverging window, a meter that is not moving rather than one that is spent, gets the
     /// heading that never asserted a charge, and a detail line naming the two numbers the
     /// reader can check.
     /// </summary>
@@ -259,7 +259,7 @@ public class PanelOffPlanTests
     }
 
     /// <summary>
-    /// Both wordings of the hint keep the rule-6 caveat that the figure is not the charge — the
+    /// Both wordings of the hint keep the rule-6 caveat that the figure is not the charge, the
     /// reason it is a carried sentence rather than something a head writes beside the number.
     /// </summary>
     [Theory]

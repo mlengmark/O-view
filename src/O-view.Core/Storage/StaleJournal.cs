@@ -5,7 +5,7 @@ namespace OView.Core.Storage;
 /// <summary>What the guard found, and what it did about it.</summary>
 public enum StaleJournalVerdict
 {
-    /// <summary>No journal beside the database — the ordinary state after a clean shutdown.</summary>
+    /// <summary>No journal beside the database, the ordinary state after a clean shutdown.</summary>
     NoJournal,
 
     /// <summary>A journal young enough to be a genuine continuation of its database.</summary>
@@ -13,7 +13,7 @@ public enum StaleJournalVerdict
 
     /// <summary>
     /// Something else holds the store open, so its timestamps cannot be trusted and nothing
-    /// was touched. Never a finding about the journal — only about what could be established.
+    /// was touched. Never a finding about the journal, only about what could be established.
     /// </summary>
     InUse,
 
@@ -28,7 +28,7 @@ public enum StaleJournalVerdict
 /// One startup check: what stood beside the database, and what the guard did.
 /// </summary>
 /// <param name="Lag">
-/// How much older the journal is than its database — <c>db mtime − wal mtime</c>. Null when
+/// How much older the journal is than its database, <c>db mtime − wal mtime</c>. Null when
 /// there was no journal, or when nothing could be established about it.
 /// </param>
 /// <param name="Stamp">The quarantine suffix, when files were moved aside.</param>
@@ -54,11 +54,11 @@ public sealed record StaleJournalCheck(
         StaleJournalVerdict.Current => string.Create(CultureInfo.InvariantCulture,
             $"current ({WalBytes:N0} bytes, {Age()} behind the database)"),
         StaleJournalVerdict.InUse => string.Create(CultureInfo.InvariantCulture,
-            $"NOT CHECKED — the store was open elsewhere ({WalBytes:N0} bytes)"),
+            $"NOT CHECKED, the store was open elsewhere ({WalBytes:N0} bytes)"),
         StaleJournalVerdict.Quarantined => string.Create(CultureInfo.InvariantCulture,
-            $"QUARANTINED as {Stamp} — {WalBytes:N0} bytes, {Age()} older than the database"),
+            $"QUARANTINED as {Stamp}, {WalBytes:N0} bytes, {Age()} older than the database"),
         StaleJournalVerdict.QuarantineFailed => string.Create(CultureInfo.InvariantCulture,
-            $"ORPHAN LEFT IN PLACE — {Age()} older than the database, could not move it: {Failure}"),
+            $"ORPHAN LEFT IN PLACE, {Age()} older than the database, could not move it: {Failure}"),
         _ => Verdict.ToString(),
     };
 
@@ -75,7 +75,7 @@ public sealed record StaleJournalCheck(
 /// treats its frames as the newest version of the pages they cover, overriding newer content
 /// in the main file. That is correct when the journal is a genuine continuation, which is the
 /// normal case. When the journal is an <i>orphan</i>, it presents the store as it stood when
-/// that file was written — and the recovered state then becomes the truth. Measured on the
+/// that file was written, and the recovered state then becomes the truth. Measured on the
 /// development machine: the same database read twice, differing only in whether a stale
 /// journal sat beside it, gave 6,917 rows and 5,072 rows. Five days of history, and
 /// <c>PRAGMA quick_check</c> returned <c>ok</c> both times.</para>
@@ -96,19 +96,19 @@ public sealed record StaleJournalCheck(
 /// last-write time from minutes ago. Reading the mtimes of a store somebody else has open and
 /// concluding "not being written" is exactly the inference that data is wrong. Holding both
 /// files with <see cref="FileShare.None"/> establishes that nobody has them open, which is
-/// what makes the comparison meaningful — and when the handles cannot be taken, the guard says
+/// what makes the comparison meaningful, and when the handles cannot be taken, the guard says
 /// so and touches nothing.</para>
 ///
 /// <para><b>On Unix that probe is weaker</b> and is not what carries the guarantee there.
 /// .NET emulates <see cref="FileShare"/> with <c>flock</c>, while SQLite locks with
-/// <c>fcntl</c> byte ranges — different mechanisms, so an open SQLite connection does not
+/// <c>fcntl</c> byte ranges, different mechanisms, so an open SQLite connection does not
 /// necessarily fail the probe. What protects both platforms is that this runs at startup,
 /// behind the single-instance guard, when no other copy of O-view is meant to exist.</para>
 ///
 /// <para><b>Only the journal is moved aside, never the database.</b> That is a deliberate
 /// departure from the corruption path this borrows its naming from, which quarantines the
 /// whole set and rebuilds empty. Here the database is the <i>truth</i> and the journal is the
-/// liar — moving the database would discard the very history the guard exists to save.</para>
+/// liar, moving the database would discard the very history the guard exists to save.</para>
 /// </summary>
 public static class StaleJournal
 {
@@ -121,7 +121,7 @@ public static class StaleJournal
     /// <para><b>Argued from the gap, not picked.</b> The upper bound on a legitimate lag is a
     /// write cadence: O-view commits on every poll, so while it is running the journal is
     /// never more than a minute behind, and a journal that outlives a clean shutdown does not
-    /// exist — SQLite deletes it. One that survives a crash is contemporaneous with its
+    /// exist, SQLite deletes it. One that survives a crash is contemporaneous with its
     /// database, not older. So on the app's own behaviour, minutes would do.</para>
     ///
     /// <para>The margin above that is for everything the app does not control: filesystem
@@ -131,7 +131,7 @@ public static class StaleJournal
     /// The issue that filed this offered "a day" as the unambiguous case; this is tighter,
     /// because of what the two mistakes cost.</para>
     ///
-    /// <para><b>The asymmetry is the point.</b> Acting wrongly costs a re-ingest — the store
+    /// <para><b>The asymmetry is the point.</b> Acting wrongly costs a re-ingest, the store
     /// is a rebuildable cache (ADR-0006, rule 7) and the journal is quarantined rather than
     /// deleted, so the frames are still there. Failing to act costs days of history that
     /// cannot be rebuilt at all, silently, with every diagnostic saying the store is
@@ -141,7 +141,7 @@ public static class StaleJournal
 
     /// <summary>
     /// Checks the journal beside <paramref name="dbPath"/> and quarantines it if it cannot
-    /// belong there. Call <b>before</b> opening the database — once SQLite has recovered from
+    /// belong there. Call <b>before</b> opening the database, once SQLite has recovered from
     /// an orphan, the damage is done and this can no longer see it.
     ///
     /// <para>Never throws. This runs on the path that must always leave a usable store behind
@@ -154,7 +154,7 @@ public static class StaleJournal
 
         try
         {
-            // A journal with no database is not an orphan overriding anything — there is
+            // A journal with no database is not an orphan overriding anything, there is
             // nothing for it to roll back. Left alone.
             if (!File.Exists(wal) || !File.Exists(dbPath))
             {
@@ -171,7 +171,7 @@ public static class StaleJournal
                 return new StaleJournalCheck(StaleJournalVerdict.Current, lag, walBytes);
             }
 
-            // Both handles are closed by now — TryReadWhileExclusive owns and releases them,
+            // Both handles are closed by now, TryReadWhileExclusive owns and releases them,
             // and a move cannot run while they are open.
             var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss", CultureInfo.InvariantCulture);
             return MoveAside(dbPath, stamp) is { } failure
@@ -187,7 +187,7 @@ public static class StaleJournal
 
     /// <summary>
     /// How far the journal beside <paramref name="dbPath"/> trails its database, for a reader
-    /// that only wants to report the fact. No probe and no action — the number alone, which is
+    /// that only wants to report the fact. No probe and no action, the number alone, which is
     /// what the store section of the diagnostics bundle carries.
     /// </summary>
     public static TimeSpan? Lag(string dbPath)
@@ -208,7 +208,7 @@ public static class StaleJournal
     /// <summary>
     /// Reads both timestamps while holding both files exclusively, so no lazily-updated
     /// directory entry can be in flight behind them. False when either handle cannot be
-    /// taken — which is a statement about the probe, not about the journal.
+    /// taken, which is a statement about the probe, not about the journal.
     /// </summary>
     private static bool TryReadWhileExclusive(string dbPath, string wal, out TimeSpan lag, out long walBytes)
     {
@@ -239,7 +239,7 @@ public static class StaleJournal
     ///
     /// <para><b>Unlike the corruption path, a failure here is not shrugged off.</b> There it
     /// can fall back to deleting, because the file being moved is already malformed. This one
-    /// may hold committed frames, so it is never deleted — if it cannot be moved it stays
+    /// may hold committed frames, so it is never deleted, if it cannot be moved it stays
     /// where it is and the verdict says so, which at least means the wrong number arrives with
     /// an explanation beside it.</para>
     /// </summary>

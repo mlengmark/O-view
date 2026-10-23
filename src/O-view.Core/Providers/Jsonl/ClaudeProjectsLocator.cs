@@ -10,7 +10,7 @@ public static class ClaudeProjectsLocator
     /// Default transcript root: <c>projects</c> under Claude Code's configuration directory.
     ///
     /// <para>Which is <c>%USERPROFILE%\.claude</c> unless <c>CLAUDE_CONFIG_DIR</c> says
-    /// otherwise — see <see cref="ClaudeConfigDir"/>. This used to hard-code the profile
+    /// otherwise, see <see cref="ClaudeConfigDir"/>. This used to hard-code the profile
     /// path, so a user who had relocated their configuration had no transcripts found and a
     /// token tile reading zero, with nothing to explain it.</para>
     /// </summary>

@@ -59,7 +59,7 @@ public class PlanHistoryLocatorTests : IDisposable
     }
 
     /// <summary>
-    /// The freshest file wins, wherever it lives — the canonical path has no standing of its
+    /// The freshest file wins, wherever it lives, the canonical path has no standing of its
     /// own. It used to be tried first because it is the documented location, which is the same
     /// "first location that exists wins" rule that read a migration stub instead of the account
     /// file and an abandoned cache instead of the live one (2026-08-24). A machine can carry an
@@ -79,7 +79,7 @@ public class PlanHistoryLocatorTests : IDisposable
         Assert.Equal(canonical, PlanHistoryLocator.Candidates(AppData, LocalAppData)[0]);
     }
 
-    /// <summary>Both locations stay in the list — reading one is never a substitute for the other.</summary>
+    /// <summary>Both locations stay in the list, reading one is never a substitute for the other.</summary>
     [Fact]
     public void Both_locations_are_always_candidates()
     {
@@ -120,7 +120,7 @@ public class PlanHistoryLocatorTests : IDisposable
     [Fact]
     public void Missing_packages_root_is_not_fatal()
     {
-        // No %LOCALAPPDATA%\Packages at all — still returns the canonical candidate.
+        // No %LOCALAPPDATA%\Packages at all, still returns the canonical candidate.
         var candidates = PlanHistoryLocator.Candidates(AppData, Path.Combine(_root, "no-such-local"));
 
         Assert.Single(candidates);

@@ -8,7 +8,7 @@ namespace OView.Core.Providers.Jsonl;
 /// One Cowork session as Cowork itself recorded it.
 /// </summary>
 /// <param name="SessionId">
-/// <c>cliSessionId</c> — and, crucially, the <b>file name</b> its transcript is written under.
+/// <c>cliSessionId</c>, and, crucially, the <b>file name</b> its transcript is written under.
 /// </param>
 /// <param name="WorkingDirectory">The session's <c>cwd</c>. Diagnostic only; the lookup is by id.</param>
 /// <param name="LastActivityUtc">When Cowork last touched it. Null when the field was absent.</param>
@@ -26,7 +26,7 @@ public sealed record CoworkSession(
 /// <para><b>Why this is the diagnostic that was missing.</b> Every other transcript field in the
 /// bundle answers "what did O-view find", and none of them can answer "what should have been
 /// there". A machine actively using Cowork whose newest local transcript is 52 hours old is
-/// indistinguishable, in that report, from a machine that simply stopped working — the scan
+/// indistinguishable, in that report, from a machine that simply stopped working, the scan
 /// found what it found, reported it honestly, and had no way to know anything was absent. This
 /// is the independent expectation to measure against: Cowork writes one
 /// <c>local_&lt;id&gt;.json</c> per session under <c>claude-code-sessions</c>, carrying the
@@ -36,7 +36,7 @@ public sealed record CoworkSession(
 /// <para><b>The lookup is by file name, not by rebuilding the directory.</b> Claude Code encodes
 /// a <c>cwd</c> into a directory name (<c>C:\Users\x</c> → <c>C--Users-x</c>) by a rule this
 /// project has never had written down and does not control. Reconstructing it would make the
-/// check wrong the first time that rule changed — and wrong in the direction that invents a
+/// check wrong the first time that rule changed, and wrong in the direction that invents a
 /// fault, reporting every session as missing on a machine where nothing is. The session id is
 /// unique and is the file's own name, so the transcript is looked up by name wherever it
 /// sits.</para>
@@ -47,7 +47,7 @@ public sealed record CoworkSession(
 /// therefore "a recent session has no transcript at all", which no timestamp can fake, and the
 /// mtime comparison is offered beside it as context rather than as the alarm.</para>
 ///
-/// <para>Ids, paths and timestamps only — no titles and no conversation content, which these
+/// <para>Ids, paths and timestamps only, no titles and no conversation content, which these
 /// files do carry. <see cref="Providers.PlanHistory.PlanHistoryReport"/> and the transcript
 /// scope report hold the same line.</para>
 /// </summary>
@@ -57,7 +57,7 @@ public sealed record CoworkSessionReport(
     IReadOnlyList<CoworkSession> Sessions,
     string? Failure = null)
 {
-    /// <summary>Nothing was inspected — the roots do not exist, or none were given.</summary>
+    /// <summary>Nothing was inspected, the roots do not exist, or none were given.</summary>
     public static CoworkSessionReport None { get; } = new([], 0, []);
 
     /// <summary>
@@ -82,8 +82,8 @@ public sealed record CoworkSessionReport(
     /// <summary>
     /// Sessions Cowork touched recently that have no transcript on disk.
     ///
-    /// <para><b>This is the finding.</b> An old session without one is ordinary — Claude Code
-    /// deletes transcripts after ~30 days while the registration survives — but a session
+    /// <para><b>This is the finding.</b> An old session without one is ordinary, Claude Code
+    /// deletes transcripts after ~30 days while the registration survives, but a session
     /// active in the last few hours with nothing written for it means the machine is producing
     /// usage that nothing local is recording, which is precisely the state that reads as "the
     /// token tiles have stopped".</para>
@@ -170,7 +170,7 @@ public sealed record CoworkSessionReport(
     /// <summary>
     /// Overload taking explicit roots so the report can be tested against a synthetic layout.
     /// A null projects root resolves nothing and reports every session as unresolved, which is
-    /// why it is stated rather than defaulted — the same rule
+    /// why it is stated rather than defaulted, the same rule
     /// <see cref="TranscriptScopeReport.Inspect(string?, IReadOnlyList{string})"/> follows.
     /// </summary>
     public static CoworkSessionReport Inspect(
@@ -180,7 +180,7 @@ public sealed record CoworkSessionReport(
         {
             // De-duplicated by FILE NAME, not by path. MSIX presents one store through the
             // canonical path as well as the package's own, neither is a link, and nothing about
-            // either name reveals they are one tree — so a path-keyed Distinct kept both copies
+            // either name reveals they are one tree, so a path-keyed Distinct kept both copies
             // and reported twice the sessions that exist. A registration's file name carries the
             // session's own id, so two entries sharing one cannot be two sessions.
             var files = roots
@@ -197,7 +197,7 @@ public sealed record CoworkSessionReport(
             }
 
             // Every transcript on disk, keyed by the session id that names it. One walk,
-            // then a lookup per session — the alternative re-walks the whole projects tree
+            // then a lookup per session, the alternative re-walks the whole projects tree
             // for each registration.
             var transcripts = (projectsRoot is null
                     ? []

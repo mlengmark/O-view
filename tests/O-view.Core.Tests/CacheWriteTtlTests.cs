@@ -10,12 +10,12 @@ namespace OView.Core.Tests;
 /// The cache-write TTL split, from the transcript to the priced figure (GitHub issue #255).
 ///
 /// <para><c>usage.cache_creation</c> carries which TTL each write used, and Anthropic bills the
-/// two at different published prices — 1.25× base input for a 5-minute write, 2× for a 1-hour
+/// two at different published prices, 1.25× base input for a 5-minute write, 2× for a 1-hour
 /// one. The reader took the flat <c>cache_creation_input_tokens</c> beside it and stopped, so
 /// every write was priced at the 5-minute rate while the transcripts on the machine this was
 /// measured on were almost entirely 1-hour.</para>
 ///
-/// <para>These cover the path rather than the arithmetic — <see cref="CostEstimatorTests"/>
+/// <para>These cover the path rather than the arithmetic, <see cref="CostEstimatorTests"/>
 /// pins the two rates. What can silently go wrong here is the attribution being dropped
 /// somewhere between the file and the tile, and each hop has its own case.</para>
 /// </summary>
@@ -145,7 +145,7 @@ public class CacheWriteTtlTests : IDisposable
 
     /// <summary>
     /// A row an older build wrote has a cache-write total and NULL beside it. It must read back
-    /// as unattributed rather than as zero writes — the total is the authority, and losing it
+    /// as unattributed rather than as zero writes, the total is the authority, and losing it
     /// would silently drop cache-write value out of every historical figure.
     /// </summary>
     [Fact]

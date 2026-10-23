@@ -12,14 +12,14 @@ namespace OView.Linux.Tests;
 /// that a click still swaps the view.
 ///
 /// <para><b>Why the words are worth a test.</b> This head registers no Avalonia theme, so a
-/// button falls back to a bare content presenter — which fills itself from the content only
+/// button falls back to a bare content presenter, which fills itself from the content only
 /// once its tree reaches a window, and the sample images are rendered from a tree that never
 /// does. Both halves stood blank in all 22 Linux sample images while the Windows panel read
 /// Bars | Breakdown. An image says so only once someone looks at it; this fails the moment
 /// either half is built with nothing to read.</para>
 ///
 /// <para>Avalonia raises no pointer events without a windowing subsystem, so these raise the
-/// routed event a click raises rather than clicking — the same reason
+/// routed event a click raises rather than clicking, the same reason
 /// <see cref="PanelTileFlipTests"/> drives the tiles' flip instead.</para>
 /// </summary>
 public class PanelViewSwitchTests
@@ -56,7 +56,7 @@ public class PanelViewSwitchTests
 
     /// <summary>
     /// The feature: both halves carry their word, in both themes, in a colour that is not the
-    /// colour of the pill beneath it — a word the shade of its own background is no better
+    /// colour of the pill beneath it, a word the shade of its own background is no better
     /// than the blank pill it replaces.
     /// </summary>
     [Theory]
@@ -131,7 +131,7 @@ public class PanelViewSwitchTests
 
     /// <summary>
     /// Each half is still a focusable button, so Space and Enter still work it. Neither key can
-    /// be pressed here — keyboard input needs a window — so what is pinned is the button that
+    /// be pressed here, keyboard input needs a window, so what is pinned is the button that
     /// carries them: a plain border in its place would draw the words just as well and leave
     /// the switch reachable by pointer alone.
     /// </summary>

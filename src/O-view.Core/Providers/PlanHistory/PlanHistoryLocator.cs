@@ -14,7 +14,7 @@ namespace OView.Core.Providers.PlanHistory;
 /// path is therefore an assumption about someone else's packaging, which is exactly the
 /// kind of thing that differs across users' machines.
 ///
-/// <b>Order is by freshness, across every location — the canonical path included.</b> It used
+/// <b>Order is by freshness, across every location, the canonical path included.</b> It used
 /// to be tried first on the grounds that it is the documented one, with only the package
 /// stores sorted by age. That is the same "first location that exists wins" rule that read a
 /// migration stub instead of the account file and an abandoned cache instead of the live one
@@ -23,7 +23,7 @@ namespace OView.Core.Providers.PlanHistory;
 /// actually writing. Both locations are read, every time, and the freshest answers.
 ///
 /// Locations that do not exist keep their place at the end so diagnostics can still report
-/// what was searched — a path that was checked and found missing is evidence too.
+/// what was searched, a path that was checked and found missing is evidence too.
 /// </summary>
 public static class PlanHistoryLocator
 {
@@ -33,7 +33,7 @@ public static class PlanHistoryLocator
     public static string CanonicalPath => Path.Combine(ClaudeDataRoots.Canonical, FileName);
 
     /// <summary>
-    /// Every location worth checking, in priority order. Always non-empty — the canonical
+    /// Every location worth checking, in priority order. Always non-empty, the canonical
     /// path is the first entry even when it does not exist, so diagnostics can report it.
     /// </summary>
     public static IReadOnlyList<string> Candidates() => Candidates(
@@ -49,14 +49,14 @@ public static class PlanHistoryLocator
 
     /// <summary>
     /// Builds candidates from explicit roots. Public so the layout rules can be tested
-    /// against a synthetic profile — the sandboxed-app layout is the whole reason this
+    /// against a synthetic profile, the sandboxed-app layout is the whole reason this
     /// class exists, and it cannot be exercised against the real machine.
     /// </summary>
     public static IReadOnlyList<string> Candidates(string appDataRoot, IReadOnlyList<string> redirectedRoots)
     {
         var canonical = Path.Combine(appDataRoot, "Claude", FileName);
 
-        // A sandboxed Claude Desktop redirects its config away from the canonical path —
+        // A sandboxed Claude Desktop redirects its config away from the canonical path,
         // MSIX into a LocalCache on Windows, Snap or Flatpak into a per-app tree on Linux.
         // Root discovery is shared with Cowork ingestion (ClaudeDataRoots).
         //

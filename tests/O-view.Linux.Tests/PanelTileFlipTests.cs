@@ -9,13 +9,13 @@ namespace OView.Linux.Tests;
 /// Windows panel has always had.
 ///
 /// <para><b>This is the feature's only proof.</b> No shared sample state carries per-model
-/// rows, so every tile in every golden render has nothing to break down — no golden on either
+/// rows, so every tile in every golden render has nothing to break down, no golden on either
 /// head shows a tile's second face, and giving a state that data would change the Windows
 /// picture as well, which Phase D puts out of scope. The flip is therefore asserted here
 /// instead of looked at.</para>
 ///
 /// <para>Avalonia raises no pointer events without a windowing subsystem and CI has none, so
-/// these drive the state a click drives rather than clicking — the same reason
+/// these drive the state a click drives rather than clicking, the same reason
 /// <see cref="PanelDismissal"/> is its own class. The controls under assertion are the ones the
 /// panel really built; what no test here covers is the three event subscriptions that call
 /// <c>Toggle</c>.</para>
@@ -91,7 +91,7 @@ public class PanelTileFlipTests
 
     /// <summary>
     /// Only the two tiles with something to break down gain a flip. Today's pair has no usage
-    /// behind it, so it stays the plain tile — an affordance that leads nowhere is worse than
+    /// behind it, so it stays the plain tile, an affordance that leads nowhere is worse than
     /// none.
     /// </summary>
     [Fact]
@@ -122,7 +122,7 @@ public class PanelTileFlipTests
 
     /// <summary>
     /// The feature: a click flips the tile, and another click flips it back, as often as you
-    /// like. Nothing is fetched either way — the split is already in hand.
+    /// like. Nothing is fetched either way, the split is already in hand.
     /// </summary>
     [Fact]
     public void ATileFlipsAndFlipsBackAsOftenAsYouLike()
@@ -141,7 +141,7 @@ public class PanelTileFlipTests
 
     /// <summary>
     /// One face is showing at a time, and the other is held out of sight without leaving the
-    /// layout — the tile keeps one height so the sections below it never jump.
+    /// layout, the tile keeps one height so the sections below it never jump.
     /// </summary>
     [Fact]
     public void OneFaceShowsAndTheOtherKeepsItsSpace()
@@ -168,7 +168,7 @@ public class PanelTileFlipTests
 
     /// <summary>
     /// The affordance is faint at rest, clearer under the pointer, clearest while the breakdown
-    /// is open — findable, and never louder than the number it sits beside. Same three values
+    /// is open, findable, and never louder than the number it sits beside. Same three values
     /// as the Windows tile.
     /// </summary>
     [Fact]
@@ -184,7 +184,7 @@ public class PanelTileFlipTests
         flip.Toggle();
         Assert.Equal(0.9, flip.Glyph.Opacity, 3);
 
-        // Still open after the pointer leaves — the breakdown does not close itself.
+        // Still open after the pointer leaves, the breakdown does not close itself.
         flip.PointerOver(false);
         Assert.Equal(0.9, flip.Glyph.Opacity, 3);
         Assert.True(flip.IsExpanded);
@@ -192,7 +192,7 @@ public class PanelTileFlipTests
 
     /// <summary>
     /// A second open rebuilds the tiles, so no flip is left holding controls that are no longer
-    /// on screen — and the new tiles open on their totals like any others.
+    /// on screen, and the new tiles open on their totals like any others.
     /// </summary>
     [Fact]
     public void ASecondOpenStartsFromFreshTiles()

@@ -6,13 +6,13 @@ namespace OView.App;
 /// Reads off the UI thread and publishes back onto it, under a gate so a slow read cannot
 /// stack another behind it.
 ///
-/// <para>Shared by all three of <see cref="UsageEngine"/>'s cadences — the full poll, the
-/// plan-only poll and the usage-cache refresh — rather than written three times. They differ
+/// <para>Shared by all three of <see cref="UsageEngine"/>'s cadences, the full poll, the
+/// plan-only poll and the usage-cache refresh, rather than written three times. They differ
 /// in <i>what</i> they read and publish; the threading, the drop-don't-queue rule and the
 /// shutdown handling are identical, and this file's history is one of behaviour written
 /// twice and fixed once.</para>
 ///
-/// <para>Split out of <see cref="UsageEngine"/> purely to shorten that file — same members,
+/// <para>Split out of <see cref="UsageEngine"/> purely to shorten that file, same members,
 /// same behaviour, same logging. <see cref="AttachDispatcher"/> is called from
 /// <see cref="UsageEngine.Start"/>, since the dispatcher is not known until then; with none
 /// attached, a run has no separate UI thread to protect and runs inline, which is what the
@@ -49,7 +49,7 @@ public sealed class PollRunner
     /// <para><b>The gate is released on every path out of the read, including a throw.</b>
     /// It has to be: nothing else on this path releases it, so one escaped exception left
     /// <c>_busy</c> set for the life of the process and every later tick was dropped by
-    /// <see cref="Gate.TryEnter"/>. That failure is silent and total — the panel goes on
+    /// <see cref="Gate.TryEnter"/>. That failure is silent and total, the panel goes on
     /// drawing its last snapshot, no transcript is ingested, no observed weekly reset is
     /// written, and because <c>_log</c> is null unless <c>--log</c> was passed there is
     /// nothing on disk to say why. Observed in the field: a tray up for 35 minutes with a
@@ -60,7 +60,7 @@ public sealed class PollRunner
     {
         if (_dispatcher is not { } dispatcher)
         {
-            // No separate UI thread to protect — run inline, which is what the tests rely on.
+            // No separate UI thread to protect, run inline, which is what the tests rely on.
             publish(read());
             return;
         }
@@ -70,14 +70,14 @@ public sealed class PollRunner
         // reports the same state, so a queue would only replay stale work.
         if (!gate.TryEnter())
         {
-            _log?.Write($"{what} skipped — previous still running");
+            _log?.Write($"{what} skipped, previous still running");
             return;
         }
 
         // Three lines per poll, and the gaps between them are the diagnosis. A tick that
         // never logs "read begin" means the timer is not firing; "read begin" with no "read
         // done" means the read is hung or threw; "read done" with no "published" means the
-        // dispatcher is not running the callback — and each of those is a different bug in a
+        // dispatcher is not running the callback, and each of those is a different bug in a
         // different layer. Without them a stalled poll and a healthy idle one are the same
         // silence, which is how five days of no ingestion went unnoticed.
         var startedAt = Environment.TickCount64;
@@ -94,7 +94,7 @@ public sealed class PollRunner
             catch (Exception ex)
             {
                 // Both reads already guard themselves and return a failure result rather
-                // than throwing — but each only guards what sits inside its own try, and
+                // than throwing, but each only guards what sits inside its own try, and
                 // neither covers what it touches before entering one. This is the backstop
                 // for that gap, and for whatever a future read reaches for first.
                 //
@@ -124,7 +124,7 @@ public sealed class PollRunner
             }
             catch (Exception ex)
             {
-                // The dispatcher is gone — the app is shutting down. Release the gate so
+                // The dispatcher is gone, the app is shutting down. Release the gate so
                 // nothing is wedged, and drop the result: there is no longer anything to
                 // draw it on.
                 gate.Exit();

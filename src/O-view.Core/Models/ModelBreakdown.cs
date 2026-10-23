@@ -10,12 +10,12 @@ public enum BreakdownMeasure
 /// <summary>
 /// Shapes a per-model list into the segments a tile chart can actually show.
 ///
-/// The cap is not arbitrary and not a layout choice — it comes from the colour
+/// The cap is not arbitrary and not a layout choice, it comes from the colour
 /// validator. The chart's segment order follows the data (largest first), so any two
 /// colours can end up adjacent and the palette has to clear the separation gates on
 /// ALL pairs, not just neighbours. Measured against the tile surfaces:
 ///
-///   • three chromatic slots (blue/orange/aqua) clear every gate in both themes —
+///   • three chromatic slots (blue/orange/aqua) clear every gate in both themes,
 ///     worst CVD ΔE 9.2 light / 9.4 dark against a target of 8;
 ///   • adding a neutral "Other" alongside them does not: no grey exists that is both
 ///     inside the dark lightness band and separable from the aqua slot for
@@ -35,7 +35,7 @@ public static class ModelBreakdown
     public const int NamedSlotsBesideOther = 2;
 
     /// <summary>
-    /// The models that get their own colour, in slot order — computed once for the whole
+    /// The models that get their own colour, in slot order, computed once for the whole
     /// panel from the widest window, and used by every tile.
     ///
     /// This exists because colour must follow the MODEL, never its rank within one tile.
@@ -87,7 +87,7 @@ public static class ModelBreakdown
     /// Zero-measure models are dropped: a segment of width zero is invisible but its
     /// legend entry is not, so it reads as a model that contributed nothing to a total
     /// it is listed under. For <see cref="BreakdownMeasure.EstValue"/> that also removes
-    /// unpriced models — they are NOT silently lost, they are reported by
+    /// unpriced models, they are NOT silently lost, they are reported by
     /// <see cref="Unpriced"/> so the caller can state the gap (rule 6).
     /// </summary>
     public static IReadOnlyList<ModelSlice> Segments(
@@ -107,10 +107,10 @@ public static class ModelBreakdown
             return named;
         }
 
-        // A single leftover keeps its own name — "Other · 1 more models" would be a
+        // A single leftover keeps its own name, "Other · 1 more models" would be a
         // clumsy way to say "Haiku 4.5". It still takes the neutral colour, because it is
         // not one of the panel's coloured models.
-        // The remainder keeps a real summed value so the segment's width is the truth — but
+        // The remainder keeps a real summed value so the segment's width is the truth, but
         // stays unavailable if anything in it was unpriced.
         var restUsd = rest.Any(s => s.EstUsdValue.Value is null)
             ? null
@@ -119,8 +119,8 @@ public static class ModelBreakdown
         named.Add(rest.Count == 1
             ? rest[0]
             : new ModelSlice(
-                // Neither field names anything once FoldedCount is set — every reader
-                // checks that first — so these are left empty rather than carrying
+                // Neither field names anything once FoldedCount is set, every reader
+                // checks that first, so these are left empty rather than carrying
                 // words ("Other", "<n> more") that are Presentation's to choose.
                 Model: "",
                 DisplayName: "",
@@ -137,8 +137,8 @@ public static class ModelBreakdown
 
     /// <summary>
     /// Models excluded from an <see cref="BreakdownMeasure.EstValue"/> breakdown because
-    /// they have no published rate. The value chart cannot place them — their dollar
-    /// value is unknown, not zero — so the caller names them instead of letting the
+    /// they have no published rate. The value chart cannot place them, their dollar
+    /// value is unknown, not zero, so the caller names them instead of letting the
     /// chart imply the total is complete.
     /// </summary>
     public static IReadOnlyList<string> Unpriced(IReadOnlyList<ModelSlice> slices) =>

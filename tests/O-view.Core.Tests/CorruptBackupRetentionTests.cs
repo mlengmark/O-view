@@ -6,7 +6,7 @@ namespace OView.Core.Tests;
 /// <summary>
 /// Retention for the databases the rollup store quarantines (issue #160).
 ///
-/// <para>The corruption handling itself is not what these are about — that behaved correctly
+/// <para>The corruption handling itself is not what these are about, that behaved correctly
 /// every time it fired, and <see cref="RollupStoreTests.CorruptDatabase_IsBackedUpAndRebuilt"/>
 /// owns it. What was wrong is that the files it left behind had no upper bound and no reader:
 /// seven generations and ~6 MB on one machine over a month, retained "so the corruption can
@@ -31,7 +31,7 @@ public class CorruptBackupRetentionTests : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    /// <summary>Seeds a complete generation — the DB and both sidecars, all on one stamp.</summary>
+    /// <summary>Seeds a complete generation, the DB and both sidecars, all on one stamp.</summary>
     private void SeedGeneration(string stamp, int bytesEach = 64)
     {
         foreach (var suffix in new[] { "", "-wal", "-shm" })
@@ -60,7 +60,7 @@ public class CorruptBackupRetentionTests : IDisposable
 
     /// <summary>
     /// The reason grouping exists at all. A database separated from its WAL is not the state
-    /// that was quarantined, so a surviving generation has to be complete — dropping a sidecar
+    /// that was quarantined, so a surviving generation has to be complete, dropping a sidecar
     /// while keeping its DB would leave something that looks like evidence and is not.
     /// </summary>
     [Fact]
@@ -100,7 +100,7 @@ public class CorruptBackupRetentionTests : IDisposable
     /// <summary>
     /// A generation is however many files carried that stamp, which is not always three.
     /// <c>BackUpCorruptFiles</c> moves only the files that exist, and a store checkpointed
-    /// before it corrupted has no <c>-wal</c> or <c>-shm</c> to move — three of the seven
+    /// before it corrupted has no <c>-wal</c> or <c>-shm</c> to move, three of the seven
     /// generations on the machine this issue was measured from are a lone <c>.db</c>.
     /// Grouping by stamp has to treat those as whole generations rather than as fragments,
     /// or the retention count means something different depending on how the store happened
@@ -138,7 +138,7 @@ public class CorruptBackupRetentionTests : IDisposable
     }
 
     /// <summary>
-    /// The live database and its working sidecars are not backups and must survive a prune —
+    /// The live database and its working sidecars are not backups and must survive a prune,
     /// they carry no stamp, and confusing the two would delete the store the app is using.
     /// </summary>
     [Fact]
@@ -162,7 +162,7 @@ public class CorruptBackupRetentionTests : IDisposable
     /// <summary>
     /// A file that will not delete is skipped, the rest of the sweep continues, and nothing
     /// propagates to the caller. This is the guarantee rule 7 / issue #16 already made of the
-    /// rebuild path — housekeeping is not allowed to turn a self-heal back into the fatal
+    /// rebuild path, housekeeping is not allowed to turn a self-heal back into the fatal
     /// state it exists to escape.
     /// </summary>
     [Fact]
@@ -197,7 +197,7 @@ public class CorruptBackupRetentionTests : IDisposable
     /// empty database still results.
     ///
     /// <para>Only Windows holds an open file against deletion. On Linux the unlink succeeds,
-    /// which is not a failure of anything — so the assertion that has to hold on both is that
+    /// which is not a failure of anything, so the assertion that has to hold on both is that
     /// the store came back, and the file surviving is asserted only where the OS makes it
     /// survive.</para>
     /// </summary>
@@ -275,7 +275,7 @@ public class CorruptBackupRetentionTests : IDisposable
     }
 
     /// <summary>
-    /// Valid SQLite magic and page size followed by garbage — a malformed file rather than
+    /// Valid SQLite magic and page size followed by garbage, a malformed file rather than
     /// merely "not a database", which is what real on-disk corruption looks like. Same shape
     /// <see cref="RollupStoreTests"/> uses.
     /// </summary>

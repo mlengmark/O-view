@@ -39,7 +39,7 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
     ///
     /// <para>This head carries the within-week intensity as opacity on its one series colour
     /// rather than as a second hue, so the ramp needs no colour the shared palette does not
-    /// have — and it reads the same way in both themes, which a fixed light-to-dark ramp
+    /// have, and it reads the same way in both themes, which a fixed light-to-dark ramp
     /// does not. Floored well above nothing: the quietest day of a week is still a day with
     /// usage, and a bar fading towards invisible would read as a day with none.</para>
     /// </summary>
@@ -48,7 +48,7 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
     private readonly LinuxPanelTheme _theme = theme;
 
     /// <summary>
-    /// <para><b>A day with no data draws nothing at all</b> — no bar, and no zero-height
+    /// <para><b>A day with no data draws nothing at all</b>, no bar, and no zero-height
     /// stand-in for one, because a flat bar claims a measured day of no usage on a day that
     /// was never measured (rule 6). The column stays, so the dates and the gridlines over it
     /// still line up; it is simply empty.</para>
@@ -56,7 +56,7 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
     /// <para><b>Why a Canvas rather than the strip of bars this was.</b> A gridline sits at
     /// its true fractional position <em>inside</em> a day column, which no stack of
     /// fixed-width children can express. The columns are laid out at a fixed pitch instead of
-    /// against the panel's measured width, so every position here is known before layout —
+    /// against the panel's measured width, so every position here is known before layout,
     /// Avalonia offers no arranged width to divide up at build time, and a chart that waited
     /// for one would be redrawing itself on every resize.</para>
     /// </summary>
@@ -69,7 +69,7 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
 
         // Scaled by the density ratio rather than given the Windows chart height: this head
         // ships a 60 px strip, and a display with room must keep exactly that. The date band
-        // below it is NOT scaled — the labels are text, and text does not shrink with the
+        // below it is NOT scaled, the labels are text, and text does not shrink with the
         // spacing.
         var barArea = NaturalGraphHeight * density.GraphScale;
         var dateTop = barArea + GraphDateGap;
@@ -138,7 +138,7 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
     /// the element's centre, so the label is positioned by its centre and the rotation leaves
     /// that point where it was: the horizontal centre is the column's own, which is also the
     /// bar's, so a date cannot drift onto its neighbour. Measuring is what makes the vertical
-    /// placement right — after a quarter turn the box's WIDTH is its height on screen.</para>
+    /// placement right, after a quarter turn the box's WIDTH is its height on screen.</para>
     /// </summary>
     /// <returns>How far below <paramref name="top"/> the label reaches.</returns>
     private double AddGraphDate(Canvas chart, PanelGraphColumnView column, double centre, double top)
@@ -165,7 +165,7 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
     /// A graph hover card as this head can show one: a single line, figure first.
     ///
     /// <para>An empty figure is the Monday fallback gridline, which has no observed instant to
-    /// state (rule 6) — so the caption stands alone rather than behind a separator with
+    /// state (rule 6), so the caption stands alone rather than behind a separator with
     /// nothing in front of it.</para>
     /// </summary>
     private static string GraphTip(string figure, string caption) =>

@@ -8,8 +8,8 @@ namespace OView.Core.Tests;
 
 /// <summary>
 /// Cowork writes its transcript to `audit.jsonl` inside a sandboxed session home, using
-/// `request_id` where Claude Code uses `requestId`. Both differences fail silently —
-/// wrong folder or wrong key yields zero rows and an empty tile, never an error — so
+/// `request_id` where Claude Code uses `requestId`. Both differences fail silently,
+/// wrong folder or wrong key yields zero rows and an empty tile, never an error, so
 /// each gets an explicit test (GitHub issue #44).
 /// </summary>
 public class CoworkIngestionTests : IDisposable
@@ -50,7 +50,7 @@ public class CoworkIngestionTests : IDisposable
     {
         var session = Path.Combine(_dir, "local-agent-mode-sessions", "org", "user", sessionId);
 
-        // The sandbox really does contain this, and it really is always empty — that is
+        // The sandbox really does contain this, and it really is always empty, that is
         // exactly why the miss was invisible.
         Directory.CreateDirectory(Path.Combine(session, ".claude", "projects"));
 
@@ -79,7 +79,7 @@ public class CoworkIngestionTests : IDisposable
     [Fact]
     public void AuditRecord_DuplicateRequestIds_DeduplicatedLikeTranscripts()
     {
-        // CLAUDE.md rule 4 applies to audit logs too — streaming writes the id repeatedly.
+        // CLAUDE.md rule 4 applies to audit logs too, streaming writes the id repeatedly.
         var path = WriteCoworkSession("local_a",
             AuditLine("req_A", "2026-07-20T12:00:00.000Z", output: 10),
             AuditLine("req_A", "2026-07-20T12:00:01.000Z", output: 120),
@@ -97,8 +97,8 @@ public class CoworkIngestionTests : IDisposable
         WriteCoworkSession("local_a", AuditLine("req_A", "2026-07-20T12:00:00.000Z", output: 120));
         WriteCoworkSession("local_b", AuditLine("req_B", "2026-07-20T12:00:00.000Z", output: 80));
 
-        // The sandbox's own projects dir — the only place the Claude Code locator would
-        // ever have looked inside a Cowork session — holds nothing.
+        // The sandbox's own projects dir, the only place the Claude Code locator would
+        // ever have looked inside a Cowork session, holds nothing.
         var sandboxProjects = Path.Combine(CoworkRoot, "org", "user", "local_a", ".claude", "projects");
         Assert.True(Directory.Exists(sandboxProjects));
         Assert.Empty(ClaudeProjectsLocator.FindTranscripts(sandboxProjects));
@@ -153,7 +153,7 @@ public class CoworkIngestionTests : IDisposable
             return;
         }
 
-        // Breaking the target is what makes enumeration throw DirectoryNotFoundException —
+        // Breaking the target is what makes enumeration throw DirectoryNotFoundException,
         // an IOException, which the old `GetFiles(AllDirectories)` shape swallowed into
         // an empty result for the entire tree.
         Directory.Delete(target, recursive: true);
@@ -229,12 +229,12 @@ public class CoworkIngestionTests : IDisposable
     public void SameSessionThroughTwoRoots_IsCountedOnce()
     {
         // MSIX redirection can expose one set of files through both the canonical and
-        // packaged paths — observed on the dev machine, identical session ids and totals.
+        // packaged paths, observed on the dev machine, identical session ids and totals.
         // Scanning both must not double the tokens.
         //
         // It must not double the FILE COUNT either, which this used to assert that it did:
         // the union was taken deliberately and ingestion's request-id de-duplication kept the
-        // tokens right. The tokens were right and the counts were not — the bundle reported
+        // tokens right. The tokens were right and the counts were not, the bundle reported
         // "16 file(s), 46,994,714 bytes" for 8 files and 23 MB, halving and doubling through
         // the day as the canonical root came and went. Mirrors are now collapsed on the path
         // relative to their root, which is the only thing that makes two of them comparable.
@@ -260,7 +260,7 @@ public class CoworkIngestionTests : IDisposable
     /// <summary>
     /// Two genuinely different sessions are not mistaken for mirrors. <c>audit.jsonl</c> repeats
     /// in every session directory, so collapsing on the file name alone would discard real
-    /// transcripts — which is why the match is on the path relative to its root.
+    /// transcripts, which is why the match is on the path relative to its root.
     /// </summary>
     [Fact]
     public void TwoSessionsUnderOneRootAreBothKept()
@@ -280,7 +280,7 @@ public class CoworkIngestionTests : IDisposable
     /// <summary>
     /// <b>The gap issue #224 was filed for.</b> A Cowork session that runs Claude Code inside
     /// its sandbox writes to the sandbox's own <c>.claude\projects</c>, not to
-    /// <c>audit.jsonl</c> — and this class asserted for a year that that directory was always
+    /// <c>audit.jsonl</c>, and this class asserted for a year that that directory was always
     /// empty. Measured: 4 such files on the development machine and 38 on the machine that
     /// reported #218, none of them ever read.
     /// </summary>

@@ -9,7 +9,7 @@ namespace OView.Tray.Tray;
 /// <para><b>Why this exists.</b> The release exe is single-file with
 /// <c>IncludeNativeLibrariesForSelfExtract</c>, so the host unpacks WPF's native DLLs into
 /// <c>%TEMP%\.net\O-view.Tray\&lt;hash&gt;\</c> at launch. A tray app draws no WPF window until
-/// the first click, so nothing loads them — and a file nothing has loaded is exactly what
+/// the first click, so nothing loads them, and a file nothing has loaded is exactly what
 /// Storage Sense and third-party temp cleaners delete. O-view runs for days; the first click
 /// after such a sweep then failed with <c>XamlParseException</c> "Add value to collection of
 /// type 'System.Windows.Controls.UIElementCollection' threw an exception", whose inner
@@ -17,7 +17,7 @@ namespace OView.Tray.Tray;
 /// "Unhandled exception" box because the click arrives through NotifyIcon's window.</para>
 ///
 /// <para>Measured, not assumed: deleting <c>wpfgfx_cor3.dll</c> reproduces the exact message,
-/// and the host re-extracts missing files on the next launch — so the window is only ever
+/// and the host re-extracts missing files on the next launch, so the window is only ever
 /// between launch and first click. Loading them here closes it: Windows will not delete a
 /// file that is mapped as a loaded image.</para>
 /// </summary>
@@ -39,7 +39,7 @@ internal static class WpfNativeLibraries
 
     /// <summary>
     /// Loads each library through the same probing WPF's own P/Invokes use, and never frees
-    /// the handle. Returns the names that could not be loaded, for the log — a failure here
+    /// the handle. Returns the names that could not be loaded, for the log, a failure here
     /// is not fatal, because a build that is not single-file finds them elsewhere anyway.
     /// </summary>
     public static IReadOnlyList<string> Pin()
@@ -59,7 +59,7 @@ internal static class WpfNativeLibraries
 
     /// <summary>
     /// True when a failure anywhere in the chain is a native library that could not be
-    /// found — the signature of the files having been removed underneath a running process,
+    /// found, the signature of the files having been removed underneath a running process,
     /// whatever wrapper (XamlParseException, TypeInitializationException) WPF put round it.
     /// </summary>
     public static bool IsMissingNativeLibrary(Exception exception)

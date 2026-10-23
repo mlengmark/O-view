@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace OView.Core.Providers.PlanHistory;
 
 /// <summary>
-/// Reads %APPDATA%\Claude\plan-usage-history.json — a file owned by Claude Desktop.
+/// Reads %APPDATA%\Claude\plan-usage-history.json, a file owned by Claude Desktop.
 /// Strictly read-only (CLAUDE.md rule 3), opened with FileShare.ReadWrite because
 /// Desktop appends while we read. The format is undocumented and has already changed
 /// once (version: 2), so every field is treated as optional and malformed samples are
@@ -12,7 +12,7 @@ namespace OView.Core.Providers.PlanHistory;
 public static class PlanHistoryFile
 {
     /// <summary>
-    /// Where the file actually is on this machine — the canonical
+    /// Where the file actually is on this machine, the canonical
     /// <c>%APPDATA%\Claude</c> location when it exists, otherwise a packaged Claude
     /// Desktop's redirected store (<see cref="PlanHistoryLocator"/>). Falls back to the
     /// canonical path when nothing is found, so error messages name the expected location.
@@ -26,19 +26,19 @@ public static class PlanHistoryFile
     ///
     /// <para><b>Why a sentinel rather than <c>null</c>.</b> Null means "use the real machine's
     /// file", and that default is what reached past an injected provider chain into the
-    /// developer's own Claude Desktop usage — so the test suite's result depended on how much
+    /// developer's own Claude Desktop usage, so the test suite's result depended on how much
     /// Claude that person had recently used. An explicit "no file" is the same fix
     /// <c>CachedUtilizationProvider(() =&gt; null)</c> already applies one seam over, where the
     /// identical hazard was solved and the reasoning written down.</para>
     ///
-    /// <para>Reads from it return nothing, exactly as a missing file does — a provider built on
+    /// <para>Reads from it return nothing, exactly as a missing file does, a provider built on
     /// it is inert rather than absent, so nothing downstream has to special-case it.</para>
     /// </summary>
     public const string NoFile = "";
 
     /// <summary>
     /// Parse the file into validated samples ordered by time. Returns an empty list on
-    /// any failure — missing file, unreadable file, malformed JSON. Never throws.
+    /// any failure, missing file, unreadable file, malformed JSON. Never throws.
     /// </summary>
     public static IReadOnlyList<PlanHistorySample> Read(string path)
     {
@@ -84,7 +84,7 @@ public static class PlanHistoryFile
         if (element.ValueKind != JsonValueKind.Object) return null;
 
         // Note: TryGetInt32/64 THROW on non-Number kinds (e.g. a string) rather than
-        // returning false — the ValueKind check first is load-bearing.
+        // returning false, the ValueKind check first is load-bearing.
         if (!element.TryGetProperty("t", out var t) ||
             t.ValueKind != JsonValueKind.Number || !t.TryGetInt64(out var epochMs)) return null;
         if (!element.TryGetProperty("org", out var org) || org.ValueKind != JsonValueKind.String) return null;

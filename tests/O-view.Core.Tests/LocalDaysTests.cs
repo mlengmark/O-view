@@ -36,7 +36,7 @@ public class LocalDaysTests
     /// <summary>
     /// The DST pair, and the reason none of this is 24-hour arithmetic. London's transitions
     /// are at 01:00 local, so the day that loses an hour is 23 hours long and the day that
-    /// gains one is 25 — measured from the zone, not assumed.
+    /// gains one is 25, measured from the zone, not assumed.
     /// </summary>
     [Fact]
     public void ALocalDayIsNotAlways24Hours()
@@ -58,7 +58,7 @@ public class LocalDaysTests
 
     /// <summary>
     /// Consecutive days tile the timeline with no gap and no overlap, through both
-    /// transitions. A gap loses usage; an overlap counts it twice — and neither raises
+    /// transitions. A gap loses usage; an overlap counts it twice, and neither raises
     /// anything, they just move a figure.
     /// </summary>
     [Theory]
@@ -105,7 +105,7 @@ public class LocalDaysTests
 
     /// <summary>
     /// A zone whose clock jumps forward <i>over</i> midnight has no local 00:00 on that day.
-    /// The day begins at the jump — and the point is that it begins at all: converting that
+    /// The day begins at the jump, and the point is that it begins at all: converting that
     /// non-existent time throws, which would take the panel down rather than shift a figure.
     /// </summary>
     [Fact]

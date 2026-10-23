@@ -16,13 +16,13 @@ namespace OView.Core.Tests;
 ///
 /// <para>Those records draw on the same plan window as the session that spawned them, so leaving
 /// them out would put the tiles in direct conflict with Claude's own meter. They are ingested
-/// today — measured on the development machine, 2026-08-31 took in <b>230 sub-agent requests
-/// worth 62.0M tokens</b> — but only because <see cref="TranscriptFileScan"/> walks recursively.
+/// today, measured on the development machine, 2026-08-31 took in <b>230 sub-agent requests
+/// worth 62.0M tokens</b>, but only because <see cref="TranscriptFileScan"/> walks recursively.
 /// Nothing asserted it, and nothing wrote the layout down.</para>
 ///
 /// <para><b>That is the whole hazard.</b> The extra directory level is invisible to anyone
-/// reading the scan: a future narrowing for performance — a top-level enumeration, a tighter
-/// pattern, a depth ceiling — would silently drop every sub-agent token with no failing test to
+/// reading the scan: a future narrowing for performance, a top-level enumeration, a tighter
+/// pattern, a depth ceiling, would silently drop every sub-agent token with no failing test to
 /// argue back. It is the shape of issue #44 (a scan that looked for what it expected rather than
 /// for what was there) and issue #224 (real usage one directory below where the scan looked), and
 /// this file is here so it cannot be the shape of a third.</para>
@@ -48,20 +48,20 @@ public class SubAgentTranscriptTests : IDisposable
     /// The all-zero placeholder, not a session id copied off a real machine.
     ///
     /// <para>The first draft of this file used an observed one, and CI's identifier scan
-    /// rejected it — correctly. Nothing here depends on the value: it is a directory name and a
+    /// rejected it, correctly. Nothing here depends on the value: it is a directory name and a
     /// file name, and the shape is all the fixture needs. <b>Do not "improve" this to something
     /// that looks more realistic</b>; a realistic session id in a public repository is somebody's
     /// actual session.</para>
     /// </summary>
     private const string ParentSessionId = "00000000-0000-0000-0000-000000000000";
 
-    /// <summary>Synthetic, for the same reason — agent ids are `a` followed by 16 hex digits.</summary>
+    /// <summary>Synthetic, for the same reason, agent ids are `a` followed by 16 hex digits.</summary>
     private const string AgentId = "a0123456789abcdef";
 
     private string DbPath => Path.Combine(_dir, "usage.db");
 
     /// <summary>
-    /// An ordinary session record — what the parent conversation writes.
+    /// An ordinary session record, what the parent conversation writes.
     /// </summary>
     private static string SessionRecord(string requestId, long outputTokens) =>
         "{\"type\":\"assistant\",\"requestId\":\"" + requestId + "\","
@@ -76,7 +76,7 @@ public class SubAgentTranscriptTests : IDisposable
     ///
     /// <para>Written out in full rather than reduced to the fields the parser reads, because the
     /// point of the fixture is to be the shape that is actually on disk. <c>sessionId</c> is the
-    /// <b>parent's</b> id, not a new one — the sub-agent does not get a session of its own, which
+    /// <b>parent's</b> id, not a new one, the sub-agent does not get a session of its own, which
     /// is why the register in <see cref="CoworkSessionIndex"/> has nothing to match on and why
     /// the directory name is the only thing tying the file back to its session.</para>
     /// </summary>
@@ -147,7 +147,7 @@ public class SubAgentTranscriptTests : IDisposable
     /// <summary>
     /// Both files are read on one pass. A scan that found the session transcript and stopped at
     /// the top level would still pass <see cref="SubAgentTokensReachTheStore"/>'s sibling in
-    /// spirit but report only the parent here — which is the field symptom, since a session with
+    /// spirit but report only the parent here, which is the field symptom, since a session with
     /// sub-agents always has both.
     /// </summary>
     [Fact]
@@ -163,8 +163,8 @@ public class SubAgentTranscriptTests : IDisposable
     /// <summary>
     /// The locator itself, asserted directly rather than through ingestion.
     ///
-    /// <para>This is the assertion that names the actual requirement — <b>the walk must descend
-    /// past the top level of the projects root</b> — so a change that breaks it fails here, at
+    /// <para>This is the assertion that names the actual requirement, <b>the walk must descend
+    /// past the top level of the projects root</b>, so a change that breaks it fails here, at
     /// the line responsible, rather than only in the totals two layers up.</para>
     /// </summary>
     [Fact]
@@ -185,7 +185,7 @@ public class SubAgentTranscriptTests : IDisposable
     ///
     /// <para><b>The sub-agent file carries a second, unshared request on purpose.</b> Without it
     /// the expected total is reachable by reading the parent alone, so the test would pass just
-    /// as happily against a scan that never descended — asserting the absence of double-counting
+    /// as happily against a scan that never descended, asserting the absence of double-counting
     /// while silently tolerating the absence of the data. The 50 is what makes the number
     /// distinguish all three outcomes: 750 correct, 700 sub-agent dropped, 1450 counted twice.</para>
     /// </summary>

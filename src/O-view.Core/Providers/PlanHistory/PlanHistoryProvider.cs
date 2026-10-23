@@ -4,7 +4,7 @@ namespace OView.Core.Providers.PlanHistory;
 
 /// <summary>
 /// Primary usage provider (ADR-0007). Reads the utilisation time series Claude Desktop
-/// maintains locally — no token, no network, no rate limits. Degrades to
+/// maintains locally, no token, no network, no rate limits. Degrades to
 /// <see cref="UsageSnapshot.None"/> when the file is missing or empty, and to
 /// <see cref="DataSource.Stale"/> when Desktop has not sampled recently (e.g. it is
 /// closed); the composite provider then falls back (ADR-0002 precedence).
@@ -14,7 +14,7 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// <summary>
     /// Maximum age at which a sample is still taken to describe <i>now</i>.
     ///
-    /// <para><b>Measured, not assumed — and re-measured, because Claude Desktop changed it.</b>
+    /// <para><b>Measured, not assumed, and re-measured, because Claude Desktop changed it.</b>
     /// The original calibration read: across 1,828 consecutive gaps in a 30-day real file,
     /// median 5.00 min, 92% within a hair of 5 min; 11 minutes then tolerated two missed
     /// samples and a minute of slack. That was true of every Desktop build up to
@@ -22,37 +22,37 @@ public sealed class PlanHistoryProvider : IUsageProvider
     ///
     /// <para>On that date the cadence changed to <b>15 minutes</b> and has held there since.
     /// Measured on the same machine's file, 1,443 gaps: 1,234 at 5 min (all before 08-10),
-    /// then 15 min throughout — 31 of them on 08-23 alone, with nothing at 5 min. Desktop
+    /// then 15 min throughout, 31 of them on 08-23 alone, with nothing at 5 min. Desktop
     /// samples on launch and every 15 minutes it stays active.</para>
     ///
     /// <para><b>Eleven minutes was therefore shorter than the interval itself</b>, which made
     /// "Live" unreachable for four minutes of every fifteen: a reading taken as recently as
     /// Desktop can take one was labelled stale while it was still the newest that could
     /// possibly exist. One interval plus a minute of slack restores the meaning the bound is
-    /// supposed to carry — stale means <i>the next sample is overdue</i>, not merely that
+    /// supposed to carry, stale means <i>the next sample is overdue</i>, not merely that
     /// Desktop paused between two of them.</para>
     ///
     /// <para>The question this answers is unchanged (issue #161): not "is Desktop alive" but
     /// "does this number still describe the window". Two missed samples at the new cadence
-    /// would be 31 minutes, which is far too long to render as a confident reading — so the
+    /// would be 31 minutes, which is far too long to render as a confident reading, so the
     /// tolerance shrinks from two intervals to one as the interval grows.</para>
     /// </summary>
     public static readonly TimeSpan DefaultFreshness = TimeSpan.FromMinutes(16);
 
     /// <summary>
-    /// How long a five-hour reading of <b>zero</b> may be trusted — much shorter, because zero
+    /// How long a five-hour reading of <b>zero</b> may be trusted, much shorter, because zero
     /// is the one value whose staleness is both most likely and most costly.
     ///
     /// <para><b>Why zero is different.</b> Within a window, utilisation only ever rises. So an
     /// aged sample is a <i>lower bound</i>, never a measurement, and the older it is the weaker
-    /// the bound. For a non-zero reading that degrades gracefully — 72% drifting to 75% is
+    /// the bound. For a non-zero reading that degrades gracefully, 72% drifting to 75% is
     /// still broadly the truth. For zero it degrades to nothing: "at least 0%" says precisely
     /// nothing about the window, while <i>looking</i> like a precise finding that the window is
     /// empty. It is the reading a user is most likely to act on and most likely to be wrong
     /// about.</para>
     ///
     /// <para>And it is common, not exotic: 587 of 1,829 samples in that same real file read
-    /// zero — every window reset produces a run of them. The reported case was exactly this:
+    /// zero, every window reset produces a run of them. The reported case was exactly this:
     /// the window reset 72 → 0, Desktop sampled at that instant and then went quiet, and 14
     /// minutes later O-view still showed an empty gauge while ~6% had been consumed
     /// (issue #161).</para>
@@ -63,7 +63,7 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// renders as a confident empty window again, which is issue #161 verbatim.</para>
     ///
     /// <para>The two bounds answer different questions, and only one of them is about
-    /// Desktop's cadence. "Is this snapshot current?" is — it can only ever be as current as
+    /// Desktop's cadence. "Is this snapshot current?" is, it can only ever be as current as
     /// the sampler allows. "Does <i>at least 0%</i> tell the user anything?" is not: fourteen
     /// minutes of Claude Code can move an empty window well into double digits whether or not
     /// Desktop was due to sample, so the reading is worthless at the same age regardless of
@@ -71,7 +71,7 @@ public sealed class PlanHistoryProvider : IUsageProvider
     ///
     /// <para>The cost is real and accepted: after a reset the gauge now reads <i>unknown</i>
     /// for nine minutes out of every fifteen rather than six out of every ten. Unknown is not
-    /// a wrong answer — it is the absence of one, which is what rule 6 asks for when the
+    /// a wrong answer, it is the absence of one, which is what rule 6 asks for when the
     /// alternative is a precise-looking figure O-view cannot stand behind.</para>
     /// </summary>
     public static readonly TimeSpan ZeroReadingFreshness = TimeSpan.FromMinutes(6);
@@ -86,7 +86,7 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// Only used to <em>disambiguate</em> a file that interleaves several orgs; it is never
     /// allowed to blank a file whose samples it doesn't match. That distinction matters:
     /// `~/.claude.json` is written by Claude Code and `plan-usage-history.json` by Claude
-    /// Desktop, so if the two apps are signed into different accounts the keys differ — and
+    /// Desktop, so if the two apps are signed into different accounts the keys differ, and
     /// a single-account dev machine never reveals it. null tracks whatever the file holds.
     /// See <see cref="ReadSamples"/>.
     /// </param>
@@ -102,13 +102,13 @@ public sealed class PlanHistoryProvider : IUsageProvider
 
     /// <summary>
     /// Where a swallowed failure is recorded. A delegate for the same reason
-    /// <see cref="_earliestActivity"/> is one — this class knows nothing about the app's
+    /// <see cref="_earliestActivity"/> is one, this class knows nothing about the app's
     /// logging and stays testable without it.
     /// </summary>
     public Action<string>? Log { get; init; }
 
     /// <summary>
-    /// The file this provider actually resolved to — <see cref="PlanHistoryFile.NoFile"/> when
+    /// The file this provider actually resolved to, <see cref="PlanHistoryFile.NoFile"/> when
     /// it was built to read nothing.
     ///
     /// <para>Exposed so the resolution can be <i>asserted</i> rather than inferred from the
@@ -131,7 +131,7 @@ public sealed class PlanHistoryProvider : IUsageProvider
 
     /// <summary>
     /// Meter values for the current session window (since the last observed reset),
-    /// plus that window's start — the inputs the divergence detector needs. Empty
+    /// plus that window's start, the inputs the divergence detector needs. Empty
     /// when no data is available.
     /// </summary>
     /// <returns>
@@ -149,14 +149,14 @@ public sealed class PlanHistoryProvider : IUsageProvider
             return (utcNow, [], TimeSpan.MaxValue);
         }
 
-        // Anchor on the current window's start so the span never crosses a boundary — a
+        // Anchor on the current window's start so the span never crosses a boundary, a
         // reset would show as a large negative rise and mask real divergence.
         //
         // The current window, not merely the last drop: after an idle gap the last drop can
         // be days old, and summing output tokens since then would compare a two-day total
         // against a five-hour meter (issue #180). Falls back to the last drop, and then to
-        // the series start, so that a window O-view cannot locate exactly is still a window
-        // — and then bounds the result, because neither fallback is bounded by anything else.
+        // the series start, so that a window O-view cannot locate exactly is still a window,
+        // and then bounds the result, because neither fallback is bounded by anything else.
         var windowStart = NoOlderThanOneWindow(
             ResetDetector.FindCurrentWindowStart(samples)?.LatestUtc
             ?? ResetDetector.FindLastDrop(samples)
@@ -179,14 +179,14 @@ public sealed class PlanHistoryProvider : IUsageProvider
     ///
     /// <para><b>Arithmetic, not a threshold.</b> The five-hour window rolls from first use, so
     /// whenever one is running it began at most five hours ago. A start earlier than that does
-    /// not describe a wide window — it describes no window at all, and everything derived from
+    /// not describe a wide window, it describes no window at all, and everything derived from
     /// it inherits that: which samples are selected, the rise between the first and the last,
     /// and the output tokens the caller sums over the same span.</para>
     ///
     /// <para><b>Only the first of the three anchors above was bounded.</b>
     /// <see cref="ResetDetector.FindCurrentWindowStart"/> returns a sample from inside the
     /// running window, so it cannot be older than one. It returns null whenever the newest
-    /// reading is <c>0</c> — "no window is running, because it starts on first use" — and the
+    /// reading is <c>0</c>, "no window is running, because it starts on first use", and the
     /// fallbacks then reach back to the last observed drop, or to the start of the series,
     /// either of which can be days old. The comment above used to defend that as a missed
     /// signal being safer than a crash. It is neither: it is a false positive, which CLAUDE.md
@@ -196,8 +196,8 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// <para><b>Observed 2026-09-07 (issue #274).</b> Claude Desktop was closed from 09-05 17:31Z until
     /// 09-07 14:44Z and resumed writing <c>fh=0</c>. That zero blanked
     /// <see cref="ResetDetector.FindCurrentWindowStart"/>, the fallback anchored on the drop at
-    /// 09-05 13:16Z, and the window handed to the detector was 47 hours wide — nineteen zeros
-    /// spanning nine five-hour boundaries — against 60,922 output tokens spent in half an hour
+    /// 09-05 13:16Z, and the window handed to the detector was 47 hours wide, nineteen zeros
+    /// spanning nine five-hour boundaries, against 60,922 output tokens spent in half an hour
     /// that morning. The reported <c>rise=0</c> was a subtraction between a sample from
     /// Saturday and a reading from Monday, and the balloon said "Usage is not drawing from your
     /// plan" beside a panel that said, correctly, that it did not know what the session was or
@@ -220,7 +220,7 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// never blank a file it simply doesn't match. So:
     /// <list type="bullet">
     /// <item>prefer <see cref="_orgUuid"/> when it matches at least one sample;</item>
-    /// <item>otherwise fall back to the file's most-recently-active org — one org's data,
+    /// <item>otherwise fall back to the file's most-recently-active org, one org's data,
     /// still de-interleaved, but the machine's real usage instead of nothing.</item>
     /// </list>
     /// The fallback is what makes O-view work when Claude Code and Claude Desktop are signed
@@ -241,7 +241,7 @@ public sealed class PlanHistoryProvider : IUsageProvider
             return forOrg;
         }
 
-        // Preferred org matched nothing — use the most recent org rather than blanking.
+        // Preferred org matched nothing, use the most recent org rather than blanking.
         // Samples are time-sorted (PlanHistoryFile), so the last one is the active org.
         var latestOrg = samples[^1].OrgUuid;
         return samples.Where(s => s.OrgUuid == latestOrg).ToList();
@@ -254,7 +254,7 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// <para>Every failure here is a silent no-op, and deliberately: no lookup configured, no
     /// activity in the bracket, or a store that throws mid-query all leave the plan-history
     /// bracket exactly as it was. This only ever <i>improves</i> a figure that is already
-    /// correct-but-imprecise, so it must never be able to make one worse — and a user whose
+    /// correct-but-imprecise, so it must never be able to make one worse, and a user whose
     /// first use was chat or the Desktop app has no transcript to find, which is normal
     /// rather than exceptional.</para>
     /// </summary>
@@ -271,12 +271,12 @@ public sealed class PlanHistoryProvider : IUsageProvider
         }
         catch (Exception)
         {
-            // A precision refinement must never take down the reading it refines — and the
+            // A precision refinement must never take down the reading it refines, and the
             // filter that used to sit here, `when (ex is IOException or
             // InvalidOperationException)`, did not deliver that. In production the delegate
             // is RollupStore.EarliestRequestBetween, so what it actually throws is
             // SqliteException, which is neither. That escaped GetSnapshot and blanked the
-            // plan-history percentages — figures that do not depend on the store at all —
+            // plan-history percentages, figures that do not depend on the store at all,
             // turning a rebuildable cache's failure into a missing session gauge.
             //
             // Do not narrow this again. The delegate is injected, so this provider cannot
@@ -312,7 +312,7 @@ public sealed class PlanHistoryProvider : IUsageProvider
         var age = utcNow - latest.AtUtc;
         var source = age <= _freshness ? DataSource.Live : DataSource.Stale;
 
-        // The window that is running now, bracketed by the samples straddling its start —
+        // The window that is running now, bracketed by the samples straddling its start,
         // not a grid stepped forward from the last drop, which after an idle gap describes
         // a window that never existed (issue #180).
         //
@@ -327,13 +327,13 @@ public sealed class PlanHistoryProvider : IUsageProvider
         // No weekly reset. This provider used to derive one by scanning the series for `sd`
         // drops; ADR-0014 removed that outright. The reset is a fixed weekly grid reported
         // exactly by Claude Code, so plan history has nothing to add to it and the engine
-        // owns the question — deriving it here only ever produced a worse answer than the
+        // owns the question, deriving it here only ever produced a worse answer than the
         // one already sitting in ~/.claude.json.
         //
         // The FIVE-hour reset above is unaffected and still derived, because that window
         // rolls from first use and is genuinely not a grid (issue #180).
         //
-        // The two percentages and the sample's own timestamp are measured — read straight off
+        // The two percentages and the sample's own timestamp are measured, read straight off
         // a Desktop sample. The session reset is not: it is predicted from an observed drop,
         // never reported by the source (see the type's own doc comment), so it is estimated
         // whenever there is one to predict. Weekly has nothing to add at all, per the comment
@@ -348,7 +348,7 @@ public sealed class PlanHistoryProvider : IUsageProvider
             WeeklyResetPeriod: null,
             // How wide the bracket is, so a start inferred across a sampling gap is marked
             // approximate rather than printed to the minute (rule 6). The session window is
-            // the only one that still carries this — the weekly reset is a reported instant
+            // the only one that still carries this, the weekly reset is a reported instant
             // with no bracket to describe (ADR-0014).
             SessionResetUncertainty: windowStart?.Uncertainty);
     }

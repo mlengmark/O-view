@@ -4,12 +4,12 @@ namespace OView.Core.Pricing;
 
 /// <summary>
 /// Prices tokens at published API rates to produce the "Est. value" figures. This is
-/// NOT money charged — within plan limits the marginal cost is £0/$0 (CLAUDE.md
+/// NOT money charged, within plan limits the marginal cost is £0/$0 (CLAUDE.md
 /// rule 6; ui-spec.md). The UI must always prefix these figures "Est."
 ///
 /// <para><b>Every price is read from a <see cref="RateCard"/>; none is computed from
 /// another.</b> This class used to hold two <c>private const</c> multipliers, and one of
-/// them — <c>CacheWriteMultiplier = 1.25m</c> — stood in for two different published prices.
+/// them, <c>CacheWriteMultiplier = 1.25m</c>, stood in for two different published prices.
 /// Anthropic bills a 5-minute cache write at 1.25× base input and a 1-hour write at 2×, and
 /// the transcripts on the machine this was measured on were almost entirely 1-hour, so
 /// cache-write value understated by 37.5% of its true amount for as long as the constant
@@ -60,12 +60,12 @@ public static class CostEstimator
 
     /// <summary>
     /// One rate row applied to one token split. The single place the six columns are
-    /// multiplied out — <see cref="RelativeError"/> has to price exactly what
+    /// multiplied out, <see cref="RelativeError"/> has to price exactly what
     /// <see cref="EstimateUsd"/> prices, or the calibration measures the difference between
     /// two implementations rather than between O-view and a reported figure.
     ///
     /// <para>The TTL-unrecorded bucket takes the 5-minute rate. It is the cheaper of the two
-    /// write prices, so this understates rather than overstates — and the panel names the
+    /// write prices, so this understates rather than overstates, and the panel names the
     /// assumption rather than letting the figure stand on its own (issue #255).</para>
     /// </summary>
     private static decimal Value(ModelRates rates, TokenSplit tokens) =>
@@ -83,8 +83,8 @@ public static class CostEstimator
     /// <para><b>This is the only check on the rates that needs no network, no credential and no
     /// policy change</b>, and it is how issue #256 was found. Claude Code's usage summary prints
     /// token counts <i>and</i> a dollar total, so the rates are the only unknown in the
-    /// comparison. It catches every class of estimator error — a wrong rate, a wrong cache
-    /// column, an unread modifier, a de-duplication fault — where a drift check against the
+    /// comparison. It catches every class of estimator error, a wrong rate, a wrong cache
+    /// column, an unread modifier, a de-duplication fault, where a drift check against the
     /// published page only catches rates.</para>
     ///
     /// <para><b>It compares against a candidate <see cref="ModelRates"/> rather than solving for

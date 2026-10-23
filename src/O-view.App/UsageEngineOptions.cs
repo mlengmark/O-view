@@ -9,19 +9,19 @@ namespace OView.App;
 ///
 /// <para>Every path is nullable and defaults to the real location, which is the same shape
 /// <see cref="RollupStore"/>, <see cref="WeeklyResetAnchor"/> and <see cref="Core.Models.TraySettings"/>
-/// already use — so a test can point the whole engine at a temp directory without a
+/// already use, so a test can point the whole engine at a temp directory without a
 /// filesystem mock, and production passes nothing.</para>
 /// </summary>
 public sealed record UsageEngineOptions
 {
     /// <summary>
-    /// Steady-state interval for the <b>full</b> poll — the one that walks the transcripts and
+    /// Steady-state interval for the <b>full</b> poll, the one that walks the transcripts and
     /// rebuilds the 31-day figures. 60 s by default.
     /// </summary>
     public TimeSpan PollInterval { get; init; } = TimeSpan.FromSeconds(60);
 
     /// <summary>
-    /// Interval for the plan-history read alone — the session and weekly percentages the icon,
+    /// Interval for the plan-history read alone, the session and weekly percentages the icon,
     /// the tooltip and the bars are drawn from.
     ///
     /// <para><b>Why this is not <see cref="PollInterval"/>.</b> The two reads a poll performs
@@ -40,7 +40,7 @@ public sealed record UsageEngineOptions
 
     /// <summary>
     /// Fast retry used while warming up before Claude Desktop has produced data. Never
-    /// allowed to exceed <see cref="PollInterval"/> — a sub-3 s diagnostic
+    /// allowed to exceed <see cref="PollInterval"/>, a sub-3 s diagnostic
     /// <c>--interval-ms</c> would otherwise make "warming up" slower than steady state.
     /// </summary>
     public TimeSpan WarmupInterval { get; init; } = TimeSpan.FromSeconds(3);
@@ -56,7 +56,7 @@ public sealed record UsageEngineOptions
     /// notice a release, which is the gap that prompted the change. Minutes would spend a
     /// resource that is not this instance's to spend: GitHub allows an unauthenticated caller
     /// 60 requests per hour <b>per IP</b>, so a ten-minute cadence has ten copies behind one
-    /// NAT consuming the whole budget for that address — and conditional requests buy no
+    /// NAT consuming the whole budget for that address, and conditional requests buy no
     /// exemption without an <c>Authorization</c> header, which rule 3 forbids this app from
     /// holding.</para>
     ///
@@ -66,7 +66,7 @@ public sealed record UsageEngineOptions
     public TimeSpan UpdateCheckInterval { get; init; } = TimeSpan.FromHours(6);
 
     /// <summary>
-    /// First rate-card drift check, after launch for the same reason the update check is —
+    /// First rate-card drift check, after launch for the same reason the update check is,
     /// so it neither slows startup nor races the first refresh (GitHub issue #257).
     /// </summary>
     public TimeSpan FirstRateCheckDelay { get; init; } = TimeSpan.FromMinutes(2);
@@ -76,8 +76,8 @@ public sealed record UsageEngineOptions
     /// jitter (<see cref="UpdateSchedule"/>).
     ///
     /// <para><b>Weekly, and deliberately not shorter.</b> Published rates change on the order of
-    /// months, and the failure this guards against — a Sonnet 5 row that was wrong the day it
-    /// was written — took two months to surface. A daily check would buy nothing but noise
+    /// months, and the failure this guards against, a Sonnet 5 row that was wrong the day it
+    /// was written, took two months to surface. A daily check would buy nothing but noise
     /// against a page nobody else is paying for. One ~50 KB request per week, zero tokens.</para>
     /// </summary>
     public TimeSpan RateCheckInterval { get; init; } = TimeSpan.FromDays(7);
@@ -85,7 +85,7 @@ public sealed record UsageEngineOptions
     /// <summary>
     /// Randomness source for the cadence jitter. Injectable so a test can pin the interval
     /// rather than assert against a range that a bad implementation would also satisfy.
-    /// Shared by both outbound cadences — there is one reason to scatter them and one setting
+    /// Shared by both outbound cadences, there is one reason to scatter them and one setting
     /// for it.
     /// </summary>
     public Random UpdateJitter { get; init; } = Random.Shared;
@@ -93,12 +93,12 @@ public sealed record UsageEngineOptions
     public IClock Clock { get; init; } = SystemClock.Instance;
 
     /// <summary>
-    /// The timezone the panel's daily figures are measured in — the reader's own, so "today"
+    /// The timezone the panel's daily figures are measured in, the reader's own, so "today"
     /// means their today (issue #211).
     ///
     /// <para>Injectable for the same reason <see cref="Clock"/> is: a day-boundary assertion
     /// that reads the machine's zone passes or fails by where CI happens to be, and passes
-    /// vacuously on a runner sitting in UTC. The pair is what pins a case — a fixed clock in a
+    /// vacuously on a runner sitting in UTC. The pair is what pins a case, a fixed clock in a
     /// zone that moves under it says nothing.</para>
     /// </summary>
     public TimeZoneInfo DisplayZone { get; init; } = TimeZoneInfo.Local;
@@ -114,7 +114,7 @@ public sealed record UsageEngineOptions
     /// <summary>
     /// Raw access to Claude Code's cached figures, for harvesting the weekly anchor.
     ///
-    /// <para>Separate from <see cref="CachedUtilization"/> — that provider deliberately drops a
+    /// <para>Separate from <see cref="CachedUtilization"/>, that provider deliberately drops a
     /// <c>resets_at</c> once it has passed, which is exactly the value the anchor is made of.
     /// Null defaults to reading the real file, and only when no <see cref="Provider"/> was
     /// injected: a test that describes its own world must not have this reach past it into the
@@ -128,7 +128,7 @@ public sealed record UsageEngineOptions
 
     /// <summary>
     /// Reads Claude's files from these locations instead of this machine's: the smoke test's
-    /// fixture. Null — the default, and always in the shipped app — reads the real ones.
+    /// fixture. Null, the default, and always in the shipped app, reads the real ones.
     /// Takes precedence over <see cref="PlanHistoryPath"/>.
     /// </summary>
     public ClaudeDataLocations? ClaudeData { get; init; }
@@ -138,14 +138,14 @@ public sealed record UsageEngineOptions
     /// <see cref="Core.Models.DivergenceDetector"/> synthetic inputs rather than faking its
     /// output, so the simulation exercises the same code path the real case would.
     /// Off-plan rendering cannot be produced on demand from real data, and this whole
-    /// feature exists because a UI failed to communicate something expensive — so the UI
+    /// feature exists because a UI failed to communicate something expensive, so the UI
     /// itself needs verifying.
     /// </summary>
     public string? SimulateDivergence { get; init; }
 
     /// <summary>
     /// Pre-composed provider, for tests. Production leaves this null and the engine builds
-    /// the real chain — plan history first, JSONL as a labelled estimate (ADR-0002/0007).
+    /// the real chain, plan history first, JSONL as a labelled estimate (ADR-0002/0007).
     /// </summary>
     public IUsageProvider? Provider { get; init; }
 
@@ -173,7 +173,7 @@ public sealed record UsageEngineOptions
     ///
     /// <para><b>Deliberately not defaulted to the real one.</b> Every other seam here falls back
     /// to the real location, but this one spawns a process, and a test that forgot to set it
-    /// would run <c>claude</c> on the developer's machine — the same rule that keeps
+    /// would run <c>claude</c> on the developer's machine, the same rule that keeps
     /// <see cref="CachedUtilizationSource"/> from reaching past an injected provider into a real
     /// <c>~/.claude.json</c>, with a side effect instead of a read.</para>
     /// </summary>
@@ -182,15 +182,15 @@ public sealed record UsageEngineOptions
     /// <summary>
     /// Shortest gap between two refresh attempts.
     ///
-    /// <para><b>Rate limit is the constraint here, not cost.</b> The refresh itself is free —
-    /// measured at zero tokens — but it spends <i>Claude Code's</i> budget against a usage
+    /// <para><b>Rate limit is the constraint here, not cost.</b> The refresh itself is free,
+    /// measured at zero tokens, but it spends <i>Claude Code's</i> budget against a usage
     /// endpoint ADR-0002 recorded as aggressively rate limited. Polling hard enough to be
     /// throttled would degrade the user's own CLI work to keep a tray icon current, which is a
     /// worse outcome than a stale gauge.</para>
     ///
     /// <para>Fifteen minutes because nothing moves faster: the session meter shifted ~8 points
     /// per 15-minute sample under heavy load, on a gauge that shows an integer percent. A shorter
-    /// floor buys resolution the display cannot express. Opening the panel bypasses it — that is
+    /// floor buys resolution the display cannot express. Opening the panel bypasses it, that is
     /// a person looking, not a timer.</para>
     /// </summary>
     public TimeSpan UsageRefreshFloor { get; init; } = TimeSpan.FromMinutes(15);

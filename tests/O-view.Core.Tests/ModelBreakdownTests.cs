@@ -6,7 +6,7 @@ namespace OView.Core.Tests;
 /// The per-model tile breakdown (GitHub issue #37).
 ///
 /// Two constraints are expressed as code here and both are load-bearing:
-///   • colour follows the MODEL, from one panel-wide slot order — never the segment's
+///   • colour follows the MODEL, from one panel-wide slot order, never the segment's
 ///     rank within a tile, which made the same model change colour between tiles;
 ///   • the slot count tiers at three, because no validated neutral separates from the
 ///     third chromatic slot for deuteranopes.
@@ -60,7 +60,7 @@ public class ModelBreakdownTests
     /// <summary>
     /// The regression this order exists to prevent. Colouring by rank within each tile
     /// made Opus 5 blue on the "today" tile (where it was the only model, hence first)
-    /// and orange on the 31-day tile (where Opus 4.8 outranked it) — the same model
+    /// and orange on the 31-day tile (where Opus 4.8 outranked it), the same model
     /// wearing two colours on one panel.
     /// </summary>
     [Fact]
@@ -160,7 +160,7 @@ public class ModelBreakdownTests
         var slices = new[]
         {
             Slice("claude-opus-5", 100, 10m),
-            // Real tokens, value that rounds to zero — the case this test is about. It
+            // Real tokens, value that rounds to zero, the case this test is about. It
             // used to use "<synthetic>", which ingestion can never produce (issue #57);
             // the behaviour under test is the zero MEASURE, not the model id.
             Slice("claude-haiku-4-5", 40, 0m),

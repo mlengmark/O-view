@@ -57,7 +57,7 @@ internal sealed class PopupDivergence(
         coverage.Text = offPlan.Coverage;
 
         // The explanation is on hover now rather than standing under the figure (issue #181).
-        // Both wordings still carry the rule-6 caveat that this is not what was charged —
+        // Both wordings still carry the rule-6 caveat that this is not what was charged,
         // moving a caveat behind a hover is the obvious way to lose one, so the sentences
         // live in OffPlanText where they have one definition and a test can assert them.
         creditsSection.ToolTip = HoverCard.Text(owner, offPlan.Hint);

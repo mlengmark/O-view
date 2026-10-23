@@ -42,7 +42,7 @@ public class ReleaseVersionTests
         Assert.True(Parse("0.4.3") > Parse("0.4.2"));
         // The third vector crossing into two digits, first exercised by v0.4.10.
         // Lexicographically "0.5.10" < "0.5.9", so a string comparison would leave every user
-        // on 0.5.9 never offered the update — and silently, since the check would report
+        // on 0.5.9 never offered the update, and silently, since the check would report
         // "up to date" rather than fail.
         Assert.True(Parse("0.5.10") > Parse("0.5.9"));
         Assert.True(Parse("0.5.11") > Parse("0.5.10"));
@@ -80,7 +80,7 @@ public class ReleaseVersionTests
     /// <summary>
     /// The specific shape a string comparison gets wrong, kept separate because it is narrower
     /// than the theory above: the trap is a change of <b>digit width</b>, not two digits as
-    /// such. "11.0.0" sorts correctly above "10.0.0" as a string — both are the same width —
+    /// such. "11.0.0" sorts correctly above "10.0.0" as a string, both are the same width,
     /// so pairing those would assert something untrue. It is 9→10 and 99→100 that invert.
     /// </summary>
     [Theory]
@@ -93,7 +93,7 @@ public class ReleaseVersionTests
     public void A_string_comparison_would_call_these_newer_versions_older(string newer, string older)
     {
         Assert.True(string.CompareOrdinal(newer, older) < 0,
-            $"{newer} should sort BELOW {older} as a string — that inversion is what this guards");
+            $"{newer} should sort BELOW {older} as a string, that inversion is what this guards");
 
         Assert.True(Parse(newer) > Parse(older));
     }
@@ -101,7 +101,7 @@ public class ReleaseVersionTests
     /// <summary>
     /// Vectors are unbounded non-negative integers, not capped at 99. Nothing in the app, the
     /// release workflow or the installer enforces a ceiling, so documenting one would be a
-    /// rule that does not exist — and a cap would only ever be a reason to bump a higher
+    /// rule that does not exist, and a cap would only ever be a reason to bump a higher
     /// vector for no engineering reason.
     /// </summary>
     [Fact]
@@ -122,8 +122,8 @@ public class ReleaseVersionTests
 public class UpdateCheckTests
 {
     /// <summary>
-    /// These cases are all about version and feed handling, so they run as the Windows build
-    /// — the platform whose behaviour must not change. Asset selection itself is exercised
+    /// These cases are all about version and feed handling, so they run as the Windows build,
+    /// the platform whose behaviour must not change. Asset selection itself is exercised
     /// separately in <see cref="ReleaseAssetSelectionTests"/>.
     /// </summary>
     private static UpdateCheckResult Check(string currentVersion, string releaseJson) =>

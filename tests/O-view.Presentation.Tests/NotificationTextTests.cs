@@ -10,7 +10,7 @@ namespace OView.Presentation.Tests;
 ///
 /// <para><b>A notification gets one pass.</b> A Windows balloon is gone in seconds and a
 /// freedesktop notification may never be seen at all, so there is no re-reading and no
-/// "where was that again?" — which makes these the strings most worth pinning and the ones
+/// "where was that again?", which makes these the strings most worth pinning and the ones
 /// whose only other verification was reading the call site.</para>
 /// </summary>
 public class NotificationTextTests
@@ -63,7 +63,7 @@ public class NotificationTextTests
         Assert.Equal("Weekly reset time doesn't match", NoticeText.WeeklyResetConflictTitle);
 
     /// <summary>
-    /// The threshold balloon's title is generic — the crossing itself is in the body — because
+    /// The threshold balloon's title is generic, the crossing itself is in the body, because
     /// one title is reused for every percentage a user may set (issue #141).
     /// </summary>
     [Fact]
@@ -78,7 +78,7 @@ public class NotificationTextTests
 
     /// <summary>
     /// The user has just launched something that appears to have done nothing at all, so the
-    /// title leads with the app running — the fact that reframes the rest from a failure into
+    /// title leads with the app running, the fact that reframes the rest from a failure into
     /// a missing extension.
     /// </summary>
     [Fact]
@@ -100,7 +100,7 @@ public class NotificationTextTests
     {
         Assert.Equal(
             "O-view found no notification-area host on the session bus, so its icon has "
-            + "nowhere to appear. GNOME does not provide one by default — installing an "
+            + "nowhere to appear. GNOME does not provide one by default, installing an "
             + "AppIndicator/KStatusNotifierItem extension adds it, and O-view will pick it up "
             + "without needing a restart.",
             NoticeText.TrayHostAbsent);
@@ -132,7 +132,7 @@ public class NotificationTextTests
 
     /// <summary>
     /// An account with extra usage off is not billing beyond its plan, and saying otherwise
-    /// was not a hedge but a false statement about the reader's money — so only the enabled
+    /// was not a hedge but a false statement about the reader's money, so only the enabled
     /// state keeps the billing claim.
     /// </summary>
     [Fact]
@@ -147,7 +147,7 @@ public class NotificationTextTests
     }
 
     /// <summary>
-    /// The estimate is the API-rate VALUE of the work, not a charge — withheld beside "extra
+    /// The estimate is the API-rate VALUE of the work, not a charge, withheld beside "extra
     /// usage is switched off" because a balloon has no room to qualify the two against each
     /// other, unlike the panel.
     /// </summary>
@@ -170,7 +170,7 @@ public class NotificationTextTests
 
     /// <summary>
     /// Unknown withholds the setting sentence, same as Disabled would, but <b>not</b> the
-    /// estimate — the two are read from different sources, and a figure already built from
+    /// estimate, the two are read from different sources, and a figure already built from
     /// the plan-history window does not become less true because the cached block was
     /// absent. Only Disabled, which states the figure cannot be billed, withholds it.
     /// </summary>
@@ -223,7 +223,7 @@ public class NotificationTextTests
     /// The one case that earns an error badge, and the one that must never offer the releases
     /// page: the bytes that arrived were not the bytes the release published, so sending the
     /// reader to download it by hand would hand them exactly the file the check rejected. The
-    /// reassurance about the current version is the other half — nothing on the machine
+    /// reassurance about the current version is the other half, nothing on the machine
     /// changed.
     /// </summary>
     [Fact]
@@ -243,7 +243,7 @@ public class NotificationTextTests
 
     /// <summary>
     /// The automatic path's download failure promises the next scheduled attempt rather than
-    /// opening a browser, because nobody is watching it — and that is the whole reason it is
+    /// opening a browser, because nobody is watching it, and that is the whole reason it is
     /// worded apart from <see cref="UpdateText.FailedBody"/>.
     /// </summary>
     [Fact]
@@ -273,8 +273,8 @@ public class NotificationTextTests
     }
 
     /// <summary>
-    /// The interactive check always reports an outcome — silence would be indistinguishable
-    /// from a check that never ran — and names the version, so the answer cannot be mistaken
+    /// The interactive check always reports an outcome, silence would be indistinguishable
+    /// from a check that never ran, and names the version, so the answer cannot be mistaken
     /// for a stale one.
     /// </summary>
     [Fact]
@@ -286,7 +286,7 @@ public class NotificationTextTests
 
     /// <summary>
     /// A throttled check is named apart from an unreachable GitHub because the remedy differs
-    /// and the cause is usually not this machine — the limit is per IP address, so a shared
+    /// and the cause is usually not this machine, the limit is per IP address, so a shared
     /// network exhausts it without this user making a request (issue #176). Telling them
     /// their connection failed sent them to debug the wrong thing.
     /// </summary>
@@ -314,17 +314,17 @@ public class NotificationTextTests
         Assert.Equal("Update available", UpdateText.DialogTitle);
 
         Assert.Equal(
-            "O-view 0.7.1 is available — you have 0.7.0. Download and install it now?",
+            "O-view 0.7.1 is available, you have 0.7.0. Download and install it now?",
             UpdateText.DialogMessage(Next, Current, UpdateText.InstallQuestion));
 
         Assert.Equal(
-            "O-view 0.7.1 is available — you have 0.7.0. Open the download page for the new version?",
+            "O-view 0.7.1 is available, you have 0.7.0. Open the download page for the new version?",
             UpdateText.DialogMessage(Next, Current, UpdateText.OpenPageQuestion));
     }
 
     /// <summary>
     /// The primary button names the action rather than answering "Yes" to a question the
-    /// reader would have to re-read to be sure of — and the two paths do different things, so
+    /// reader would have to re-read to be sure of, and the two paths do different things, so
     /// they cannot share a label.
     /// </summary>
     [Fact]
@@ -338,7 +338,7 @@ public class NotificationTextTests
 
     /// <summary>
     /// The app vanishing and returning is surprising enough to state before it happens. It
-    /// belongs to the install question only — the download page opens no installer and closes
+    /// belongs to the install question only, the download page opens no installer and closes
     /// nothing.
     /// </summary>
     [Fact]
@@ -358,7 +358,7 @@ public class NotificationTextTests
     /// The .deb notice deliberately does not say "run apt upgrade". There is no O-view apt
     /// repository, so that command would report nothing to do and the user would reasonably
     /// conclude the notification was wrong (rule 6). It names the real step, and says whose
-    /// files these are — which is why O-view is not doing it for them.
+    /// files these are, which is why O-view is not doing it for them.
     /// </summary>
     [Fact]
     public void ThePackageNoticeNamesTheRealStepAndNotAptUpgrade()
@@ -376,7 +376,7 @@ public class NotificationTextTests
 
     /// <summary>
     /// The tarball has no package manager to defer to, so the step is unpacking over what is
-    /// there — and the two notices must not be interchangeable, because following the wrong
+    /// there, and the two notices must not be interchangeable, because following the wrong
     /// one does nothing.
     /// </summary>
     [Fact]

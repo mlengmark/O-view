@@ -9,7 +9,7 @@ namespace OView.Core.Providers.Jsonl;
 /// nothing at all about where they came from, so a machine whose transcripts are 98.5% Cowork
 /// and whose ledger holds only Claude Code rows looked exactly like a machine that had simply
 /// used Claude a little (GitHub issue #218). A label that reaches the schema cannot be retyped
-/// per call site — a second spelling would split one source into two rows of a breakdown whose
+/// per call site, a second spelling would split one source into two rows of a breakdown whose
 /// entire purpose is to be summed against the file counts above it.</para>
 ///
 /// <para>They are display strings and storage keys at once, deliberately: the breakdown is
@@ -18,10 +18,10 @@ namespace OView.Core.Providers.Jsonl;
 /// </summary>
 public static class TranscriptSources
 {
-    /// <summary>Claude Code, CLI or hosted in Desktop — <c>~/.claude/projects/**/*.jsonl</c>.</summary>
+    /// <summary>Claude Code, CLI or hosted in Desktop, <c>~/.claude/projects/**/*.jsonl</c>.</summary>
     public const string ClaudeCode = "Claude Code";
 
-    /// <summary>Cowork — <c>&lt;claude-data-root&gt;/local-agent-mode-sessions/…/audit.jsonl</c>.</summary>
+    /// <summary>Cowork, <c>&lt;claude-data-root&gt;/local-agent-mode-sessions/…/audit.jsonl</c>.</summary>
     public const string Cowork = "Cowork";
 
     /// <summary>
@@ -29,7 +29,7 @@ public static class TranscriptSources
     ///
     /// <para><b>Not a third surface, and never counted as one.</b> Every install that predates
     /// this column carries a whole ledger of them, and the honest reading is "this build cannot
-    /// say" — attributing them to Claude Code because that is the likelier source would be
+    /// say", attributing them to Claude Code because that is the likelier source would be
     /// exactly the fabricated number rule 6 forbids, in the one report a person turns to when
     /// they already suspect the figures.</para>
     /// </summary>

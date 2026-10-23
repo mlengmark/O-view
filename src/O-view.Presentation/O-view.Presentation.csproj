@@ -2,7 +2,7 @@
 
   <!-- Everything a user reads or sees, shared by both heads: wording, formatting, view
        models, and the sample states both heads render for verification. Platform-neutral by
-       the same rule as O-view.Core and O-view.App — no WPF, no Avalonia, no Win32 — and CI
+       the same rule as O-view.Core and O-view.App, no WPF, no Avalonia, no Win32, and CI
        builds it on ubuntu-latest. See docs/architecture.md. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>

@@ -27,7 +27,7 @@ public sealed record IngestAuditSource(
 /// bundle is a claim the store makes about its own state: how many rows it has, how far it read
 /// each file, how many records that produced. All of those are written by the same code path
 /// whose correctness is in question, and on an install that predates the source column they are
-/// silent about the only thing being asked. This is the independent measurement — it parses the
+/// silent about the only thing being asked. This is the independent measurement, it parses the
 /// files the way ingestion does and compares the result against what is actually stored, so a
 /// missing surface shows up as a number rather than as an inference from two file counts.</para>
 ///
@@ -42,7 +42,7 @@ public sealed record IngestAuditSource(
 /// side effect of diagnosing, and the transcripts are read the same way every other reader in
 /// this app reads them. Producing a bundle must never change what the bundle describes.</para>
 ///
-/// <para>Carries counts only — request ids are compared in memory and never printed, exactly as
+/// <para>Carries counts only, request ids are compared in memory and never printed, exactly as
 /// ADR-0006 keeps conversation content out of the store itself.</para>
 /// </summary>
 public sealed record IngestAuditReport(
@@ -58,7 +58,7 @@ public sealed record IngestAuditReport(
     /// absent from most bundles by design, so it says how to get it.
     /// </summary>
     public static IngestAuditReport NotRun { get; } =
-        new([], 0, 0, TimeSpan.Zero, "not run — pass --diagnose to include it");
+        new([], 0, 0, TimeSpan.Zero, "not run, pass --diagnose to include it");
 
     /// <summary>
     /// Request ids found in more than one surface's files. Ingestion de-duplicates on the id
@@ -104,7 +104,7 @@ public sealed record IngestAuditReport(
         return text.ToString();
     }
 
-    /// <summary>Audits the real machine layout — every root ingestion actually reads.</summary>
+    /// <summary>Audits the real machine layout, every root ingestion actually reads.</summary>
     public static IngestAuditReport Run() =>
         Run(null, ClaudeProjectsLocator.DefaultRoot, CoworkAuditLocator.DefaultRoots);
 
@@ -112,7 +112,7 @@ public sealed record IngestAuditReport(
     /// Overload taking explicit inputs so the pass is testable against a synthetic layout.
     /// Mirrors <see cref="JsonlUsageProvider"/>'s own constructor: a null projects root and an
     /// empty Cowork list each skip that source outright, and neither falls back to a machine
-    /// default — naming one root while the other silently resolved to a real directory once
+    /// default, naming one root while the other silently resolved to a real directory once
     /// made a test read this developer's actual Cowork history.
     /// </summary>
     public static IngestAuditReport Run(
@@ -199,7 +199,7 @@ public sealed record IngestAuditReport(
     /// beats tens of thousands of parameterised lookups, and the ids are short.
     ///
     /// <para><c>Mode=ReadOnly</c> is load-bearing. Opening this store the ordinary way would run
-    /// the schema migration and let SQLite fold in any journal beside it — so the act of
+    /// the schema migration and let SQLite fold in any journal beside it, so the act of
     /// diagnosing a suspected rollback (#213) would perform one.</para>
     /// </summary>
     private static Dictionary<string, long> ReadLedger(string path)

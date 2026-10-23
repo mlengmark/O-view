@@ -90,15 +90,15 @@
                 </Grid>
                 <!-- Thin. The figures are revealed on hover rather than printed inside
                      the segments, so the bar carries no text and does not need the
-                     height for it — it reads as a cleaner mark this way. -->
+                     height for it, it reads as a cleaner mark this way. -->
                 <Grid x:Name="BarHost" Height="10" Margin="0,5,0,0" SnapsToDevicePixels="True"/>
                 <!-- The legend is mandatory, not optional polish: on the light surface
                      two series sit below 3:1 against the tile, which the colour rules
                      allow only when visible labels ship alongside. It is also the
-                     colour-blind fallback — identity never rests on hue alone. -->
+                     colour-blind fallback, identity never rests on hue alone. -->
                 <WrapPanel x:Name="LegendHost" Margin="0,5,0,0" Orientation="Horizontal"/>
                 <!-- The coverage caveat repeats here. The tile's LABEL is expendable in
-                     this view; its caveat is not — "465.3M" without "8 of 31 days
+                     this view; its caveat is not, "465.3M" without "8 of 31 days
                      recorded" reads as low usage rather than short history, which is the
                      exact misreading rule 6 exists to prevent. -->
                 <TextBlock x:Name="BreakdownNote" FontSize="10" TextWrapping="Wrap"
@@ -110,7 +110,7 @@
 
                  Two opposed arrows, not a chart glyph (issue #179). The tile does not draw
                  a chart, it SWAPS between two views of the same figure, and a bar-chart icon
-                 said the wrong thing about what clicking does — it read as "this is a chart"
+                 said the wrong thing about what clicking does, it read as "this is a chart"
                  rather than "there is another side to this".
 
                  Strokes with no fill, deliberately: a filled or boxed icon reads as a button

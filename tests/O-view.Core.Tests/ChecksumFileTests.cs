@@ -6,7 +6,7 @@ namespace OView.Core.Tests;
 /// The bug these prevent: an updater that believes a malformed or ambiguous
 /// <c>SHA256SUMS</c> and installs on the strength of it.
 ///
-/// <para>Every case here asserts the same property — anything short of an unambiguous,
+/// <para>Every case here asserts the same property, anything short of an unambiguous,
 /// well-formed entry for the exact asset yields null, and null means "do not install".
 /// A lenient parser would turn each of these into permission.</para>
 /// </summary>

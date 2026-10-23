@@ -10,7 +10,7 @@ namespace OView.App.Tests;
 /// hard-coded at the single point they all funnel through. So "O-view is up to date" arrived
 /// under a yellow warning triangle, identical to "Usage is billing beyond your plan". A tool
 /// that draws the same alarm for good news and for money being spent has taught the user to
-/// ignore the alarm — and the alarm it then loses is the one that mattered.</para>
+/// ignore the alarm, and the alarm it then loses is the one that mattered.</para>
 ///
 /// <para>The Windows head has no test project, so the mapping from kind to
 /// <c>ToolTipIcon</c> and the choice made at each of its eleven call sites are verified by

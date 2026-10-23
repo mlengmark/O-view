@@ -10,14 +10,14 @@ namespace OView.Tray.Tray;
 /// The Windows drawing backend for the tray icon: System.Drawing over the shared
 /// measurements in <see cref="TrayIconGeometry"/>.
 ///
-/// <para>What the mark <i>is</i> — the ring/pupil ratios, the stroke width, the arc's start
-/// angle, the colour bands, and the rule that an estimate renders no fill — lives in
+/// <para>What the mark <i>is</i>, the ring/pupil ratios, the stroke width, the arc's start
+/// angle, the colour bands, and the rule that an estimate renders no fill, lives in
 /// <see cref="TrayIconGeometry"/> so it cannot drift from the Linux head's copy. What lives
 /// here is only <i>how Windows draws it</i>, which is a view and may reasonably differ
 /// (ADR-0013).</para>
 ///
 /// <para>System.Drawing has been Windows-only since .NET 6, so this file can never move to
-/// a shared project — and does not need to.</para>
+/// a shared project, and does not need to.</para>
 /// </summary>
 public static class IconRenderer
 {
@@ -30,7 +30,7 @@ public static class IconRenderer
 
     /// <summary>
     /// Render the snapshot into a size×size bitmap. Caller owns the bitmap. Unknown or
-    /// estimated data (no authoritative percent) renders an empty ring — never a
+    /// estimated data (no authoritative percent) renders an empty ring, never a
     /// fabricated fill (CLAUDE.md rule 6).
     /// </summary>
     public static Bitmap Render(int size, UsageSnapshot snapshot, bool lightTaskbar) =>
@@ -69,7 +69,7 @@ public static class IconRenderer
             g.DrawArc(arc, rect, TrayIconGeometry.StartAngleDegrees, TrayIconGeometry.SweepDegrees(fillPercent));
         }
 
-        // Pupil: the brand "eye", centred in the ring's hole. Its own colour, not the arc's —
+        // Pupil: the brand "eye", centred in the ring's hole. Its own colour, not the arc's,
         // at a measured 0% it fades to the track so the empty gauge reads as one thing (#139).
         var pupilRadius = TrayIconGeometry.PupilRadius(size);
         using (var pupil = new SolidBrush(pupilColor))

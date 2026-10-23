@@ -7,7 +7,7 @@ namespace OView.App.Tests;
 /// Nothing reaches a skin except through its dispatcher.
 ///
 /// <para>Both skins touch their tray icon straight from these calls, so a push that arrives
-/// on whichever thread happened to raise it is a thread-affinity fault in the skin — and one
+/// on whichever thread happened to raise it is a thread-affinity fault in the skin, and one
 /// that only shows on the machine whose first ingest is slow enough to run off the UI thread
 /// (issue #125). <see cref="ShellHost"/> is the one place that can rule it out, by posting
 /// every push.</para>
@@ -16,7 +16,7 @@ namespace OView.App.Tests;
 /// thread, with nothing dispatched around it, and then checks the skin was <i>not</i> called
 /// before the dispatcher ran. A <see cref="ShellHost"/> that invoked the skin directly would
 /// pass any "was this the UI thread?" check here, because the test thread <i>is</i> the UI
-/// thread — so the question asked instead is "did it wait for the dispatcher?".</para>
+/// thread, so the question asked instead is "did it wait for the dispatcher?".</para>
 ///
 /// <para>The fakes are local on purpose: this file owns the one thing it asserts, and
 /// <c>Fakes.cs</c>'s dispatcher runs work for a different test's reasons.</para>
@@ -30,7 +30,7 @@ public class ShellToSkinDispatchTests
 
     /// <summary>
     /// Holds everything until the test pumps it, and says while it is pumping that whatever
-    /// runs now came from here — which is what lets the skin tell a posted call from a direct
+    /// runs now came from here, which is what lets the skin tell a posted call from a direct
     /// one on the very same thread.
     /// </summary>
     private sealed class GatedDispatcher : IUiDispatcher
@@ -80,7 +80,7 @@ public class ShellToSkinDispatchTests
 
     /// <summary>
     /// A skin that records what it was told, in order, and counts anything that reached it
-    /// while the dispatcher was not running — which must stay at zero.
+    /// while the dispatcher was not running, which must stay at zero.
     /// </summary>
     private sealed class RecordingSkin(GatedDispatcher dispatcher) : IShellToSkin
     {
@@ -147,7 +147,7 @@ public class ShellToSkinDispatchTests
     }
 
     /// <summary>
-    /// The shell a skin is built from is the shell it keeps being handed — a second one would
+    /// The shell a skin is built from is the shell it keeps being handed, a second one would
     /// mean two engines, and the one thing this class exists to guarantee is that there is
     /// exactly one.
     /// </summary>
@@ -186,7 +186,7 @@ public class ShellToSkinDispatchTests
 
     /// <summary>
     /// The same for a notification, which the shell raises in the same breath as the snapshot
-    /// that crossed the threshold — and in that order, which the hop must preserve.
+    /// that crossed the threshold, and in that order, which the hop must preserve.
     /// </summary>
     [Fact]
     public void ANotificationWaitsForTheDispatcherAndStaysBehindItsSnapshot()

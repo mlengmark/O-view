@@ -14,7 +14,7 @@ public static class BoostText
     /// The boost chip on a meter's label row: <c>50% Boosted · until 31 Aug · ends in 2w 4d 14h</c>.
     ///
     /// <para><b>The figure leads and the word follows it immediately.</b> The same row carries
-    /// utilisation — a <i>level</i> — a hundred pixels to the right, and this is a <i>delta</i>.
+    /// utilisation, a <i>level</i>, a hundred pixels to the right, and this is a <i>delta</i>.
     /// A bare <c>50%</c> adrift on that row would read as the same kind of number; <c>50%
     /// Boosted</c> reads as one phrase, so the two are never split.</para>
     ///
@@ -27,7 +27,7 @@ public static class BoostText
     /// preference.</b> Measured at the panel's real width in the face the Windows head paints,
     /// the label row leaves 281px for this chip: <c>50% Boosted · until 31 Aug · ends in 14h</c>
     /// takes 220, the widest the payload could carry takes 263, and the same string with a full
-    /// month name takes 289 and overflows. The row must never wrap — a wrap shifts the bar under
+    /// month name takes 289 and overflows. The row must never wrap, a wrap shifts the bar under
     /// it and changes the panel's height.</para>
     /// </summary>
     /// <param name="notice">The notice to describe. Its own bar decides where this is drawn.</param>
@@ -53,7 +53,7 @@ public static class BoostText
     /// Time left on a promo, in the weeks/days/hours the chip asks for: <c>2w 4d 14h</c>,
     /// <c>4d 14h</c>, <c>14h</c>.
     ///
-    /// <para><b>Empty leading units are dropped</b> — a promo ending tonight reads <c>14h</c>,
+    /// <para><b>Empty leading units are dropped</b>, a promo ending tonight reads <c>14h</c>,
     /// not <c>0w 0d 14h</c>. Hours are the floor because the end is a <i>date</i>: the source
     /// says "Aug 31", so the last hour of that day is the finest thing anyone knows, and
     /// counting down in minutes would imply a precision the sentence never carried.</para>
@@ -89,7 +89,7 @@ public static class BoostText
     }
 
     /// <summary>
-    /// The instant a promo's last day ends, in UTC — the next local midnight after it.
+    /// The instant a promo's last day ends, in UTC, the next local midnight after it.
     ///
     /// <para>Built from the zone's offset rather than
     /// <see cref="TimeZoneInfo.ConvertTimeToUtc(DateTime, TimeZoneInfo)"/>, which throws when the
@@ -107,8 +107,8 @@ public static class BoostText
     /// The hover card behind the chip: Claude's sentence, then who said it and when O-view read it.
     ///
     /// <para><b>The message is never edited, summarised or re-worded.</b> Whether this promo
-    /// applies to this account is something O-view cannot check — the payload is a feature-flag
-    /// cache, evaluated server-side — so the panel relays rather than asserts, and the provenance
+    /// applies to this account is something O-view cannot check, the payload is a feature-flag
+    /// cache, evaluated server-side, so the panel relays rather than asserts, and the provenance
     /// line is what makes that the honest reading rather than a hedge (rule 6).</para>
     /// </summary>
     public static string BoostCard(

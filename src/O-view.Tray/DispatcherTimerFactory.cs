@@ -5,7 +5,7 @@ namespace OView.Tray;
 
 /// <summary>
 /// Backs the engine's timers with WPF's <see cref="DispatcherTimer"/>, which keeps every
-/// callback on the UI thread — so a tick that surfaces a balloon or a modal dialog needs no
+/// callback on the UI thread, so a tick that surfaces a balloon or a modal dialog needs no
 /// marshalling. That property is why the engine takes a timer factory rather than reaching
 /// for <c>System.Threading.Timer</c> itself.
 /// </summary>

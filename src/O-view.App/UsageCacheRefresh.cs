@@ -7,14 +7,14 @@ namespace OView.App;
 /// gate against Claude Code's own cached block, and the latch that stops it on a suspected
 /// charge.
 ///
-/// <para>Split out of <see cref="UsageEngine"/> purely to shorten that file — same members,
+/// <para>Split out of <see cref="UsageEngine"/> purely to shorten that file, same members,
 /// same behaviour, same logging. The threading stays with the engine: a caller supplies
 /// <c>runOffThread</c>, the same off-thread/dispatcher mechanics <see cref="UsageEngine"/>
 /// uses for its own polls, so there is one gate-and-dispatch implementation rather than two.
 /// </para>
 ///
 /// <para>Never raises <see cref="UsageEngine.SnapshotUpdated"/> or writes
-/// <see cref="UsageEngine.Latest"/> itself — a successful refresh's new figures live in a
+/// <see cref="UsageEngine.Latest"/> itself, a successful refresh's new figures live in a
 /// file the engine's own provider chain already reads, so this only tells the engine a
 /// refresh succeeded, through <see cref="Succeeded"/>, and leaves scheduling the resulting
 /// poll to it.</para>
@@ -38,8 +38,8 @@ public sealed class UsageCacheRefresh
     /// <para><b>Resettable on purpose, and that is load-bearing rather than a nicety.</b> The
     /// guard behind it errs toward reporting a charge: a Claude Code session the user starts
     /// during the seconds a refresh runs produces a new transcript carrying request ids, and
-    /// nothing distinguishes it from a billed refresh. That direction is right — a false stop is
-    /// recoverable and a missed charge leaks roughly 50K tokens per poll silently — but only
+    /// nothing distinguishes it from a billed refresh. That direction is right, a false stop is
+    /// recoverable and a missed charge leaks roughly 50K tokens per poll silently, but only
     /// while it can be undone. A latch with no way out would turn a rare race into a permanent,
     /// unexplained loss of the feature.</para>
     /// </summary>
@@ -67,11 +67,11 @@ public sealed class UsageCacheRefresh
     /// </summary>
     public string? UsageRefreshBlocked => _refreshBlocked;
 
-    /// <summary>Whether a refresher was supplied at all — the feature being on, not it being allowed.</summary>
+    /// <summary>Whether a refresher was supplied at all, the feature being on, not it being allowed.</summary>
     public bool CanRefreshUsageCache => _refresher is not null;
 
     /// <summary>
-    /// How many refresh attempts have actually been started — not how many times
+    /// How many refresh attempts have actually been started, not how many times
     /// <see cref="RefreshUsageCache"/> was called, since most calls are turned away by the
     /// floor, the freshness gate or the latch.
     ///
@@ -89,7 +89,7 @@ public sealed class UsageCacheRefresh
     /// Clears the block set by a suspected charge and allows refreshing again.
     ///
     /// <para>The other half of the trade in <see cref="_refreshBlocked"/>. The guard errs toward
-    /// stopping, which is only the right direction while stopping is undoable — so this exists
+    /// stopping, which is only the right direction while stopping is undoable, so this exists
     /// for the user to say the charge was a concurrent session rather than a real one.</para>
     /// </summary>
     /// <returns>True when something was actually cleared.</returns>
@@ -113,11 +113,11 @@ public sealed class UsageCacheRefresh
     /// Asks Claude Code to refresh its usage cache, if it is allowed and due.
     ///
     /// <para><b>Call this when the panel opens.</b> That is the moment freshness is observable,
-    /// and it is what makes this event-driven rather than another timer — a tray gauge only has
+    /// and it is what makes this event-driven rather than another timer, a tray gauge only has
     /// to be right when someone looks at it. <paramref name="force"/> bypasses the floor for
     /// exactly that case: a person opening the panel is not a poll.</para>
     ///
-    /// <para><b>Ten panel opens in quick succession are still ten attempts here</b> — nothing in
+    /// <para><b>Ten panel opens in quick succession are still ten attempts here</b>, nothing in
     /// this cadence collapses them, and nothing should: that is what lets a person who opens the
     /// panel ten times in a row get ten honest looks at Claude Code's own freshness window rather
     /// than nine silently skipped. They stop piling up ten separate session files one layer
@@ -143,13 +143,13 @@ public sealed class UsageCacheRefresh
         }
 
         // Nothing to gain from spawning a process to refresh something already fresher than the
-        // floor — the user may have run /usage themselves, which is the one other thing that
+        // floor, the user may have run /usage themselves, which is the one other thing that
         // moves this block.
         //
         // Note what this deliberately does NOT do: skip while a Claude Code session is running.
         // That was the plan until it was measured. A running session does not maintain this
-        // block — the development machine held a 4.43-day-old one while Claude Code had been
-        // running all morning — so "a session is open" says nothing about freshness.
+        // block, the development machine held a 4.43-day-old one while Claude Code had been
+        // running all morning, so "a session is open" says nothing about freshness.
         if (!force && CachedBlockAge(utcNow) is { } age && age < _refreshFloor)
         {
             return;
@@ -166,14 +166,14 @@ public sealed class UsageCacheRefresh
 
     /// <summary>
     /// Runs off the UI thread. It spawns a process and waits up to
-    /// <see cref="ClaudeCliRefresher.DefaultTimeout"/> for it — done on the dispatcher that is a
+    /// <see cref="ClaudeCliRefresher.DefaultTimeout"/> for it, done on the dispatcher that is a
     /// frozen tray icon for the duration, which is issue #125's lesson applied to a new caller.
     /// </summary>
     private ClaudeCliRefreshResult RunRefresh() =>
         _refresher!.Refresh();
 
     /// <summary>
-    /// How old Claude Code's cached block is, or null when that cannot be established — no file,
+    /// How old Claude Code's cached block is, or null when that cannot be established, no file,
     /// unreadable, or a test that described its own world and left this source returning null.
     ///
     /// <para>Null means "do not gate on this", not "stale". An unknown age must not block a
@@ -213,7 +213,7 @@ public sealed class UsageCacheRefresh
                 ? $"an invocation appears to have been billed ({detail})"
                 : "an invocation appears to have been billed";
 
-            _log?.Write($"usage refresh BLOCKED — {_refreshBlocked}");
+            _log?.Write($"usage refresh BLOCKED, {_refreshBlocked}");
             return;
         }
 
@@ -232,13 +232,13 @@ public sealed class UsageCacheRefresh
     /// <para>Every other outcome is legible as its own name. <see cref="RefreshOutcome.NoBlockProduced"/>
     /// is not, and it is the one a reader most needs to understand: it is the state that used to
     /// be indistinguishable from a healthy no-op, so the line has to say what it means rather
-    /// than name an enum. The log is what a bug report carries — one round trip should be enough
+    /// than name an enum. The log is what a bug report carries, one round trip should be enough
     /// to see this (CLAUDE.md).</para>
     /// </summary>
     private static string Describe(RefreshOutcome outcome) => outcome switch
     {
         RefreshOutcome.NoBlockProduced =>
-            "ran but wrote no usage block — /usage is not refreshing on this machine",
+            "ran but wrote no usage block, /usage is not refreshing on this machine",
         _ => outcome.ToString().ToLowerInvariant(),
     };
 }

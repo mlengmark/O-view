@@ -237,7 +237,7 @@ public static class SampleStates
 
     /// <summary>
     /// A sample Est. figure: estimated where there is one, unavailable where the state is one
-    /// in which nothing could be priced — the same split <c>PanelStatistics</c> itself applies,
+    /// in which nothing could be priced, the same split <c>PanelStatistics</c> itself applies,
     /// so a sample cannot describe a pairing the real builder would never produce.
     /// </summary>
     private static EstimatedUsd Priced(decimal? usd) =>

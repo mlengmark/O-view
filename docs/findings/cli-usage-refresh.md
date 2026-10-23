@@ -12,21 +12,21 @@ development machine it could not, and this records why, what fixes it, and what 
 
 | | |
 |---|---|
-| `cachedUsageUtilization.fetchedAtMs` | 2026-08-24 02:17 — **4.43 days old** |
-| `~/.claude.json` file mtime | 2026-08-28 12:23 — **12 minutes old** |
+| `cachedUsageUtilization.fetchedAtMs` | 2026-08-24 02:17, **4.43 days old** |
+| `~/.claude.json` file mtime | 2026-08-28 12:23, **12 minutes old** |
 | Cached figures | `five_hour 14%`, `seven_day 81%` |
 | Reality, `plan-usage-history.json` at 12:09 | `fh 44%`, `sd 35%` |
-| Both `resets_at` | 2026-08-24 — four days past |
+| Both `resets_at` | 2026-08-24, four days past |
 
 Three consequences, and the third is the defect:
 
 1. **The file is written constantly; the usage block is not.** Project state and history update every
    session, so **mtime says nothing about this block's freshness.** `CachedUtilization` already reads
    `fetchedAtMs` rather than mtime and is correct to; anything added later must do the same.
-2. **The stale figures are wrong in both directions** — session far too low, weekly far too high. Not
+2. **The stale figures are wrong in both directions**, session far too low, weekly far too high. Not
    drift; a different account state.
 3. **CLAUDE.md's stale-window rule correctly rejects them**, because both `resets_at` have passed. So
-   O-view reports *unknown*, and a Claude-Code-only machine sits there as its normal state — the very
+   O-view reports *unknown*, and a Claude-Code-only machine sits there as its normal state, the very
    population this provider was added to serve.
 
 Nothing in O-view is at fault. Claude Code simply does not refresh the block.
@@ -37,10 +37,10 @@ Nothing in O-view is at fault. Claude Code simply does not refresh the block.
 |---|---|
 | `claude --version` | no |
 | `claude --help` | no |
-| `claude doctor` | no — exits 0, non-interactive, safe |
-| **an interactive session** | **no** — a session started that morning left the block 4.43 days old |
-| `claude -p "<ordinary prompt>"` | **no** — reaches the model, and still does not refresh |
-| **`claude -p "/usage"`** | **yes** — 24 Aug 02:17 → 28 Aug 12:50 |
+| `claude doctor` | no, exits 0, non-interactive, safe |
+| **an interactive session** | **no**, a session started that morning left the block 4.43 days old |
+| `claude -p "<ordinary prompt>"` | **no**, reaches the model, and still does not refresh |
+| **`claude -p "/usage"`** | **yes**, 24 Aug 02:17 → 28 Aug 12:50 |
 
 **Starting Claude Code does not refresh it.** That is the whole explanation for a machine running
 Claude Code daily and still holding a four-day-old block.
@@ -56,7 +56,7 @@ Measured by running the real refresher twice, five minutes apart:
 
 Claude Code has its own internal freshness window and served a cached answer rather than
 re-fetching. **`Unchanged` is therefore an ordinary outcome, not a failure**, and must not be
-treated as one — it is the expected result of asking twice in quick succession.
+treated as one, it is the expected result of asking twice in quick succession.
 
 Two consequences for anything built on this. Only `Refreshed` should trigger a republish, because
 nothing else changed anything. And the refresh floor should stay comfortably longer than whatever
@@ -66,7 +66,7 @@ to shorten it.
 ### …but "ordinary" was over-applied, and it hid a failure for two releases
 
 **Corrected 2026-09-01.** The paragraph above is true of a machine that *has* a block. It was
-also being applied to one that has none, because both came back as `Unchanged` — the comparison
+also being applied to one that has none, because both came back as `Unchanged`, the comparison
 was `after > before`, and a null `after` is simply "not greater".
 
 The two are not the same event:
@@ -74,21 +74,21 @@ The two are not the same event:
 | Before | After | Meaning |
 |---|---|---|
 | a block | the same block | Claude Code served its own cache. Ordinary. |
-| **no block** | **still no block** | **The run produced the one thing it exists to produce — nothing.** |
+| **no block** | **still no block** | **The run produced the one thing it exists to produce, nothing.** |
 
 A refresh that had **never once worked** therefore logged exactly like a healthy no-op. Seen on a
 user's machine reporting v0.9.1: `usage refresh unchanged` on repeat, against a `~/.claude.json`
 carrying no `cachedUsageUtilization` at all, weekly reset unknown, and nothing anywhere saying so.
-Running `/usage` by hand filled it in immediately. **The cause is still unknown** — an old Claude
-Code, a trust prompt on the working directory and a login that exits quietly all fit — which is
+Running `/usage` by hand filled it in immediately. **The cause is still unknown**, an old Claude
+Code, a trust prompt on the working directory and a login that exits quietly all fit, which is
 the point: the log gave nobody anything to pull on.
 
 `RefreshOutcome.NoBlockProduced` now names it, and the log line says what it means rather than an
 enum name. It is **not** fatal: the cause is not established, and stopping the feature on a state
 nobody understands trades a silent no-op for a silent latch.
 
-**It is keyed on the read succeeding, not on a null time.** A file that could not be opened —
-locked, mid-write, permissions — is *unknown*, and reporting that as "nothing was produced" would
+**It is keyed on the read succeeding, not on a null time.** A file that could not be opened,
+locked, mid-write, permissions, is *unknown*, and reporting that as "nothing was produced" would
 turn a transient into a standing accusation about the user's machine (rule 6). Unknown stays
 `Unchanged`.
 
@@ -96,17 +96,17 @@ turn a transient into a standing accusation about the user's machine (rule 6). U
 
 Claude Code files each transcript under a project slug derived from the invoking process's working
 directory. A run from a temporary path produced
-`C--Users-…-Temp-claude-…-spawncheck` — a directory that means nothing to anyone who later finds it,
+`C--Users-…-Temp-claude-…-spawncheck`, a directory that means nothing to anyone who later finds it,
 sitting in another application's data.
 
 So the working directory is **chosen, not inherited**: `ClaudeCliRefresher.WorkingDirectory` points
 at O-view's own data directory, which exists on both platforms, so the slug names O-view and a user
-who finds the folder can tell what made it. Inheriting would be worse than untidy — for a
+who finds the folder can tell what made it. Inheriting would be worse than untidy, for a
 startup-registered tray app the working directory is whatever launched it, which differs between a
 Start Menu launch, an autostart entry and a post-update relaunch through Explorer
 ([ADR-0010](../adr/0010-post-update-relaunch.md)).
 
-## 3. Cost: zero — and the failure mode that is not
+## 3. Cost: zero, and the failure mode that is not
 
 `claude -p "/usage"` produced a 6-line transcript holding only `queue-operation`, `user`, `system`
 and `last-prompt` records. **No `requestId`, no assistant turn, no usage record.** Input, output,
@@ -141,8 +141,8 @@ contradicts the first one on two fields, and the correction is the point of this
 |---|---|---|
 | `five_hour` | `20%`, exact `resets_at` | yes |
 | `seven_day` | `2%`, exact `resets_at` | yes |
-| `limits[]` | two entries — see below | **no** (issue #238) |
-| `extra_usage` | four real booleans — see below | yes, since issue #259 |
+| `limits[]` | two entries, see below | **no** (issue #238) |
+| `extra_usage` | four real booleans, see below | yes, since issue #259 |
 | `spend` | `enabled:false`, `used: {0, USD}`, a `disclaimer` sentence | no |
 | `member_dashboard_available` | `false` | no |
 | `nimbus_quill` | `0%`, no `resets_at` | no |
@@ -151,10 +151,10 @@ contradicts the first one on two fields, and the correction is the point of this
 
 `seven_day_opus`, `seven_day_sonnet`, `seven_day_cowork`, `seven_day_oauth_apps`,
 `seven_day_omelette`, `tangelo`, `iguana_necktie`, `omelette_promotional`, `cinder_cove`,
-`amber_ladder`, `juniper_tide` — all explicit `null`.
+`amber_ladder`, `juniper_tide`, all explicit `null`.
 
 Caveat unchanged: this is a `claude_pro` account, and some of these plausibly populate where the
-corresponding separate limit exists — `seven_day_opus` on Max, for instance. **Empty here is not
+corresponding separate limit exists, `seven_day_opus` on Max, for instance. **Empty here is not
 proven empty everywhere.** But see *no client contract* below before building on one.
 
 ### The correction: `extra_usage` and `spend` are not empty
@@ -169,7 +169,7 @@ around in the panel for weeks:
   "user_disabled": true,        // the person turned it off
   "spend_limit_reached": false,
   "credits_ever_enabled": true,
-  // the money half — null BECAUSE it is switched off and nothing has been spent
+  // the money half, null BECAUSE it is switched off and nothing has been spent
   "monthly_limit": null, "used_credits": null, "utilization": null,
   "currency": null, "decimal_places": null, "disabled_reason": null,
   "daily": null, "weekly": null
@@ -178,7 +178,7 @@ around in the panel for weeks:
 
 **How the first reading got it wrong is worth recording**, because it is a shape a survey will
 meet again: the object is twelve fields of which eight are null, and it was read as empty. It is
-not empty — it is an *off* switch, and the nulls are what "off" looks like. A field that carries
+not empty, it is an *off* switch, and the nulls are what "off" looks like. A field that carries
 `false` is carrying an answer.
 
 That answer is now the basis of the off-plan banner's wording (issue #259). Before it, the panel
@@ -187,7 +187,7 @@ the ones who could not be billed anything.
 
 `spend` is populated too, though nothing needs it yet: `enabled:false`, `used` as a minor-unit
 money object, and a `disclaimer` sentence with a support link in it. `member_dashboard_available`
-is `false` — again a value, not an absence.
+is `false`, again a value, not an absence.
 
 ### `limits[]` is a re-projection, not a second source
 
@@ -202,15 +202,15 @@ Both entries match `five_hour` and `seven_day` **to the microsecond**. So `limit
 percentage and no reset instant O-view is not already reading. What it holds that nothing else
 does is three fields:
 
-- **`is_active`** — which limit currently binds. Session on both measurements; a case where the
+- **`is_active`**, which limit currently binds. Session on both measurements; a case where the
   weekly meter is the higher of the two has never been observed, so *what the flag means* is not
   established from this data, only that it is reported rather than derived.
-- **`severity`** — Anthropic's own classification. **Only `normal` has ever been observed**, at
+- **`severity`**, Anthropic's own classification. **Only `normal` has ever been observed**, at
   70%, 20% and 2%. The value names of the rest of the scale are unknown.
-- **`scope`** — null on both. The obvious carrier for a model-scoped limit, which makes `limits[]`
+- **`scope`**, null on both. The obvious carrier for a model-scoped limit, which makes `limits[]`
   the shape a Max account's Opus limit would arrive in.
 
-### No client contract — the fact that decides how much weight these can bear
+### No client contract, the fact that decides how much weight these can bear
 
 Counted in Claude Code's own binary (`2.1.241`, 337 MB):
 
@@ -231,24 +231,24 @@ Counted in Claude Code's own binary (`2.1.241`, 337 MB):
 Claude Code caches the whole `utilization` object verbatim and renders four bars from it. The
 zero-count fields are **server payload passing through a client that never reads them**, so
 nothing in the vendor's own product would break if the server renamed or dropped one. Nothing
-here is discouraged by that — `extra_usage.is_enabled` is consumed by Claude Code and is read on
+here is discouraged by that, `extra_usage.is_enabled` is consumed by Claude Code and is read on
 that basis, while `user_disabled` and `spend_limit_reached` are carried for diagnostics and
 deliberately not branched on. It is the asymmetry to weigh before making any of them load-bearing.
 
 ## 5. The `/usage` text output carries more
 
 Beyond the cached block: request and session counts over 24h and 7d, a context-size distribution,
-and a per-skill breakdown. It also carries Anthropic's own coverage disclaimer —
+and a per-skill breakdown. It also carries Anthropic's own coverage disclaimer,
 
-> "Approximate, based on local sessions on this machine — does not include other devices or
-> claude.ai."
+> "Approximate, based on local sessions on this machine, does not include other devices or
+> claude.ai.",
 
-— which is almost exactly the labelling O-view needs for its own scope problem. Worth aligning to
+which is almost exactly the labelling O-view needs for its own scope problem. Worth aligning to
 as a phrasing precedent rather than inventing against. **Parsing that text is still TUI-shaped and
 remains a fallback, not the plan**: the structured block is already parsed by
 `CachedUtilizationProvider`, and spawning to *refresh* while reading the *file* keeps one parser.
 
-## 6. Cadence — why not faster
+## 6. Cadence, why not faster
 
 Cost is zero, so cost is not the constraint. Two others are:
 
@@ -260,8 +260,8 @@ Cost is zero, so cost is not the constraint. Two others are:
   (measured; see §7), and the session meter moved ~8 points per sample under heavy load. A gauge
   showing an integer percent cannot express finer resolution.
 
-**Prefer event-driven over timer-driven.** Refresh when the panel opens — that is when freshness is
-observable — plus a slow background beat for the tray icon's threshold notification. Tie
+**Prefer event-driven over timer-driven.** Refresh when the panel opens, that is when freshness is
+observable, plus a slow background beat for the tray icon's threshold notification. Tie
 `DefaultFreshness` to whatever floor is chosen so a reading is refreshed as it goes stale, and never
 refresh while a Claude Code session is running, since it maintains the block itself.
 
@@ -269,7 +269,7 @@ refresh while a Claude Code session is running, since it maintains the block its
 
 - **Sampling cadence.** Three consecutive `plan-usage-history.json` samples were **exactly 15:00
   apart**. [ADR-0007](../adr/0007-plan-history-primary-provider.md) records a 5-minute series.
-  **Record it as variable, not as a new constant** — it was 5 minutes in July and 15 in August, so a
+  **Record it as variable, not as a new constant**, it was 5 minutes in July and 15 in August, so a
   fixed figure invites the same error again. Reset-derivation precision claims rest on the finer one.
 - **Transcript retention.** Ten Cowork registrations aged 30–90 days, oldest **41.9 days**, all still
   had their transcripts. [ADR-0006](../adr/0006-local-rollup-store.md) justifies the rollup store on
@@ -278,7 +278,7 @@ refresh while a Claude Code session is running, since it maintains the block its
 
 ## 8. Related
 
-The register also carries unused per-session metadata — `model`, `completedTurns`, `isArchived` —
+The register also carries unused per-session metadata, `model`, `completedTurns`, `isArchived`,
 and `lastActivityAt` / `createdAt` / `lastFocusedAt` are **Int64 epoch milliseconds**, not ISO
 strings. `CoworkSessionRegistry` already parses them correctly; anything new must not assume
 otherwise.

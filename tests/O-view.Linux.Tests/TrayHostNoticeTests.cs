@@ -8,13 +8,13 @@ namespace OView.Linux.Tests;
 /// it: its timing.
 ///
 /// <para><b>What it got wrong.</b> Every login on a stock GNOME desktop opened with "O-view is
-/// running, but has nowhere to show its icon" — and then the icon appeared. The probe has to
+/// running, but has nowhere to show its icon", and then the icon appeared. The probe has to
 /// run before the toolkit starts, and it was reading the bus some tens of milliseconds before
 /// the session registered its own watcher. Nothing was broken except the order of two
 /// events.</para>
 ///
 /// <para><b>Why these are unit tests and not runtime ones.</b> CI's <c>linux-runtime</c> job
-/// runs with a stand-in tray host present, so the no-host path never executes there — the
+/// runs with a stand-in tray host present, so the no-host path never executes there, the
 /// notice it would have to catch is one that is correctly never shown. Every wait here is
 /// injected, so no test sleeps and none of them needs a session bus.</para>
 /// </summary>
@@ -75,7 +75,7 @@ public class TrayHostNoticeTests
 
     /// <summary>
     /// A desktop that really has no notification area is still told, in the words it was always
-    /// told in — including the state no notice ever used to show, so that a reading cannot fall
+    /// told in, including the state no notice ever used to show, so that a reading cannot fall
     /// through to a sentence written for a different one.
     /// </summary>
     [Theory]
@@ -129,7 +129,7 @@ public class TrayHostNoticeTests
 
     /// <summary>
     /// A bus that cannot be watched is not a host. The watch reports false for both "nothing is
-    /// there" and "I could not ask", and only the first of those would justify saying nothing —
+    /// there" and "I could not ask", and only the first of those would justify saying nothing,
     /// so the notice is shown, and the icon's recovery, which has nothing left to wait on, is
     /// not claimed to have happened.
     /// </summary>
@@ -222,7 +222,7 @@ public class TrayHostNoticeTests
 
     /// <summary>
     /// Fails the test rather than hanging the suite. Every wait in here is injected, so a run
-    /// that takes seconds is a notice waiting on something real — which is the defect, not a
+    /// that takes seconds is a notice waiting on something real, which is the defect, not a
     /// slow machine.
     /// </summary>
     private static Task WithoutHanging(Task running) => running.WaitAsync(TimeSpan.FromSeconds(5));

@@ -32,7 +32,7 @@ public class ReleaseAssetSelectionTests
 
         var result = UpdateCheck.Evaluate("0.5.11", json, ReleaseAssets.DebianPackage("amd64"));
 
-        // Not "offers the exe" — nothing at all. There is no Linux artifact to install.
+        // Not "offers the exe", nothing at all. There is no Linux artifact to install.
         Assert.Equal(UpdateOutcome.Unknown, result.Outcome);
         Assert.Null(result.Available);
     }
@@ -59,7 +59,7 @@ public class ReleaseAssetSelectionTests
         Assert.EndsWith(ReleaseAssets.WindowsInstallerName, result.Available!.InstallerUrl, StringComparison.Ordinal);
     }
 
-    /// <summary>arm64 is a real target — Claude Desktop for Linux ships for it, so O-view's users are there.</summary>
+    /// <summary>arm64 is a real target, Claude Desktop for Linux ships for it, so O-view's users are there.</summary>
     [Fact]
     public void ArchitecturesDoNotMatchEachOther()
     {
@@ -115,8 +115,8 @@ public class ReleaseAssetSelectionTests
     }
 
     /// <summary>
-    /// The selector for a build that must never install what it finds. It still checks — so
-    /// the user can be told a newer version exists — but has nothing to act on.
+    /// The selector for a build that must never install what it finds. It still checks, so
+    /// the user can be told a newer version exists, but has nothing to act on.
     /// </summary>
     [Fact]
     public void TheNoneSelectorNeverMatchesAnything()

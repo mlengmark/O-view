@@ -162,7 +162,7 @@ public class JsonlIngestionTests : IDisposable
         // usage. They are not API calls.
         //
         // This is the ONLY place they are handled (issue #57). CostEstimator and
-        // ModelDisplayName each used to carry their own branch for the id — unreachable
+        // ModelDisplayName each used to carry their own branch for the id, unreachable
         // because of this filter, and case-INsensitive where this one was not, so an
         // upstream casing change would have silently promoted the dead code to live and
         // changed whether these records count toward DailyRollup.RequestCount.
@@ -183,7 +183,7 @@ public class JsonlIngestionTests : IDisposable
     {
         // The end-to-end guarantee the two downstream branches were duplicating: no row
         // with this model id can enter the ledger, whatever usage the record claims.
-        // Deliberately NON-zero here — the guarantee must rest on the record's shape,
+        // Deliberately NON-zero here, the guarantee must rest on the record's shape,
         // not on its usage happening to be zero on the transcripts measured so far.
         var path = WriteTranscript("session.jsonl",
             "{\"type\":\"assistant\",\"requestId\":\"req_synth\",\"timestamp\":\"2026-07-20T12:00:00.000Z\"," +
@@ -198,7 +198,7 @@ public class JsonlIngestionTests : IDisposable
 
         Assert.DoesNotContain("<synthetic>", rollups.Select(r => r.Model));
         Assert.Equal(120, TotalOutputTokens());
-        // And not counted as a request either — the behaviour that has always shipped.
+        // And not counted as a request either, the behaviour that has always shipped.
         Assert.Equal(1, rollups.Sum(r => r.RequestCount));
     }
 

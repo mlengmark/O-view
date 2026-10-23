@@ -4,12 +4,12 @@ using System.Text.RegularExpressions;
 namespace OView.Core.Providers.CachedUsage;
 
 /// <summary>
-/// The two figures that can be lifted out of a promo notice's sentence — when it ends, and by
+/// The two figures that can be lifted out of a promo notice's sentence, when it ends, and by
 /// how much limits went up.
 ///
 /// <para><b>Why parse prose at all.</b> The notice Claude Code caches is marketing copy, not a
 /// structured entitlement: <c>"+50% weekly limits promo through Aug 31 · clau.de/cc-50-promo"</c>.
-/// The message itself is always shown verbatim, so nothing here is load-bearing for correctness —
+/// The message itself is always shown verbatim, so nothing here is load-bearing for correctness,
 /// but the end date is a real date, and the machine's own clock can therefore decide whether the
 /// promo has passed. That is a far better expiry test than asking how recently Claude Code ran,
 /// which is a question about O-view's reader rather than about the promo.</para>
@@ -20,7 +20,7 @@ namespace OView.Core.Providers.CachedUsage;
 /// things is refused rather than guessed.</para>
 ///
 /// <para>Pure functions over <c>(text, anchor)</c>, with no I/O, so the fixture tables in
-/// <c>PromoTextTests</c> are the specification — including every row that must <i>not</i>
+/// <c>PromoTextTests</c> are the specification, including every row that must <i>not</i>
 /// resolve.</para>
 /// </summary>
 public static class PromoText
@@ -40,7 +40,7 @@ public static class PromoText
 
     /// <summary>
     /// A word that marks the date as the promo's <i>end</i>. Without one, a date in the sentence
-    /// could be anything — a start, a billing date, a support article's publication.
+    /// could be anything, a start, a billing date, a support article's publication.
     /// </summary>
     private const string EndLeadIn =
         @"(?:through|thru|until|till|til|ends?(?:\s+on)?|expires?(?:\s+on)?|valid\s+(?:through|until))";
@@ -71,8 +71,8 @@ public static class PromoText
     /// The promo's last day, or null when the sentence does not carry one that can be read
     /// without guessing.
     ///
-    /// <para><b>A missing year is inferred from the anchor</b> — the moment the notice was
-    /// cached — by taking the reading nearest it within
+    /// <para><b>A missing year is inferred from the anchor</b>, the moment the notice was
+    /// cached, by taking the reading nearest it within
     /// <c>[anchor − 30d, anchor + 180d]</c>. That window is what makes <c>"through Jan 2"</c>
     /// read on an August anchor resolve to the following January rather than the one already
     /// past. Outside it, nothing resolves: a date a year away is not a promo.</para>
@@ -160,7 +160,7 @@ public static class PromoText
     /// How much bigger the limit is, as a whole percentage, or null when the sentence does not
     /// say it unambiguously.
     ///
-    /// <para><b>The hazard here is not extraction — it is the panel.</b> The weekly row already
+    /// <para><b>The hazard here is not extraction, it is the panel.</b> The weekly row already
     /// shows a percentage: utilisation, a <i>level</i>. A boost magnitude is a <i>delta</i>. Two
     /// unrelated percentages a hundred pixels apart is a genuine misreading risk, so this refuses
     /// every figure that is not plainly an increase:</para>
@@ -168,13 +168,13 @@ public static class PromoText
     /// <list type="number">
     /// <item><b>Exactly one percentage in the string</b>, or nothing is taken. Two means the
     /// sentence is doing something never observed, and picking one would be a guess.</item>
-    /// <item><b>It must read as an increase</b> — an explicit <c>+</c>, or an increase word
+    /// <item><b>It must read as an increase</b>, an explicit <c>+</c>, or an increase word
     /// nearby. <c>"You have used 50% of your weekly limit"</c> must never become a boost
     /// figure, and that sentence is the reason this rule exists rather than a bare regex.</item>
     /// </list>
     ///
     /// <para>Note that a URL like <c>clau.de/cc-50-promo</c> carries <c>50</c> but not
-    /// <c>50%</c>, so it does not count as a second match — checked against the real payload,
+    /// <c>50%</c>, so it does not count as a second match, checked against the real payload,
     /// not assumed.</para>
     /// </summary>
     public static int? Percent(string? text)

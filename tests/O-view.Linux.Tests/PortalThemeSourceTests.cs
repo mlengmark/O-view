@@ -9,7 +9,7 @@ namespace OView.Linux.Tests;
 /// round trip from Avalonia's UI thread, and the reply continuation was posted back to the
 /// thread already blocked waiting for it.
 ///
-/// <para>These tests cannot open a panel — there is no desktop here — but they can assert
+/// <para>These tests cannot open a panel, there is no desktop here, but they can assert
 /// the two properties whose absence caused it: that a read returns promptly with no bus to
 /// talk to, and that nothing in the head waits synchronously on a task anywhere the
 /// dispatcher can reach.</para>
@@ -20,7 +20,7 @@ public class PortalThemeSourceTests
     /// CI has no session bus and no portal, which is the harshest case and the one that
     /// used to hang: with a bus present the call at least completes.
     ///
-    /// <para>The bound is deliberately loose. It is not measuring how fast the lookup is —
+    /// <para>The bound is deliberately loose. It is not measuring how fast the lookup is,
     /// it is distinguishing "returned" from "never returns", and a generous ceiling keeps
     /// that distinction from turning into a flake on a loaded runner.</para>
     /// </summary>
@@ -36,7 +36,7 @@ public class PortalThemeSourceTests
         watch.Stop();
 
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(1),
-            $"a theme read took {watch.ElapsedMilliseconds} ms — it is talking to the bus on the caller's thread");
+            $"a theme read took {watch.ElapsedMilliseconds} ms, it is talking to the bus on the caller's thread");
     }
 
     /// <summary>
@@ -56,12 +56,12 @@ public class PortalThemeSourceTests
         watch.Stop();
 
         Assert.True(watch.Elapsed < TimeSpan.FromSeconds(1),
-            $"500 theme reads took {watch.ElapsedMilliseconds} ms — reads are not served from the cache");
+            $"500 theme reads took {watch.ElapsedMilliseconds} ms, reads are not served from the cache");
     }
 
     /// <summary>
     /// Priming is the one call allowed to wait, and it must still terminate on a machine
-    /// with nothing to answer it — otherwise a broken portal hangs startup instead of the
+    /// with nothing to answer it, otherwise a broken portal hangs startup instead of the
     /// first click.
     /// </summary>
     [Fact]
@@ -76,7 +76,7 @@ public class PortalThemeSourceTests
     /// <para>Both tests above pass against the broken implementation on this machine, because
     /// with no bus the call fails fast and never reaches the deadlock. The deadlock needs a
     /// live session bus <i>and</i> a dispatcher, which is precisely the combination no CI
-    /// runner has — so the property has to be asserted over the source rather than observed
+    /// runner has, so the property has to be asserted over the source rather than observed
     /// at runtime.</para>
     ///
     /// <para><c>Program.Main</c> is the sole exemption, and a narrow one: it runs before the
@@ -108,7 +108,7 @@ public class PortalThemeSourceTests
 
     /// <summary>
     /// Walks up from the test binary to the directory holding the solution file. The tests
-    /// run from <c>bin/</c>, several levels below, and the depth differs by configuration —
+    /// run from <c>bin/</c>, several levels below, and the depth differs by configuration,
     /// so the marker is searched for rather than counted to.
     /// </summary>
     private static string RepositoryRoot()

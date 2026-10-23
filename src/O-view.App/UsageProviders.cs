@@ -11,7 +11,7 @@ namespace OView.App;
 /// and cached-utilization sources, the JSONL fallback, and the composite that picks between
 /// them.
 ///
-/// <para>Split out of <see cref="UsageEngine"/> purely to shorten that file — same wiring,
+/// <para>Split out of <see cref="UsageEngine"/> purely to shorten that file, same wiring,
 /// same behaviour, same fallback rules. See the constructor's comments for why each source
 /// is built the way it is; nothing here changes what was decided, only where it lives.</para>
 /// </summary>
@@ -21,7 +21,7 @@ public sealed class UsageProviders
     public IUsageProvider Provider { get; }
 
     /// <summary>
-    /// The plan-history provider, held directly as well as through <see cref="Provider"/> —
+    /// The plan-history provider, held directly as well as through <see cref="Provider"/>,
     /// the engine needs it outside the chain for the current-window arithmetic that
     /// divergence detection depends on.
     /// </summary>
@@ -40,14 +40,14 @@ public sealed class UsageProviders
 
     /// <summary>
     /// Whether the plan-history provider built here is one the caller actually asked for,
-    /// and so may be published from directly — see <see cref="PlanHistoryPoll"/>'s own doc
+    /// and so may be published from directly, see <see cref="PlanHistoryPoll"/>'s own doc
     /// for why this matters. False in exactly one case: a caller injected a whole
     /// <see cref="IUsageProvider"/> and said nothing about plan history.
     /// </summary>
     public bool PlanHistoryIsAddressed { get; }
 
     /// <summary>The account read from <see cref="ClaudeDataLocations.AccountFile"/>, for the
-    /// weekly-reset anchor's scoping — null when there is none to read.</summary>
+    /// weekly-reset anchor's scoping, null when there is none to read.</summary>
     public string? OrganizationUuid { get; }
 
     public UsageProviders(UsageEngineOptions options, RollupStore store, IAppLog? log)
@@ -72,13 +72,13 @@ public sealed class UsageProviders
         // unnamed plan history reads NOTHING rather than the real machine's file (issue #212).
         //
         // The default used to be PlanHistoryFile.DefaultPath in that case, and the guard
-        // against it — PlanHistoryPoll's own addressed flag — covered only *publishing*.
+        // against it, PlanHistoryPoll's own addressed flag, covered only *publishing*.
         // UsageAlerts.ReadOffPlan() →
         // BuildStatistics() went through this provider regardless, so the off-plan comparison
         // read the developer's own Claude Desktop usage on every poll in every test that did
         // not name a file. Replayed against that file afterwards: six instants where a test
         // with an empty rollup store would have seen the plan meter pinned at 99% and reported
-        // usage billing beyond the plan, all within two hours on 2026-08-25 — which is when
+        // usage billing beyond the plan, all within two hours on 2026-08-25, which is when
         // eight of them did.
         //
         // Same fix, and the same reasoning, as CachedUtilization gets a few lines below.
@@ -95,7 +95,7 @@ public sealed class UsageProviders
             Log = logLine,
         };
 
-        // Claude Code's own cached figures — real percentages where the JSONL estimate has
+        // Claude Code's own cached figures, real percentages where the JSONL estimate has
         // none, and on a machine without Desktop the only source of the top two bars at all.
         //
         // Position here is a tie-break, not a precedence: the composite picks whichever
@@ -106,7 +106,7 @@ public sealed class UsageProviders
         // A caller that supplies its own Provider has described the whole world, so the real
         // file is left alone unless it also supplies this. Without that, WithReportedResets
         // would read the developer's own ~/.claude.json during tests and fold live reset times
-        // onto fixtures — passing on a CI runner, which has no such file, and failing on the
+        // onto fixtures, passing on a CI runner, which has no such file, and failing on the
         // machine of whoever last used Claude Code. Reaching past an injected provider to real
         // user data is the bug, not the test that caught it.
         CachedUtilization = options.CachedUtilization ?? (options.Provider is null

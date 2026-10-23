@@ -26,8 +26,8 @@ public class WeeklyResetTextTests
 
     /// <summary>
     /// The line under the heading names where the time comes from. That is the whole reason an
-    /// entry outranks what O-view derives — the user is copying a fact Anthropic assigned,
-    /// not estimating one — so it has to send them somewhere specific rather than describe
+    /// entry outranks what O-view derives, the user is copying a fact Anthropic assigned,
+    /// not estimating one, so it has to send them somewhere specific rather than describe
     /// the field.
     /// </summary>
     [Fact]
@@ -40,7 +40,7 @@ public class WeeklyResetTextTests
     }
 
     /// <summary>
-    /// Nothing is pre-filled from the derived value — a guess the user confirms becomes a
+    /// Nothing is pre-filled from the derived value, a guess the user confirms becomes a
     /// fact, which is strictly worse than one the panel labels approximate. So the first-entry
     /// hint is the only thing telling a reader that leaving the field alone is a valid answer,
     /// and it has to say what happens if they do.
@@ -75,7 +75,7 @@ public class WeeklyResetTextTests
     public void TheTimeErrorQuotesTheEntryAndNamesBothShapes()
     {
         Assert.Equal(
-            "'10:59 PM' is not a 24-hour time. Enter it as HH:mm — 22:59, not 10:59 PM.",
+            "'10:59 PM' is not a 24-hour time. Enter it as HH:mm, 22:59, not 10:59 PM.",
             WeeklyResetText.TimeError("10:59 PM"));
 
         Assert.Contains("'25:00'", WeeklyResetText.TimeError("25:00"), StringComparison.Ordinal);

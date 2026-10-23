@@ -95,7 +95,7 @@ public class PlanHistoryDiagnosticsTests : IDisposable
     public void Explanations_state_the_observation_not_an_assumption()
     {
         // A user with Claude Desktop open was told to "install and run the Claude Desktop
-        // app" — an assertion O-view had no basis for. Every explanation must name the
+        // app", an assertion O-view had no basis for. Every explanation must name the
         // path it actually looked at, and must not claim Desktop is absent.
         var missing = PlanHistoryDiagnostics.Inspect(Path.Combine(_dir, "absent.json"));
         Assert.Contains("absent.json", missing.Explain());

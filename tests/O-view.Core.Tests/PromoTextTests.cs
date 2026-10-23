@@ -6,7 +6,7 @@ namespace OView.Core.Tests;
 /// The two extractors that read a promo notice's sentence (issue #254).
 ///
 /// <para><b>These tables are the specification, and the rows that must NOT resolve are the
-/// half that matters.</b> Both extractors are allowed to give up — the message is relayed
+/// half that matters.</b> Both extractors are allowed to give up, the message is relayed
 /// verbatim either way, so a miss costs a detail on a chip. What neither may ever do is produce
 /// a confident wrong answer, which is why every ambiguous shape has a row here pinning it as
 /// refused.</para>
@@ -33,7 +33,7 @@ public class PromoTextTests
     [InlineData("Higher weekly limits valid through 2026-09-04", "2026-09-04")]
     // Year rollover: read in August, "Jan 2" is the NEXT January, not the one already past.
     [InlineData("+50% weekly limits promo through Jan 2", "2027-01-02")]
-    // An explicit year is taken as written, even when it is behind the anchor — that is what
+    // An explicit year is taken as written, even when it is behind the anchor, that is what
     // makes an expired promo detectable rather than silently re-dated into the future.
     [InlineData("Promo through Aug 3 2025", "2025-08-03")]
     public void ReadsAnEndDate(string text, string expected)
@@ -54,7 +54,7 @@ public class PromoTextTests
     [InlineData("Weekly limits boosted. Sep 4 update available")]
     // No year, and no candidate year lands inside the accepted window: read on 31 August,
     // "Mar 15" is 169 days behind or 196 ahead, and neither is a promo this notice is about.
-    // An EXPLICIT year is a different matter and is taken as written — that is what makes
+    // An EXPLICIT year is a different matter and is taken as written, that is what makes
     // "Aug 3 2025" above read as expired rather than being re-dated into the future.
     [InlineData("Weekly limits boosted through Mar 15")]
     public void RefusesADateItCannotReadWithoutGuessing(string text)
@@ -87,12 +87,12 @@ public class PromoTextTests
     }
 
     [Theory]
-    // Nothing to take — "doubled" is not a percentage, and inventing 100 would be fabrication.
+    // Nothing to take, "doubled" is not a percentage, and inventing 100 would be fabrication.
     [InlineData("Weekly limits doubled through Sep 4")]
     // Two percentages: the sentence is doing something never observed, and picking one is a guess.
     [InlineData("Save 20% on Max and get 50% higher limits")]
     // The row this rule exists for. A sentence about CONSUMPTION must never become a boost
-    // figure — the weekly bar already shows a percentage, and it means the opposite of this one.
+    // figure, the weekly bar already shows a percentage, and it means the opposite of this one.
     [InlineData("You have used 50% of your weekly limit")]
     [InlineData("Weekly limit 80% reached")]
     // Zero is not a boost.
@@ -104,7 +104,7 @@ public class PromoTextTests
 
     /// <summary>
     /// The real payload's URL carries <c>50</c> but not <c>50%</c>, so it does not trip the
-    /// two-percentages rule. Checked against the shipped string rather than assumed — if a
+    /// two-percentages rule. Checked against the shipped string rather than assumed, if a
     /// future promo's short link ever included a percent sign, the magnitude would correctly
     /// disappear rather than pick the wrong number.
     /// </summary>

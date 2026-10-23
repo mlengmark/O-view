@@ -24,10 +24,10 @@ namespace OView.Tray;
 /// Tray-resident WPF app: no windows, no StartupUri; the WPF dispatcher pumps the
 /// messages NotifyIcon's hidden window needs. Diagnostic args (all optional):
 /// --interval-ms N, --log path, --stress N (refresh N times, log GDI delta, keep
-/// running), --samples dir (render icon PNGs and exit — legibility verification),
+/// running), --samples dir (render icon PNGs and exit, legibility verification),
 /// --popup-samples dir (render the detail panel offscreen in both themes), --menu-check
 /// path (activate every tray-menu row over repeated open/close cycles and report what
-/// fired — the menu's equivalent of --toggle-check).
+/// fired, the menu's equivalent of --toggle-check).
 /// </summary>
 public partial class App : System.Windows.Application
 {
@@ -58,7 +58,7 @@ public partial class App : System.Windows.Application
 
     /// <summary>
     /// Passed to the instance started by <see cref="RestartForMissingNativeLibrary"/>, so it
-    /// can say why it restarted — a tray icon that blinks out and back unexplained reads as
+    /// can say why it restarted, a tray icon that blinks out and back unexplained reads as
     /// a crash.
     /// </summary>
     private const string RestartedForNativeLibraryFlag = "--restarted-native";
@@ -90,7 +90,7 @@ public partial class App : System.Windows.Application
 
         // Verification hooks, all handled BEFORE the single-instance mutex so they can be
         // run against a machine where O-view is already running without disturbing the
-        // live instance — which for --diagnose is the case that actually needs diagnosing,
+        // live instance, which for --diagnose is the case that actually needs diagnosing,
         // and for the renderers means they never fight the running app for the display.
         // Each renders offscreen and exits; none needs a desktop session.
         foreach (var (flag, run) in PreMutexHooks)
@@ -113,7 +113,7 @@ public partial class App : System.Windows.Application
 
         // The disclosure fold, sampled on the real desktop over ~2 s: a per-frame geometry
         // trace plus filmstrips grabbed off the screen. Same shape as the two above and
-        // pre-mutex for the same reason — it drives a panel of its own and must not fight the
+        // pre-mutex for the same reason, it drives a panel of its own and must not fight the
         // running instance for the tray or the display. Takes a DIRECTORY, like the sample
         // renderers, because it writes several files.
         if (args.TryGetValue("--fold-check", out var foldCheckDir))
@@ -125,7 +125,7 @@ public partial class App : System.Windows.Application
         _instance = new MutexSingleInstanceGuard();
         if (!_instance.TryAcquire())
         {
-            // Exiting silently is right for a second ordinary launch — the user clicked the
+            // Exiting silently is right for a second ordinary launch, the user clicked the
             // shortcut twice and the running instance is what they wanted. It is wrong for a
             // verification hook: --popup-check needs the assembled app, so unlike the pre-mutex
             // checks it cannot run beside a live instance, and a check that produces no report
@@ -134,9 +134,9 @@ public partial class App : System.Windows.Application
             {
                 File.WriteAllText(
                     blockedReport ?? "popup-check.txt",
-                    "popup check NOT RUN — another instance holds the single-instance mutex.\n\n" +
+                    "popup check NOT RUN, another instance holds the single-instance mutex.\n\n" +
                     "This check drives the real ShowPopup(), so it needs the engine and tray host\n" +
-                    "that only exist after startup — which means it cannot run pre-mutex the way\n" +
+                    "that only exist after startup, which means it cannot run pre-mutex the way\n" +
                     "--menu-check and --fold-check do. Close the running O-view and try again.\n\n" +
                     "RESULT: NOT RUN\n");
             }
@@ -147,7 +147,7 @@ public partial class App : System.Windows.Application
 
         // On by default; --log only redirects it. It was opt-in until a machine stalled for
         // five days and the one thing that would have named the failing call was a flag
-        // nobody had passed — a log you have to enable before the fault reproduces is never
+        // nobody had passed, a log you have to enable before the fault reproduces is never
         // on when it matters. FileLog bounds itself, so always-on costs a capped 6 MB.
         var log = new FileLog(args.TryGetValue("--log", out var logPath) ? logPath : null);
         log.WriteSessionHeader(UpdateService.CurrentVersion, UpdateService.CurrentInstallKind.ToString());
@@ -164,9 +164,9 @@ public partial class App : System.Windows.Application
             ? TimeSpan.FromMilliseconds(parsed)
             : TimeSpan.FromSeconds(60);
 
-        // Everything about *what the numbers mean* — provider composition, the poll loop and
+        // Everything about *what the numbers mean*, provider composition, the poll loop and
         // its cadence, the rollup store and weekly-reset log lifecycle, threshold and
-        // off-plan decisions, settings, and the update schedule — lives on the other side of
+        // off-plan decisions, settings, and the update schedule, lives on the other side of
         // the seam, which is platform-neutral and tested (ADR-0012). What stays here is the
         // Windows face, and these options are all it says about the rest.
         var shellOptions = new UsageEngineOptions
@@ -175,7 +175,7 @@ public partial class App : System.Windows.Application
             Log = log,
             // Off-plan rendering can't be produced on demand from real data, so it is
             // verifiable via simulation. This whole feature exists because a UI failed
-            // to communicate something expensive — the UI itself needs verifying.
+            // to communicate something expensive, the UI itself needs verifying.
             SimulateDivergence = args.TryGetValue("--simulate-divergence", out var sim)
                 ? sim ?? "diverging"
                 : null,
@@ -185,21 +185,21 @@ public partial class App : System.Windows.Application
             // Code refreshes that block only when /usage runs, so a 4.43-day-old one was measured
             // on a machine that had been running Claude Code all morning.
             //
-            // No credential is involved — Claude Code authenticates itself and O-view reads the
+            // No credential is involved, Claude Code authenticates itself and O-view reads the
             // file it already reads (ADR-0015).
             UsageCacheRefresher = new ClaudeCliRefresher(),
         };
 
         _trayHost = new NotifyIconTrayHost();
 
-        // The rate-card drift check (ADR-0016). It writes a log line and nothing else — it
+        // The rate-card drift check (ADR-0016). It writes a log line and nothing else, it
         // never installs a rate, and a difference is a maintainer's cue rather than a user's
         // problem, so there is no balloon and no UI. The line reaches a bug report through the
         // diagnostics bundle's log tail.
         var rates = new RateCardFeed(log);
 
         // The seam (docs/architecture.md): the shell builds and owns everything behind it, and
-        // this file names none of it beyond the options above. The controller is the skin — the
+        // this file names none of it beyond the options above. The controller is the skin, the
         // shell pushes at it, always on this thread, and it asks back through the one interface
         // it is handed here.
         //
@@ -226,8 +226,8 @@ public partial class App : System.Windows.Application
         _updateFlow = new UpdateFlow(_updates, _trayHost, _shell, Shutdown);
 
         // The menu's rows and their actions, and the support bundle behind one of them.
-        // Built here because everything it drives — the shell, the tray host, the update
-        // flow — exists by this point; what stays on this file is showing the flyout.
+        // Built here because everything it drives, the shell, the tray host, the update
+        // flow, exists by this point; what stays on this file is showing the flyout.
         _menuBuilder = new TrayMenuBuilder(
             _startup, _shell, _trayHost, _updateFlow,
             new DiagnosticsClipboard(_trayHost, _shell), ResetPanelPosition, Shutdown);
@@ -338,10 +338,10 @@ public partial class App : System.Windows.Application
         // Unlike the Refresh() above this does NOT block the click: it spawns Claude Code off
         // the UI thread and publishes back when it lands, so the panel opens immediately on the
         // current snapshot and updates underneath if the figures moved. Doing it synchronously
-        // here would put a process spawn in front of the user's click — issue #125's lesson.
+        // here would put a process spawn in front of the user's click, issue #125's lesson.
         _shell.RefreshUsageCache(force: true);
         // Both inspected on open (not cached) so the banners reflect the machine as it is
-        // now. The scope report is what the token-scope note is built from — resolved
+        // now. The scope report is what the token-scope note is built from, resolved
         // roots and real file counts, never a hard-coded path (issue #58).
         popup.DataReport = PlanHistoryDiagnostics.Inspect();
         popup.ScopeReport = TranscriptScopeReport.Inspect();
@@ -367,7 +367,7 @@ public partial class App : System.Windows.Application
     ///
     /// <para>Clicking the tray icon is a toggle, as every taskbar flyout is. The click
     /// itself dismisses an open surface by taking focus away from it, so by the time this
-    /// runs the surface is already closing — reopening it here made the icon a one-way
+    /// runs the surface is already closing, reopening it here made the icon a one-way
     /// switch that could only ever open. A click landing right after a dismissal is the
     /// close half, and leaves it closed.</para>
     ///
@@ -388,7 +388,7 @@ public partial class App : System.Windows.Application
     private PopupWindow EnsurePopup() => _popup ??= new PopupWindow
     {
         // Set here and nowhere else: the offscreen sample renderers build their own panels
-        // without one, which is correct — they place no window, so a remembered place would be
+        // without one, which is correct, they place no window, so a remembered place would be
         // read for a position nothing ever applies.
         PlacementMemory = new PanelPlacementMemory(_panelPositions),
     };
@@ -412,7 +412,7 @@ public partial class App : System.Windows.Application
 
     /// <summary>
     /// Runs a tray-click action. Anything it throws arrives inside NotifyIcon's window
-    /// procedure, where WinForms shows its raw "Unhandled exception" box — which is how a
+    /// procedure, where WinForms shows its raw "Unhandled exception" box, which is how a
     /// missing native library reached users. That one case is recoverable, because a fresh
     /// launch re-extracts the files, so it restarts; anything else is logged and rethrown
     /// unchanged rather than hidden.
@@ -460,7 +460,7 @@ public partial class App : System.Windows.Application
     }
 
     /// <summary>
-    /// Right-click menu — a docked flyout window, not a ContextMenu (issue #33; see
+    /// Right-click menu, a docked flyout window, not a ContextMenu (issue #33; see
     /// <see cref="MenuWindow"/> for why the cursor-placed menu had to go). Still no
     /// WinForms: that stays confined to NotifyIcon itself (CLAUDE.md rule 5).
     /// </summary>

@@ -8,15 +8,15 @@ namespace OView.Core.Models;
 ///
 /// <para>The default threshold aligns with the "Critical" colour band
 /// (<see cref="UsageLevels.CriticalPercent"/>), so out of the box O-view notifies exactly
-/// when the gauge turns red — GitHub issue #2.</para>
+/// when the gauge turns red, GitHub issue #2.</para>
 ///
 /// <para><b>Run-at-startup is deliberately NOT here.</b> The registry Run key is its single
 /// source of truth, so the two can never disagree about whether O-view starts with Windows,
-/// and Task Manager's startup page — which edits that key directly — stays authoritative.</para>
+/// and Task Manager's startup page, which edits that key directly, stays authoritative.</para>
 ///
 /// <para><b>Audited for display text and found to hold none.</b> Every field here is
 /// either a flag, a percentage, a weekday/time pair the user typed, or a tag the update
-/// checker compares against — values a skin reads and formats, never a sentence this type
+/// checker compares against, values a skin reads and formats, never a sentence this type
 /// composes itself.</para>
 /// </summary>
 /// <param name="LastUpdateNoticeTag">
@@ -35,7 +35,7 @@ namespace OView.Core.Models;
 /// auto-install because it acts <i>without consent</i>; what makes this acceptable is that
 /// the user chose it, once, knowingly. A default would remove precisely that. The default
 /// here is also the fallback for a settings file that predates the field or fails to
-/// load — so an upgrade never switches it on behind the user.</para>
+/// load, so an upgrade never switches it on behind the user.</para>
 ///
 /// <para>It is <b>not</b> sufficient on its own: <c>UpdatePolicy.MayDownloadAndRun</c> still
 /// decides whether anything may be fetched or executed, and a portable, <c>.deb</c> or
@@ -46,7 +46,7 @@ namespace OView.Core.Models;
 /// "not set", and O-view derives the reset instead (GitHub issue #186).
 ///
 /// <para><b>Deliberately not org-scoped</b>, unlike the observation log. Windows are
-/// per-organization, so an account that switches org would carry the wrong entry across —
+/// per-organization, so an account that switches org would carry the wrong entry across,
 /// but a settings file is the natural home for something the user typed, and the failure is
 /// visible and one edit to fix. Revisit if multi-org turns out to be common.</para>
 /// </param>
@@ -85,7 +85,7 @@ public sealed record TraySettings(
         }
     }
 
-    /// <summary>Persist settings; failures are swallowed — losing a preference must not crash the tray.</summary>
+    /// <summary>Persist settings; failures are swallowed, losing a preference must not crash the tray.</summary>
     public void Save(string? path = null)
     {
         try

@@ -1,11 +1,11 @@
 namespace OView.App.Platform;
 
 /// <summary>
-/// Single-instance via an exclusively-held lock file — the Linux mechanism.
+/// Single-instance via an exclusively-held lock file, the Linux mechanism.
 ///
 /// <para><b>Why not a named <see cref="Mutex"/>, which .NET does implement on Unix?</b>
 /// Because its lifetime is not tied to the process. Named mutexes on Unix are backed by
-/// files in a shared-memory directory, and a hard-killed process can leave the name held —
+/// files in a shared-memory directory, and a hard-killed process can leave the name held,
 /// which for an app designed to run for days means "O-view won't start any more", with a
 /// cause the user has no way to guess. An advisory file lock is released by the kernel
 /// however the process dies, including <c>kill -9</c>.</para>
@@ -14,7 +14,7 @@ namespace OView.App.Platform;
 /// per-session, and cleared on logout, which is exactly the lifetime wanted. Falling back
 /// to the temp directory keeps it working where that variable is unset.</para>
 ///
-/// <para>Nothing here is Linux-only — it is ordinary file IO, so it is exercised on both
+/// <para>Nothing here is Linux-only, it is ordinary file IO, so it is exercised on both
 /// CI platforms rather than only on the one it was written for.</para>
 /// </summary>
 public sealed class FileLockSingleInstanceGuard : ISingleInstanceGuard
@@ -46,7 +46,7 @@ public sealed class FileLockSingleInstanceGuard : ISingleInstanceGuard
             // FileShare.None is the whole mechanism: the second opener is refused.
             _held = new FileStream(_path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
 
-            // The pid is written for diagnosis only — never read back to make a decision.
+            // The pid is written for diagnosis only, never read back to make a decision.
             // A stale pid in an abandoned file must not be mistaken for a live instance.
             var pid = System.Text.Encoding.UTF8.GetBytes(Environment.ProcessId.ToString());
             _held.SetLength(0);
@@ -56,7 +56,7 @@ public sealed class FileLockSingleInstanceGuard : ISingleInstanceGuard
         }
         catch (IOException)
         {
-            return false;   // someone else holds it — the normal "already running" path
+            return false;   // someone else holds it, the normal "already running" path
         }
         catch (UnauthorizedAccessException)
         {
@@ -77,7 +77,7 @@ public sealed class FileLockSingleInstanceGuard : ISingleInstanceGuard
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            // Leaving the file behind is harmless — it is the *lock*, not the file's
+            // Leaving the file behind is harmless, it is the *lock*, not the file's
             // existence, that means "running".
         }
     }

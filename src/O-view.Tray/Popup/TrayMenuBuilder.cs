@@ -14,7 +14,7 @@ namespace OView.Tray.Popup;
 /// shell, the startup registration and the update flow.
 ///
 /// <para>Showing the menu stays with <c>App</c>, because placing a docked flyout is the
-/// skin's own job and the app's lifetime is its own — Exit arrives here as a callback for the
+/// skin's own job and the app's lifetime is its own, Exit arrives here as a callback for the
 /// same reason it does in <see cref="UpdateFlow"/>.</para>
 /// </summary>
 public sealed class TrayMenuBuilder
@@ -55,7 +55,7 @@ public sealed class TrayMenuBuilder
         var menu = new MenuWindow
         {
             // Both setters return the state as it actually stands afterwards, not the
-            // state that was requested — a registry write can fail, and a tick that
+            // state that was requested, a registry write can fail, and a tick that
             // claims otherwise would be a fabricated fact about the machine. That rule
             // now lives once, on IStartupRegistration.Apply, so both heads share it.
             SetRunAtStartup = _startup.Apply,
@@ -93,7 +93,7 @@ public sealed class TrayMenuBuilder
 
     /// <summary>
     /// What the menu row shows on its right: the entered reset, or empty when O-view is
-    /// deriving one. Reads the shell on every open rather than caching — the same rule the
+    /// deriving one. Reads the shell on every open rather than caching, the same rule the
     /// rest of the menu state follows.
     /// </summary>
     public string WeeklyResetRowLabel() =>
@@ -104,8 +104,8 @@ public sealed class TrayMenuBuilder
     /// <summary>
     /// Tells the user once when an observed reset disproves what they entered (issue #186).
     ///
-    /// <para>The provider has already set the entry aside in favour of the observation — a
-    /// number O-view has evidence against must not stay on screen — so this explains a change
+    /// <para>The provider has already set the entry aside in favour of the observation, a
+    /// number O-view has evidence against must not stay on screen, so this explains a change
     /// that has already happened. Silence would leave them believing the time they typed.</para>
     ///
     /// <para>Once per conflicting observation, not once per poll: the check runs every
@@ -129,7 +129,7 @@ public sealed class TrayMenuBuilder
 
     /// <summary>
     /// Opens the weekly-reset entry (issue #186), applies whatever comes back, and refreshes
-    /// so the panel and the graph's week gridlines move with it — the gridlines read the
+    /// so the panel and the graph's week gridlines move with it, the gridlines read the
     /// snapshot's weekly reset, so they follow without separate wiring.
     /// </summary>
     private void EditWeeklyReset()

@@ -4,7 +4,7 @@ namespace OView.Core.Providers;
 
 /// <summary>
 /// Chooses how soon the tray should poll again. A fresh launch can start *before* Claude
-/// Desktop has written any usage samples — Desktop was closed, or is still starting — so
+/// Desktop has written any usage samples, Desktop was closed, or is still starting, so
 /// the first snapshots carry no authoritative percentages and the plan bars read
 /// "unknown" ([ADR-0007](../../../docs/adr/0007-plan-history-primary-provider.md); the
 /// bars only fill on <see cref="DataSource.Live"/>/<see cref="DataSource.Stale"/>).
@@ -12,7 +12,7 @@ namespace OView.Core.Providers;
 /// Rather than wait a full normal interval for that data to appear, the controller polls
 /// on a short <em>warm-up</em> cadence until authoritative data arrives, then settles to
 /// the normal interval. The warm-up is time-boxed by <see cref="WarmupWindow"/> so a
-/// Desktop that stays closed does not mean permanent fast polling — after the window the
+/// Desktop that stays closed does not mean permanent fast polling, after the window the
 /// cadence returns to normal regardless.
 /// </summary>
 public static class PollingCadence
@@ -37,7 +37,7 @@ public static class PollingCadence
         IsAuthoritative(latest) || sinceStart >= WarmupWindow ? normal : warmup;
 
     /// <summary>
-    /// Whether a snapshot from this source populates the plan bars — the signal that the
+    /// Whether a snapshot from this source populates the plan bars, the signal that the
     /// warm-up has done its job. Matches the popup's own Live/Stale gate so the two agree.
     /// </summary>
     public static bool IsAuthoritative(DataSource source) =>

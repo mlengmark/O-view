@@ -8,7 +8,7 @@ namespace OView.Core.Tests;
 /// retried straight back into the limit (GitHub issue #176).
 ///
 /// <para>These pin the rule that tells them apart. The limit is 60 requests an hour <b>per
-/// IP</b> for an unauthenticated caller, so this is not an edge case on a shared network —
+/// IP</b> for an unauthenticated caller, so this is not an edge case on a shared network,
 /// and conditional requests buy no exemption without an Authorization header, which rule 3
 /// forbids this app from holding.</para>
 /// </summary>
@@ -40,7 +40,7 @@ public class RateLimitResponseTests
     public void A429IsRateLimitedWithoutNeedingCorroboration()
     {
         Assert.True(IsLimited(429, null, null, null, out var retryAt));
-        Assert.Null(retryAt);   // throttled, duration unknown — still more than "offline"
+        Assert.Null(retryAt);   // throttled, duration unknown, still more than "offline"
     }
 
     /// <summary>
@@ -68,7 +68,7 @@ public class RateLimitResponseTests
 
     /// <summary>
     /// <c>x-ratelimit-reset</c> is epoch seconds; <c>retry-after</c> is a delta. Reading the
-    /// first as a delta — which its name invites, sitting beside the second — would put the
+    /// first as a delta, which its name invites, sitting beside the second, would put the
     /// retry decades away and pin the app out of checking permanently.
     /// </summary>
     [Fact]

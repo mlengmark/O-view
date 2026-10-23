@@ -11,7 +11,7 @@ namespace OView.App;
 ///
 /// <para>All-or-nothing on purpose. A run that named some locations and defaulted the rest
 /// would quietly read the developer's own Cowork sessions or cached usage beside the fixture,
-/// and pass or fail depending on whose machine it ran on — the failure mode issue #212 removed
+/// and pass or fail depending on whose machine it ran on, the failure mode issue #212 removed
 /// for injected providers.</para>
 /// </summary>
 /// <param name="AccountFile">Claude Code's <c>.claude.json</c>: the account and its organization.</param>

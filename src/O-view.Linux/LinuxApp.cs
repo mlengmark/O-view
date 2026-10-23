@@ -54,7 +54,7 @@ public sealed class LinuxApp : Application, IShellToSkin
 
     /// <summary>
     /// This head's one hop onto the UI thread. <see cref="Program"/> hands the same object to
-    /// the shell, so a push and a bus callback arrive by exactly the same route — and there is
+    /// the shell, so a push and a bus callback arrive by exactly the same route, and there is
     /// one place to look when either turns out not to.
     /// </summary>
     private readonly IUiDispatcher _dispatcher = new AvaloniaUiDispatcher();
@@ -62,7 +62,7 @@ public sealed class LinuxApp : Application, IShellToSkin
     /// <summary>The shell's lifetime: this head starts it, <see cref="Program"/> disposes it.</summary>
     private ShellHost? _host;
 
-    /// <summary>What this head asks of the shell — the same object for the shell's whole life.</summary>
+    /// <summary>What this head asks of the shell, the same object for the shell's whole life.</summary>
     private ISkinToShell? _shell;
 
     private TrayHostState _hostState;
@@ -88,7 +88,7 @@ public sealed class LinuxApp : Application, IShellToSkin
     private CancellationTokenSource? _hostWatch;
 
     /// <summary>
-    /// Set by the reset row when there is no panel yet to forget a place for — see
+    /// Set by the reset row when there is no panel yet to forget a place for, see
     /// <see cref="ResetPanelPosition"/>.
     /// </summary>
     private bool _forgetPanelPlaceOnNextOpen;
@@ -103,7 +103,7 @@ public sealed class LinuxApp : Application, IShellToSkin
     internal IUiDispatcher UiDispatcher => _dispatcher;
 
     /// <summary>
-    /// Handed the shell once it exists — Avalonia constructs this type itself, so this cannot
+    /// Handed the shell once it exists, Avalonia constructs this type itself, so this cannot
     /// be a constructor argument.
     ///
     /// <para>Polling is deliberately <i>not</i> started here: <see cref="StartTray"/> does
@@ -123,7 +123,7 @@ public sealed class LinuxApp : Application, IShellToSkin
     {
         if (SampleDirectory is { Length: > 0 } directory)
         {
-            // Offscreen render and exit — no tray, no bus, no shell. The panel is
+            // Offscreen render and exit, no tray, no bus, no shell. The panel is
             // otherwise only inspectable on a desktop none of its authors has.
             PanelSampleRenderer.RenderAll(directory);
 
@@ -144,7 +144,7 @@ public sealed class LinuxApp : Application, IShellToSkin
 
     private void StartTray(ShellHost host)
     {
-        // The mode the lifetime actually has, not the one Program asked for — the two are
+        // The mode the lifetime actually has, not the one Program asked for, the two are
         // different facts, and the wrong one here used to end the app the second time anyone
         // opened the panel without writing a word about it (issue #312). A line naming it is the
         // only way a log that stops mid-session can be told from one that was shut down.
@@ -153,11 +153,11 @@ public sealed class LinuxApp : Application, IShellToSkin
             + ((ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.ShutdownMode.ToString()
                ?? "(no desktop lifetime)"));
 
-        // Which of the two Wayland cases this is, and why — the one decision behind both the
+        // Which of the two Wayland cases this is, and why, the one decision behind both the
         // panel keeping its corner and the reset row being absent, so a report from a session
         // where dragging does nothing says in one line that it was meant to.
-        _log?.Write($"remembered panel position: {(_placement.Allowed ? "available" : "unavailable")} "
-                    + $"— {_placement.Reason}");
+        _log?.Write($"remembered panel position: {(_placement.Allowed ? "available" : "unavailable")}"
+                    + $", {_placement.Reason}");
 
         _tray = new TrayIcon
         {
@@ -174,7 +174,7 @@ public sealed class LinuxApp : Application, IShellToSkin
         // application's own collection, and until then every property set above is dropped by
         // a null-conditional call that reports nothing and returns nothing to check. So the
         // gauge was drawn every poll, the icon reported itself visible, and the session bus
-        // never heard a word — which is also why the toolkit's log has nothing to say about
+        // never heard a word, which is also why the toolkit's log has nothing to say about
         // it (see Program.AvaloniaLog): the backend that would have complained was never
         // constructed.
         TrayIcon.SetIcons(this, new TrayIcons { _tray });
@@ -190,7 +190,7 @@ public sealed class LinuxApp : Application, IShellToSkin
             _log);
 
         // The rate-card drift check (ADR-0016). One line in the log, no UI, no rate ever
-        // installed — see the Windows head, which wires it identically because there is
+        // installed, see the Windows head, which wires it identically because there is
         // nothing platform-specific about asking a public page what it says.
         _rates = new RateCardFeed(_log);
 
@@ -231,7 +231,7 @@ public sealed class LinuxApp : Application, IShellToSkin
     /// <para><see cref="AppNotification.Kind"/> is deliberately dropped here rather than
     /// mapped. A freedesktop notification already shows O-view's own app icon, so there is no
     /// severity glyph to pick; the only severity channel the spec offers is the urgency hint,
-    /// and marking anything critical makes it persist on screen until dismissed — wrong for all
+    /// and marking anything critical makes it persist on screen until dismissed, wrong for all
     /// three kinds, and already decided against in <see cref="FreedesktopNotifier"/>. The
     /// Windows head needs the kind because its balloon draws a glyph whether you choose one or
     /// not.</para>
@@ -261,19 +261,19 @@ public sealed class LinuxApp : Application, IShellToSkin
 
     /// <summary>
     /// Opens the detail panel, rebuilt for the current theme so a desktop switched between
-    /// light and dark never needs a restart — the same rule the WPF panel follows.
+    /// light and dark never needs a restart, the same rule the WPF panel follows.
     ///
     /// <para><b>UI thread only.</b> Reached through <see cref="BusCallback"/>, because the
     /// tray click that calls it arrives on the D-Bus thread and everything below here builds
     /// and shows an Avalonia window. Called directly from a bus callback, this segfaulted
-    /// (issue #143) — and note that the <c>catch</c> below cannot help with that: a SIGSEGV
+    /// (issue #143), and note that the <c>catch</c> below cannot help with that: a SIGSEGV
     /// is not an exception, which is why the report was a core dump and an empty log.</para>
     /// </summary>
     private void ShowPanel(ISkinToShell shell)
     {
         try
         {
-            // Opens on the last polled snapshot — at most one poll old, and exactly what
+            // Opens on the last polled snapshot, at most one poll old, and exactly what
             // the icon beside it is already showing. It used to force a synchronous
             // Refresh() here, on the assumption that "local reads are cheap"; they are not
             // when the machine holds hundreds of MB of transcripts, and that read ran on
@@ -327,7 +327,7 @@ public sealed class LinuxApp : Application, IShellToSkin
 
             // Which thread got here, not only that the panel came up. Taking BusCallback's
             // hand-off away leaves the window built on the D-Bus thread, and under a virtual
-            // display that still opens — so "panel opened" alone cannot tell the #143 defect
+            // display that still opens, so "panel opened" alone cannot tell the #143 defect
             // from a healthy click, and the runtime click test has nothing to fail on.
             _log?.Write($"panel opened uiThread={(Dispatcher.UIThread.CheckAccess() ? "true" : "false")}");
         }
@@ -357,7 +357,7 @@ public sealed class LinuxApp : Application, IShellToSkin
     }
 
     /// <summary>
-    /// The notice as this head wires it, built but not started — its own method so the wiring
+    /// The notice as this head wires it, built but not started, its own method so the wiring
     /// is inspectable without a session bus, the way <see cref="OpenPanelHandler"/> is.
     /// </summary>
     internal TrayHostNotice BuildHostNotice() =>
@@ -369,16 +369,16 @@ public sealed class LinuxApp : Application, IShellToSkin
 
     /// <summary>
     /// A user can install an AppIndicator extension while O-view is running. Re-showing the
-    /// icon when a host appears is the Linux <c>TaskbarCreated</c> (ADR-0003 item 5) — and
+    /// icon when a host appears is the Linux <c>TaskbarCreated</c> (ADR-0003 item 5), and
     /// without it they would have to know to restart, which nothing tells them.
     ///
     /// <para>Posted, because the host turns up on a bus thread and everything below touches
-    /// the toolkit — the SIGSEGV of issue #143, not an exception any catch could reach.</para>
+    /// the toolkit, the SIGSEGV of issue #143, not an exception any catch could reach.</para>
     /// </summary>
     private void ReShowIcon() =>
         Dispatcher.UIThread.Post(() =>
         {
-            _log?.Write("tray host appeared — re-showing icon");
+            _log?.Write("tray host appeared, re-showing icon");
             if (_tray is not null && _shell is not null)
             {
                 _tray.IsVisible = false;
@@ -408,7 +408,7 @@ public sealed class LinuxApp : Application, IShellToSkin
             _tray.ToolTipText = TooltipFormatter.Format(snapshot);
 
             // A native menu is drawn by the host and offers no opening hook, so the resume row's
-            // visibility rides the render instead — which happens every poll, more often than a
+            // visibility rides the render instead, which happens every poll, more often than a
             // user could open the menu.
             SyncResumeItem();
 
@@ -426,7 +426,7 @@ public sealed class LinuxApp : Application, IShellToSkin
     /// <summary>
     /// The meter as a bug report needs it: the figure and why it is the figure. "unavailable"
     /// and a missing reading used to print the same <c>null</c>, which left the most common
-    /// Linux report — the icon showing nothing — unable to say which had happened.
+    /// Linux report, the icon showing nothing, unable to say which had happened.
     /// </summary>
     private static string Describe(UsagePercent percent) => percent.Status switch
     {
@@ -437,7 +437,7 @@ public sealed class LinuxApp : Application, IShellToSkin
     };
 
     /// <summary>
-    /// SNI wants pixels, not a themed icon name — the gauge changes every poll, so there is
+    /// SNI wants pixels, not a themed icon name, the gauge changes every poll, so there is
     /// no theme entry it could refer to.
     /// </summary>
     private static WindowIcon ToWindowIcon(UsageSnapshot snapshot) => ToWindowIcon(snapshot, out _);
@@ -492,8 +492,8 @@ public sealed class LinuxApp : Application, IShellToSkin
         };
 
         // The tick shows the state as it ACTUALLY stands after the write, never the state
-        // that was requested. Writing the autostart file can fail — a read-only home, a full
-        // disk — and a tick claiming otherwise would be a fabricated fact about the user's
+        // that was requested. Writing the autostart file can fail, a read-only home, a full
+        // disk, and a tick claiming otherwise would be a fabricated fact about the user's
         // machine (rule 6). IStartupRegistration.Apply is shared with the Windows head
         // precisely so the two cannot get this subtly different.
         //
@@ -518,8 +518,8 @@ public sealed class LinuxApp : Application, IShellToSkin
         }, _log);
 
         // Only present once the refresh has stopped itself (issue #234). The guard behind that
-        // block errs toward reporting a charge — a Claude Code session started while a refresh
-        // ran looks the same as a billed one — and that direction is only correct while the user
+        // block errs toward reporting a charge, a Claude Code session started while a refresh
+        // ran looks the same as a billed one, and that direction is only correct while the user
         // can reverse it, so this row is what makes the trade sound rather than a nicety.
         var resume = new NativeMenuItem(PanelText.UsageRefreshBlockedRow) { IsVisible = false };
 
@@ -542,7 +542,7 @@ public sealed class LinuxApp : Application, IShellToSkin
         _resumeItem = resume;
 
         // A closure, deliberately not invoked here. Building the menu must not dereference the
-        // shell — LinuxHeadWiringTests constructs it with a null one to inspect the click
+        // shell, LinuxHeadWiringTests constructs it with a null one to inspect the click
         // handlers without opening a store or touching this machine's paths. The row starts
         // hidden, which is the correct initial state anyway, and Render corrects it every poll.
         _usageRefreshBlocked = () => shell.UsageRefreshBlocked;
@@ -559,7 +559,7 @@ public sealed class LinuxApp : Application, IShellToSkin
     /// an open one back at the work-area corner.
     ///
     /// <para>Deferred to the next open when no panel exists yet. A place is stored per display,
-    /// and which display a panel will open on is not knowable until there is a panel to ask —
+    /// and which display a panel will open on is not knowable until there is a panel to ask,
     /// this head has no screen geometry of its own, only a window's. The next open knows it, and
     /// is also the first moment a reset would be visible to anyone, so nothing is lost by
     /// waiting for it.</para>
@@ -573,7 +573,7 @@ public sealed class LinuxApp : Application, IShellToSkin
         }
 
         _forgetPanelPlaceOnNextOpen = true;
-        _log?.Write("reset panel position — deferred to the next open, the first panel there is");
+        _log?.Write("reset panel position, deferred to the next open, the first panel there is");
     }
 
     /// <summary>
@@ -593,8 +593,8 @@ public sealed class LinuxApp : Application, IShellToSkin
 
     /// <summary>
     /// Re-reads the autostart state from disk. The autostart file is the single source of
-    /// truth and anything may have changed it — the desktop's own startup-applications
-    /// settings, or <c>o-view --startup-off</c> in a terminal — so a menu built once at
+    /// truth and anything may have changed it, the desktop's own startup-applications
+    /// settings, or <c>o-view --startup-off</c> in a terminal, so a menu built once at
     /// launch would otherwise show a tick that quietly went stale.
     /// </summary>
     private void RefreshStartupItem()
@@ -611,14 +611,14 @@ public sealed class LinuxApp : Application, IShellToSkin
 /// finish starting, and withdraws it if a notification area turns up after all.
 ///
 /// <para><b>Why it waits.</b> The probe has to run before the toolkit starts (a D-Bus round
-/// trip on the dispatcher deadlocks the app — issue #124), and at a stock GNOME login that is
+/// trip on the dispatcher deadlocks the app, issue #124), and at a stock GNOME login that is
 /// before the session's own watcher has registered. The reading is honest and the notice was
 /// true when it was written; then the icon appeared, and every login opened with a sentence
 /// the desktop contradicted a moment later. Waiting costs a user who really has no
 /// notification area ten seconds, and costs everyone else nothing.</para>
 ///
 /// <para><b>Why it is also what brings the icon back.</b> The wait and the icon's recovery
-/// (ADR-0003 item 5) watch for the same thing — the watcher name being owned — so they are one
+/// (ADR-0003 item 5) watch for the same thing, the watcher name being owned, so they are one
 /// watch. Kept apart they could disagree, and the way they would disagree is a notice left on
 /// screen beside an icon that works.</para>
 ///
@@ -630,8 +630,8 @@ public sealed class LinuxApp : Application, IShellToSkin
 public sealed class TrayHostNotice
 {
     /// <summary>
-    /// How long a missing host is given to turn up. Measured against the gap this exists for —
-    /// tens of milliseconds at a GNOME login — with room to spare for a slower machine, and
+    /// How long a missing host is given to turn up. Measured against the gap this exists for,
+    /// tens of milliseconds at a GNOME login, with room to spare for a slower machine, and
     /// short enough that someone who genuinely has no notification area is told while they are
     /// still wondering where the icon went.
     /// </summary>
@@ -667,8 +667,8 @@ public sealed class TrayHostNotice
     public TimeSpan Grace { get; }
 
     /// <summary>
-    /// Runs the whole of it: wait, then speak if nothing turned up, then — whenever a host
-    /// does turn up — withdraw whatever was said and bring the icon back.
+    /// Runs the whole of it: wait, then speak if nothing turned up, then, whenever a host
+    /// does turn up, withdraw whatever was said and bring the icon back.
     ///
     /// <para>Never throws, and returns on cancellation: the exit row cancels this, and an app
     /// on its way out has nobody to tell.</para>
@@ -685,7 +685,7 @@ public sealed class TrayHostNotice
 
             if (HostIsThere(arrived))
             {
-                _log?.Write("tray host appeared during the notice wait — notice not shown");
+                _log?.Write("tray host appeared during the notice wait, notice not shown");
             }
             else
             {
@@ -709,7 +709,7 @@ public sealed class TrayHostNotice
 
             if (shown is { } id)
             {
-                _log?.Write($"tray host appeared — closing notice {id}");
+                _log?.Write($"tray host appeared, closing notice {id}");
                 await _close(id).ConfigureAwait(false);
             }
 
@@ -736,7 +736,7 @@ public sealed class TrayHostNotice
 
     /// <summary>
     /// A notification the desktop refused and one it filed under an id print differently in
-    /// the log — the first is why a later "closing notice" line is missing, and the log is the
+    /// the log, the first is why a later "closing notice" line is missing, and the log is the
     /// only account of this anyone reporting it can send.
     /// </summary>
     private static string Describe(uint? id) => id?.ToString() ?? "(not shown)";

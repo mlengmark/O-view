@@ -29,21 +29,21 @@ public sealed record CorruptBackupReport(int Generations, string? NewestStamp, l
 ///
 /// <para><b>The problem was not the quarantine, it was that nothing bounded or read it.</b>
 /// Each corruption renames the DB and its sidecars with a timestamp so two events a week
-/// apart cannot overwrite each other — which is correct — but the directory then only ever
+/// apart cannot overwrite each other, which is correct, but the directory then only ever
 /// grows. Measured on one machine over about a month: seven generations, ~6 MB. Small, and far
 /// smaller than the temp-installer leak filed alongside it (#159).</para>
 ///
 /// <para><b>The reason to bound it anyway is that the files were not serving their stated
 /// purpose.</b> They exist "so the corruption can still be examined", but nothing surfaced
 /// them: <c>--diagnose</c> did not list them, the bundle did not mention them, and the panel
-/// said nothing. A backup nobody is told about is not evidence, it is residue — and the oldest
+/// said nothing. A backup nobody is told about is not evidence, it is residue, and the oldest
 /// generations are the least likely ever to be looked at. So the two halves here belong
 /// together, and the second is what makes the first defensible: what is kept is now named in
 /// the diagnostics bundle, which means the pruning trades away generations nobody could have
 /// found rather than evidence someone might have used.</para>
 ///
 /// <para>Worth recording: on the machine measured, the self-heal path behaved correctly every
-/// time — quarantine, rebuild empty, carry on — and the corruption timestamps line up with
+/// time, quarantine, rebuild empty, carry on, and the corruption timestamps line up with
 /// hard power-cycles rather than with anything the app did, which is the expected way to end
 /// up with a half-written WAL. <c>weekly-resets.json</c> survived intact each time, which is
 /// exactly what ADR-0011 moved it out of the store for.</para>
@@ -58,15 +58,15 @@ public static class CorruptBackups
     ///
     /// <para>Two, not one: the newest is the event that just happened, and the one before it is
     /// what a "has this been happening repeatedly?" question is answered from. Past that,
-    /// another copy of a database nobody has opened adds nothing a bug report could use — the
+    /// another copy of a database nobody has opened adds nothing a bug report could use, the
     /// <i>count</i> of events is the part that carries information beyond two, and that is now
     /// reported rather than inferred from the file listing.</para>
     /// </summary>
     public const int KeepGenerations = 2;
 
     /// <summary>
-    /// Every retained generation for <paramref name="dbPath"/>, newest first. Empty — never
-    /// throwing — when the directory is unreadable or holds none.
+    /// Every retained generation for <paramref name="dbPath"/>, newest first. Empty, never
+    /// throwing, when the directory is unreadable or holds none.
     ///
     /// <para>Grouped by stamp because a generation is only examinable whole: a database
     /// separated from its WAL is not the state that was quarantined, so the three files are
@@ -99,7 +99,7 @@ public static class CorruptBackups
             .Where(x => x.Stamp is { Length: > 0 })
             .GroupBy(x => x.Stamp!, StringComparer.Ordinal)
             // Ordinal descending is newest-first for yyyyMMdd-HHmmss, and stays deterministic
-            // for a stamp that is not one — sorting by parsed date would drop those silently.
+            // for a stamp that is not one, sorting by parsed date would drop those silently.
             .OrderByDescending(g => g.Key, StringComparer.Ordinal)
             .Select(g => new CorruptGeneration(
                 g.Key,
@@ -109,7 +109,7 @@ public static class CorruptBackups
     }
 
     /// <summary>
-    /// The one-line summary the diagnostics bundle prints. Never throws — an unreadable
+    /// The one-line summary the diagnostics bundle prints. Never throws, an unreadable
     /// directory reports nothing rather than failing the bundle, which is the one thing a
     /// user with a broken machine still has to be able to produce.
     /// </summary>
@@ -128,14 +128,14 @@ public static class CorruptBackups
     /// <para><b>Best-effort, exactly as the move it follows already is.</b> A file that cannot
     /// be deleted is skipped and the next corruption sweeps again. This runs on the rebuild
     /// path, and rule 7 / issue #16 requires that path to leave a usable empty database behind
-    /// whatever else fails — housekeeping must not be the thing that makes a self-heal
+    /// whatever else fails, housekeeping must not be the thing that makes a self-heal
     /// fatal.</para>
     /// </summary>
     /// <param name="dbPath">The live database path the backups are named after.</param>
     /// <param name="keep">Generations to retain, newest first. Clamped at zero.</param>
     /// <param name="delete">
     /// How to remove one file. The seam exists for the test that a failure here does not
-    /// propagate — the real causes are OS- and state-specific and cannot be provoked the same
+    /// propagate, the real causes are OS- and state-specific and cannot be provoked the same
     /// way on Windows and Linux, whereas the guarantee under test is the same on both.
     /// </param>
     public static int Prune(string? dbPath = null, int keep = KeepGenerations, Action<string>? delete = null)
@@ -179,7 +179,7 @@ public static class CorruptBackups
     }
 
 
-    /// <summary>Human-readable size for the diagnostics line — MB below a gigabyte, GB above.</summary>
+    /// <summary>Human-readable size for the diagnostics line, MB below a gigabyte, GB above.</summary>
     public static string DescribeBytes(long bytes) => bytes >= 1024L * 1024 * 1024
         ? string.Create(CultureInfo.InvariantCulture, $"{bytes / (1024.0 * 1024 * 1024):0.0} GB")
         : string.Create(CultureInfo.InvariantCulture, $"{bytes / (1024.0 * 1024):0.0} MB");

@@ -5,7 +5,7 @@ using OView.App.Platform;
 namespace OView.Tray.Tray;
 
 /// <summary>
-/// Run-at-startup via HKCU\...\CurrentVersion\Run — per-user, no elevation
+/// Run-at-startup via HKCU\...\CurrentVersion\Run, per-user, no elevation
 /// (ADR-0003 item 6; not LaunchAgents). The registry value is the single source
 /// of truth; nothing is duplicated into settings.json.
 /// </summary>

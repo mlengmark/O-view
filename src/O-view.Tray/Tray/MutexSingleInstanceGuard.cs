@@ -4,12 +4,12 @@ namespace OView.Tray.Tray;
 
 /// <summary>
 /// Single-instance on Windows via a named mutex, where the kernel releases the name when
-/// the owning process dies however it dies — so the failure mode that pushes Linux towards
+/// the owning process dies however it dies, so the failure mode that pushes Linux towards
 /// a lock file (<see cref="FileLockSingleInstanceGuard"/>) does not arise here.
 ///
 /// <para><b>The name is a compatibility surface.</b> An installed build already holds
 /// <c>OView.Tray.SingleInstance</c>; changing it would let an old and a new instance run
-/// side by side during an in-place update — two icons, double polling, and a very
+/// side by side during an in-place update, two icons, double polling, and a very
 /// confusing bug report. It stays exactly as it is.</para>
 /// </summary>
 public sealed class MutexSingleInstanceGuard : ISingleInstanceGuard
