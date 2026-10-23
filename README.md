@@ -4,6 +4,13 @@ A system tray app for Windows 11 and Linux that shows how much of your Claude us
 
 **Current release: [v1.0.0](https://github.com/mlengmark/O-view/releases/latest)**, with a Windows installer, a portable Windows exe, `.deb` packages for amd64 and arm64, and portable Linux tarballs under one tag.
 
+| | |
+|---|---|
+| ![The detail panel on Windows, dark theme](docs/images/panel-typical-windows-dark.png) | ![The detail panel on Windows, light theme](docs/images/panel-typical-windows-light.png) |
+| ![The tray menu](docs/images/menu-windows-dark.png) | ![A stat tile flipped to its per-model breakdown](docs/images/tiles-breakdown-dark.png) |
+
+Every surface, on both platforms and in both themes: [docs/overview.md](docs/overview.md).
+
 ## What it shows
 
 | Surface | What you see |
@@ -197,6 +204,7 @@ powershell -File tools/check.ps1
 
 ## Documentation
 
+- [docs/overview.md](docs/overview.md): every surface, with pictures.
 - [docs/architecture.md](docs/architecture.md): the layers and the rules the code follows.
 - [docs/platform-status.md](docs/platform-status.md): what has been seen working on each platform.
 - [docs/cli.md](docs/cli.md): every command-line flag.
