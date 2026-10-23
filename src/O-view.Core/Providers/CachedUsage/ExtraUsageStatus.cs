@@ -105,16 +105,11 @@ public sealed record ExtraUsageStatus(
             enabled.ValueKind == JsonValueKind.True ? ExtraUsageState.Enabled : ExtraUsageState.Disabled,
             Flag(extra, "user_disabled"),
             Flag(extra, "spend_limit_reached"),
-            Text(extra, "disabled_reason"));
+            JsonFields.NonEmptyString(extra, "disabled_reason"));
     }
 
     /// <summary>A boolean that is false unless the file actually says true.</summary>
     private static bool Flag(JsonElement obj, string name) =>
         obj.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.True;
 
-    private static string? Text(JsonElement obj, string name) =>
-        obj.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String &&
-        v.GetString() is { Length: > 0 } s
-            ? s
-            : null;
 }

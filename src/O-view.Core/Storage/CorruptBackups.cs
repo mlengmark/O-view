@@ -104,7 +104,7 @@ public static class CorruptBackups
             .Select(g => new CorruptGeneration(
                 g.Key,
                 [.. g.Select(x => x.File).Order(StringComparer.Ordinal)],
-                g.Sum(x => SizeOf(x.File))))
+                g.Sum(x => FileSizes.Of(x.File))))
             .ToList();
     }
 
@@ -178,17 +178,6 @@ public static class CorruptBackups
         return at < 0 ? null : name[(at + Marker.Length)..];
     }
 
-    private static long SizeOf(string file)
-    {
-        try
-        {
-            return new FileInfo(file).Length;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return 0;
-        }
-    }
 
     /// <summary>Human-readable size for the diagnostics line — MB below a gigabyte, GB above.</summary>
     public static string DescribeBytes(long bytes) => bytes >= 1024L * 1024 * 1024

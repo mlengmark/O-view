@@ -77,10 +77,7 @@ public sealed record CoworkSessionReport(
 
     public int Unresolved => Sessions.Count(s => s.TranscriptPath is null);
 
-    public DateTimeOffset? NewestActivityUtc =>
-        Sessions.Select(s => s.LastActivityUtc).OfType<DateTimeOffset>() is { } times && times.Any()
-            ? times.Max()
-            : null;
+    public DateTimeOffset? NewestActivityUtc => Sessions.Max(s => s.LastActivityUtc);
 
     /// <summary>
     /// Sessions Cowork touched recently that have no transcript on disk.

@@ -202,10 +202,7 @@ public static class TranscriptReader
                 return null;
             }
 
-            if (!root.TryGetProperty("timestamp", out var ts) ||
-                ts.ValueKind != JsonValueKind.String ||
-                !DateTimeOffset.TryParse(ts.GetString(), CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal, out var timestamp))
+            if (!UtcInstant.TryParse(JsonFields.StringOrNull(root, "timestamp"), out var timestamp))
             {
                 return null;
             }
@@ -231,8 +228,8 @@ public static class TranscriptReader
                 timestamp,
                 model,
                 ReadTokens(usage),
-                UsageModifiers.From(ReadStringField(usage, "speed"),
-                    ReadStringField(usage, "inference_geo")));
+                UsageModifiers.From(JsonFields.StringOrNull(usage, "speed"),
+                    JsonFields.StringOrNull(usage, "inference_geo")));
         }
         catch (JsonException)
         {
@@ -308,16 +305,6 @@ public static class TranscriptReader
             ReadTokenField(usage, "output_tokens"));
     }
 
-    /// <summary>
-    /// A string field, or null when it is absent, JSON <c>null</c>, or another type. All of
-    /// those mean the same thing to <see cref="UsageModifiers.From"/>: nothing said the price
-    /// was modified. <c>null</c> is not hypothetical — a Cowork audit record here carries
-    /// <c>"speed": null</c> beside <c>"inference_geo": null</c>.
-    /// </summary>
-    private static string? ReadStringField(JsonElement usage, string name) =>
-        usage.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String
-            ? v.GetString()
-            : null;
 
     /// <summary>Absent token fields mean none reported; zero, not an error.</summary>
     private static long ReadTokenField(JsonElement usage, string name) =>

@@ -115,7 +115,7 @@ public sealed record ClaudeWriteSurvey(IReadOnlyList<SurveyedRoot> Roots, TimeSp
 
         foreach (var (label, path) in roots)
         {
-            if (!seen.Add(Resolve(path)))
+            if (!seen.Add(TranscriptFileScan.Canonical(path)))
             {
                 continue;
             }
@@ -222,17 +222,6 @@ public sealed record ClaudeWriteSurvey(IReadOnlyList<SurveyedRoot> Roots, TimeSp
         }
     }
 
-    private static string Resolve(string path)
-    {
-        try
-        {
-            return Directory.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName ?? path;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return path;
-        }
-    }
 
     public string ToClipboardText(DateTimeOffset utcNow)
     {

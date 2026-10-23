@@ -1,3 +1,7 @@
+using OView.Core.Models;
+using OView.Core.Providers;
+using OView.Core.Providers.PlanHistory;
+
 namespace OView.App;
 
 /// <summary>
@@ -27,12 +31,12 @@ public sealed record ClaudeDataLocations(
     /// <summary>The standard layout under one home folder, as Claude Code and Desktop write it on Windows.</summary>
     public static ClaudeDataLocations UnderHome(string home)
     {
-        var claudeDir = Path.Combine(home, ".claude");
-        var accountFile = Path.Combine(claudeDir, ".claude.json");
+        var claudeDir = Path.Combine(home, ClaudeConfigDir.DefaultFolderName);
+        var accountFile = Path.Combine(claudeDir, ClaudeAccount.FileName);
         return new(
             AccountFile: accountFile,
             CachedUsageFile: accountFile,
-            PlanHistoryFile: Path.Combine(home, "AppData", "Roaming", "Claude", "plan-usage-history.json"),
+            PlanHistoryFile: Path.Combine(home, "AppData", "Roaming", "Claude", PlanHistoryLocator.FileName),
             ProjectsRoot: Path.Combine(claudeDir, "projects"),
             CoworkRoots: [],
             SessionRegistryRoots: []);

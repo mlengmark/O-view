@@ -73,10 +73,7 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
     public IReadOnlyList<string> PresentSources =>
         Sources.Where(s => s.FileCount > 0).Select(s => s.Label).ToList();
 
-    public DateTimeOffset? NewestWriteUtc =>
-        Sources.Select(s => s.NewestWriteUtc).OfType<DateTimeOffset>() is { } times && times.Any()
-            ? times.Max()
-            : null;
+    public DateTimeOffset? NewestWriteUtc => Sources.Max(s => s.NewestWriteUtc);
 
     public TranscriptScopeStatus Status =>
         TotalFiles == 0 ? TranscriptScopeStatus.NoTranscripts : TranscriptScopeStatus.TranscriptsPresent;
@@ -229,14 +226,9 @@ public sealed record TranscriptScopeReport(IReadOnlyList<TranscriptSource> Sourc
                 .Where(f => ownPrefix is null || !f.StartsWith(ownPrefix, PathIdentity.Comparison))
                 .ToList();
 
-        // Distinct by path, exactly as ingestion does: MSIX redirection can expose the same
-        // session through two roots, and counting it twice would overstate the evidence.
-        // Must use the same rule ingestion uses, or the banner and the scan disagree about
-        // how many files there are — which is the drift issue #58 was about.
-        var coworkFiles = CoworkAuditLocator
-            .FindTranscripts(coworkRoots)
-            .Distinct(PathIdentity.Comparer)
-            .ToList();
+        // The same list ingestion reads, mirrors already collapsed by the locator, so the
+        // banner and the scan cannot disagree about how many files there are (issue #58).
+        var coworkFiles = CoworkAuditLocator.FindTranscripts(coworkRoots);
 
         return new TranscriptScopeReport(
         [

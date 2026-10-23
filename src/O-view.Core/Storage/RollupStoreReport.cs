@@ -320,14 +320,14 @@ public sealed record RollupStoreReport(
         // Probed rather than inferred from a failed query: a store written by an older build
         // genuinely has no such column, and that is a different report from one whose rows are
         // all unattributed. Only the first is fixed by waiting for the next poll.
-        var attribution = HasColumn(connection, "ingested_requests", "source")
-                          && HasColumn(connection, "file_offsets", "counted_from");
+        var attribution = SqliteSchema.HasColumn(connection, "ingested_requests", "source")
+                          && SqliteSchema.HasColumn(connection, "file_offsets", "counted_from");
 
         return new RollupStoreReport(
             path,
             origin,
-            SizeOf(path),
-            SizeOf(path + "-wal"),
+            FileSizes.Of(path),
+            FileSizes.Of(path + "-wal"),
             Scalar(connection, "PRAGMA journal_mode;"),
             Scalar(connection, "PRAGMA quick_check;"),
             ProbeWrite(connection),
@@ -347,29 +347,6 @@ public sealed record RollupStoreReport(
             attribution);
     }
 
-    /// <summary>Whether a column exists, without assuming a failed query means it does not.</summary>
-    private static bool HasColumn(SqliteConnection connection, string table, string column)
-    {
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = $"PRAGMA table_info({table});";
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
-            {
-                if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
-                {
-                    return true;
-                }
-            }
-
-            return false;
-        }
-        catch (SqliteException)
-        {
-            return false;
-        }
-    }
 
     /// <summary>
     /// Rows and tokens per surface. Tokens are the four fields summed — the same arithmetic the
@@ -528,7 +505,7 @@ public sealed record RollupStoreReport(
             {
                 tracked++;
                 var recorded = reader.GetInt64(1);
-                var actual = SizeOf(reader.GetString(0), missing: -1);
+                var actual = FileSizes.Of(reader.GetString(0), missing: -1);
 
                 if (actual < 0)
                 {
@@ -563,15 +540,4 @@ public sealed record RollupStoreReport(
         }
     }
 
-    private static long SizeOf(string path, long missing = 0)
-    {
-        try
-        {
-            return File.Exists(path) ? new FileInfo(path).Length : missing;
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return missing;
-        }
-    }
 }
