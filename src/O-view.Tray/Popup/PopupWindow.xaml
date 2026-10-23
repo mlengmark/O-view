@@ -4,7 +4,8 @@
         xmlns:local="clr-namespace:OView.Tray.Popup"
         xmlns:text="clr-namespace:OView.Presentation.Text;assembly=O-view.Presentation"
         xmlns:panel="clr-namespace:OView.Presentation.Panel;assembly=O-view.Presentation"
-        Width="400" SizeToContent="Height"
+        xmlns:rendering="clr-namespace:OView.App.Rendering;assembly=O-view.App"
+        Width="{x:Static rendering:PanelMetrics.PanelWidthDip}" SizeToContent="Height"
         WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False"
         Topmost="True" AllowsTransparency="True" Background="Transparent"
         TextOptions.TextFormattingMode="Display">
@@ -102,14 +103,16 @@
                  on the Linux bar. The bar only ever appears on a display already short of
                  room, so it costs the content as little width as it can. -->
             <Style x:Key="PanelScrollBar" TargetType="ScrollBar">
-                <Setter Property="Width" Value="6"/>
+                <Setter Property="Width" Value="{x:Static rendering:PanelMetrics.ScrollBarWidthDip}"/>
 
                 <!-- MinWidth as well as Width: the stock vertical bar sets a MinWidth of the
                      system scroll-bar width, and a minimum outranks a width whatever the style
                      precedence says. Without this the bar comes out at the Windows default of
                      17 DIP — nearly three times the Linux one, in the one place on the panel
                      where width is scarce. -->
-                <Setter Property="MinWidth" Value="6"/>
+                <Setter Property="MinWidth" Value="{x:Static rendering:PanelMetrics.ScrollBarWidthDip}"/>
+                <!-- The left margin is PanelMetrics.ScrollBarGapDip; a Thickness cannot be
+                     built from a static double in XAML, so the figure is repeated here. -->
                 <Setter Property="Margin" Value="6,0,0,0"/>
                 <Setter Property="Template">
                     <Setter.Value>
@@ -128,7 +131,7 @@
                                         </RepeatButton>
                                     </Track.DecreaseRepeatButton>
                                     <Track.Thumb>
-                                        <Thumb MinHeight="24">
+                                        <Thumb MinHeight="{x:Static rendering:PanelMetrics.ScrollThumbMinHeightDip}">
                                             <Thumb.Template>
                                                 <ControlTemplate TargetType="Thumb">
                                                     <Border Background="{DynamicResource ScrollThumb}"

@@ -76,14 +76,13 @@ internal sealed class PopupFit
         _window.UpdateLayout();
 
         var available = PopupPositioner.AvailableHeightDip();
-        var density = PanelDensity.For(NaturalHeightDip() + pendingGrowth, available);
-        if (density.IsCompact)
+        var outcome = PanelFit.Fit(available, NaturalHeightDip, density =>
         {
             _applyDensity(density);
             _window.UpdateLayout();
-        }
+        }, pendingGrowth);
 
-        ApplyFit(PanelFit.Resolve(NaturalHeightDip() + pendingGrowth, available), available);
+        ApplyFit(outcome.Fit, available);
         _window.UpdateLayout();
 
         _drawGraph(stats, snapshot);

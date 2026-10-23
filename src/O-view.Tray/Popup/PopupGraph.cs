@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Shapes;
+using OView.App.Rendering;
 using OView.Core.Models;
 using OView.Presentation.Panel;
 using Brush = System.Windows.Media.Brush;
@@ -66,7 +67,7 @@ internal sealed class PopupGraph(FrameworkElement owner, Canvas host)
             // Bar — height by absolute tokens, colour by within-week intensity.
             if (column.HasBar)
             {
-                var height = Math.Max(2, barAreaHeight * column.Height);
+                var height = Math.Max(PanelMetrics.GraphMinBarHeightDip, barAreaHeight * column.Height);
                 var barWidth = Math.Max(2, col - 2);
                 var bar = new Rectangle
                 {
@@ -107,10 +108,10 @@ internal sealed class PopupGraph(FrameworkElement owner, Canvas host)
             var label = new TextBlock
             {
                 Text = column.DateLabel,
-                FontSize = 8,
+                FontSize = PanelMetrics.GraphLabelFontSize,
                 Foreground = labelBrush,
                 RenderTransform = rotation,
-                Opacity = column.Recorded ? 1.0 : 0.5,
+                Opacity = column.Recorded ? 1.0 : PanelMetrics.GraphUnrecordedLabelOpacity,
             };
             // Parent first, so the font properties measured are the inherited ones.
             host.Children.Add(label);
@@ -152,10 +153,10 @@ internal sealed class PopupGraph(FrameworkElement owner, Canvas host)
             var x = (boundary.Column + boundary.FractionOfDay) * col;
             var line = new Line
             {
-                X1 = x, X2 = x, Y1 = 0, Y2 = barAreaHeight + 3,
+                X1 = x, X2 = x, Y1 = 0, Y2 = barAreaHeight + PanelMetrics.GraphBoundaryOverhangDip,
                 Stroke = gridBrush,
                 StrokeThickness = 1,
-                StrokeDashArray = [2, 2],
+                StrokeDashArray = [PanelMetrics.GraphBoundaryDashOnDip, PanelMetrics.GraphBoundaryDashOffDip],
                 // No figure is the Monday fallback, which has no observed instant to state,
                 // so it takes the text-only card rather than a headline standing empty.
                 ToolTip = boundary.CardFigure.Length == 0

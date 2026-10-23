@@ -42,4 +42,50 @@ public static class PanelFit
         contentHeightDip <= availableHeightDip
             ? new Result(contentHeightDip, MustScroll: false)
             : new Result(availableHeightDip, MustScroll: true);
+
+    /// <summary>
+    /// Everything <see cref="Fit"/> decided: the cap and scroll answer, the density the
+    /// content was laid out at, and the height the content wanted at the natural density
+    /// (before any compacting), which is the figure a head logs when it had to compact.
+    /// </summary>
+    public readonly record struct Outcome(Result Fit, PanelDensity Density, double NaturalHeightDip);
+
+    /// <summary>
+    /// The sequence both heads run to fit the panel to a display, written once: measure the
+    /// content, pick the density the space allows (<see cref="PanelDensity.For"/>), and when
+    /// that is compact re-lay the content out and measure it again, because the tree that
+    /// answered first is not the one the cap and the scroll decision are about. Then
+    /// <see cref="Resolve"/> caps what that second measurement wants.
+    /// </summary>
+    /// <param name="availableHeightDip">What the work area leaves for the window, in DIP.</param>
+    /// <param name="measureNaturalHeightDip">
+    /// Measures what the content wants at the density it currently has, against an unbounded
+    /// height. Called once, or twice when the content had to be compacted.
+    /// </param>
+    /// <param name="applyDensity">
+    /// Lays the content out at a density. Called only when the space calls for the compact
+    /// one, so a display with room keeps exactly the tree it always had.
+    /// </param>
+    /// <param name="pendingGrowthDip">
+    /// Height the content is about to gain or lose but has not yet, added to each
+    /// measurement. Zero everywhere except a fold that measures before it plays.
+    /// </param>
+    public static Outcome Fit(
+        double availableHeightDip,
+        Func<double> measureNaturalHeightDip,
+        Action<PanelDensity> applyDensity,
+        double pendingGrowthDip = 0)
+    {
+        var natural = measureNaturalHeightDip() + pendingGrowthDip;
+        var density = PanelDensity.For(natural, availableHeightDip);
+        var wanted = natural;
+
+        if (density.IsCompact)
+        {
+            applyDensity(density);
+            wanted = measureNaturalHeightDip() + pendingGrowthDip;
+        }
+
+        return new Outcome(Resolve(wanted, availableHeightDip), density, natural);
+    }
 }

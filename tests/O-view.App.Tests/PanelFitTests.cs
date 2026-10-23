@@ -100,4 +100,74 @@ public class PanelFitTests
         Assert.Equal(expectedWindowHeightDip, result.WindowHeightDip);
         Assert.True(expectedMustScroll == result.MustScroll, panel);
     }
+
+    // ── the shared fit sequence ─────────────────────────────────────────────────────
+
+    /// <summary>A display with room never has its content re-laid out: one measurement, no density change.</summary>
+    [Fact]
+    public void ContentWithRoomIsMeasuredOnceAndLeftAtTheNaturalDensity()
+    {
+        var measures = 0;
+        var applied = new List<PanelDensity>();
+
+        var outcome = PanelFit.Fit(
+            availableHeightDip: 900,
+            measureNaturalHeightDip: () => { measures++; return 700; },
+            applyDensity: applied.Add);
+
+        Assert.Equal(1, measures);
+        Assert.Empty(applied);
+        Assert.Equal(PanelDensity.Normal, outcome.Density);
+        Assert.Equal(700, outcome.NaturalHeightDip);
+        Assert.Equal(700, outcome.Fit.WindowHeightDip);
+        Assert.False(outcome.Fit.MustScroll);
+    }
+
+    /// <summary>
+    /// Content that overflows is compacted and then measured again, and the cap is decided on
+    /// that second measurement, not the first.
+    /// </summary>
+    [Fact]
+    public void OverflowingContentIsCompactedAndMeasuredAgainBeforeTheCap()
+    {
+        var heights = new Queue<double>([900, 760]);
+        var applied = new List<PanelDensity>();
+
+        var outcome = PanelFit.Fit(
+            availableHeightDip: 800,
+            measureNaturalHeightDip: heights.Dequeue,
+            applyDensity: applied.Add);
+
+        Assert.Empty(heights);
+        Assert.Equal([PanelDensity.Compact], applied);
+        Assert.Equal(PanelDensity.Compact, outcome.Density);
+        Assert.Equal(900, outcome.NaturalHeightDip);
+        Assert.Equal(760, outcome.Fit.WindowHeightDip);
+        Assert.False(outcome.Fit.MustScroll);
+    }
+
+    /// <summary>What still overflows after compacting is capped at the work area and scrolled.</summary>
+    [Fact]
+    public void ContentStillTooTallAfterCompactingIsCappedAndScrolled()
+    {
+        var heights = new Queue<double>([1000, 920]);
+
+        var outcome = PanelFit.Fit(800, heights.Dequeue, _ => { });
+
+        Assert.Equal(800, outcome.Fit.WindowHeightDip);
+        Assert.True(outcome.Fit.MustScroll);
+    }
+
+    /// <summary>Pending growth counts in both measurements, so a fold about to play is fitted for, not after.</summary>
+    [Fact]
+    public void PendingGrowthIsAddedToEveryMeasurement()
+    {
+        var heights = new Queue<double>([700, 640]);
+
+        var outcome = PanelFit.Fit(760, heights.Dequeue, _ => { }, pendingGrowthDip: 100);
+
+        Assert.Equal(PanelDensity.Compact, outcome.Density);
+        Assert.Equal(800, outcome.NaturalHeightDip);
+        Assert.Equal(740, outcome.Fit.WindowHeightDip);
+    }
 }

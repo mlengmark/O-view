@@ -27,11 +27,9 @@ namespace OView.Tray.Popup;
 /// </summary>
 public partial class StatTile : UserControl
 {
-    /// <summary>Vertical gap between stacked segments, in the surface colour.</summary>
-    private const double SegmentGap = 2;
+    private const double SegmentGap = PanelMetrics.TileSegmentGapDip;
 
-    /// <summary>Rounding on the bar's data end; the baseline end stays square.</summary>
-    private const double DataEndRadius = 4;
+    private const double DataEndRadius = PanelMetrics.TileDataEndRadiusDip;
 
     // ── hover timing for the per-model figures ────────────────────────────────────
     //
@@ -167,7 +165,9 @@ public partial class StatTile : UserControl
     }
 
     private void UpdateGlyph() =>
-        ExpandGlyph.Opacity = _expanded ? 0.9 : Root.IsMouseOver ? 0.75 : 0.35;
+        ExpandGlyph.Opacity = _expanded
+            ? PanelMetrics.TileGlyphOpenOpacity
+            : Root.IsMouseOver ? PanelMetrics.TileGlyphHoverOpacity : PanelMetrics.TileGlyphIdleOpacity;
 
     private void BuildBreakdown()
     {

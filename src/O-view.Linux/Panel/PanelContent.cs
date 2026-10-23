@@ -42,23 +42,18 @@ namespace OView.Linux.Panel;
 /// </summary>
 public sealed class PanelContent : Border
 {
-    private const double PanelWidth = 400;
+    private const double PanelWidth = PanelMetrics.PanelWidthDip;
 
     /// <summary>Gap between sections at the natural density — this head's own constant.</summary>
     private const double NaturalRootSpacing = 10;
 
     /// <summary>
-    /// How wide the scroll bar is drawn. Thin on purpose: it only ever appears on a display
-    /// that is already short of room, so it has to cost the content as little width as it can
-    /// while still reading as something to grab. The Windows panel draws the same width — the
-    /// two colours are shared through <see cref="PanelPalette"/>, and these three numbers are
-    /// stated here for that head to match.
+    /// The scroll bar's width and the gap before it, shared with the Windows head through
+    /// <see cref="PanelMetrics"/>; the two colours are shared through <see cref="PanelPalette"/>.
     /// </summary>
-    private const double ScrollBarWidth = 6;
+    private const double ScrollBarWidth = PanelMetrics.ScrollBarWidthDip;
 
-    /// <summary>Gap between the content and the bar, so a right-aligned figure does not read
-    /// as touching it.</summary>
-    private const double ScrollBarGap = 6;
+    private const double ScrollBarGap = PanelMetrics.ScrollBarGapDip;
 
     /// <summary>
     /// How tightly to pack, for a display too short for the natural layout
