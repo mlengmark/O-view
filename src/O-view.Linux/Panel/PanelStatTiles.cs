@@ -23,11 +23,9 @@ namespace OView.Linux.Panel;
 /// </summary>
 public sealed class PanelStatTiles(LinuxPanelTheme theme)
 {
-    /// <summary>Gap between a tile's bar segments, in the surface colour.</summary>
-    private const double SegmentGap = 2;
+    private const double SegmentGap = PanelMetrics.TileSegmentGapDip;
 
-    /// <summary>Rounding on the bar's data end; the baseline end stays square.</summary>
-    private const double DataEndRadius = 4;
+    private const double DataEndRadius = PanelMetrics.TileDataEndRadiusDip;
 
     private readonly LinuxPanelTheme _theme = theme;
     private readonly List<TileFlip> _flips = [];
@@ -99,7 +97,9 @@ public sealed class PanelStatTiles(LinuxPanelTheme theme)
             _summary.IsHitTestVisible = !IsExpanded;
             _breakdown.Opacity = IsExpanded ? 1 : 0;
             _breakdown.IsHitTestVisible = IsExpanded;
-            _glyph.Opacity = IsExpanded ? 0.9 : _pointerOver ? 0.75 : 0.35;
+            _glyph.Opacity = IsExpanded
+                ? PanelMetrics.TileGlyphOpenOpacity
+                : _pointerOver ? PanelMetrics.TileGlyphHoverOpacity : PanelMetrics.TileGlyphIdleOpacity;
         }
     }
 

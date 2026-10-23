@@ -88,7 +88,7 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
 
             if (column.HasBar)
             {
-                var height = Math.Max(2, barArea * column.Height);
+                var height = Math.Max(PanelMetrics.GraphMinBarHeightDip, barArea * column.Height);
                 var bar = new Border
                 {
                     Width = GraphBarWidth,
@@ -116,10 +116,10 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
             var line = new Line
             {
                 StartPoint = new Point(x, 0),
-                EndPoint = new Point(x, barArea + 3),
+                EndPoint = new Point(x, barArea + PanelMetrics.GraphBoundaryOverhangDip),
                 Stroke = _theme["WarnText"],
                 StrokeThickness = 1,
-                StrokeDashArray = [2, 2],
+                StrokeDashArray = [PanelMetrics.GraphBoundaryDashOnDip, PanelMetrics.GraphBoundaryDashOffDip],
             };
             ToolTip.SetTip(line, GraphTip(boundary.CardFigure, boundary.CardCaption));
             chart.Children.Add(line);
@@ -146,11 +146,9 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
         var label = new TextBlock
         {
             Text = column.DateLabel,
-            FontSize = 8,
+            FontSize = PanelMetrics.GraphLabelFontSize,
             Foreground = _theme["TextMuted"],
-            // A day with no data is dimmed rather than left blank: the column needs its date
-            // for the reader to see WHICH days are missing.
-            Opacity = column.Recorded ? 1.0 : 0.5,
+            Opacity = column.Recorded ? 1.0 : PanelMetrics.GraphUnrecordedLabelOpacity,
             RenderTransform = new RotateTransform(90),
         };
 

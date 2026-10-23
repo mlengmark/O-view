@@ -294,27 +294,28 @@ public sealed class PanelWindow : Window
         BoostNotices? boostNotices = null,
         CachedUtilization? cachedUsage = null)
     {
-        var natural = _content.NaturalHeightDip();
         if (TargetScreen() is not { } screen)
         {
-            return natural;
+            return _content.NaturalHeightDip();
         }
 
         var available = WorkAreaPlacement.AvailableHeightPx(ToBox(screen.WorkingArea)) / Scaling(screen);
 
-        var density = PanelDensity.For(natural, available);
-        if (density.IsCompact)
+        var outcome = PanelFit.Fit(available, _content.NaturalHeightDip, density =>
         {
             _content.Density = density;
             _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow, boostNotices,
                 cachedUsage: cachedUsage);
+        });
+
+        if (outcome.Density.IsCompact)
+        {
             _log?.Write(
-                $"panel density: compact (natural {natural:0} dip > available {available:0} dip)");
+                $"panel density: compact (natural {outcome.NaturalHeightDip:0} dip > available {available:0} dip)");
         }
 
-        var fit = PanelFit.Resolve(_content.NaturalHeightDip(), available);
-        ApplyHeight(fit.WindowHeightDip, fit.MustScroll, available);
-        return fit.WindowHeightDip;
+        ApplyHeight(outcome.Fit.WindowHeightDip, outcome.Fit.MustScroll, available);
+        return outcome.Fit.WindowHeightDip;
     }
 
     /// <summary>

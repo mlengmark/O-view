@@ -2,6 +2,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
 using Avalonia.Input;
+using OView.App.Rendering;
 
 namespace OView.Linux.Panel;
 
@@ -14,9 +15,8 @@ namespace OView.Linux.Panel;
 /// </summary>
 internal sealed class PanelScroll
 {
-    /// <summary>Shortest the thumb may get. A thumb kept strictly proportional to very tall
-    /// content shrinks to a few pixels, which is neither visible nor grabbable.</summary>
-    internal const double MinThumbHeight = 24;
+    /// <summary>Shortest the thumb may get: <see cref="PanelMetrics.ScrollThumbMinHeightDip"/>, shared with the Windows head.</summary>
+    internal const double MinThumbHeight = PanelMetrics.ScrollThumbMinHeightDip;
 
     /// <summary>
     /// How far one notch of the wheel moves the content. This is Avalonia's own figure for a
