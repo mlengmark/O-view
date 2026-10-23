@@ -23,15 +23,6 @@ public class ReportedResetTests
 {
     private static readonly DateTimeOffset T0 = new(2026, 8, 24, 9, 0, 0, TimeSpan.Zero);
 
-    private sealed class FixedProvider(UsageSnapshot snapshot) : IUsageProvider
-    {
-        public UsageSnapshot GetSnapshot(DateTimeOffset utcNow) => snapshot;
-    }
-
-    private sealed class ThrowingProvider : IUsageProvider
-    {
-        public UsageSnapshot GetSnapshot(DateTimeOffset utcNow) => throw new IOException("locked");
-    }
 
     /// <summary>A Desktop machine: percentages and derived, bracketed reset times.</summary>
     private static UsageSnapshot Derived { get; } = new(
