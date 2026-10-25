@@ -2,7 +2,7 @@
 
 A system tray app for Windows 11 and Linux that shows how much of your Claude usage limit you have used, when it resets, and whether your work is drawing from the plan or billing as extra usage. It reads the files Claude's own apps keep on your machine. It handles no credentials and sends nothing anywhere.
 
-**Current release: [v1.0.0](https://github.com/mlengmark/O-view/releases/latest)**, with a Windows installer, a portable Windows exe, `.deb` packages for amd64 and arm64, and portable Linux tarballs under one tag.
+**Current release: [v1.1.0](https://github.com/mlengmark/O-view/releases/latest)**, with a Windows installer, a portable Windows exe, `.deb` packages for amd64 and arm64, and portable Linux tarballs under one tag.
 
 | | |
 |---|---|
@@ -133,7 +133,7 @@ If you are on GNOME, including stock Ubuntu, read [Why the icon may not appear o
 **Debian or Ubuntu:**
 
 ```bash
-sudo apt install ./o-view_1.0.0_amd64.deb
+sudo apt install ./o-view_1.1.0_amd64.deb
 ```
 
 Self-contained, no .NET runtime needed. It adds an application-menu entry and does not enable run at startup for you. `apt remove` leaves your settings and your weekly-reset anchor alone.
@@ -191,7 +191,7 @@ dotnet publish src/O-view.Tray -c Release -r win-x64 --self-contained -p:Publish
 The Linux head, the `.deb` and the tarball, with the same script CI runs (needs `dpkg-deb`, so a Debian-family machine or container):
 
 ```bash
-./packaging/linux/build.sh 1.0.0 linux-x64 dist
+./packaging/linux/build.sh 1.1.0 linux-x64 dist
 ```
 
 On Linux, build the projects rather than the solution: `O-view.Tray` is WPF and does not build there. Everything else is portable, and CI tests it on both Windows and Ubuntu on every push.
