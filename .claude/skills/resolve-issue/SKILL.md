@@ -75,7 +75,9 @@ authority when local and CI renders disagree.
 Write the whole body to a file first, then open the PR with it. The checks run as soon as the
 PR exists.
 
-- Title: `<what changes, in plain English> (#<n>)`, at most 70 characters.
+- Title: `<what changes, in plain English> (GH-<n>)`, at most 70 characters. `pr-format` requires
+  the title to end with an issue key shaped `(LETTERS-digits)`, which is how Paperclip slices are
+  keyed (`OVIAA-14`). A GitHub issue is written `(GH-<n>)`; a bare `(#<n>)` fails the check.
 - Body: every section of `.github/pull_request_template.md`, in that order: Merge order,
   Summary, Changes, Screenshots, Checks, Not verified, Noticed. `pr-format` fails on a missing
   or reordered section.
