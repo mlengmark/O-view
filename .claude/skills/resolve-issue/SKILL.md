@@ -60,10 +60,11 @@ number in the branch name so `gh pr list` reads as a map of the open issues.
 ## 4. Run the gate
 
 ```powershell
-powershell -File tools/check.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/check.ps1
 ```
 
-It builds, runs every test including the smoke test, renders both panels' sample states and
+The bypass is needed because this machine's execution policy refuses repository scripts
+otherwise; CI needs none. It builds, runs every test including the smoke test, renders both panels' sample states and
 compares them with the goldens. Read the diff images in `artifacts/diff/` with the Read tool
 when anything changed. Accept a change with `-UpdateGolden` only for the states the issue
 asked for; if other states moved, that is a finding, not noise. CI's `visual` job is the
