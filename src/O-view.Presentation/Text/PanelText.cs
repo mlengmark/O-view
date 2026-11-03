@@ -230,8 +230,21 @@ public static class PanelText
             return "Reset time unknown (no reset observed yet)";
         }
 
-        var at = TimeZoneInfo.ConvertTime(reset, local);
-        return $"Resets in {Countdown(reset - utcNow)} · {(IsApproximate(uncertainty) ? "~" : "")}{at:HH:mm}";
+        return $"Resets in {Countdown(reset - utcNow)} · {SessionResetClock(reset, local, uncertainty)}";
+    }
+
+    /// <summary>
+    /// The clock time of a session reset, <c>13:59</c> or <c>~13:59</c>. The panel line and the
+    /// tray tooltip both take it from here so the two can never print the same instant as
+    /// different minutes, or mark one <c>~</c> and not the other (issue #317). The minute is the
+    /// instant truncated, never rounded: <c>13:59:59.6</c> reads <c>13:59</c> everywhere.
+    /// </summary>
+    public static string SessionResetClock(
+        DateTimeOffset resetAtUtc, TimeZoneInfo local, TimeSpan? uncertainty)
+    {
+        var at = TimeZoneInfo.ConvertTime(resetAtUtc, local);
+        return string.Create(CultureInfo.InvariantCulture,
+            $"{(IsApproximate(uncertainty) ? "~" : "")}{at:HH:mm}");
     }
 
     /// <summary>

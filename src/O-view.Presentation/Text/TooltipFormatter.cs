@@ -35,7 +35,7 @@ public static class TooltipFormatter
             ? string.Create(CultureInfo.InvariantCulture, $"5h: {fh}%")
             : "5h: ?";
         var reset = s.SessionResetAtUtcValue is { Status: not UsageValueStatus.Unavailable, Value: { } r }
-            ? string.Create(CultureInfo.InvariantCulture, $" · resets {ToLocal(r, zone):HH:mm}")
+            ? $" · resets {PanelText.SessionResetClock(r, zone, s.SessionResetUncertainty)}"
             : "";
         var weekly = s.WeeklyPercentValue is { Status: not UsageValueStatus.Unavailable, Value: { } sd }
             ? string.Create(CultureInfo.InvariantCulture, $" · 7d: {sd}%")
