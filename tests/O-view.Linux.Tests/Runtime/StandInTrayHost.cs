@@ -232,12 +232,28 @@ public sealed class StandInTrayHost : IAsyncDisposable
     /// <summary>
     /// Drops the name and the connection with it, which is what makes the host "gone" as far
     /// as anything else on the bus can tell.
+    ///
+    /// <para>The name is given up, and the bus's answer waited for, before the connection goes.
+    /// The bus frees a dropped connection's names when it notices, which is not the same
+    /// instant as Dispose returning, so without this a host started straight after this one
+    /// could find the name still owned, and a notification area leaving and coming back is a
+    /// case worth testing on its own (issue #356).</para>
     /// </summary>
-    public ValueTask DisposeAsync()
+    public async ValueTask DisposeAsync()
     {
+        try
+        {
+            await _connection.ReleaseNameAsync(WatcherService).WaitAsync(ReplyTimeout);
+        }
+        catch (Exception ex) when (ex is DBusExceptionBase or IOException or InvalidOperationException
+                                       or TimeoutException)
+        {
+            // Already gone with the connection, or disposed once before: the name is not
+            // owned either way, which is what this is for.
+        }
+
         _connection.Dispose();
         _firstItem.TrySetCanceled();
-        return ValueTask.CompletedTask;
     }
 
     /// <summary>

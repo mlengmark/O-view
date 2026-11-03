@@ -19,6 +19,7 @@ using OView.Linux.Rendering;
 using OView.Linux.Tray;
 using OView.Presentation.Panel;
 using OView.Presentation.Text;
+using Tmds.DBus.Protocol;
 
 namespace OView.Linux;
 
@@ -86,6 +87,15 @@ public sealed class LinuxApp : Application, IShellToSkin
     private TrayIcon? _tray;
     private PanelWindow? _panel;
     private CancellationTokenSource? _hostWatch;
+
+    /// <summary>
+    /// How long a host that has just appeared is given to list the icon before this head
+    /// registers it itself. The toolkit's own registration lands within milliseconds of the
+    /// name changing hands; the rest is room for a host slow to add what it was given, and
+    /// costs only how late the icon appears on the one path where that registration never
+    /// arrived.
+    /// </summary>
+    private static readonly TimeSpan HostListingPatience = TimeSpan.FromSeconds(5);
 
     /// <summary>
     /// Set by the reset row when there is no panel yet to forget a place for, see
@@ -372,8 +382,17 @@ public sealed class LinuxApp : Application, IShellToSkin
     /// icon when a host appears is the Linux <c>TaskbarCreated</c> (ADR-0003 item 5), and
     /// without it they would have to know to restart, which nothing tells them.
     ///
-    /// <para>Posted, because the host turns up on a bus thread and everything below touches
-    /// the toolkit, the SIGSEGV of issue #143, not an exception any catch could reach.</para>
+    /// <para><b>Only if the host does not already list it.</b> The toolkit's tray backend
+    /// registers the icon again by itself whenever the watcher's name changes hands, so by the
+    /// time a host has appeared it usually has the icon already. Hiding and showing it on top
+    /// of that was a second registration, and the desktop the report came from drew both: two
+    /// O-view icons, each with a working menu, until exit (issue #356). So the host's own list
+    /// is read first, and the icon is re-shown only when nothing in it belongs to this
+    /// process.</para>
+    ///
+    /// <para>The list is read off the UI thread, because every read is a D-Bus round trip
+    /// (issue #124); what follows is posted, because it touches the toolkit, the SIGSEGV of
+    /// issue #143, not an exception any catch could reach.</para>
     /// </summary>
     private void ReShowIcon() =>
         Dispatcher.UIThread.Post(() =>
@@ -386,6 +405,48 @@ public sealed class LinuxApp : Application, IShellToSkin
                 Render(_shell.Latest);
             }
         });
+
+    private async Task ReShowIconUnlessListedAsync(CancellationToken cancellation)
+    {
+        var listing = await TrayHostListing
+            .WaitForProcessAsync(Environment.ProcessId, HostListingPatience, cancellation)
+            .ConfigureAwait(false);
+
+        if (cancellation.IsCancellationRequested)
+        {
+            return;
+        }
+
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_tray is null || _shell is null)
+            {
+                return;
+            }
+
+            switch (listing)
+            {
+                case TrayHostListingState.NotListed:
+                    _log?.Write($"tray host appeared, icon not listed after {HostListingPatience.TotalSeconds:0}s, re-showing icon");
+                    _tray.IsVisible = false;
+                    _tray.IsVisible = true;
+                    break;
+
+                case TrayHostListingState.Listed:
+                    _log?.Write("tray host appeared, icon already listed, not registered again");
+                    break;
+
+                default:
+                    // "I could not ask" is not evidence that the icon is missing (rule 6), and
+                    // the toolkit has registered it on its own either way. A second icon is the
+                    // failure that was seen; a missing one has not been.
+                    _log?.Write("tray host appeared, its list could not be read, icon left as the toolkit registered it");
+                    break;
+            }
+
+            Render(_shell.Latest);
+        });
+    }
 
     private void Render(UsageSnapshot snapshot)
     {
@@ -740,4 +801,199 @@ public sealed class TrayHostNotice
     /// only account of this anyone reporting it can send.
     /// </summary>
     private static string Describe(uint? id) => id?.ToString() ?? "(not shown)";
+}
+
+/// <summary>What a notification area's own list says about one process's icon.</summary>
+public enum TrayHostListingState
+{
+    /// <summary>An entry in the list belongs to the process.</summary>
+    Listed,
+
+    /// <summary>The list was read, and nothing in it belongs to the process.</summary>
+    NotListed,
+
+    /// <summary>The list could not be read. Distinct from NotListed, never claim more than was observed.</summary>
+    Unknown,
+}
+
+/// <summary>
+/// Reads the watcher's <c>RegisteredStatusNotifierItems</c> and says whether any entry in it
+/// belongs to a given process.
+///
+/// <para><b>By process, not by name.</b> Watchers do not agree on how they list an item: one
+/// lists the name the item registered under, another the connection behind it, either one
+/// followed by an object path. The bus can say which process owns either, and the process is
+/// the one thing this head knows about its icon without reaching into the toolkit, which picks
+/// the item's name itself.</para>
+///
+/// <para><b>Its own connection.</b> The shared session connection carries the app's
+/// notifications and theme reads, and a reply this misreads must not be able to take those
+/// down with it; one connection per check, dropped afterwards, is the price of that.</para>
+/// </summary>
+public static class TrayHostListing
+{
+    private const string WatcherPath = "/StatusNotifierWatcher";
+    private const string PropertiesInterface = "org.freedesktop.DBus.Properties";
+    private const string BusService = "org.freedesktop.DBus";
+
+    /// <summary>
+    /// How often the list is read again while the toolkit's registration is on its way. Fine
+    /// enough that a check usually ends on its first or second read.
+    /// </summary>
+    private static readonly TimeSpan Poll = TimeSpan.FromMilliseconds(100);
+
+    /// <summary>
+    /// Reads the list until an entry belongs to <paramref name="processId"/> or
+    /// <paramref name="patience"/> runs out, and says what the last read found.
+    ///
+    /// <para>Never throws, and returns what it last read on cancellation: the exit row cancels
+    /// this, and an app on its way out registers nothing.</para>
+    /// </summary>
+    public static async Task<TrayHostListingState> WaitForProcessAsync(
+        int processId,
+        TimeSpan patience,
+        CancellationToken cancellation = default)
+    {
+        if (Environment.GetEnvironmentVariable("DBUS_SESSION_BUS_ADDRESS") is not { Length: > 0 } address)
+        {
+            return TrayHostListingState.Unknown;
+        }
+
+        var deadline = DateTime.UtcNow + patience;
+        var last = TrayHostListingState.Unknown;
+
+        try
+        {
+            using var connection = new DBusConnection(address);
+            await connection.ConnectAsync().ConfigureAwait(false);
+
+            while (true)
+            {
+                last = await ReadAsync(connection, processId).ConfigureAwait(false);
+
+                if (last == TrayHostListingState.Listed || DateTime.UtcNow >= deadline)
+                {
+                    return last;
+                }
+
+                await Task.Delay(Poll, cancellation).ConfigureAwait(false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return last;
+        }
+        catch (Exception ex) when (ex is DBusExceptionBase or IOException or InvalidOperationException)
+        {
+            return TrayHostListingState.Unknown;
+        }
+    }
+
+    /// <summary>
+    /// The bus name an entry starts with: the whole entry, or the part before its object path.
+    /// Null for an entry that is only a path, which names no connection to ask about.
+    /// </summary>
+    public static string? BusNameOf(string entry)
+    {
+        var slash = entry.IndexOf('/');
+        var name = slash < 0 ? entry : entry[..slash];
+        return name.Length > 0 ? name : null;
+    }
+
+    private static async Task<TrayHostListingState> ReadAsync(DBusConnection connection, int processId)
+    {
+        IReadOnlyList<string> entries;
+        try
+        {
+            entries = await ReadEntriesAsync(connection).ConfigureAwait(false);
+        }
+        catch (DBusExceptionBase)
+        {
+            // The watcher not answering yet, or already gone again: unread, not empty.
+            return TrayHostListingState.Unknown;
+        }
+
+        foreach (var entry in entries)
+        {
+            if (BusNameOf(entry) is not { } name)
+            {
+                continue;
+            }
+
+            try
+            {
+                if (await ProcessOfAsync(connection, name).ConfigureAwait(false) == processId)
+                {
+                    return TrayHostListingState.Listed;
+                }
+            }
+            catch (DBusExceptionBase)
+            {
+                // The name lost its owner between the two calls, so it is nobody's icon now.
+            }
+        }
+
+        return TrayHostListingState.NotListed;
+    }
+
+    private static Task<IReadOnlyList<string>> ReadEntriesAsync(DBusConnection connection)
+    {
+        var writer = connection.GetMessageWriter();
+        writer.WriteMethodCallHeader(
+            destination: SniHostProbe.WatcherService,
+            path: WatcherPath,
+            @interface: PropertiesInterface,
+            member: "Get",
+            signature: "ss",
+            flags: MessageFlags.None);
+        writer.WriteString(SniHostProbe.WatcherService);
+        writer.WriteString("RegisteredStatusNotifierItems");
+
+        return connection.CallMethodAsync(writer.CreateMessage(), static (m, _) => ReadStrings(m));
+    }
+
+    private static Task<uint> ProcessOfAsync(DBusConnection connection, string busName)
+    {
+        var writer = connection.GetMessageWriter();
+        writer.WriteMethodCallHeader(
+            destination: BusService,
+            path: "/org/freedesktop/DBus",
+            @interface: BusService,
+            member: "GetConnectionUnixProcessID",
+            signature: "s",
+            flags: MessageFlags.None);
+        writer.WriteString(busName);
+
+        return connection.CallMethodAsync(writer.CreateMessage(), static (m, _) => m.GetBodyReader().ReadUInt32());
+    }
+
+    /// <summary>
+    /// The <c>as</c> inside the property's variant. Anything else reads as an empty list rather
+    /// than throwing: a watcher that publishes the property in another shape lists nothing this
+    /// head can recognise as its own.
+    /// </summary>
+    private static IReadOnlyList<string> ReadStrings(Message message)
+    {
+        var value = message.GetBodyReader().ReadVariantValue();
+        while (value.Type == VariantValueType.Variant)
+        {
+            value = value.GetVariantValue();
+        }
+
+        if (value.Type != VariantValueType.Array)
+        {
+            return [];
+        }
+
+        var entries = new List<string>(value.Count);
+        for (var i = 0; i < value.Count; i++)
+        {
+            if (value.GetItem(i) is { Type: VariantValueType.String } entry)
+            {
+                entries.Add(entry.GetString());
+            }
+        }
+
+        return entries;
+    }
 }
