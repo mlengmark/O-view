@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using Microsoft.Data.Sqlite;
+using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 
 namespace OView.Core.Storage;
@@ -285,7 +286,15 @@ public sealed record RollupStoreReport(
     /// that fails is worse than one with a gap, and the user producing it is already reporting
     /// a problem.</para>
     /// </summary>
-    public static RollupStoreReport Inspect(string? dbPath = null)
+    public static RollupStoreReport Inspect(string? dbPath = null) =>
+        Inspect(dbPath, ClaudeCliRefresher.OwnProjectFolder);
+
+    /// <summary>
+    /// As above, with the refresher's own project folder named explicitly, the same seam
+    /// <see cref="TranscriptScopeReport.Inspect(string?, IReadOnlyList{string}, string?)"/>
+    /// offers. Pass null to count every file.
+    /// </summary>
+    public static RollupStoreReport Inspect(string? dbPath, string? ownRefresherFolder)
     {
         var path = dbPath ?? RollupStore.DefaultPath;
 
@@ -298,7 +307,7 @@ public sealed record RollupStoreReport(
 
             using var connection = new SqliteConnection($"Data Source={path};Pooling=False");
             connection.Open();
-            return Read(connection, path, OpenedForReport);
+            return Read(connection, path, OpenedForReport, null, ownRefresherFolder);
         }
         catch (Exception ex) when (ex is SqliteException or IOException or UnauthorizedAccessException)
         {
@@ -312,7 +321,12 @@ public sealed record RollupStoreReport(
     /// point of comparing them.
     /// </summary>
     internal static RollupStoreReport Read(
-        SqliteConnection connection, string path, string origin, StaleJournalCheck? journalGuard = null)
+        SqliteConnection connection, string path, string origin, StaleJournalCheck? journalGuard = null) =>
+        Read(connection, path, origin, journalGuard, ClaudeCliRefresher.OwnProjectFolder);
+
+    private static RollupStoreReport Read(
+        SqliteConnection connection, string path, string origin, StaleJournalCheck? journalGuard,
+        string? ownRefresherFolder)
     {
         var (rows, firstDay, lastDay, newest) = ReadLedger(connection);
         var (tracked, behind, unread, gone) = ReadOffsets(connection);
@@ -343,7 +357,7 @@ public sealed record RollupStoreReport(
             StaleJournal.Lag(path),
             journalGuard,
             attribution ? ReadLedgerBySource(connection) : [],
-            attribution ? ReadWatermarksBySource(connection) : [],
+            attribution ? ReadWatermarksBySource(connection, ownRefresherFolder) : [],
             attribution);
     }
 
@@ -396,8 +410,15 @@ public sealed record RollupStoreReport(
     /// nothing left to explain the absence), and the file was not empty. Anything short of that
     /// is reported as unknown coverage instead, a watermark inherited from an earlier build can
     /// only ever say "nothing since", which is not evidence of anything.</para>
+    ///
+    /// <para>A file under the refresher's own project folder is never counted as silent: the
+    /// usage refresh is a prompt whose reply carries no billed assistant record the ledger
+    /// keeps, so reading it whole and storing nothing is its normal shape, and a bug-report
+    /// reader would take the line for a stalled ingest. Ingestion still reads those files; only
+    /// this count leaves them out, as <see cref="TranscriptScopeReport"/> does.</para>
     /// </summary>
-    private static IReadOnlyList<WatermarkSource> ReadWatermarksBySource(SqliteConnection connection)
+    private static IReadOnlyList<WatermarkSource> ReadWatermarksBySource(
+        SqliteConnection connection, string? ownRefresherFolder)
     {
         try
         {
@@ -407,15 +428,12 @@ public sealed record RollupStoreReport(
                        COUNT(*),
                        SUM(CASE WHEN byte_offset >= file_length AND file_length > 0 THEN 1 ELSE 0 END),
                        SUM(COALESCE(records, 0)),
-                       SUM(CASE WHEN counted_from IS NULL THEN 1 ELSE 0 END),
-                       SUM(CASE WHEN counted_from = 0
-                                 AND COALESCE(records, 0) = 0
-                                 AND file_length > 0
-                                 AND byte_offset >= file_length
-                                THEN 1 ELSE 0 END)
+                       SUM(CASE WHEN counted_from IS NULL THEN 1 ELSE 0 END)
                 FROM file_offsets
                 GROUP BY 1
                 """;
+
+            var silent = ReadSilentFiles(connection, ownRefresherFolder);
 
             var sources = new List<WatermarkSource>();
             using var reader = cmd.ExecuteReader();
@@ -427,7 +445,7 @@ public sealed record RollupStoreReport(
                     reader.GetInt32(2),
                     reader.GetInt64(3),
                     reader.GetInt32(4),
-                    reader.GetInt32(5)));
+                    silent.GetValueOrDefault(reader.GetString(0))));
             }
 
             return sources;
@@ -436,6 +454,46 @@ public sealed record RollupStoreReport(
         {
             return [];
         }
+    }
+
+    /// <summary>
+    /// Silent files per source label, listed by path rather than counted in SQL so the
+    /// refresher's own folder can be left out with the same prefix rule
+    /// <see cref="TranscriptScopeReport"/> uses: a separator is appended, so a sibling folder
+    /// sharing the name's start is not mistaken for it.
+    /// </summary>
+    private static Dictionary<string, int> ReadSilentFiles(
+        SqliteConnection connection, string? ownRefresherFolder)
+    {
+        var ownPrefix = ownRefresherFolder is null
+            ? null
+            : System.IO.Path.TrimEndingDirectorySeparator(ownRefresherFolder)
+              + System.IO.Path.DirectorySeparatorChar;
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT COALESCE(source, '{TranscriptSources.Unattributed}'), path
+            FROM file_offsets
+            WHERE counted_from = 0
+              AND COALESCE(records, 0) = 0
+              AND file_length > 0
+              AND byte_offset >= file_length
+            """;
+
+        var silent = new Dictionary<string, int>(StringComparer.Ordinal);
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read())
+        {
+            if (ownPrefix is not null && reader.GetString(1).StartsWith(ownPrefix, PathIdentity.Comparison))
+            {
+                continue;
+            }
+
+            var source = reader.GetString(0);
+            silent[source] = silent.GetValueOrDefault(source) + 1;
+        }
+
+        return silent;
     }
 
     /// <summary>
