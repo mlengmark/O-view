@@ -34,13 +34,17 @@ namespace OView.Linux.Platform;
 /// and therefore at the only moment in the process's life when waiting for D-Bus is safe.
 /// Every read after that is a field load.</para>
 ///
-/// <para><b>Staying current without a restart.</b> Each read starts a background refresh
-/// for the <i>next</i> one, so a desktop switched between light and dark is picked up
-/// within a poll rather than needing O-view restarted. What it costs is that the switch
-/// lands one read late; the alternative costs the dispatcher.</para>
+/// <para><b>Staying current without a restart.</b> The portal announces every change with
+/// its <c>SettingChanged</c> signal, and the cache is updated when that signal arrives, on
+/// the bus's own thread, so the first panel open after a switch between light and dark
+/// already shows the new theme. Reads still never ask the bus. Polling was the earlier
+/// answer and left every switch one open late (issue #357): each read started a refresh
+/// that only the <i>next</i> read could see. It survives only where no signal can come,
+/// a desktop with no portal or a bus that refused the subscription, and there a switch
+/// still lands one read late, because the alternative costs the dispatcher.</para>
 ///
-/// <para><b>Unverified on a real desktop.</b> The portal call and its variant shape are
-/// written from the specification. Both lookups fail closed to dark, which matches the tray
+/// <para><b>Unverified on a real desktop.</b> The portal call, its signal and their variant
+/// shapes are written from the specification. Both lookups fail closed to dark, which matches the tray
 /// icon's own default so the two surfaces stay consistent when neither can be read.</para>
 /// </summary>
 public sealed class PortalThemeSource : IThemeSource
@@ -48,6 +52,8 @@ public sealed class PortalThemeSource : IThemeSource
     private const string PortalService = "org.freedesktop.portal.Desktop";
     private const string PortalPath = "/org/freedesktop/portal/desktop";
     private const string SettingsInterface = "org.freedesktop.portal.Settings";
+    private const string AppearanceNamespace = "org.freedesktop.appearance";
+    private const string ColorSchemeKey = "color-scheme";
 
     /// <summary>Portal values for <c>color-scheme</c>: 0 no preference, 1 prefer dark, 2 prefer light.</summary>
     private const uint PreferDark = 1;
@@ -75,6 +81,29 @@ public sealed class PortalThemeSource : IThemeSource
     /// </summary>
     private static int _refreshing;
 
+    /// <summary>
+    /// True while the <c>SettingChanged</c> subscription is live. Not enough on its own to
+    /// stop polling: the bus accepts the subscription whether or not a portal exists to
+    /// raise the signal.
+    /// </summary>
+    private static volatile bool _subscribed;
+
+    /// <summary>
+    /// True once changes are known to arrive as signals: the subscription is live and the
+    /// portal has answered, or a signal has already come. Reads then stop polling, because a
+    /// poll can only repeat what the signal said or, finishing late, contradict it.
+    /// </summary>
+    private static volatile bool _followingSignals;
+
+    /// <summary>
+    /// How many signals have been applied. A lookup notes it before asking and stores its
+    /// answer only if it is unchanged, so a slow read overtaken by a signal cannot put the
+    /// old theme back.
+    /// </summary>
+    private static int _signals;
+
+    private static readonly Lock StoreGate = new();
+
     /// <summary>Same answer for both surfaces, Linux has one colour scheme, not two.</summary>
     public bool IsTrayLight() => Current();
 
@@ -82,22 +111,68 @@ public sealed class PortalThemeSource : IThemeSource
     public bool IsPanelLight() => Current();
 
     /// <summary>
-    /// Fills the cache before the first read, and is the one call here that waits.
+    /// Fills the cache before the first read and starts listening for changes, and is the
+    /// one call here that waits.
     ///
     /// <para>Call it from <c>Program.Main</c> before the toolkit starts, alongside
     /// <see cref="Tray.SniHostProbe.CheckAsync"/> and for the same reason: there is no
     /// dispatcher yet, so there is nothing to deadlock. Awaiting it there is what makes the
     /// <i>first</i> panel open correct rather than dark-by-default.</para>
+    ///
+    /// <para>It subscribes before it reads, so a switch made while the read is in flight
+    /// still arrives. The subscription is answered by the bus itself, not the portal, so a
+    /// portal that cannot be activated still costs one timeout here, not two.</para>
     /// </summary>
-    public static async Task PrimeAsync() => _isLight = await ReadAsync().ConfigureAwait(false);
+    public static async Task PrimeAsync()
+    {
+        await SubscribeAsync().ConfigureAwait(false);
+        await RefreshAsync().ConfigureAwait(false);
+    }
 
     /// <summary>
-    /// The cached answer, plus a background refresh so the next caller gets a current one.
-    /// Never touches the bus on the calling thread.
+    /// What one <c>SettingChanged</c> signal does to the cache. On a desktop only the bus
+    /// calls it, on the bus's own thread; it is public so the tests can raise one with no
+    /// portal to send it.
+    ///
+    /// <para>A dark or light preference is stored as it stands, so the next read returns it
+    /// and nothing is asked. "No preference" leaves the answer to the fallback, so it is
+    /// resolved as a read would be, off the bus's thread, since gsettings is a process to
+    /// wait for.</para>
+    /// </summary>
+    public static void OnSettingChanged(string @namespace, string key, uint scheme)
+    {
+        if (@namespace != AppearanceNamespace || key != ColorSchemeKey)
+        {
+            return;
+        }
+
+        int signal;
+        lock (StoreGate)
+        {
+            signal = ++_signals;
+            _followingSignals = true;
+            if (scheme is PreferDark or PreferLight)
+            {
+                _isLight = scheme == PreferLight;
+                return;
+            }
+        }
+
+        _ = Task.Run(() => Store(Resolve(scheme), signal));
+    }
+
+    /// <summary>
+    /// The cached answer. Never touches the bus on the calling thread; while no signal can
+    /// be relied on, it also starts a background refresh so the next caller gets a current
+    /// one.
     /// </summary>
     private static bool Current()
     {
-        BeginRefresh();
+        if (!_followingSignals)
+        {
+            BeginRefresh();
+        }
+
         return _isLight;
     }
 
@@ -112,7 +187,14 @@ public sealed class PortalThemeSource : IThemeSource
         {
             try
             {
-                _isLight = await ReadAsync().ConfigureAwait(false);
+                // Retried here and not only at startup, so a session bus that was not up
+                // when O-view started still delivers signals once it is.
+                if (!_subscribed)
+                {
+                    await SubscribeAsync().ConfigureAwait(false);
+                }
+
+                await RefreshAsync().ConfigureAwait(false);
             }
             finally
             {
@@ -121,18 +203,96 @@ public sealed class PortalThemeSource : IThemeSource
         });
     }
 
-    /// <summary>Portal, then gsettings, then dark. Never throws.</summary>
-    private static async Task<bool> ReadAsync()
+    /// <summary>Asks the desktop and stores the answer, unless a signal overtook the question.</summary>
+    private static async Task RefreshAsync()
     {
-        if (await ReadPortalAsync().ConfigureAwait(false) is { } fromPortal)
+        var signalsBefore = Volatile.Read(ref _signals);
+        var scheme = await ReadPortalAsync().ConfigureAwait(false);
+
+        if (scheme is not null && _subscribed)
         {
-            return fromPortal;
+            _followingSignals = true;   // a portal that answers Read is one that raises the signal
         }
 
-        return ReadGSettings() ?? false;   // dark when nothing can be read
+        Store(Resolve(scheme), signalsBefore);
     }
 
-    private static async Task<bool?> ReadPortalAsync()
+    private static void Store(bool isLight, int signalsBefore)
+    {
+        lock (StoreGate)
+        {
+            if (_signals == signalsBefore)
+            {
+                _isLight = isLight;
+            }
+        }
+    }
+
+    /// <summary>The portal's preference, then gsettings, then dark. Never throws.</summary>
+    private static bool Resolve(uint? scheme) => scheme switch
+    {
+        PreferDark => false,
+        PreferLight => true,
+        _ => ReadGSettings() ?? false,   // "no preference" is not an answer; dark when nothing can be read
+    };
+
+    /// <summary>
+    /// Asks the bus for the portal's <c>SettingChanged</c> signal. Never throws: without the
+    /// subscription, reads simply keep polling.
+    /// </summary>
+    private static async Task SubscribeAsync()
+    {
+        try
+        {
+            var connection = DBusConnection.Session;
+            await connection.ConnectAsync().ConfigureAwait(false);
+
+            var rule = new MatchRule
+            {
+                Type = MessageType.Signal,
+                Sender = PortalService,
+                Path = PortalPath,
+                Interface = SettingsInterface,
+                Member = "SettingChanged",
+                Arg0 = AppearanceNamespace,
+            };
+
+            await connection.AddMatchAsync(
+                    rule,
+                    static (m, _) =>
+                    {
+                        var body = m.GetBodyReader();
+                        return (Namespace: body.ReadString(), Key: body.ReadString(), Scheme: SchemeOf(body.ReadVariantValue()));
+                    },
+                    static notification =>
+                    {
+                        if (notification.HasValue)
+                        {
+                            var change = notification.Value;
+                            OnSettingChanged(change.Namespace, change.Key, change.Scheme);
+                            return;
+                        }
+
+                        // The connection is gone and no more signals will come, so reads go
+                        // back to polling.
+                        _subscribed = false;
+                        _followingSignals = false;
+                    },
+                    emitOnCapturedContext: false,
+                    flags: ObserverFlags.EmitOnConnectionClosed)
+                .AsTask()
+                .WaitAsync(LookupTimeout)
+                .ConfigureAwait(false);
+
+            _subscribed = true;
+        }
+        catch (Exception ex) when (IsBusFailure(ex))
+        {
+        }
+    }
+
+    /// <summary>The portal's <c>color-scheme</c> number, or null when the portal gave none.</summary>
+    private static async Task<uint?> ReadPortalAsync()
     {
         try
         {
@@ -147,41 +307,41 @@ public sealed class PortalThemeSource : IThemeSource
                 member: "Read",
                 signature: "ss",
                 flags: MessageFlags.None);
-            writer.WriteString("org.freedesktop.appearance");
-            writer.WriteString("color-scheme");
+            writer.WriteString(AppearanceNamespace);
+            writer.WriteString(ColorSchemeKey);
 
             var message = writer.CreateMessage();
 
-            var scheme = await connection.CallMethodAsync(
+            return await connection.CallMethodAsync(
                     message,
-                    static (m, _) =>
-                    {
-                        // Read returns a variant; the portal nests the value inside another,
-                        // so unwrap until something numeric falls out rather than assuming a
-                        // depth.
-                        var value = m.GetBodyReader().ReadVariantValue();
-                        while (value.Type == VariantValueType.Variant)
-                        {
-                            value = value.GetVariantValue();
-                        }
-                        return value.Type == VariantValueType.UInt32 ? value.GetUInt32() : uint.MaxValue;
-                    })
+                    static (m, _) => SchemeOf(m.GetBodyReader().ReadVariantValue()))
                 .WaitAsync(LookupTimeout)
                 .ConfigureAwait(false);
-
-            return scheme switch
-            {
-                PreferDark => false,
-                PreferLight => true,
-                _ => null,      // "no preference" is not an answer; fall through
-            };
         }
-        catch (Exception ex) when (ex is DBusExceptionBase or IOException or InvalidOperationException
-                                       or TimeoutException or OperationCanceledException)
+        catch (Exception ex) when (IsBusFailure(ex))
         {
             return null;
         }
     }
+
+    /// <summary>
+    /// The number inside a portal variant. <c>Read</c> nests the value inside another
+    /// variant and the signal does not, so unwrap until something numeric falls out rather
+    /// than assuming a depth.
+    /// </summary>
+    private static uint SchemeOf(VariantValue value)
+    {
+        while (value.Type == VariantValueType.Variant)
+        {
+            value = value.GetVariantValue();
+        }
+
+        return value.Type == VariantValueType.UInt32 ? value.GetUInt32() : uint.MaxValue;
+    }
+
+    private static bool IsBusFailure(Exception ex) =>
+        ex is DBusExceptionBase or IOException or InvalidOperationException
+            or TimeoutException or OperationCanceledException;
 
     /// <summary>
     /// GNOME-only fallback, for a desktop with no portal. Deliberately not the primary

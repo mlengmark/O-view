@@ -16,6 +16,14 @@ namespace OView.Linux.Tests;
 /// </summary>
 public class PortalThemeSourceTests
 {
+    private const string Appearance = "org.freedesktop.appearance";
+    private const string ColorScheme = "color-scheme";
+
+    /// <summary>The portal's <c>color-scheme</c> values.</summary>
+    private const uint NoPreference = 0;
+    private const uint PreferDark = 1;
+    private const uint PreferLight = 2;
+
     /// <summary>
     /// CI has no session bus and no portal, which is the harshest case and the one that
     /// used to hang: with a bus present the call at least completes.
@@ -68,6 +76,83 @@ public class PortalThemeSourceTests
     public async Task PrimingTerminatesWithNoPortalPresent()
     {
         await PortalThemeSource.PrimeAsync().WaitAsync(TimeSpan.FromSeconds(20));
+    }
+
+    /// <summary>
+    /// A desktop switched between light and dark used to show on the second panel open,
+    /// not the first (issue #357): each read only started a refresh for the read after it.
+    /// The portal's signal is what changes the cache now, so the very next read has it, with
+    /// no priming and nothing asked.
+    /// </summary>
+    [Fact]
+    public void ASignalAloneFlipsTheNextRead()
+    {
+        var source = new PortalThemeSource();
+
+        PortalThemeSource.OnSettingChanged(Appearance, ColorScheme, PreferLight);
+        Assert.True(source.IsPanelLight());
+        Assert.True(source.IsTrayLight());
+
+        PortalThemeSource.OnSettingChanged(Appearance, ColorScheme, PreferDark);
+        Assert.False(source.IsPanelLight());
+        Assert.False(source.IsTrayLight());
+    }
+
+    /// <summary>
+    /// Once signals arrive, a read is a field load and nothing else. If reads still polled,
+    /// a refresh would ask a bus that is not here, fall closed to dark and overwrite the
+    /// light the signal reported, so a read answered by the bus shows up as a flip.
+    /// </summary>
+    [Fact]
+    public async Task NoReadAfterASignalIsAnsweredByTheBus()
+    {
+        var source = new PortalThemeSource();
+        PortalThemeSource.OnSettingChanged(Appearance, ColorScheme, PreferLight);
+
+        var watch = Stopwatch.StartNew();
+        while (watch.Elapsed < TimeSpan.FromMilliseconds(500))
+        {
+            Assert.True(source.IsPanelLight(), "a read after the signal was answered by a refresh, not the signal");
+            await Task.Delay(5);
+        }
+    }
+
+    /// <summary>
+    /// The portal raises <c>SettingChanged</c> for every setting it carries, accent colour
+    /// and contrast among them. Only the colour scheme may move the theme.
+    /// </summary>
+    [Fact]
+    public void OtherSettingsLeaveTheThemeAlone()
+    {
+        var source = new PortalThemeSource();
+        PortalThemeSource.OnSettingChanged(Appearance, ColorScheme, PreferLight);
+
+        PortalThemeSource.OnSettingChanged(Appearance, "contrast", PreferDark);
+        PortalThemeSource.OnSettingChanged("org.gnome.desktop.interface", ColorScheme, PreferDark);
+
+        Assert.True(source.IsPanelLight());
+    }
+
+    /// <summary>
+    /// "No preference" is not an answer, on the signal as on a read: it goes to the gsettings
+    /// fallback and, with nothing to read here, fails closed to dark. That lookup runs off the
+    /// bus's thread, so the theme follows shortly after rather than within the call.
+    /// </summary>
+    [Fact]
+    public async Task NoPreferenceFallsBackAsAReadDoes()
+    {
+        var source = new PortalThemeSource();
+        PortalThemeSource.OnSettingChanged(Appearance, ColorScheme, PreferLight);
+
+        PortalThemeSource.OnSettingChanged(Appearance, ColorScheme, NoPreference);
+
+        var watch = Stopwatch.StartNew();
+        while (source.IsPanelLight() && watch.Elapsed < TimeSpan.FromSeconds(10))
+        {
+            await Task.Delay(20);
+        }
+
+        Assert.False(source.IsPanelLight(), "\"no preference\" with nothing to fall back on did not fail closed to dark");
     }
 
     /// <summary>
