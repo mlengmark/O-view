@@ -155,4 +155,33 @@ public class RollupStoreReportTests : IDisposable
         Assert.Contains("integrity ok", text, StringComparison.Ordinal);
         Assert.Contains("writes accepted", text, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// O-view's own usage refresh leaves a transcript whose reply stores nothing, so it is read
+    /// whole and silent by construction. The bundle must not list it beside a user's silent file
+    /// as if it were a stalled ingest; the user's file still counts.
+    /// </summary>
+    [Fact]
+    public void ARefreshersSilentFileIsLeftOutOfTheSilentCount()
+    {
+        var projects = Directory.CreateDirectory(Path.Combine(_dir, "projects")).FullName;
+        var own = Directory.CreateDirectory(Path.Combine(projects, "C--oview-own")).FullName;
+        var users = Directory.CreateDirectory(Path.Combine(projects, "C--oview-own-2")).FullName;
+        const string noAssistant = "{\"type\":\"user\",\"timestamp\":\"2026-08-20T10:00:00Z\"}\n";
+        File.WriteAllText(Path.Combine(own, "refresh.jsonl"), noAssistant);
+        File.WriteAllText(Path.Combine(users, "session.jsonl"), noAssistant);
+
+        using (var store = new RollupStore(DbPath))
+        {
+            new JsonlUsageProvider(store, projects, []).GetSnapshot(DateTimeOffset.UnixEpoch);
+        }
+
+        var report = RollupStoreReport.Inspect(DbPath, own);
+        var claudeCode = report.WatermarksBySource!.Single(s => s.Source == TranscriptSources.ClaudeCode);
+
+        Assert.Equal(2, claudeCode.Files);
+        Assert.Equal(1, claudeCode.Silent);
+        Assert.Contains("!! 1 file(s)", report.ToClipboardText(), StringComparison.Ordinal);
+        Assert.Equal(2, RollupStoreReport.Inspect(DbPath, null).WatermarksBySource!.Single().Silent);
+    }
 }
