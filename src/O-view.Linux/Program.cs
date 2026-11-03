@@ -257,78 +257,6 @@ internal static class Program
         AppBuilder.Configure<LinuxApp>().UsePlatformDetect();
 
     /// <summary>
-    /// Avalonia's own log, written into O-view's log file.
-    ///
-    /// <para><b>Why this exists.</b> The builder used to end in <c>LogToTrace</c>, which routes
-    /// the toolkit's log into <see cref="System.Diagnostics.Trace"/>. A shipped build registers
-    /// no trace listener, so every line Avalonia wrote was formatted and dropped, including the
-    /// handful its FreeDesktop backends write when they give up, which are the only account
-    /// anything gives of why an icon or a theme read did not happen.</para>
-    ///
-    /// <para><b>Warning and above only.</b> Below that the toolkit narrates layout and property
-    /// changes by the thousand, which would roll a bounded log away before anything worth
-    /// reading reached it. What is wanted is the few lines a backend writes when it stops.</para>
-    ///
-    /// <para>Each line is marked <c>avalonia</c> and carries the toolkit's own area, because
-    /// this file is pasted whole into bug reports and "which of these did O-view write" is
-    /// otherwise guesswork.</para>
-    /// </summary>
-    private sealed class AvaloniaLog(IAppLog log) : ILogSink
-    {
-        /// <summary>The lowest level passed through, named so the log can state it.</summary>
-        public const LogEventLevel Floor = LogEventLevel.Warning;
-
-        public bool IsEnabled(LogEventLevel level, string area) => level >= Floor;
-
-        public void Log(LogEventLevel level, string area, object? source, string messageTemplate) =>
-            Write(level, area, source, messageTemplate);
-
-        public void Log(
-            LogEventLevel level,
-            string area,
-            object? source,
-            string messageTemplate,
-            params object?[] propertyValues) =>
-            Write(level, area, source, Fill(messageTemplate, propertyValues));
-
-        private void Write(LogEventLevel level, string area, object? source, string message) =>
-            log.Write($"avalonia {level} [{area}] {source?.GetType().Name ?? "-"}: {message}");
-
-        /// <summary>
-        /// Puts the values into the template's <c>{...}</c> holes in the order Avalonia passed
-        /// them. A hole with no value left for it is kept as written rather than throwing: this
-        /// runs on the toolkit's failure paths, where an exception would replace a reported
-        /// failure with an unreported one.
-        /// </summary>
-        private static string Fill(string template, object?[] values)
-        {
-            var filled = new StringBuilder(template.Length);
-            var next = 0;
-
-            for (var i = 0; i < template.Length; i++)
-            {
-                if (template[i] != '{')
-                {
-                    filled.Append(template[i]);
-                    continue;
-                }
-
-                var close = template.IndexOf('}', i);
-                if (close < 0 || next >= values.Length)
-                {
-                    filled.Append(template.AsSpan(i));
-                    break;
-                }
-
-                filled.Append(values[next++]);
-                i = close;
-            }
-
-            return filled.ToString();
-        }
-    }
-
-    /// <summary>
     /// Renders the tray icon at every size an SNI host might ask for, in both panel
     /// themes, so legibility can be judged from images rather than described in prose.
     ///
@@ -393,6 +321,101 @@ internal static class Program
         Environment.GetEnvironmentVariable("XDG_SESSION_TYPE")
         ?? (Environment.GetEnvironmentVariable("WAYLAND_DISPLAY") is { Length: > 0 } ? "wayland" : "(unset)");
 
+}
+
+/// <summary>
+/// Avalonia's own log, written into O-view's log file.
+///
+/// <para><b>Why this exists.</b> The builder used to end in <c>LogToTrace</c>, which routes
+/// the toolkit's log into <see cref="System.Diagnostics.Trace"/>. A shipped build registers
+/// no trace listener, so every line Avalonia wrote was formatted and dropped, including the
+/// handful its FreeDesktop backends write when they give up, which are the only account
+/// anything gives of why an icon or a theme read did not happen.</para>
+///
+/// <para><b>Warning and above only.</b> Below that the toolkit narrates layout and property
+/// changes by the thousand, which would roll a bounded log away before anything worth
+/// reading reached it. What is wanted is the few lines a backend writes when it stops.</para>
+///
+/// <para>Each line is marked <c>avalonia</c> and carries the toolkit's own area, because
+/// this file is pasted whole into bug reports and "which of these did O-view write" is
+/// otherwise guesswork.</para>
+///
+/// <para>Outside <see cref="Program"/>, unlike the rest of its entry-point machinery, only so a
+/// test can push lines through it: <see cref="Program"/> is internal and this project grants
+/// no test assembly its internals.</para>
+/// </summary>
+public sealed class AvaloniaLog(IAppLog log) : ILogSink
+{
+    /// <summary>The lowest level passed through, named so the log can state it.</summary>
+    public const LogEventLevel Floor = LogEventLevel.Warning;
+
+    /// <summary>
+    /// The start of the one Error the toolkit writes on every start of a machine with no usable
+    /// GPU: its GLX renderer refuses the software one (llvmpipe, in a VM) and it draws on the CPU
+    /// instead, which works. Matched on the template rather than the filled text because the
+    /// reason after the colon varies by driver.
+    /// </summary>
+    private const string SoftwareRenderingFallback = "Unable to initialize GLX-based rendering";
+
+    public bool IsEnabled(LogEventLevel level, string area) => level >= Floor;
+
+    public void Log(LogEventLevel level, string area, object? source, string messageTemplate) =>
+        Write(Relabel(level, messageTemplate), area, source, messageTemplate);
+
+    public void Log(
+        LogEventLevel level,
+        string area,
+        object? source,
+        string messageTemplate,
+        params object?[] propertyValues) =>
+        Write(Relabel(level, messageTemplate), area, source, Fill(messageTemplate, propertyValues));
+
+    private void Write(LogEventLevel level, string area, object? source, string message) =>
+        log.Write($"avalonia {level} [{area}] {source?.GetType().Name ?? "-"}: {message}");
+
+    /// <summary>
+    /// The software-rendering fallback written as Information rather than Error. It is the
+    /// expected outcome without a GPU, and labelled Error it was the first line anyone reading a
+    /// VM's log stopped at, ahead of whatever had actually gone wrong. The line itself stays:
+    /// that the panel is drawn on the CPU is worth knowing when it is slow.
+    /// </summary>
+    private static LogEventLevel Relabel(LogEventLevel level, string messageTemplate) =>
+        level == LogEventLevel.Error && messageTemplate.StartsWith(SoftwareRenderingFallback, StringComparison.Ordinal)
+            ? LogEventLevel.Information
+            : level;
+
+    /// <summary>
+    /// Puts the values into the template's <c>{...}</c> holes in the order Avalonia passed
+    /// them. A hole with no value left for it is kept as written rather than throwing: this
+    /// runs on the toolkit's failure paths, where an exception would replace a reported
+    /// failure with an unreported one.
+    /// </summary>
+    private static string Fill(string template, object?[] values)
+    {
+        var filled = new StringBuilder(template.Length);
+        var next = 0;
+
+        for (var i = 0; i < template.Length; i++)
+        {
+            if (template[i] != '{')
+            {
+                filled.Append(template[i]);
+                continue;
+            }
+
+            var close = template.IndexOf('}', i);
+            if (close < 0 || next >= values.Length)
+            {
+                filled.Append(template.AsSpan(i));
+                break;
+            }
+
+            filled.Append(values[next++]);
+            i = close;
+        }
+
+        return filled.ToString();
+    }
 }
 
 /// <summary>
