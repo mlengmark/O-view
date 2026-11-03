@@ -394,17 +394,7 @@ public sealed class LinuxApp : Application, IShellToSkin
     /// (issue #124); what follows is posted, because it touches the toolkit, the SIGSEGV of
     /// issue #143, not an exception any catch could reach.</para>
     /// </summary>
-    private void ReShowIcon() =>
-        Dispatcher.UIThread.Post(() =>
-        {
-            _log?.Write("tray host appeared, re-showing icon");
-            if (_tray is not null && _shell is not null)
-            {
-                _tray.IsVisible = false;
-                _tray.IsVisible = true;
-                Render(_shell.Latest);
-            }
-        });
+    private void ReShowIcon() => _ = ReShowIconUnlessListedAsync(_hostWatch?.Token ?? CancellationToken.None);
 
     private async Task ReShowIconUnlessListedAsync(CancellationToken cancellation)
     {
