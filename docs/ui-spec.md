@@ -39,7 +39,7 @@ Per [ADR-0003](adr/0003-windows-tray-constraints.md) and the [legibility spike](
 - Arc colour, the shared `UsageLevels` bands ([issue #2](https://github.com/mlengmark/O-view/issues/2)):
   **green < 50% · amber 50–69% · red ≥ 70%**. Same classifier drives the popup bars.
 - No data / estimate: faint empty ring, never a fabricated fill
-- Tooltip (≤127 chars): `5h: 47% · resets 16:32 · 7d: 61% · resets Tue 06:28`. The weekly reset is the instant Claude Code reports, shown exactly and never with a `~` ([ADR-0014](adr/0014-weekly-reset-is-a-reported-constant.md)); the session reset is derived and carries a `~` when the observation behind it was bracketed by a gap in sampling. Either is absent while unknown.
+- Tooltip (≤127 chars): `5h: 47% · resets 16:32 · 7d: 61% · resets Tue 06:28`. The weekly reset is the instant Claude Code reports, shown exactly and never with a `~` ([ADR-0014](adr/0014-weekly-reset-is-a-reported-constant.md)); the session reset is the instant Claude Code reports while one is ahead of now, shown exactly with no `~`, and otherwise the time derived from drops, which carries a `~` when the observation behind it was bracketed by a gap in sampling. Either is absent while unknown.
 
 > **Linux: GNOME shows none of this.** The text above is still what O-view publishes, but as
 > the tray item's `Title`, Avalonia's tray backend fills `ToolTip` with an empty structure and
@@ -200,7 +200,7 @@ The row has three states:
 | Not known | `Weekly reset time not known`, hover names the one step that ends it; clicking copies `/usage` |
 | No plan data at all | hidden; the no-data banner above already explains it |
 
-> **The `~` is gone from this row, and its absence is the claim.** Both remaining sources report the instant rather than inferring it, so there is no bracket to state and the uncertainty field that carried one was removed (issue #248). The session row keeps its tilde, that window rolls from first use and is still derived.
+> **The `~` is gone from this row, and its absence is the claim.** Both remaining sources report the instant rather than inferring it, so there is no bracket to state and the uncertainty field that carried one was removed (issue #248). The session row keeps its tilde only while its reset is derived, because that window rolls from first use; a reset Claude Code has reported is exact and carries none.
 
 > **"Not known" is a setup step, not a wait.** This line used to read `Waiting for first reset…`, from when the reset was derived by watching the weekly percentage fall. ADR-0014 deleted that derivation, so nothing was watching and the promised fill-in could never arrive, a row that names a wait nobody is serving is the blank row's defect wearing an explanation. It now states the fact and carries the action: **run `/usage` in Claude Code**, which is the only thing that refreshes the block Claude Code caches, or enter the time from **Menu → Weekly reset…** where there is no `claude` to run. Which sentence appears is an observation (`UsageEngine.ClaudeCodeFound`), never an inference from the account file, a machine can carry a `~/.claude.json` and no executable.
 
@@ -565,7 +565,7 @@ Images are generated from `brand/o-view-mark.svg` into `installer/brand/` as BMP
 |---|---|
 | Name, email, tier | `~/.claude.json` |
 | Session and weekly % | `plan-usage-history.json` (Claude Desktop) or `cachedUsageUtilization` in `~/.claude.json` (Claude Code), whichever carries more meters most recently; O-view runs `claude /usage` to keep the latter fresh |
-| Session reset | Derived from `fh` drops in the plan history, bracketed, or reported in the cached figures |
+| Session reset | Reported in the cached figures (`five_hour.resets_at`) while one is ahead of now, exact; otherwise derived from `fh` drops in the plan history, bracketed |
 | Weekly reset | Reported in the cached figures and stored as an anchor ([ADR-0014](adr/0014-weekly-reset-is-a-reported-constant.md)); entered by hand where never reported |
 | Tokens today / 31 days | Rollup store, fed from Claude Code and Cowork transcripts ([ADR-0006](adr/0006-local-rollup-store.md)) |
 | Est. value | Rollup store and the bundled price table, checked weekly against the published one ([ADR-0016](adr/0016-published-reference-data-is-fetchable.md)) |
