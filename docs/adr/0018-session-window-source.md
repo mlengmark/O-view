@@ -4,7 +4,7 @@
 - **Date:** 2026-11-05
 - **Deciders:** @mlengmark
 - **Resolves:** [#275](https://github.com/mlengmark/O-view/issues/275), the follow-up to #274.
-- **Does not change:** [ADR-0002](0002-usage-data-providers.md) and [ADR-0007](0007-plan-history-primary-provider.md), which rank sources for the *snapshot*. [ADR-0014](0014-weekly-reset-is-a-reported-constant.md) left the five-hour window derived; that still holds for the **panel's** reset.
+- **Does not change:** [ADR-0002](0002-usage-data-providers.md) and [ADR-0007](0007-plan-history-primary-provider.md), which rank sources for the *snapshot*. [ADR-0014](0014-weekly-reset-is-a-reported-constant.md) left the five-hour window derived.
 - **Evidence:** [findings/cached-usage-utilization.md](../findings/cached-usage-utilization.md); the code is `SessionWindowPlacement`.
 
 ## Context
@@ -78,10 +78,9 @@ and is plausible, and when it is not, nothing is lost by using the bracket.
 
 ## What does not change
 
-The panel's session reset still comes from drops in the sampled series, keeps its narrowing by
-local activity, and still shows a `~`. The reported reset has no effect on it. Putting it there
-would be a separate decision, and would have to settle what the panel shows when the two
-sources disagree. F06, F18 and F49 stay true as written.
+This phase did not change the panel's session reset. It shows Claude Code's reported reset,
+exact and without a `~`, while one is ahead of now, and otherwise the time derived from drops
+in the sampled series, with a `~` across a sampling gap.
 
 ## Unproven
 
@@ -98,5 +97,5 @@ real two-account machine behaves differently, supersede this ADR rather than pat
   the plan-history chain.
 - A user with no plan history at all still gets a window, starting at the reported start with an
   empty series, so a single reported reading cannot produce an off-plan verdict.
-- The choice lives in `SessionWindowPlacement.Place` and nowhere else, so a source added or
+- The choice lives in `SessionWindowPlacement` and nowhere else, so a source added or
   demoted later is one change.

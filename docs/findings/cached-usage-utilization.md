@@ -78,7 +78,7 @@ the cache was the fresher of the two.
   uncertainty.
 - **A *future* `five_hour.resets_at` is a window boundary, and places the off-plan window.**
   Within one window ahead, it minus five hours is the start, exactly. The panel's session
-  reset does not read it. See [ADR-0018](../adr/0018-session-window-source.md).
+  reset already shows it, exact, while it is ahead of now. See [ADR-0018](../adr/0018-session-window-source.md).
 - **`accountUuid` is not `organizationUuid`.** They are different identifiers, and both appear on
   the same machine, the plan-history file keys on the org. Do not match one against the other.
 - **Read-only, and mind the neighbours.** The file belongs to Claude Code and sits beside
