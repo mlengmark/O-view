@@ -149,25 +149,25 @@ public sealed class PlanHistoryProvider : IUsageProvider
     public (DateTimeOffset WindowStartUtc, IReadOnlyList<int> Percents, TimeSpan MeterAge)
         GetCurrentWindow(DateTimeOffset utcNow, DateTimeOffset? reportedResetUtc = null)
     {
+        var (start, percents, age, _) = GetCurrentWindowPlaced(utcNow, reportedResetUtc);
+        return (start, percents, age);
+    }
+
+    /// <summary>
+    /// <see cref="GetCurrentWindow"/>, and how its start was placed: which source chose it, and
+    /// whether the reported start and the located window contradict each other.
+    /// </summary>
+    public (DateTimeOffset WindowStartUtc, IReadOnlyList<int> Percents, TimeSpan MeterAge, WindowPlacement Placement)
+        GetCurrentWindowPlaced(DateTimeOffset utcNow, DateTimeOffset? reportedResetUtc = null)
+    {
         var samples = ReadSamples();
+        var placement = PlaceWindow(samples, utcNow, reportedResetUtc);
         if (samples.Count == 0)
         {
-            return (SessionWindowPlacement.Place(utcNow, reportedResetUtc, utcNow), [], TimeSpan.MaxValue);
+            return (placement.StartUtc, [], TimeSpan.MaxValue, placement);
         }
 
-        // Anchor on the current window's start so the span never crosses a boundary, a
-        // reset would show as a large negative rise and mask real divergence.
-        //
-        // The current window, not merely the last drop: after an idle gap the last drop can
-        // be days old, and summing output tokens since then would compare a two-day total
-        // against a five-hour meter (issue #180). Falls back to the last drop, and then to
-        // the series start, so that a window O-view cannot locate exactly is still a window,
-        // and then bounds the result, because neither fallback is bounded by anything else.
-        var windowStart = SessionWindowPlacement.Place(utcNow, reportedResetUtc, NoOlderThanOneWindow(
-            ResetDetector.FindCurrentWindowStart(samples)?.LatestUtc
-            ?? ResetDetector.FindLastDrop(samples)
-            ?? samples[0].AtUtc,
-            utcNow));
+        var windowStart = placement.StartUtc;
 
         // Whatever start was chosen, the series must not span a reset: a start taken from
         // Claude Code can land just after a boundary and keep one sample from the window
@@ -180,7 +180,46 @@ public sealed class PlanHistoryProvider : IUsageProvider
         var age = utcNow - samples[^1].AtUtc;
 
         return (windowStart, inWindow.Select(s => s.FiveHourPercent).ToList(),
-            age > TimeSpan.Zero ? age : TimeSpan.Zero);
+            age > TimeSpan.Zero ? age : TimeSpan.Zero, placement);
+    }
+
+    /// <summary>
+    /// How the window is placed and whether the two sources agree, without the series. What
+    /// <c>--diagnose</c> reads, since it has no engine to ask.
+    /// </summary>
+    public WindowPlacement DescribeWindow(DateTimeOffset utcNow, DateTimeOffset? reportedResetUtc = null) =>
+        PlaceWindow(ReadSamples(), utcNow, reportedResetUtc);
+
+    private static WindowPlacement PlaceWindow(
+        IReadOnlyList<PlanHistorySample> samples, DateTimeOffset utcNow, DateTimeOffset? reportedResetUtc)
+    {
+        if (samples.Count == 0)
+        {
+            return SessionWindowPlacement.Describe(utcNow, reportedResetUtc, null, utcNow, samples);
+        }
+
+        // Anchor on the current window's start so the span never crosses a boundary, a
+        // reset would show as a large negative rise and mask real divergence.
+        //
+        // The current window, not merely the last drop: after an idle gap the last drop can
+        // be days old, and summing output tokens since then would compare a two-day total
+        // against a five-hour meter (issue #180). Falls back to the last drop, and then to
+        // the series start, so that a window O-view cannot locate exactly is still a window,
+        // and then bounds the result, because neither fallback is bounded by anything else.
+        var found = ResetDetector.FindCurrentWindowStart(samples);
+
+        // A window located more than one window ago has ended, whatever the newest sample says:
+        // Desktop closed on a non-zero reading leaves the search pointing at it for days. It is
+        // still where the start falls back to, clamped below, but it is no inference about the
+        // window running now, so nothing can disagree with it.
+        var inferred = found is { } located && located.LatestUtc >= utcNow - ResetDetector.WindowLength
+            ? located
+            : null;
+        return SessionWindowPlacement.Describe(utcNow, reportedResetUtc, inferred, NoOlderThanOneWindow(
+            found?.LatestUtc
+            ?? ResetDetector.FindLastDrop(samples)
+            ?? samples[0].AtUtc,
+            utcNow), samples);
     }
 
     /// <summary>
@@ -195,7 +234,8 @@ public sealed class PlanHistoryProvider : IUsageProvider
     ///
     /// <para><b>Only the first of the three anchors above was bounded.</b>
     /// <see cref="ResetDetector.FindCurrentWindowStart"/> returns a sample from inside the
-    /// running window, so it cannot be older than one. It returns null whenever the newest
+    /// window it found, which is the running one only while Desktop keeps sampling: closed on a
+    /// non-zero reading, it can find a window days old. It returns null whenever the newest
     /// reading is <c>0</c>, "no window is running, because it starts on first use", and the
     /// fallbacks then reach back to the last observed drop, or to the start of the series,
     /// either of which can be days old. The comment above used to defend that as a missed

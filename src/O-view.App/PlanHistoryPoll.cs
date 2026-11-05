@@ -56,6 +56,9 @@ public sealed class PlanHistoryPoll
     /// </summary>
     private readonly bool _planHistoryIsAddressed;
 
+    /// <summary>1 while the last window placement disagreed, see <see cref="LogWindowAgreement"/>.</summary>
+    private int _windowsDisagree;
+
     public PlanHistoryPoll(
         PlanHistoryProvider? planHistory,
         bool planHistoryIsAddressed,
@@ -224,7 +227,8 @@ public sealed class PlanHistoryPoll
         // Read once, ahead of the window: Claude Code's reported reset places the window, and
         // its reported percentage joins the series after it.
         var reported = ReadReportedMeter(utcNow);
-        var (windowStart, percents, meterAge) = _planHistory.GetCurrentWindow(utcNow, reported.ResetUtc);
+        var (windowStart, percents, meterAge, placement) = _planHistory.GetCurrentWindowPlaced(utcNow, reported.ResetUtc);
+        LogWindowAgreement(placement);
 
         if (_simulateDivergence is { } mode)
         {
@@ -249,6 +253,36 @@ public sealed class PlanHistoryPoll
             percents, meterAge, reported.SessionPercent, reported.Age);
 
         return stats.WithDivergence(_store, windowStart, series, seriesAge);
+    }
+
+    /// <summary>
+    /// Writes one line when the reported and inferred windows start to disagree and one when they
+    /// stop, not one per poll.
+    ///
+    /// <para>A disagreement usually means Claude Desktop and Claude Code are signed into
+    /// different accounts, which nothing else on a single machine's log would reveal: each
+    /// source is internally consistent and the panel simply reads one of them. Timestamps only.
+    /// <see cref="WindowPlacement.Disagrees"/> is never true without both sources, so a machine
+    /// with no Desktop, or no reported reset, logs nothing.</para>
+    /// </summary>
+    private void LogWindowAgreement(WindowPlacement placement)
+    {
+        var now = placement.Disagrees ? 1 : 0;
+        if (Interlocked.Exchange(ref _windowsDisagree, now) == now)
+        {
+            return;
+        }
+
+        if (placement is { Disagrees: true, ReportedStartUtc: { } reported, Inferred: { } inferred })
+        {
+            _log?.Write($"session window sources disagree: Claude Code reports a start of {reported:u}, "
+                        + $"plan history places it between {inferred.EarliestUtc:u} and {inferred.LatestUtc:u}, "
+                        + "usually Desktop and Claude Code on different accounts");
+        }
+        else
+        {
+            _log?.Write("session window sources no longer disagree");
+        }
     }
 
     /// <summary>

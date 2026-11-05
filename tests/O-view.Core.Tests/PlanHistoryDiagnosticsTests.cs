@@ -149,4 +149,61 @@ public class PlanHistoryDiagnosticsTests : IDisposable
         Assert.Contains("plan-usage-history.json", text);
         Assert.Contains("Ok", text);
     }
+
+    // ── the session window, worked out from the file alone ──────────────────────────
+
+    private string WriteDrop(DateTimeOffset now) => Write(
+        $$"""{"version":2,"samples":[{{Sample(now.AddMinutes(-45).ToUnixTimeMilliseconds(), fh: 60)}},{{Sample(now.AddMinutes(-30).ToUnixTimeMilliseconds(), fh: 3)}}]}""");
+
+    [Fact]
+    public void DescribeWindow_ReadsTheReportedAndInferredStartsFromTheFiles()
+    {
+        var now = DateTimeOffset.Parse("2026-09-07T12:00:00Z");
+
+        // The drop is seen between 11:15 and 11:30. A reset at 16:20 puts the start at 11:20,
+        // inside that; one at 16:50 puts it at 11:50, after it.
+        var agree = PlanHistoryDiagnostics.DescribeWindow(now, now.AddHours(4).AddMinutes(20), WriteDrop(now));
+        var disagree = PlanHistoryDiagnostics.DescribeWindow(now, now.AddHours(4).AddMinutes(50), WriteDrop(now));
+
+        Assert.Equal(WindowPlacedBy.ReportedReset, agree.PlacedBy);
+        Assert.NotNull(agree.Inferred);
+        Assert.NotNull(agree.ReportedStartUtc);
+        Assert.False(agree.Disagrees);
+        Assert.True(disagree.Disagrees);
+    }
+
+    [Fact]
+    public void DescribeWindow_WithNoFileAndNoReset_SaysBothAreMissing()
+    {
+        var window = PlanHistoryDiagnostics.DescribeWindow(
+            DateTimeOffset.Parse("2026-09-07T12:00:00Z"), null, Path.Combine(_dir, "absent.json"));
+
+        Assert.Equal(WindowPlacedBy.PlanHistoryFallback, window.PlacedBy);
+        Assert.Null(window.ReportedStartUtc);
+        Assert.Null(window.Inferred);
+        Assert.False(window.Disagrees);
+    }
+
+    /// <summary>
+    /// Desktop closed on a non-zero reading: the search still finds the window from two days
+    /// ago, but it is not the running one, so it is neither compared nor credited with placing
+    /// the start.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AWindowLocatedMoreThanOneWindowAgo_IsNoLocationAtAll(bool withReportedReset)
+    {
+        var now = DateTimeOffset.Parse("2026-09-07T15:00:00Z");
+        long Ms(string t) => DateTimeOffset.Parse(t + "Z").ToUnixTimeMilliseconds();
+        var path = Write($$"""{"version":2,"samples":[{{Sample(Ms("2026-09-05T10:30:00"), fh: 40)}},{{Sample(Ms("2026-09-05T10:45:00"), fh: 2)}},{{Sample(Ms("2026-09-05T13:00:00"), fh: 30)}}]}""");
+
+        var window = PlanHistoryDiagnostics.DescribeWindow(
+            now, withReportedReset ? DateTimeOffset.Parse("2026-09-07T19:40:00Z") : null, path);
+
+        Assert.Null(window.Inferred);
+        Assert.False(window.Disagrees);
+        Assert.Equal(
+            withReportedReset ? WindowPlacedBy.ReportedReset : WindowPlacedBy.PlanHistoryFallback, window.PlacedBy);
+    }
 }

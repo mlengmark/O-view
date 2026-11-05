@@ -203,6 +203,65 @@ public class DiagnosticsBundleTests : IDisposable
         Assert.Contains("weekly anchor", bundle, StringComparison.Ordinal);
     }
 
+    // ── the session window ──────────────────────────────────────────────────────────
+
+    private static readonly DateTimeOffset WindowStart = new(2026, 9, 7, 11, 50, 0, TimeSpan.Zero);
+
+    private string BuildWithWindow(WindowPlacement? window) =>
+        DiagnosticsBundle.Build(
+            Windows,
+            PlanHistoryDiagnostics.Inspect(_dir.File("absent.json")),
+            TranscriptScopeReport.Inspect(null, []),
+            account: null,
+            new WeeklyResetAnchor(_dir.File("weekly-reset.json")),
+            new DateTimeOffset(2026, 9, 7, 12, 0, 0, TimeSpan.Zero),
+            window: window);
+
+    [Fact]
+    public void TheSessionWindowSectionShowsBothStartsAndWhichOnePlacedIt()
+    {
+        var bundle = BuildWithWindow(new WindowPlacement(
+            WindowStart, WindowPlacedBy.ReportedReset, WindowStart,
+            new SessionWindowStart(WindowStart.AddMinutes(-35), WindowStart.AddMinutes(-20)), Disagrees: true));
+
+        Assert.Contains("placed by Claude Code's reported reset", bundle, StringComparison.Ordinal);
+        Assert.Contains("reported    : 2026-09-07 11:50:00Z", bundle, StringComparison.Ordinal);
+        Assert.Contains("inferred    : between 2026-09-07 11:15:00Z and 2026-09-07 11:30:00Z", bundle,
+            StringComparison.Ordinal);
+        Assert.Contains("agreement   : DISAGREE", bundle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AMissingSourceIsNamedNotOmitted()
+    {
+        var noReported = BuildWithWindow(new WindowPlacement(
+            WindowStart, WindowPlacedBy.PlanHistory, null,
+            new SessionWindowStart(WindowStart.AddMinutes(-5), WindowStart), Disagrees: false));
+        var noInferred = BuildWithWindow(new WindowPlacement(
+            WindowStart, WindowPlacedBy.ReportedReset, WindowStart, null, Disagrees: false));
+
+        Assert.Contains("reported    : none", noReported, StringComparison.Ordinal);
+        Assert.Contains("not comparable", noReported, StringComparison.Ordinal);
+        Assert.Contains("inferred    : none located", noInferred, StringComparison.Ordinal);
+        Assert.Contains("not comparable", noInferred, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TwoAgreeingSourcesAreSaidToAgree()
+    {
+        var bundle = BuildWithWindow(new WindowPlacement(
+            WindowStart, WindowPlacedBy.ReportedReset, WindowStart,
+            new SessionWindowStart(WindowStart.AddMinutes(-5), WindowStart.AddMinutes(5)), Disagrees: false));
+
+        Assert.Contains("agreement   : agree", bundle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AWindowThatCouldNotBeWorkedOutIsSaidSo()
+    {
+        Assert.Contains("session window: not worked out", BuildWithWindow(null), StringComparison.Ordinal);
+    }
+
     // ── the rollup store ────────────────────────────────────────────────────────────
 
     /// <summary>

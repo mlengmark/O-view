@@ -1,5 +1,45 @@
 namespace OView.Core.Providers.PlanHistory;
 
+/// <summary>Which source put the window's start where it is.</summary>
+public enum WindowPlacedBy
+{
+    /// <summary>Claude Code's reported reset minus one window length.</summary>
+    ReportedReset,
+
+    /// <summary>A window plan history located: a drop, or a rise from zero, between two samples.</summary>
+    PlanHistory,
+
+    /// <summary>
+    /// Plan history had no window to locate, so the last drop, the start of the series or the
+    /// five-hour bound stood in, or there were no samples at all.
+    /// </summary>
+    PlanHistoryFallback,
+}
+
+/// <summary>
+/// The window's start, and the two answers it was chosen from.
+/// </summary>
+/// <param name="StartUtc">The start the off-plan comparison reads from.</param>
+/// <param name="PlacedBy">Which source chose <paramref name="StartUtc"/>.</param>
+/// <param name="ReportedStartUtc">
+/// Claude Code's reset minus one window length, or null when it reported none a running window
+/// could have.
+/// </param>
+/// <param name="Inferred">
+/// The bracket plan history located, or null when it located none. A fallback is not a
+/// location, so it never appears here.
+/// </param>
+/// <param name="Disagrees">
+/// Both sources spoke and the reported start falls outside the inferred bracket, see
+/// <see cref="SessionWindowPlacement.Disagrees"/>.
+/// </param>
+public sealed record WindowPlacement(
+    DateTimeOffset StartUtc,
+    WindowPlacedBy PlacedBy,
+    DateTimeOffset? ReportedStartUtc,
+    SessionWindowStart? Inferred,
+    bool Disagrees);
+
 /// <summary>
 /// Where the five-hour window the off-plan comparison reads began, and which source says so.
 ///
@@ -34,9 +74,99 @@ public static class SessionWindowPlacement
     /// </param>
     public static DateTimeOffset Place(
         DateTimeOffset utcNow, DateTimeOffset? reportedResetUtc, DateTimeOffset fromPlanHistory) =>
+        ReportedStart(utcNow, reportedResetUtc) ?? fromPlanHistory;
+
+    /// <summary>
+    /// <see cref="Place"/> with its reasoning kept: the chosen start, which source chose it, and
+    /// whether the two sources contradict each other.
+    /// </summary>
+    /// <param name="inferred">The bracket plan history located, or null when it located none.</param>
+    /// <param name="samples">The series <paramref name="inferred"/> was found in.</param>
+    public static WindowPlacement Describe(
+        DateTimeOffset utcNow,
+        DateTimeOffset? reportedResetUtc,
+        SessionWindowStart? inferred,
+        DateTimeOffset fromPlanHistory,
+        IReadOnlyList<PlanHistorySample> samples)
+    {
+        var reported = ReportedStart(utcNow, reportedResetUtc);
+
+        // A window the reported one began after the end of is a rollover, not a contradiction:
+        // see `Disagrees`. It is no inference about the window running now.
+        if (reported is { } reportedStart && inferred is { } found && IsSupersededBy(found, reportedStart))
+        {
+            inferred = null;
+        }
+
+        var placedBy = reported is not null ? WindowPlacedBy.ReportedReset
+            : inferred is not null ? WindowPlacedBy.PlanHistory
+            : WindowPlacedBy.PlanHistoryFallback;
+
+        return new WindowPlacement(
+            reported ?? fromPlanHistory,
+            placedBy,
+            reported,
+            inferred,
+            reported is { } start && Disagrees(start, inferred, samples));
+    }
+
+    /// <summary>
+    /// Whether plan history says the window began somewhere the reported start cannot be.
+    ///
+    /// <para><b>Only a located window can disagree.</b> The last drop, the start of the series
+    /// and the five-hour bound are answers plan history gives when it has none, and a series
+    /// that opens on <c>fh=0</c> after Desktop was off all night, the morning issue #274 was,
+    /// always differs from the reported start. Reporting that would log a disagreement every
+    /// morning on a machine with one account.</para>
+    ///
+    /// <para><b>The test is the samples, not a margin.</b> The reported start is exact, the
+    /// bracket is two samples wide, so it can sit anywhere inside the bracket and, until the
+    /// located window has ended (<see cref="IsSupersededBy"/>), nowhere after it: a drop already
+    /// seen by then would have been inside the window. It can also sit
+    /// <i>before</i> the bracket, but only one way: Claude's percentage is a whole number, so a
+    /// first use too small to reach 1% leaves the meter at 0 and the rise from zero is seen a
+    /// sample or several late. That is told apart from a different account by what the meter
+    /// read in between, zeros all the way and the two agree, anything else and they do not.
+    /// Nothing in this depends on how often Desktop samples (CLAUDE.md).</para>
+    /// </summary>
+    public static bool Disagrees(
+        DateTimeOffset reportedStartUtc, SessionWindowStart? inferred, IReadOnlyList<PlanHistorySample> samples)
+    {
+        if (inferred is not { } bracket)
+        {
+            return false;
+        }
+
+        if (IsSupersededBy(bracket, reportedStartUtc))
+        {
+            return false;
+        }
+
+        if (reportedStartUtc > bracket.LatestUtc)
+        {
+            return true;
+        }
+
+        return reportedStartUtc < bracket.EarliestUtc
+            && samples.Any(s => s.AtUtc >= reportedStartUtc && s.AtUtc <= bracket.EarliestUtc && s.FiveHourPercent != 0);
+    }
+
+    /// <summary>
+    /// Whether the window <paramref name="bracket"/> locates had already ended when
+    /// <paramref name="reportedStartUtc"/> began. The window began between the bracket's two
+    /// edges and lasts one window, so it is over at the earliest edge plus a window, but only a
+    /// start <i>after</i> the bracket can say so: a bracket wider than a window (Desktop off
+    /// overnight) holds starts that are inside the located window however wide it is. A reported
+    /// start past both is the next window, which Claude Code can report before Desktop's next
+    /// sample catches up: nothing disagrees, there is simply nothing to compare.
+    /// </summary>
+    private static bool IsSupersededBy(SessionWindowStart bracket, DateTimeOffset reportedStartUtc) =>
+        reportedStartUtc > bracket.LatestUtc && reportedStartUtc >= bracket.EarliestUtc + ResetDetector.WindowLength;
+
+    private static DateTimeOffset? ReportedStart(DateTimeOffset utcNow, DateTimeOffset? reportedResetUtc) =>
         reportedResetUtc is { } reset && reset > utcNow && reset - utcNow <= ResetDetector.WindowLength
             ? reset - ResetDetector.WindowLength
-            : fromPlanHistory;
+            : null;
 
     /// <summary>
     /// The samples since the last drop among them, which is what keeps a series inside one
