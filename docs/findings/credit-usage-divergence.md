@@ -44,7 +44,7 @@ No new data source is required to *detect* this. O-view already holds both signa
 
 > Transcript activity is high **and** `fh` is flat ⇒ that usage is not drawing from the plan window.
 
-Over the current session window (anchored on the last observed reset so it never spans one), compare deduplicated output tokens against the change in `fh`. Sustained throughput with a flat meter indicates off-plan billing.
+Over the current session window (anchored on Claude Code's reported reset when it has a usable one, otherwise on the last observed reset, so it never spans one; [ADR-0018](../adr/0018-session-window-source.md)), compare deduplicated output tokens against the change in `fh`. Sustained throughput with a flat meter indicates off-plan billing.
 
 An exact credit *balance* still needs the deferred OAuth work. Detection and spend estimation do not.
 

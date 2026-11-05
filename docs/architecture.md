@@ -109,7 +109,7 @@ head clamps, snaps, steps or reads the file itself ([ADR-0017](adr/0017-remember
 
 - **`UsageProviders`**, the account read, the plan-history and cached-utilization sources, the JSONL fallback, and the composite provider they feed.
 - **`PollRunner`**, the off-thread read/publish mechanics and the per-cadence gate, shared by the full poll, the plan poll and the usage-cache refresh.
-- **`PlanHistoryPoll`**, the cheap plan-history-only cadence, and the panel's statistics build.
+- **`PlanHistoryPoll`**, the cheap plan-history-only cadence, and the panel's statistics build, including where the off-plan window starts ([ADR-0018](adr/0018-session-window-source.md)).
 - **`WeeklyResetCoordinator`**, the weekly reset end to end: the manual override, Claude Code's reported instant, and the conflict between the two (ADR-0014).
 - **`UsageAlerts`**, the threshold and off-plan notification decisions (the wording itself lives in Presentation's `NoticeText` and `OffPlanText`).
 - **`UsageCacheRefresh`**, the floor, freshness gate and billed-charge latch behind the Claude-CLI usage-cache refresh (issue #234).
