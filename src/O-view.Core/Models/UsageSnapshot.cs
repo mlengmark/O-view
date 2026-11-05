@@ -10,16 +10,20 @@ namespace OView.Core.Models;
 /// <param name="SessionPercentValue">Five-hour window utilisation, 0–100. Integer precision only.</param>
 /// <param name="WeeklyPercentValue">Seven-day window utilisation, 0–100. Integer precision only.</param>
 /// <param name="SessionResetAtUtcValue">
-/// Predicted next five-hour window reset. Derived from observed drops, not reported by the
-/// source, so it is <see cref="UsageValueStatus.Estimated"/> where it is known and
+/// Next five-hour window reset. While Claude Code has reported one that is ahead of now it is
+/// that instant, <see cref="UsageValueStatus.Real"/> and exact, whichever source supplied the
+/// percentages. Otherwise it is derived from observed drops, so it is
+/// <see cref="UsageValueStatus.Estimated"/> where it is known and
 /// <see cref="UsageValueStatus.Unavailable"/> until at least one drop has been observed
 /// (ADR-0007).
 /// </param>
 /// <param name="CapturedAtUtcValue">When the underlying sample was taken. Drives staleness labels.</param>
 /// <param name="WeeklyResetAtUtcValue">
-/// Predicted next seven-day window reset, derived from persisted `sd` drops,
-/// <see cref="UsageValueStatus.Unavailable"/> until one has been observed, which the UI reports
-/// as still waiting rather than as broken (GitHub issue #6, ADR-0011).
+/// Next seven-day window reset: the instant Claude Code last reported, stored and projected
+/// forward by whole weeks, or failing that the time the user entered. Either is exact, so it
+/// reads <see cref="UsageValueStatus.Real"/>. It is <see cref="UsageValueStatus.Unavailable"/>
+/// until one of them exists, which the UI reports as still waiting rather than as broken
+/// (GitHub issue #6).
 /// </param>
 /// <param name="WeeklyResetPeriod">
 /// Cadence between weekly resets, as derived. Carried so the usage graph can step back from
