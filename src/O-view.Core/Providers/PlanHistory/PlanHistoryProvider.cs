@@ -140,13 +140,19 @@ public sealed class PlanHistoryProvider : IUsageProvider
     /// samples while it runs and not at all otherwise, so a flat series says nothing until you
     /// know whether it is still being written (<see cref="DivergenceDetector.MaxMeterAge"/>).
     /// </returns>
+    /// <param name="utcNow">The instant the window is read for.</param>
+    /// <param name="reportedResetUtc">
+    /// Claude Code's reported end of the running window, when it has one. It places the start
+    /// ahead of anything this file can infer, see <see cref="SessionWindowPlacement"/>; null
+    /// leaves the placement to plan history alone.
+    /// </param>
     public (DateTimeOffset WindowStartUtc, IReadOnlyList<int> Percents, TimeSpan MeterAge)
-        GetCurrentWindow(DateTimeOffset utcNow)
+        GetCurrentWindow(DateTimeOffset utcNow, DateTimeOffset? reportedResetUtc = null)
     {
         var samples = ReadSamples();
         if (samples.Count == 0)
         {
-            return (utcNow, [], TimeSpan.MaxValue);
+            return (SessionWindowPlacement.Place(utcNow, reportedResetUtc, utcNow), [], TimeSpan.MaxValue);
         }
 
         // Anchor on the current window's start so the span never crosses a boundary, a
@@ -157,12 +163,16 @@ public sealed class PlanHistoryProvider : IUsageProvider
         // against a five-hour meter (issue #180). Falls back to the last drop, and then to
         // the series start, so that a window O-view cannot locate exactly is still a window,
         // and then bounds the result, because neither fallback is bounded by anything else.
-        var windowStart = NoOlderThanOneWindow(
+        var windowStart = SessionWindowPlacement.Place(utcNow, reportedResetUtc, NoOlderThanOneWindow(
             ResetDetector.FindCurrentWindowStart(samples)?.LatestUtc
             ?? ResetDetector.FindLastDrop(samples)
             ?? samples[0].AtUtc,
-            utcNow);
-        var inWindow = samples.Where(s => s.AtUtc >= windowStart).ToList();
+            utcNow));
+
+        // Whatever start was chosen, the series must not span a reset: a start taken from
+        // Claude Code can land just after a boundary and keep one sample from the window
+        // before it.
+        var inWindow = SessionWindowPlacement.SinceLastDrop(samples.Where(s => s.AtUtc >= windowStart).ToList());
 
         // Measured against the newest sample in the FILE, not in the window: a window whose
         // samples all predate a long silence is exactly the case being guarded against, and
