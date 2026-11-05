@@ -90,6 +90,14 @@ public static class SessionWindowPlacement
         IReadOnlyList<PlanHistorySample> samples)
     {
         var reported = ReportedStart(utcNow, reportedResetUtc);
+
+        // A window the reported one began after the end of is a rollover, not a contradiction:
+        // see `Disagrees`. It is no inference about the window running now.
+        if (reported is { } reportedStart && inferred is { } found && IsSupersededBy(found, reportedStart))
+        {
+            inferred = null;
+        }
+
         var placedBy = reported is not null ? WindowPlacedBy.ReportedReset
             : inferred is not null ? WindowPlacedBy.PlanHistory
             : WindowPlacedBy.PlanHistoryFallback;
@@ -128,6 +136,11 @@ public static class SessionWindowPlacement
             return false;
         }
 
+        if (IsSupersededBy(bracket, reportedStartUtc))
+        {
+            return false;
+        }
+
         if (reportedStartUtc > bracket.LatestUtc)
         {
             return true;
@@ -136,6 +149,16 @@ public static class SessionWindowPlacement
         return reportedStartUtc < bracket.EarliestUtc
             && samples.Any(s => s.AtUtc >= reportedStartUtc && s.AtUtc <= bracket.EarliestUtc && s.FiveHourPercent != 0);
     }
+
+    /// <summary>
+    /// Whether the window <paramref name="bracket"/> locates had already ended when
+    /// <paramref name="reportedStartUtc"/> began. It began between the bracket's two edges and
+    /// lasts one window, so at the earliest edge plus a window it is over, whatever else is true.
+    /// A reported start from there on is the next window, which Claude Code can report before
+    /// Desktop's next sample catches up: nothing disagrees, there is simply nothing to compare.
+    /// </summary>
+    private static bool IsSupersededBy(SessionWindowStart bracket, DateTimeOffset reportedStartUtc) =>
+        reportedStartUtc >= bracket.EarliestUtc + ResetDetector.WindowLength;
 
     private static DateTimeOffset? ReportedStart(DateTimeOffset utcNow, DateTimeOffset? reportedResetUtc) =>
         reportedResetUtc is { } reset && reset > utcNow && reset - utcNow <= ResetDetector.WindowLength

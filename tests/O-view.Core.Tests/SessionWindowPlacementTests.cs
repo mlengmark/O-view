@@ -189,4 +189,45 @@ public class SessionWindowPlacementTests
         Assert.False(SessionWindowPlacement.Describe(
             now, past, ResetDetector.FindCurrentWindowStart(ADrop), now.AddHours(-5), ADrop).Disagrees);
     }
+
+    // ── a rollover is not a disagreement ────────────────────────────────────────────
+
+    /// <summary>
+    /// One account, Desktop running. The window that began at 10:32 ends at 15:32, and the next
+    /// first use at 15:33 is reported before Desktop's 15:45 sample has seen the rollover.
+    /// </summary>
+    private static readonly PlanHistorySample[] Rollover =
+        [At("2026-09-07T10:30:00", 40), At("2026-09-07T10:45:00", 2), At("2026-09-07T15:30:00", 50)];
+
+    [Fact]
+    public void TheNextWindowReportedBeforeDesktopSeesIt_IsNotADisagreement()
+    {
+        var samples = Rollover;
+        var now = DateTimeOffset.Parse("2026-09-07T15:40:00Z");
+        var reportedStart = DateTimeOffset.Parse("2026-09-07T15:33:00Z");
+        var bracket = ResetDetector.FindCurrentWindowStart(samples);
+
+        var window = SessionWindowPlacement.Describe(
+            now, reportedStart + ResetDetector.WindowLength, bracket, now.AddHours(-5), samples);
+
+        Assert.False(SessionWindowPlacement.Disagrees(reportedStart, bracket, samples));
+        Assert.Null(window.Inferred);
+        Assert.False(window.Disagrees);
+        Assert.Equal(WindowPlacedBy.ReportedReset, window.PlacedBy);
+    }
+
+    [Fact]
+    public void ADropSeenAfterTheRollover_AgreesOnceDesktopHasCaughtUp()
+    {
+        PlanHistorySample[] samples = [.. Rollover, At("2026-09-07T15:45:00", 3)];
+
+        Assert.False(Disagrees("2026-09-07T15:33:00", samples));
+    }
+
+    [Theory]
+    [InlineData("2026-09-07T10:46:00", true)]   // after the bracket, well inside its window
+    [InlineData("2026-09-07T15:29:59", true)]   // the last moment the old window can still run
+    [InlineData("2026-09-07T15:30:00", false)]  // its earliest edge plus a window: over
+    public void TheRealSignalSurvivesUntilTheLocatedWindowHasEnded(string reportedStart, bool disagrees) =>
+        Assert.Equal(disagrees, Disagrees(reportedStart, Rollover[..2]));
 }
