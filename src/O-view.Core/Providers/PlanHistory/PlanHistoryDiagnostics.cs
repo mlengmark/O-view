@@ -208,6 +208,17 @@ public static class PlanHistoryDiagnostics
     }
 
     /// <summary>
+    /// How the session window is placed from the files alone, for a report built with no engine
+    /// running. The same placement the engine makes, because it is the provider's own, never a
+    /// second copy of the rule.
+    /// </summary>
+    /// <param name="reportedResetUtc">Claude Code's reported five-hour reset, or null when it has none.</param>
+    /// <param name="orgUuid">The organization the engine would prefer, see <see cref="PlanHistoryProvider"/>.</param>
+    public static WindowPlacement DescribeWindow(
+        DateTimeOffset utcNow, DateTimeOffset? reportedResetUtc, string? path = null, string? orgUuid = null) =>
+        new PlanHistoryProvider(path, orgUuid).DescribeWindow(utcNow, reportedResetUtc);
+
+    /// <summary>
     /// Names of files in the canonical Claude folder. Distinguishes "Claude Desktop keeps
     /// data here but no usage file" from "there is no Claude folder here at all", the two
     /// need different answers, and a bare missing-file result cannot tell them apart.

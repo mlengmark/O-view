@@ -71,7 +71,7 @@ public static class DiagnosticsBundle
             ClaudeAccount.TryRead(), new WeeklyResetAnchor(), DateTimeOffset.UtcNow,
             CorruptBackups.Inspect(), FileLog.Tail(), RollupStoreReport.Inspect(),
             deepAudit ? IngestAuditReport.Run() : IngestAuditReport.NotRun,
-            CoworkSessionReport.Inspect(), ClaudeWriteSurvey.Inspect());
+            CoworkSessionReport.Inspect(), ClaudeWriteSurvey.Inspect(), InspectWindow());
 
     /// <summary>
     /// The bundle as the <b>running</b> app sees it: identical except that the store is read
@@ -82,7 +82,7 @@ public static class DiagnosticsBundle
         Build(environment, PlanHistoryDiagnostics.Inspect(), TranscriptScopeReport.Inspect(),
             ClaudeAccount.TryRead(), new WeeklyResetAnchor(), DateTimeOffset.UtcNow,
             CorruptBackups.Inspect(), FileLog.Tail(), store, IngestAuditReport.NotRun,
-            CoworkSessionReport.Inspect(), ClaudeWriteSurvey.Inspect());
+            CoworkSessionReport.Inspect(), ClaudeWriteSurvey.Inspect(), InspectWindow());
 
     /// <summary>Overload taking every input explicitly, so the layout is testable.</summary>
     public static string Build(
@@ -97,7 +97,8 @@ public static class DiagnosticsBundle
         RollupStoreReport? store = null,
         IngestAuditReport? ingestAudit = null,
         CoworkSessionReport? coworkSessions = null,
-        ClaudeWriteSurvey? writeSurvey = null)
+        ClaudeWriteSurvey? writeSurvey = null,
+        WindowPlacement? window = null)
     {
         var text = new StringBuilder();
         text.Append(planHistory.ToClipboardText(environment.Version));
@@ -105,6 +106,7 @@ public static class DiagnosticsBundle
         AppendMachine(text, environment);
         AppendRoots(text);
         AppendAccount(text, account);
+        AppendSessionWindow(text, window);
         text.Append(scope.ToClipboardText());
 
         // Directly after the transcript scan, because it is the answer to the question that
@@ -219,6 +221,55 @@ public static class DiagnosticsBundle
             // Paths are redacted by Redact.Bundle on the way out, as everywhere else here.
             text.AppendLine($"    candidate   : {candidate}  <-- {state}{cached}");
         }
+    }
+
+    /// <summary>
+    /// The session window as the engine would place it, from the files alone, because
+    /// <c>--diagnose</c> has no engine to ask.
+    ///
+    /// <para>Null when it cannot be worked out, which the section says rather than omits.</para>
+    /// </summary>
+    private static WindowPlacement? InspectWindow()
+    {
+        try
+        {
+            return PlanHistoryDiagnostics.DescribeWindow(
+                DateTimeOffset.UtcNow, CachedUtilization.TryRead()?.FiveHour?.ResetsAtUtc,
+                orgUuid: ClaudeAccount.TryRead()?.OrganizationUuid);
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Where the session window starts, and from which source: the start Claude Code reports,
+    /// the bracket plan history infers, and which of the two placed it.
+    ///
+    /// <para>Both are printed whichever one placed the window, and "none" is a line rather than
+    /// an omission. A disagreement is usually Claude Desktop and Claude Code signed into
+    /// different accounts, and the only way to see it is the two answers side by side
+    /// (GitHub #275). Timestamps only.</para>
+    /// </summary>
+    private static void AppendSessionWindow(StringBuilder text, WindowPlacement? window)
+    {
+        if (window is null)
+        {
+            text.AppendLine("  session window: not worked out");
+            return;
+        }
+
+        text.AppendLine($"  session window: starts {window.StartUtc:u}, placed by {window.PlacedBy switch
+        {
+            WindowPlacedBy.ReportedReset => "Claude Code's reported reset",
+            WindowPlacedBy.PlanHistory => "plan history",
+            _ => "plan history's fallback, it located no window",
+        }}");
+        text.AppendLine($"    reported    : {(window.ReportedStartUtc is { } reported ? $"{reported:u}" : "none, Claude Code reported no reset a running window could have")}");
+        text.AppendLine($"    inferred    : {(window.Inferred is { } inferred ? $"between {inferred.EarliestUtc:u} and {inferred.LatestUtc:u}" : "none located")}");
+        text.AppendLine($"    agreement   : {(window.Disagrees ? "DISAGREE, usually Claude Desktop and Claude Code on different accounts"
+            : window is { ReportedStartUtc: not null, Inferred: not null } ? "agree" : "not comparable, one source is missing")}");
     }
 
     /// <summary>

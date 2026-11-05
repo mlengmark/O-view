@@ -97,4 +97,96 @@ public class SessionWindowPlacementTests
     {
         Assert.Empty(SessionWindowPlacement.SinceLastDrop([]));
     }
+
+    // ── a disagreement between the reported start and the located window ────────────
+
+    private static PlanHistorySample At(string time, int fh) =>
+        new(DateTimeOffset.Parse(time + "Z"), "org-a", fh, 5);
+
+    /// <summary>A drop between 12:00 (60%) and 12:15 (3%): the window began in between.</summary>
+    private static readonly PlanHistorySample[] ADrop =
+        [At("2026-09-07T11:45:00", 58), At("2026-09-07T12:00:00", 60), At("2026-09-07T12:15:00", 3)];
+
+    private static bool Disagrees(string reportedStart, params PlanHistorySample[] samples) =>
+        SessionWindowPlacement.Disagrees(
+            DateTimeOffset.Parse(reportedStart + "Z"), ResetDetector.FindCurrentWindowStart(samples), samples);
+
+    [Theory]
+    [InlineData("2026-09-07T12:00:01")]
+    [InlineData("2026-09-07T12:07:30")]
+    [InlineData("2026-09-07T12:15:00")]
+    public void AReportedStartInsideTheBracket_Agrees(string reportedStart) =>
+        Assert.False(Disagrees(reportedStart, ADrop));
+
+    [Theory]
+    [InlineData("2026-09-07T11:59:00")]
+    [InlineData("2026-09-07T12:15:01")]
+    public void AReportedStartOutsideTheBracket_Disagrees(string reportedStart) =>
+        Assert.True(Disagrees(reportedStart, ADrop));
+
+    [Fact]
+    public void AWindowNoSampleLocated_NeverDisagrees()
+    {
+        // A series that opens on zero has no boundary: the placement falls back, and there is
+        // no inference for the reported start to contradict.
+        PlanHistorySample[] samples = [At("2026-09-05T13:16:00", 0), At("2026-09-07T14:44:00", 0)];
+
+        Assert.False(Disagrees("2026-09-07T14:40:00", samples));
+    }
+
+    /// <summary>
+    /// The window began with a first use too small to move a whole-number meter: the reported
+    /// start is before the rise from zero, and every sample in between reads 0.
+    /// </summary>
+    [Fact]
+    public void AFirstUseTooSmallToMoveTheMeter_Agrees()
+    {
+        PlanHistorySample[] samples =
+            [At("2026-09-07T14:00:00", 0), At("2026-09-07T14:15:00", 0), At("2026-09-07T14:30:00", 0),
+             At("2026-09-07T14:45:00", 2)];
+
+        // Began 14:02, three samples before the rise was seen.
+        Assert.False(Disagrees("2026-09-07T14:02:00", samples));
+    }
+
+    [Fact]
+    public void AReportedStartBeforeANonZeroReading_Disagrees()
+    {
+        PlanHistorySample[] samples =
+            [At("2026-09-07T13:45:00", 9), At("2026-09-07T14:00:00", 0), At("2026-09-07T14:15:00", 0),
+             At("2026-09-07T14:30:00", 2)];
+
+        // 13:45 read 9% after the reported start: the other source's window was still running.
+        Assert.True(Disagrees("2026-09-07T13:40:00", samples));
+    }
+
+    [Fact]
+    public void Describe_NamesTheSourceThatPlacedTheWindow()
+    {
+        var reset = DateTimeOffset.Parse("2026-09-07T17:10:00Z");
+        var now = DateTimeOffset.Parse("2026-09-07T12:30:00Z");
+        var inferred = ResetDetector.FindCurrentWindowStart(ADrop);
+
+        var reported = SessionWindowPlacement.Describe(now, reset, inferred, now.AddHours(-5), ADrop);
+        var located = SessionWindowPlacement.Describe(now, null, inferred, now.AddHours(-5), ADrop);
+        var fallback = SessionWindowPlacement.Describe(now, null, null, now.AddHours(-5), ADrop);
+
+        Assert.Equal(WindowPlacedBy.ReportedReset, reported.PlacedBy);
+        Assert.Equal(DateTimeOffset.Parse("2026-09-07T12:10:00Z"), reported.StartUtc);
+        Assert.False(reported.Disagrees);
+        Assert.Equal(WindowPlacedBy.PlanHistory, located.PlacedBy);
+        Assert.Null(located.ReportedStartUtc);
+        Assert.Equal(WindowPlacedBy.PlanHistoryFallback, fallback.PlacedBy);
+        Assert.Null(fallback.Inferred);
+    }
+
+    [Fact]
+    public void AReportedResetThatIsIgnored_CannotDisagree()
+    {
+        var now = DateTimeOffset.Parse("2026-09-07T12:30:00Z");
+        var past = now.AddMinutes(-1);
+
+        Assert.False(SessionWindowPlacement.Describe(
+            now, past, ResetDetector.FindCurrentWindowStart(ADrop), now.AddHours(-5), ADrop).Disagrees);
+    }
 }

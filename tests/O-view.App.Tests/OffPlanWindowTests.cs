@@ -3,6 +3,7 @@ using OView.Core.Pricing;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Storage;
+using OView.TestSupport;
 
 namespace OView.App.Tests;
 
@@ -153,7 +154,7 @@ public class OffPlanWindowTests
     /// <summary>
     /// Heavy work that morning, before the window the reset describes, and a little after it.
     /// Against the window plan history alone could place, five hours back, the 60,922 tokens
-    /// from 12:14 read as part of the window; placed by the reset they are not.
+    /// from 11:58Z read as part of the window; placed by the reset they are not.
     ///
     /// <para>Claude Code's last cached figure here is a zero twenty-four minutes old, which is
     /// discarded as a reading while its reset is still the best evidence there is, the two
@@ -240,4 +241,122 @@ public class OffPlanWindowTests
 
     private static CachedUtilization Block274(int fiveHourPercent, DateTimeOffset fetched, DateTimeOffset resetsAt) =>
         new(fetched, null, new UtilizationBar(fiveHourPercent, resetsAt), null);
+
+    // ── the log says when the two sources disagree (issue #275) ─────────────────────
+
+    /// <summary>
+    /// A window plan history located between 12:00 and 12:15. Reset 17:10 puts Claude Code's
+    /// start at 12:10, inside it; reset 16:50 puts it at 11:50, before a 50% reading.
+    /// </summary>
+    private static readonly DateTimeOffset AgreeingReset = new(2026, 9, 1, 17, 10, 0, TimeSpan.Zero);
+
+    private static readonly DateTimeOffset DisagreeingReset = new(2026, 9, 1, 16, 50, 0, TimeSpan.Zero);
+
+    private static UsageEngine EngineWithALocatedWindow(TempDir dir, Func<DateTimeOffset> reset, IAppLog log)
+    {
+        var path = dir.File("plan-usage-history.json");
+        var samples = new[]
+        {
+            (At: new DateTimeOffset(2026, 9, 1, 12, 0, 0, TimeSpan.Zero), Fh: 50),
+            (At: new DateTimeOffset(2026, 9, 1, 12, 15, 0, TimeSpan.Zero), Fh: 3),
+            (At: NewestSample, Fh: 20),
+        };
+        File.WriteAllText(path, $"{{\"version\":2,\"samples\":[{string.Join(",", samples.Select(s =>
+            $"{{\"t\":{s.At.ToUnixTimeMilliseconds()},\"org\":\"org-1\",\"u\":{{\"fh\":{s.Fh},\"sd\":8}}}}"))}]}}");
+
+        return new UsageEngine(new UsageEngineOptions
+        {
+            Clock = new FakeClock(T0),
+            Provider = new FakeProvider(),
+            RollupDbPath = dir.File("usage.db"),
+            WeeklyResetAnchorPath = dir.File("weekly-resets.json"),
+            SettingsPath = dir.File("settings.json"),
+            PlanHistoryPath = path,
+            CachedUtilization = new CachedUtilizationProvider(() => Block274(20, T0.AddMinutes(-1), reset())),
+            Log = log,
+        });
+    }
+
+    private static string[] Disagreements(ListLog log) =>
+        [.. log.Lines.Where(l => l.Contains("session window sources", StringComparison.Ordinal))];
+
+    [Fact]
+    public void ADisagreement_IsLoggedOnceNotOncePerPoll()
+    {
+        using var dir = new TempDir();
+        var log = new ListLog();
+        using var engine = EngineWithALocatedWindow(dir, () => DisagreeingReset, log);
+
+        engine.BuildStatistics();
+        engine.BuildStatistics();
+        engine.BuildStatistics();
+
+        var lines = Disagreements(log);
+        var line = Assert.Single(lines);
+        Assert.Contains("disagree", line, StringComparison.Ordinal);
+        Assert.Contains("2026-09-01 11:50:00Z", line, StringComparison.Ordinal);
+        Assert.Contains("2026-09-01 12:00:00Z and 2026-09-01 12:15:00Z", line, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AgreementReturning_IsLoggedOnceMore()
+    {
+        using var dir = new TempDir();
+        var log = new ListLog();
+        var reset = DisagreeingReset;
+        using var engine = EngineWithALocatedWindow(dir, () => reset, log);
+
+        engine.BuildStatistics();
+        reset = AgreeingReset;
+        engine.BuildStatistics();
+        engine.BuildStatistics();
+
+        var lines = Disagreements(log);
+        Assert.Equal(2, lines.Length);
+        Assert.Contains("agree again", lines[1], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AgreeingSources_LogNothing()
+    {
+        using var dir = new TempDir();
+        var log = new ListLog();
+        using var engine = EngineWithALocatedWindow(dir, () => AgreeingReset, log);
+
+        engine.BuildStatistics();
+        engine.BuildStatistics();
+
+        Assert.Empty(Disagreements(log));
+    }
+
+    /// <summary>
+    /// The morning issue #274 was reported on: plan history locates no window, only a fallback,
+    /// and the reported start differs from it entirely. That is not a disagreement.
+    /// </summary>
+    [Fact]
+    public void AFallbackWindow_IsNeverALoggedDisagreement()
+    {
+        using var dir = new TempDir();
+        var log = new ListLog();
+        var db = dir.File("usage.db");
+        using (new RollupStore(db)) { }
+        var path = dir.File("plan-usage-history.json");
+        File.WriteAllText(path, $"{{\"version\":2,\"samples\":[{{\"t\":{Sept7.AddMinutes(-14).ToUnixTimeMilliseconds()},\"org\":\"org-1\",\"u\":{{\"fh\":0,\"sd\":8}}}}]}}");
+
+        using var engine = new UsageEngine(new UsageEngineOptions
+        {
+            Clock = new FakeClock(Sept7),
+            Provider = new FakeProvider(),
+            RollupDbPath = db,
+            WeeklyResetAnchorPath = dir.File("weekly-resets.json"),
+            SettingsPath = dir.File("settings.json"),
+            PlanHistoryPath = path,
+            CachedUtilization = new CachedUtilizationProvider(() => Block274(0, Sept7.AddMinutes(-24), Sept7Reset)),
+            Log = log,
+        });
+
+        engine.BuildStatistics();
+
+        Assert.Empty(Disagreements(log));
+    }
 }
