@@ -206,9 +206,17 @@ public sealed class PlanHistoryProvider : IUsageProvider
         // against a five-hour meter (issue #180). Falls back to the last drop, and then to
         // the series start, so that a window O-view cannot locate exactly is still a window,
         // and then bounds the result, because neither fallback is bounded by anything else.
-        var inferred = ResetDetector.FindCurrentWindowStart(samples);
+        var found = ResetDetector.FindCurrentWindowStart(samples);
+
+        // A window located more than one window ago has ended, whatever the newest sample says:
+        // Desktop closed on a non-zero reading leaves the search pointing at it for days. It is
+        // still where the start falls back to, clamped below, but it is no inference about the
+        // window running now, so nothing can disagree with it.
+        var inferred = found is { } located && located.LatestUtc >= utcNow - ResetDetector.WindowLength
+            ? located
+            : null;
         return SessionWindowPlacement.Describe(utcNow, reportedResetUtc, inferred, NoOlderThanOneWindow(
-            inferred?.LatestUtc
+            found?.LatestUtc
             ?? ResetDetector.FindLastDrop(samples)
             ?? samples[0].AtUtc,
             utcNow), samples);
@@ -226,7 +234,8 @@ public sealed class PlanHistoryProvider : IUsageProvider
     ///
     /// <para><b>Only the first of the three anchors above was bounded.</b>
     /// <see cref="ResetDetector.FindCurrentWindowStart"/> returns a sample from inside the
-    /// running window, so it cannot be older than one. It returns null whenever the newest
+    /// window it found, which is the running one only while Desktop keeps sampling: closed on a
+    /// non-zero reading, it can find a window days old. It returns null whenever the newest
     /// reading is <c>0</c>, "no window is running, because it starts on first use", and the
     /// fallbacks then reach back to the last observed drop, or to the start of the series,
     /// either of which can be days old. The comment above used to defend that as a missed

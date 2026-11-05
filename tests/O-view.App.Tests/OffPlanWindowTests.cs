@@ -252,7 +252,7 @@ public class OffPlanWindowTests
 
     private static readonly DateTimeOffset DisagreeingReset = new(2026, 9, 1, 16, 50, 0, TimeSpan.Zero);
 
-    private static UsageEngine EngineWithALocatedWindow(TempDir dir, Func<DateTimeOffset> reset, IAppLog log)
+    private static UsageEngine EngineWithALocatedWindow(TempDir dir, Func<DateTimeOffset?> reset, IAppLog log)
     {
         var path = dir.File("plan-usage-history.json");
         var samples = new[]
@@ -272,7 +272,8 @@ public class OffPlanWindowTests
             WeeklyResetAnchorPath = dir.File("weekly-resets.json"),
             SettingsPath = dir.File("settings.json"),
             PlanHistoryPath = path,
-            CachedUtilization = new CachedUtilizationProvider(() => Block274(20, T0.AddMinutes(-1), reset())),
+            CachedUtilization = new CachedUtilizationProvider(() =>
+                new CachedUtilization(T0.AddMinutes(-1), null, new UtilizationBar(20, reset()), null)),
             Log = log,
         });
     }
@@ -313,7 +314,29 @@ public class OffPlanWindowTests
 
         var lines = Disagreements(log);
         Assert.Equal(2, lines.Length);
-        Assert.Contains("agree again", lines[1], StringComparison.Ordinal);
+        Assert.Contains("no longer disagree", lines[1], StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The reported reset passes, or Claude Code stops reporting one, during a disagreement:
+    /// nothing is compared any more, and the closing line must not claim the two agree.
+    /// </summary>
+    [Fact]
+    public void ASourceGoingSilentDuringADisagreement_ClosesItWithoutClaimingAgreement()
+    {
+        using var dir = new TempDir();
+        var log = new ListLog();
+        DateTimeOffset? reset = DisagreeingReset;
+        using var engine = EngineWithALocatedWindow(dir, () => reset, log);
+
+        engine.BuildStatistics();
+        reset = null;
+        engine.BuildStatistics();
+
+        var lines = Disagreements(log);
+        Assert.Equal(2, lines.Length);
+        Assert.Contains("no longer disagree", lines[1], StringComparison.Ordinal);
+        Assert.DoesNotContain("agree again", lines[1], StringComparison.Ordinal);
     }
 
     [Fact]

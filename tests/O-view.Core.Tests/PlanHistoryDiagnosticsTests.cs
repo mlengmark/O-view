@@ -183,4 +183,27 @@ public class PlanHistoryDiagnosticsTests : IDisposable
         Assert.Null(window.Inferred);
         Assert.False(window.Disagrees);
     }
+
+    /// <summary>
+    /// Desktop closed on a non-zero reading: the search still finds the window from two days
+    /// ago, but it is not the running one, so it is neither compared nor credited with placing
+    /// the start.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AWindowLocatedMoreThanOneWindowAgo_IsNoLocationAtAll(bool withReportedReset)
+    {
+        var now = DateTimeOffset.Parse("2026-09-07T15:00:00Z");
+        long Ms(string t) => DateTimeOffset.Parse(t + "Z").ToUnixTimeMilliseconds();
+        var path = Write($$"""{"version":2,"samples":[{{Sample(Ms("2026-09-05T10:30:00"), fh: 40)}},{{Sample(Ms("2026-09-05T10:45:00"), fh: 2)}},{{Sample(Ms("2026-09-05T13:00:00"), fh: 30)}}]}""");
+
+        var window = PlanHistoryDiagnostics.DescribeWindow(
+            now, withReportedReset ? DateTimeOffset.Parse("2026-09-07T19:40:00Z") : null, path);
+
+        Assert.Null(window.Inferred);
+        Assert.False(window.Disagrees);
+        Assert.Equal(
+            withReportedReset ? WindowPlacedBy.ReportedReset : WindowPlacedBy.PlanHistoryFallback, window.PlacedBy);
+    }
 }

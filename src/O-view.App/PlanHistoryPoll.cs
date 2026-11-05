@@ -281,7 +281,7 @@ public sealed class PlanHistoryPoll
         }
         else
         {
-            _log?.Write("session window sources agree again");
+            _log?.Write("session window sources no longer disagree");
         }
     }
 
