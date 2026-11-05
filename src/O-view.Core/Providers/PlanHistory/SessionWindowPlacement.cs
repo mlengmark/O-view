@@ -120,8 +120,9 @@ public static class SessionWindowPlacement
     /// morning on a machine with one account.</para>
     ///
     /// <para><b>The test is the samples, not a margin.</b> The reported start is exact, the
-    /// bracket is two samples wide, so it can sit anywhere inside the bracket and nowhere after
-    /// it, a drop already seen by then would have been inside the window. It can also sit
+    /// bracket is two samples wide, so it can sit anywhere inside the bracket and, until the
+    /// located window has ended (<see cref="IsSupersededBy"/>), nowhere after it: a drop already
+    /// seen by then would have been inside the window. It can also sit
     /// <i>before</i> the bracket, but only one way: Claude's percentage is a whole number, so a
     /// first use too small to reach 1% leaves the meter at 0 and the rise from zero is seen a
     /// sample or several late. That is told apart from a different account by what the meter
@@ -152,13 +153,15 @@ public static class SessionWindowPlacement
 
     /// <summary>
     /// Whether the window <paramref name="bracket"/> locates had already ended when
-    /// <paramref name="reportedStartUtc"/> began. It began between the bracket's two edges and
-    /// lasts one window, so at the earliest edge plus a window it is over, whatever else is true.
-    /// A reported start from there on is the next window, which Claude Code can report before
-    /// Desktop's next sample catches up: nothing disagrees, there is simply nothing to compare.
+    /// <paramref name="reportedStartUtc"/> began. The window began between the bracket's two
+    /// edges and lasts one window, so it is over at the earliest edge plus a window, but only a
+    /// start <i>after</i> the bracket can say so: a bracket wider than a window (Desktop off
+    /// overnight) holds starts that are inside the located window however wide it is. A reported
+    /// start past both is the next window, which Claude Code can report before Desktop's next
+    /// sample catches up: nothing disagrees, there is simply nothing to compare.
     /// </summary>
     private static bool IsSupersededBy(SessionWindowStart bracket, DateTimeOffset reportedStartUtc) =>
-        reportedStartUtc >= bracket.EarliestUtc + ResetDetector.WindowLength;
+        reportedStartUtc > bracket.LatestUtc && reportedStartUtc >= bracket.EarliestUtc + ResetDetector.WindowLength;
 
     private static DateTimeOffset? ReportedStart(DateTimeOffset utcNow, DateTimeOffset? reportedResetUtc) =>
         reportedResetUtc is { } reset && reset > utcNow && reset - utcNow <= ResetDetector.WindowLength

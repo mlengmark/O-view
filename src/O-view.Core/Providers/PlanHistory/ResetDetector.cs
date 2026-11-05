@@ -95,7 +95,8 @@ public static class ResetDetector
     }
 
     /// <summary>
-    /// When the window that is running <i>now</i> began, or null when none is.
+    /// When the window the newest sample sits in began, or null when none is. That is the window
+    /// running now only while samples keep arriving; after a long silence it can be days old.
     ///
     /// <para>Null in three distinct situations, all of which are honestly "unknown" rather
     /// than a number worth guessing: the latest reading is <c>0</c>, so no window is running

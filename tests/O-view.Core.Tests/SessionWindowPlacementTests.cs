@@ -230,4 +230,25 @@ public class SessionWindowPlacementTests
     [InlineData("2026-09-07T15:30:00", false)]  // its earliest edge plus a window: over
     public void TheRealSignalSurvivesUntilTheLocatedWindowHasEnded(string reportedStart, bool disagrees) =>
         Assert.Equal(disagrees, Disagrees(reportedStart, Rollover[..2]));
+
+    /// <summary>
+    /// Desktop off from 22:00 with the meter on 40%, Claude Code starting the window at 09:10,
+    /// Desktop's first sample 09:20 reading 3%: a bracket wider than a window, holding the
+    /// reported start. The two agree and the bracket is shown.
+    /// </summary>
+    [Fact]
+    public void AReportedStartInsideABracketWiderThanAWindow_KeepsTheBracket()
+    {
+        PlanHistorySample[] samples =
+            [At("2026-09-06T21:45:00", 38), At("2026-09-06T22:00:00", 40), At("2026-09-07T09:20:00", 3)];
+        var now = DateTimeOffset.Parse("2026-09-07T09:30:00Z");
+        var reportedStart = DateTimeOffset.Parse("2026-09-07T09:10:00Z");
+        var bracket = ResetDetector.FindCurrentWindowStart(samples);
+
+        var window = SessionWindowPlacement.Describe(
+            now, reportedStart + ResetDetector.WindowLength, bracket, now.AddHours(-5), samples);
+
+        Assert.Equal(bracket, window.Inferred);
+        Assert.False(window.Disagrees);
+    }
 }
