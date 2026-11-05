@@ -399,6 +399,90 @@ public class PlanHistoryProviderTests : IDisposable
         Assert.Equal(DivergenceState.Diverging, result.State);
     }
 
+    // ── the window starts at Claude Code's reported reset (issue #275) ──────────────
+
+    /// <summary>
+    /// Issue #274's timeline: the drop Desktop last saw was two days earlier, but Claude Code
+    /// reports a reset at 19:40Z, so the window began at 14:40Z and holds the one zero written
+    /// after it.
+    /// </summary>
+    [Fact]
+    public void AReportedResetPlacesTheWindowAtThatResetMinusFiveHours()
+    {
+        var now = new DateTimeOffset(2026, 9, 7, 15, 14, 0, TimeSpan.Zero);
+        var path = WriteSamples(
+            (new DateTimeOffset(2026, 9, 5, 12, 31, 0, TimeSpan.Zero), "org-a", 25, 23),
+            (new DateTimeOffset(2026, 9, 5, 13, 16, 0, TimeSpan.Zero), "org-a", 0, 23),
+            (new DateTimeOffset(2026, 9, 5, 17, 31, 0, TimeSpan.Zero), "org-a", 0, 23),
+            (new DateTimeOffset(2026, 9, 7, 14, 44, 0, TimeSpan.Zero), "org-a", 0, 25));
+        var reset = new DateTimeOffset(2026, 9, 7, 19, 40, 0, TimeSpan.Zero);
+
+        var (windowStart, percents, _) = new PlanHistoryProvider(path).GetCurrentWindow(now, reset);
+
+        Assert.Equal(new DateTimeOffset(2026, 9, 7, 14, 40, 0, TimeSpan.Zero), windowStart);
+        Assert.Equal([0], percents);
+    }
+
+    [Fact]
+    public void ReportedResetsThatCannotBeTheRunningWindow_LeaveTheWindowAsItWas()
+    {
+        var path = WriteSamples(
+            (Now.AddDays(-2).AddHours(-1), "org-a", 25, 23),
+            (Now.AddDays(-2), "org-a", 0, 23),
+            (Now.AddMinutes(-3), "org-a", 0, 25));
+        var provider = new PlanHistoryProvider(path);
+        var (expectedStart, expectedPercents, _) = provider.GetCurrentWindow(Now);
+
+        foreach (var reset in new[] { Now.AddMinutes(-1), Now.AddHours(5).AddMinutes(1) })
+        {
+            var (windowStart, percents, _) = provider.GetCurrentWindow(Now, reset);
+
+            Assert.Equal(expectedStart, windowStart);
+            Assert.Equal(expectedPercents, percents);
+        }
+    }
+
+    /// <summary>
+    /// No plan history today still gets a window, starting at the reported start, with an empty
+    /// series: one reported reading cannot be turned into an off-plan verdict.
+    /// </summary>
+    [Fact]
+    public void WithNoPlanHistory_TheReportedResetStillPlacesTheWindow()
+    {
+        var provider = new PlanHistoryProvider(PlanHistoryFile.NoFile);
+
+        var (windowStart, percents, age) = provider.GetCurrentWindow(Now, reportedResetUtc: Now.AddHours(3));
+        var result = DivergenceDetector.Evaluate(percents, outputTokensInWindow: 60_922, age);
+
+        Assert.Equal(Now.AddHours(-2), windowStart);
+        Assert.Empty(percents);
+        Assert.False(result.IsOffPlan);
+    }
+
+    /// <summary>
+    /// A start taken from Claude Code can land just after a boundary and keep one sample from
+    /// the window before it. Left in, the series reads 80 then 3, a rise of -77, which the
+    /// detector takes for a flat meter and reports as divergence.
+    /// </summary>
+    [Fact]
+    public void TheSeriesNeverSpansAReset_WhateverTheReportedStartSays()
+    {
+        var path = WriteSamples(
+            (Now.AddMinutes(-40), "org-a", 80, 7),
+            (Now.AddMinutes(-35), "org-a", 3, 7),
+            (Now.AddMinutes(-20), "org-a", 4, 7),
+            (Now.AddMinutes(-5), "org-a", 5, 7));
+
+        // Reset in 4h15m: the window began at -45m, so the 80 is inside it.
+        var (windowStart, percents, age) = new PlanHistoryProvider(path)
+            .GetCurrentWindow(Now, reportedResetUtc: Now.AddHours(4).AddMinutes(15));
+        var result = DivergenceDetector.Evaluate(percents, outputTokensInWindow: 60_922, age);
+
+        Assert.Equal(Now.AddMinutes(-45), windowStart);
+        Assert.Equal([3, 4, 5], percents);
+        Assert.Equal(2, result.PlanRisePoints);
+    }
+
     // ── narrowing with local activity (issue #185) ──────────────────────────────────
 
     /// <summary>

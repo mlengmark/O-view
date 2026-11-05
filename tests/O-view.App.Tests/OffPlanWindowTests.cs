@@ -132,7 +132,112 @@ public class OffPlanWindowTests
         ]);
     }
 
-    /// <summary>Claude Code's cached block, read a minute ago, newer than Desktop's sample.</summary>
+    /// <summary>
+    /// Claude Code's cached block, read a minute ago, newer than Desktop's sample. Its reset is
+    /// five hours after the window's first sample, which is where Claude Code and plan history
+    /// agree the window opened, so the reported start places the window where Desktop did.
+    /// </summary>
     private static CachedUtilization Block(int fiveHourPercent) =>
-        new(T0.AddMinutes(-1), null, new UtilizationBar(fiveHourPercent, T0.AddHours(4)), null);
+        new(T0.AddMinutes(-1), null, new UtilizationBar(fiveHourPercent, NewestSample.AddHours(5)), null);
+
+    // ── the window starts at Claude Code's reported reset (issue #275) ──────────────
+
+    /// <summary>
+    /// 2026-09-07 14:58Z, fourteen minutes after Desktop resumed. Claude Code reports a reset at
+    /// 19:40Z, so the window began at 14:40Z; the drop Desktop last saw was 09-05 13:16Z.
+    /// </summary>
+    private static readonly DateTimeOffset Sept7 = new(2026, 9, 7, 14, 58, 0, TimeSpan.Zero);
+
+    private static readonly DateTimeOffset Sept7Reset = new(2026, 9, 7, 19, 40, 0, TimeSpan.Zero);
+
+    /// <summary>
+    /// Heavy work that morning, before the window the reset describes, and a little after it.
+    /// Against the window plan history alone could place, five hours back, the 60,922 tokens
+    /// from 12:14 read as part of the window; placed by the reset they are not.
+    ///
+    /// <para>Claude Code's last cached figure here is a zero twenty-four minutes old, which is
+    /// discarded as a reading while its reset is still the best evidence there is, the two
+    /// have to be read apart.</para>
+    /// </summary>
+    [Fact]
+    public void AnAgedZeroIsDroppedAsAReadingButItsResetStillPlacesTheWindow()
+    {
+        using var dir = new TempDir();
+        var stats = BuildSept7Statistics(dir, Block274(0, fetched: Sept7.AddMinutes(-24), Sept7Reset));
+
+        Assert.Equal(2_000, stats.Divergence?.OutputTokensInWindow);
+        Assert.Equal(DivergenceState.InsufficientActivity, stats.Divergence?.State);
+        Assert.False(stats.IsOffPlan);
+    }
+
+    /// <summary>A reset already past is ignored, so the window is the one plan history gives.</summary>
+    [Fact]
+    public void AReportedResetInThePastIsNotUsed()
+    {
+        using var dir = new TempDir();
+        var stats = BuildSept7Statistics(dir, Block274(0, fetched: Sept7.AddMinutes(-24), Sept7.AddMinutes(-1)));
+
+        Assert.Equal(62_922, stats.Divergence?.OutputTokensInWindow);
+    }
+
+    /// <summary>
+    /// With no plan history at all the reported start is still the window's, but the series is
+    /// empty, so a single reported reading cannot be turned into a verdict.
+    /// </summary>
+    [Fact]
+    public void WithNoPlanHistory_TheReportedStartPlacesTheWindowButNoVerdictFollows()
+    {
+        using var dir = new TempDir();
+        var stats = BuildSept7Statistics(
+            dir, Block274(40, fetched: Sept7.AddMinutes(-2), Sept7Reset), withPlanHistory: false);
+
+        Assert.Equal(2_000, stats.Divergence?.OutputTokensInWindow);
+        Assert.False(stats.IsOffPlan);
+    }
+
+    private static PanelStatistics BuildSept7Statistics(
+        TempDir dir, CachedUtilization block, bool withPlanHistory = true)
+    {
+        var dbPath = dir.File("usage.db");
+        using (var store = new RollupStore(dbPath))
+        {
+            store.Ingest([
+                new TranscriptRecord(
+                    "req-morning", Sept7.AddHours(-3), "claude-opus-5",
+                    new TokenSplit(0, 0, 0, 0, 0, 60_922), UsageModifiers.Standard),
+                new TranscriptRecord(
+                    "req-after", Sept7.AddMinutes(-10), "claude-opus-5",
+                    new TokenSplit(0, 0, 0, 0, 0, 2_000), UsageModifiers.Standard),
+            ]);
+        }
+
+        var path = dir.File("plan-usage-history.json");
+        var samples = withPlanHistory
+            ? new[]
+            {
+                (At: new DateTimeOffset(2026, 9, 5, 12, 31, 0, TimeSpan.Zero), Fh: 25),
+                (At: new DateTimeOffset(2026, 9, 5, 13, 16, 0, TimeSpan.Zero), Fh: 0),
+                (At: new DateTimeOffset(2026, 9, 5, 17, 31, 0, TimeSpan.Zero), Fh: 0),
+                (At: new DateTimeOffset(2026, 9, 7, 14, 44, 0, TimeSpan.Zero), Fh: 0),
+            }
+            : [];
+        var json = string.Join(",", samples.Select(s =>
+            $"{{\"t\":{s.At.ToUnixTimeMilliseconds()},\"org\":\"org-1\",\"u\":{{\"fh\":{s.Fh},\"sd\":8}}}}"));
+        File.WriteAllText(path, $"{{\"version\":2,\"samples\":[{json}]}}");
+
+        using var engine = new UsageEngine(new UsageEngineOptions
+        {
+            Clock = new FakeClock(Sept7),
+            Provider = new FakeProvider(),
+            RollupDbPath = dbPath,
+            WeeklyResetAnchorPath = dir.File("weekly-resets.json"),
+            SettingsPath = dir.File("settings.json"),
+            PlanHistoryPath = path,
+            CachedUtilization = new CachedUtilizationProvider(() => block),
+        });
+        return engine.BuildStatistics();
+    }
+
+    private static CachedUtilization Block274(int fiveHourPercent, DateTimeOffset fetched, DateTimeOffset resetsAt) =>
+        new(fetched, null, new UtilizationBar(fiveHourPercent, resetsAt), null);
 }

@@ -221,7 +221,10 @@ public sealed class PlanHistoryPoll
             return stats;
         }
 
-        var (windowStart, percents, meterAge) = _planHistory.GetCurrentWindow(utcNow);
+        // Read once, ahead of the window: Claude Code's reported reset places the window, and
+        // its reported percentage joins the series after it.
+        var reported = ReadReportedMeter(utcNow);
+        var (windowStart, percents, meterAge) = _planHistory.GetCurrentWindow(utcNow, reported.ResetUtc);
 
         if (_simulateDivergence is { } mode)
         {
@@ -242,7 +245,6 @@ public sealed class PlanHistoryPoll
         // The meter as O-view actually knows it, not merely as Desktop last wrote it. Plan
         // history alone leaves the comparison up to 15 minutes behind a reading already on
         // screen, the gap issue #268 was reported through.
-        var reported = ReadReportedMeter(utcNow);
         var (series, seriesAge) = MeterSeries.WithReportedReading(
             percents, meterAge, reported.SessionPercent, reported.Age);
 
@@ -250,31 +252,42 @@ public sealed class PlanHistoryPoll
     }
 
     /// <summary>
-    /// Claude Code's cached five-hour reading and how old it is, or nulls when there is none.
+    /// Claude Code's cached five-hour reading, how old it is, and the reset it reported, each
+    /// null when there is none.
     ///
     /// <para>Read through <see cref="_cachedUtilization"/> rather than the raw file so it
-    /// arrives with that provider's two rules already applied, a percentage whose window has
+    /// arrives with that provider's rules already applied, a percentage whose window has
     /// rolled over, and an aged zero, both come back null. It is also the seam a caller who
     /// supplied its own <c>Provider</c> has already blanked, which is what keeps the off-plan
     /// comparison from reaching into the developer's own <c>~/.claude.json</c> during tests
     /// (issue #212, and the reasoning at <see cref="UsageEngine"/>'s plan-history field).</para>
     ///
+    /// <para><b>The reset is read on its own, not behind the percentage.</b> An aged zero is
+    /// discarded as a reading but its reset is still good, and that is exactly the state issue
+    /// #274 was in: Claude Code had last cached a zero, and the window it described was running.</para>
+    ///
     /// <para>A reader that throws yields nulls, not an exception: this refines a comparison
     /// that was already correct without it.</para>
     /// </summary>
-    private (int? SessionPercent, TimeSpan? Age) ReadReportedMeter(DateTimeOffset utcNow)
+    private (int? SessionPercent, TimeSpan? Age, DateTimeOffset? ResetUtc) ReadReportedMeter(DateTimeOffset utcNow)
     {
         try
         {
             var reported = _cachedUtilization.GetSnapshot(utcNow);
-            return reported.SessionPercentValue is { Status: not UsageValueStatus.Unavailable, Value: { } percent }
-                ? ((int?)percent, utcNow - reported.CapturedAtUtcValue.Value)
-                : (null, null);
+            var reset = reported.SessionResetAtUtcValue is { Status: not UsageValueStatus.Unavailable, Value: { } at }
+                ? (DateTimeOffset?)at
+                : null;
+            if (reported.SessionPercentValue is not { Status: not UsageValueStatus.Unavailable, Value: { } percent })
+            {
+                return (null, null, reset);
+            }
+
+            return ((int?)percent, utcNow - reported.CapturedAtUtcValue.Value, reset);
         }
         catch (Exception ex)
         {
             _log?.Write($"reported meter skipped: {ex.GetType().Name}: {ex.Message}");
-            return (null, null);
+            return (null, null, null);
         }
     }
 }
