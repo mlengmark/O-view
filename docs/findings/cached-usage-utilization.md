@@ -76,6 +76,9 @@ the cache was the fresher of the two.
   grid bug of issue #180, the window starts on first use, not on a clock. For the weekly window
   the arithmetic is sound but the answer would be an inference carrying a reported value's zero
   uncertainty.
+- **A *future* `five_hour.resets_at` is a window boundary, and places the off-plan window.**
+  Within one window ahead, it minus five hours is the start, exactly. The panel's session
+  reset does not read it. See [ADR-0018](../adr/0018-session-window-source.md).
 - **`accountUuid` is not `organizationUuid`.** They are different identifiers, and both appear on
   the same machine, the plan-history file keys on the org. Do not match one against the other.
 - **Read-only, and mind the neighbours.** The file belongs to Claude Code and sits beside
