@@ -200,7 +200,7 @@ The row has three states:
 | Not known | `Weekly reset time not known`, hover names the one step that ends it; clicking copies `/usage` |
 | No plan data at all | hidden; the no-data banner above already explains it |
 
-> **The `~` is gone from this row, and its absence is the claim.** Both remaining sources report the instant rather than inferring it, so there is no bracket to state and the uncertainty field that carried one was removed (issue #248). The session row keeps its tilde, that window rolls from first use and is still derived.
+> **The `~` is gone from this row, and its absence is the claim.** Both remaining sources report the instant rather than inferring it, so there is no bracket to state and the uncertainty field that carried one was removed (issue #248). The session row keeps its tilde only while its reset is derived, because that window rolls from first use; a reset Claude Code has reported is exact and carries none.
 
 > **"Not known" is a setup step, not a wait.** This line used to read `Waiting for first reset…`, from when the reset was derived by watching the weekly percentage fall. ADR-0014 deleted that derivation, so nothing was watching and the promised fill-in could never arrive, a row that names a wait nobody is serving is the blank row's defect wearing an explanation. It now states the fact and carries the action: **run `/usage` in Claude Code**, which is the only thing that refreshes the block Claude Code caches, or enter the time from **Menu → Weekly reset…** where there is no `claude` to run. Which sentence appears is an observation (`UsageEngine.ClaudeCodeFound`), never an inference from the account file, a machine can carry a `~/.claude.json` and no executable.
 

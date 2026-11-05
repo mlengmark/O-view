@@ -22,8 +22,8 @@ namespace OView.Core.Models;
 /// Next seven-day window reset: the instant Claude Code last reported, stored and projected
 /// forward by whole weeks, or failing that the time the user entered. Either is exact, so it
 /// reads <see cref="UsageValueStatus.Real"/>. It is <see cref="UsageValueStatus.Unavailable"/>
-/// until one of them exists, which the UI reports as still waiting rather than as broken
-/// (GitHub issue #6).
+/// until one of them exists, which the UI reports as not known and pairs with the step that
+/// ends it, rather than as a wait (GitHub issue #6).
 /// </param>
 /// <param name="WeeklyResetPeriod">
 /// Cadence between weekly resets, as derived. Carried so the usage graph can step back from
