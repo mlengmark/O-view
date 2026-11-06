@@ -132,6 +132,53 @@ carrying the date once the reading is no longer from the reader's own today, rat
 panel deciding on their behalf that an hour-old answer is no answer. Same treatment, same reason,
 as the promo notice below.
 
+## Model limits and spend
+
+Two more parts of `utilization`, read since the model limit bar and the reported-spend figure
+([ADR-0019](../adr/0019-model-limit-and-reported-spend.md)). The scoped row was first seen on
+2026-11-06, on an account with a weekly limit on Fable; `spend` had been seen before, at zero
+([cli-usage-refresh.md](cli-usage-refresh.md) §4).
+
+```jsonc
+"limits": [
+  { "kind": "session",       "group": "session", "percent": 7,  "severity": "normal",
+    "resets_at": "…", "scope": null, "is_active": false },
+  { "kind": "weekly_all",    "group": "weekly",  "percent": 13, "severity": "normal",
+    "resets_at": "…", "scope": null, "is_active": true },
+  { "kind": "weekly_scoped", "group": "weekly",  "percent": 10, "severity": "normal",
+    "resets_at": "…", "is_active": false,
+    "scope": { "model": { "id": null, "display_name": "Fable" }, "surface": null } }
+],
+"spend": {
+  "used": { "amount_minor": 0, "currency": "USD", "exponent": 2 },
+  "enabled": false, "limit": null, "percent": 0, "severity": "normal",
+  "disabled_reason": null, "cap": null, "balance": null, "auto_reload": null,
+  "disclaimer": "…", "can_purchase_credits": false, "can_toggle": false
+}
+```
+
+- **A model's own limit is a `weekly_scoped` row whose `scope.model.display_name` names the
+  model.** The two account-wide rows (`session`, `weekly_all`) repeat the meters and are skipped.
+  A row qualifies by its shape alone: group `weekly`, a named model, no surface. A `surface`
+  would make it a limit on that model within one product, which is not the model's limit.
+- **`scope.model.id` was null**, so the display name is the only name there is. A row without
+  one is skipped, never guessed. `percent` is a number that may not be whole and is rounded as a
+  meter's is.
+- **A passed reset keeps the row.** It says the reading is old, not that the limit went away.
+  The percentage goes through the same rule as the two meters, so a passed reset or an aged zero
+  reads unknown.
+- **`spend` states no period anywhere.** Nothing derived from it may claim one. It is why the
+  panel's reported figure has no day count.
+- **Only the zero shape has been observed.** `used` was `0 USD` with exponent 2 and `enabled`
+  false. A non-zero amount is read from the field names, `amount_minor` over ten to the
+  `exponent`, and nothing has confirmed that. A negative amount or an exponent beyond what a
+  `decimal` carries reads as unreadable, not as a number.
+- **Only one scoped row has been seen.** Whether other models, other plans or a surface-scoped
+  row look the same is not established.
+- **A broken `limits` or `spend` costs only itself.** The meters come from the same block, so
+  each part is read on its own and never throws; `--diagnose` says which of absent, unreadable
+  or read it found ([cli.md](../cli.md)).
+
 ## A second block in the same file: promo notices
 
 `cachedGrowthBookFeatures.tengu_rate_limit_promo_notices` is what Claude Code renders beside its

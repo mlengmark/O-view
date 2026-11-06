@@ -23,7 +23,7 @@ Left-click the icon. The panel follows the desktop's light or dark theme and ope
 |---|---|
 | ![](images/panel-typical-windows-dark.png) | ![](images/panel-typical-windows-light.png) |
 
-From the top: your account and when the figures were captured; the session and weekly bars with their reset times; four tiles for output tokens and their estimated value, today and over 31 days, with the coverage caveat when O-view has not been installed for the whole window; the tokens-used bars with a legend per kind; the 31-day graph with a dotted line at each weekly reset; and the off-plan section.
+From the top: your account and when the figures were captured; the session and weekly bars with their reset times, and under them a `Weekly · <model>` bar for each model limit the account has; four tiles for output tokens and their estimated value, today and over 31 days, with the coverage caveat when O-view has not been installed for the whole window; the tokens-used bars with a legend per kind; the 31-day graph with a dotted line at each weekly reset; and, only while there is off-plan usage to show, the off-plan section. That section is the estimated value of credit-billed models over the chart's window, or, on an account with a model limit, the spend Claude reports, with no period and hidden at zero.
 
 The Linux panel is built from the same sections and the same wording.
 

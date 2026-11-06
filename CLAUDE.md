@@ -108,6 +108,7 @@ A Cowork session in a cloud container leaves no local record while the plan mete
 IUsageProvider
  ├─ PlanHistoryProvider        Claude Desktop's sampled series: session and weekly %, derived session reset
  ├─ CachedUtilizationProvider  Claude Code's cache: the same two %, plus exact reset instants
+ │                             (its model limits and spend are read off CachedUtilization, not the snapshot)
  ├─ JsonlUsageProvider         local token counts from transcripts (Claude Code and Cowork)
  └─ CompositeUsageProvider     resolution and source labelling
 
@@ -115,10 +116,11 @@ IUsageProvider
 ```
 
 - Within a tier the most accurate reading wins: the snapshot carrying more meters, then the more recently captured one. Do not reintroduce a fixed precedence between Desktop and Claude Code.
-- Snapshots are chosen whole, never merged field by field.
+- Snapshots are chosen whole, never merged field by field. A model's own weekly limit and the spend Claude reports are not in a snapshot: the panel reads them from `CachedUtilization` directly, so they show whichever source won ([ADR-0019](docs/adr/0019-model-limit-and-reported-spend.md)).
+- A model-scoped weekly row in `limits[]`, not the plan name, decides whether the off-plan section shows the estimate or the reported spend. The two are never added, and the reported figure carries no day count because `spend` states no period. Extra usage is on when `extra_usage.is_enabled` says so, and nothing else.
 - Do not write Claude Desktop's sampling interval into code as a constant. It was 5 minutes, then 15, and it is undocumented. Derive it from the samples.
 - The weekly reset is a reported constant on a static grid ([ADR-0014](docs/adr/0014-weekly-reset-is-a-reported-constant.md)): take `seven_day.resets_at`, persist it as an anchor, project it forward by whole weeks, and never show it with a `~`. The 5-hour window rolls from first use. The panel's session reset shows Claude Code's `five_hour.resets_at`, exact, while one is ahead of now, and otherwise the time derived from drops in the sampled series, with a `~` across a sampling gap. The off-plan comparison places its window from the same reported reset when it is ahead of now and within one window ([ADR-0018](docs/adr/0018-session-window-source.md)). Never project a passed `five_hour.resets_at` forward.
-- A cached percentage whose own window has rolled over is not a reading; report unknown rather than the stale figure.
+- A cached percentage whose own window has rolled over is not a reading; report unknown rather than the stale figure. A model's limit follows the same rule, and its row stays on the panel as unknown rather than disappearing.
 - Before anything is known, a reset time is unknown. Show it as unknown and say what the user can do about it.
 
 ## Prerequisites
