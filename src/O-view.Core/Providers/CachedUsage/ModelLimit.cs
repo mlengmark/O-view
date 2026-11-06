@@ -20,6 +20,19 @@ namespace OView.Core.Providers.CachedUsage;
 /// </param>
 public sealed record ModelLimit(string Model, UtilizationBar Bar);
 
+/// <summary>What the read made of <c>limits</c>, so a missing list can be told from a broken one.</summary>
+public enum ModelLimitsState
+{
+    /// <summary>No <c>limits</c> in the block, or JSON <c>null</c>, or no <c>utilization</c> object to hold it.</summary>
+    Absent,
+
+    /// <summary>Present, but not a list.</summary>
+    Unreadable,
+
+    /// <summary>A list, even an empty one: the rows are counted.</summary>
+    Read,
+}
+
 /// <summary>
 /// Every model limit in a block, in file order, and what the read made of the rows it saw, so
 /// <c>--diagnose</c> can say what happened rather than just show an empty list.
@@ -46,20 +59,34 @@ public sealed record ModelLimitRead(IReadOnlyList<ModelLimit> Limits, int RowsSe
     public const string PropertyName = "limits";
 
     /// <summary>A block that listed no rows, or whose list could not be read.</summary>
-    public static readonly ModelLimitRead None = new([], 0, 0);
+    public static readonly ModelLimitRead None = new([], 0, 0) { State = ModelLimitsState.Absent };
+
+    private static readonly ModelLimitRead NotAList = new([], 0, 0) { State = ModelLimitsState.Unreadable };
 
     /// <summary>
-    /// Reads the rows out of a <c>utilization</c> object. Never throws: a missing, null or
-    /// non-array <c>limits</c> yields <see cref="None"/>, and a row of the wrong shape is
+    /// Whether <c>limits</c> was absent, not a list, or a list. An <c>init</c> property rather
+    /// than a fourth positional parameter, so a row count built by hand reads as a list.
+    /// </summary>
+    public ModelLimitsState State { get; init; } = ModelLimitsState.Read;
+
+    /// <summary>
+    /// Reads the rows out of a <c>utilization</c> object. Never throws: a missing or null
+    /// <c>limits</c> yields <see cref="None"/>, a non-array one a read in state
+    /// <see cref="ModelLimitsState.Unreadable"/>, and a row of the wrong shape is
     /// skipped on its own without costing the rows beside it.
     /// </summary>
     public static ModelLimitRead Read(JsonElement utilization)
     {
         if (utilization.ValueKind != JsonValueKind.Object ||
             !utilization.TryGetProperty(PropertyName, out var rows) ||
-            rows.ValueKind != JsonValueKind.Array)
+            rows.ValueKind == JsonValueKind.Null)
         {
             return None;
+        }
+
+        if (rows.ValueKind != JsonValueKind.Array)
+        {
+            return NotAList;
         }
 
         var limits = new List<ModelLimit>();

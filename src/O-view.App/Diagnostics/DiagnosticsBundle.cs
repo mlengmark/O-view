@@ -362,10 +362,18 @@ public static class DiagnosticsBundle
         text.AppendLine($"  model limits  : {read.RowsSeen} row(s) seen, {read.RowsSkipped} skipped, "
                         + $"{read.Limits.Count} scoped to a model (figures {(utcNow - cached.FetchedAtUtc).TotalMinutes:0} min old)");
 
-        if (read.RowsSeen == 0)
+        // Three different things leave zero rows, and a reader chasing a missing bar needs to know which.
+        switch (read.State)
         {
-            // limits[] absent, null, not a list and an empty list all read as no rows; the read does not keep which.
-            text.AppendLine("    (no rows: limits[] is absent, null, not a list or empty)");
+            case ModelLimitsState.Absent:
+                text.AppendLine("    (limits[] is absent or null)");
+                break;
+            case ModelLimitsState.Unreadable:
+                text.AppendLine("    (limits[] is present but not a list)");
+                break;
+            case ModelLimitsState.Read when read.RowsSeen == 0:
+                text.AppendLine("    (limits[] is an empty list)");
+                break;
         }
 
         foreach (var limit in read.Limits)

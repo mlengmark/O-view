@@ -608,10 +608,10 @@ public class DiagnosticsBundleTests : IDisposable
         Assert.Contains("no cached block", noBlock, StringComparison.Ordinal);
         Assert.DoesNotContain("spend         :", noBlock, StringComparison.Ordinal);
 
-        Assert.Contains("0 row(s) seen", missing, StringComparison.Ordinal);
+        Assert.Contains("limits[] is absent or null", missing, StringComparison.Ordinal);
         Assert.Contains("spend         : absent", missing, StringComparison.Ordinal);
 
-        Assert.Contains("0 row(s) seen", malformed, StringComparison.Ordinal);
+        Assert.Contains("limits[] is present but not a list", malformed, StringComparison.Ordinal);
         Assert.Contains("spend         : unreadable", malformed, StringComparison.Ordinal);
         Assert.DoesNotContain("no cached block", malformed, StringComparison.Ordinal);
     }
@@ -650,7 +650,8 @@ public class DiagnosticsBundleTests : IDisposable
         var bundle = BuildWithCached(Block("""{"limits":[]}"""));
 
         Assert.Contains("0 row(s) seen", bundle, StringComparison.Ordinal);
-        Assert.Contains("absent, null, not a list or empty", bundle, StringComparison.Ordinal);
+        Assert.Contains("limits[] is an empty list", bundle, StringComparison.Ordinal);
+        Assert.DoesNotContain("not a list", bundle, StringComparison.Ordinal);
     }
 
     [Fact]
