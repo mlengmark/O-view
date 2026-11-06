@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using OView.Core.Models;
@@ -71,7 +72,8 @@ public static class DiagnosticsBundle
             ClaudeAccount.TryRead(), new WeeklyResetAnchor(), DateTimeOffset.UtcNow,
             CorruptBackups.Inspect(), FileLog.Tail(), RollupStoreReport.Inspect(),
             deepAudit ? IngestAuditReport.Run() : IngestAuditReport.NotRun,
-            CoworkSessionReport.Inspect(), ClaudeWriteSurvey.Inspect(), InspectWindow());
+            CoworkSessionReport.Inspect(), ClaudeWriteSurvey.Inspect(), InspectWindow(),
+            CachedUtilization.TryRead());
 
     /// <summary>
     /// The bundle as the <b>running</b> app sees it: identical except that the store is read
@@ -82,7 +84,8 @@ public static class DiagnosticsBundle
         Build(environment, PlanHistoryDiagnostics.Inspect(), TranscriptScopeReport.Inspect(),
             ClaudeAccount.TryRead(), new WeeklyResetAnchor(), DateTimeOffset.UtcNow,
             CorruptBackups.Inspect(), FileLog.Tail(), store, IngestAuditReport.NotRun,
-            CoworkSessionReport.Inspect(), ClaudeWriteSurvey.Inspect(), InspectWindow());
+            CoworkSessionReport.Inspect(), ClaudeWriteSurvey.Inspect(), InspectWindow(),
+            CachedUtilization.TryRead());
 
     /// <summary>Overload taking every input explicitly, so the layout is testable.</summary>
     public static string Build(
@@ -98,7 +101,8 @@ public static class DiagnosticsBundle
         IngestAuditReport? ingestAudit = null,
         CoworkSessionReport? coworkSessions = null,
         ClaudeWriteSurvey? writeSurvey = null,
-        WindowPlacement? window = null)
+        WindowPlacement? window = null,
+        CachedUtilization? cachedUtilization = null)
     {
         var text = new StringBuilder();
         text.Append(planHistory.ToClipboardText(environment.Version));
@@ -107,6 +111,7 @@ public static class DiagnosticsBundle
         AppendRoots(text);
         AppendAccount(text, account);
         AppendSessionWindow(text, window);
+        AppendCachedLimits(text, cachedUtilization, utcNow);
         text.Append(scope.ToClipboardText());
 
         // Directly after the transcript scan, because it is the answer to the question that
@@ -270,6 +275,54 @@ public static class DiagnosticsBundle
         text.AppendLine($"    inferred    : {(window.Inferred is { } inferred ? $"between {inferred.EarliestUtc:u} and {inferred.LatestUtc:u}" : "none located")}");
         text.AppendLine($"    agreement   : {(window.Disagrees ? "DISAGREE, usually Claude Desktop and Claude Code on different accounts"
             : window is { ReportedStartUtc: not null, Inferred: not null } ? "agree" : "not comparable, one source is missing")}");
+    }
+
+    /// <summary>
+    /// What was found in the cached block's <c>limits[]</c> and <c>spend</c>, so a report about
+    /// a missing model bar or a missing spend figure says whether the file held them.
+    ///
+    /// <para>Percentages and resets are printed exactly as the file reports them, with the age
+    /// of the figures beside them and no judgement of freshness: a reader of a report has to
+    /// be able to see an old reset <i>as</i> old. Only the model names, percentages, reset
+    /// instants, the spend amount, its currency and <c>enabled</c> are taken from the block;
+    /// nothing else in it reaches the bundle.</para>
+    ///
+    /// <para><b>Takes the block as a value</b>, for the reason <see cref="AppendRecentLog"/>
+    /// gives: reading the real profile from here would put the developer's own Claude files
+    /// into every test that builds a bundle. Null is "no cached block", and each of the three
+    /// ways a field can fail to be there prints its own line.</para>
+    /// </summary>
+    private static void AppendCachedLimits(StringBuilder text, CachedUtilization? cached, DateTimeOffset utcNow)
+    {
+        if (cached is null)
+        {
+            text.AppendLine("  model limits  : no cached block, so no limits[] and no spend to report");
+            return;
+        }
+
+        var read = cached.ModelLimits;
+        text.AppendLine($"  model limits  : {read.RowsSeen} row(s) seen, {read.RowsSkipped} skipped, "
+                        + $"{read.Limits.Count} scoped to a model (figures {(utcNow - cached.FetchedAtUtc).TotalMinutes:0} min old)");
+
+        if (read.RowsSeen == 0)
+        {
+            // limits[] absent, null and not a list all read as no rows; the read does not keep which.
+            text.AppendLine("    (no rows: limits[] is absent, null or not a list)");
+        }
+
+        foreach (var limit in read.Limits)
+        {
+            var reset = limit.Bar.ResetsAtUtc is { } at ? $"{at:u}" : "no reset reported";
+            text.AppendLine($"    model       : {limit.Model}, {limit.Bar.Percent}%, resets {reset}");
+        }
+
+        text.AppendLine($"  spend         : {cached.Spend switch
+        {
+            { State: SpendReadState.Read, Spend: { } spend } =>
+                $"read, {spend.Amount.ToString(CultureInfo.InvariantCulture)} {spend.Currency}, enabled {(spend.Enabled ? "true" : "false")}",
+            { State: SpendReadState.Unreadable } => "unreadable, present but not an amount with a currency beside enabled",
+            _ => "absent, the file has no spend",
+        }}");
     }
 
     /// <summary>
