@@ -397,27 +397,28 @@ public sealed class PanelContent : Border
     /// </summary>
     private void AddBar(PanelMeterView meter)
     {
-        // Clipped, so a chip wider than its cell is cut off at the boundary rather than drawn
-        // over the figure on the right. The Windows head's first render of this row did exactly
-        // that, and no test could have caught it, only the picture did.
+        // Clipped, so a chip too wide for the row is cut off at the row's edge. That edge is the
+        // grid's and not the cell's: a chip that long still runs under the figure on the right,
+        // which is why a row with no chip keeps its label out of the stack below.
         var header = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions("*,Auto"),
             ClipToBounds = true,
         };
 
-        // Label and chip share the left cell. The chip reuses the tier badge's colour pair
-        // rather than introducing one, so it reads as the same class of object, a factual
-        // label about the account, not a warning.
-        var left = new StackPanel
-        {
-            Orientation = Orientation.Horizontal,
-            Spacing = 8,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-        left.Children.Add(Text(meter.Label, 14, _theme["TextPrimary"], FontWeight.SemiBold));
+        var label = Text(meter.Label, 14, _theme["TextPrimary"], FontWeight.SemiBold);
         if (meter.Chip is { } chip)
         {
+            // Label and chip share the left cell. The chip reuses the tier badge's colour pair
+            // rather than introducing one, so it reads as the same class of object, a factual
+            // label about the account, not a warning.
+            var left = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            left.Children.Add(label);
             left.Children.Add(new Border
             {
                 Background = _theme["BadgeBg"],
@@ -426,9 +427,18 @@ public sealed class PanelContent : Border
                 VerticalAlignment = VerticalAlignment.Center,
                 Child = Text(chip.Text, 11, _theme["BadgeText"]),
             });
+            header.Children.Add(left);
+        }
+        else
+        {
+            // Straight in the cell, because a horizontal stack gives its children unlimited
+            // width. A model's name is whatever Claude Code cached, and a long one has to wrap
+            // here rather than run across the figure.
+            label.Margin = new Thickness(0, 0, 8, 0);
+            label.VerticalAlignment = VerticalAlignment.Center;
+            header.Children.Add(label);
         }
 
-        header.Children.Add(left);
         var value = Text(meter.Value, 14, _theme["TextSecondary"]);
         value.HorizontalAlignment = HorizontalAlignment.Right;
         Grid.SetColumn(value, 1);
