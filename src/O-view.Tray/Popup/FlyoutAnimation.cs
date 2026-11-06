@@ -10,12 +10,25 @@ namespace OView.Tray.Popup;
 /// <summary>
 /// Open/close transitions for the docked surfaces (the detail panel and the tray menu).
 ///
-/// These are not invented. Windows' own Quick Settings flyout was recorded frame by
-/// frame on this platform and the numbers below come from that trace: its top edge rises
-/// while its bottom stays pinned to the taskbar, travelling the full height in ~230 ms,
-/// with almost no fade, it is a *geometric reveal*, not a zoom and not a dissolve.
+/// The whole card slides out of its docked edge and back as one rigid piece: border, corners
+/// and content together, at full opacity, with no clip of its own. The window's bounds are the
+/// edge it emerges from. The slide and its durations are Maximilian's decision of 2026-11-06,
+/// made watching a side-by-side demo.
 ///
-/// Sampled progress of that reveal, as a fraction of total travel:
+/// It replaced a wipe: a clip rectangle grew from the docked edge while the content moved the
+/// last 20 px behind it and a 90 ms fade took the edge off the first instant. Three motions at
+/// three rates, so the card was uncovered by a moving line rather than moving, and its border
+/// and rounded corners only existed on the final frame. A plain slide had been rejected
+/// earlier because the part beyond the edge is cut off by the window's bounds. That is exactly
+/// what was seen in the demo, the card emerging 12 px above the taskbar, and it was chosen
+/// over the wipe.
+///
+/// The curves are not invented, and they are all that is left of the wipe. Windows' own Quick
+/// Settings flyout was recorded frame by frame on this platform: its top edge rises while its
+/// bottom stays pinned to the taskbar, travelling the full height in ~230 ms, with almost no
+/// fade. The durations here are deliberately slower than that; the shape is the platform's.
+///
+/// Sampled progress of that trace, as a fraction of total travel:
 ///
 ///     8 ms → 0.15    24 ms → 0.35    57 ms → 0.60    115 ms → 0.84    230 ms → 1.00
 ///
@@ -34,23 +47,22 @@ namespace OView.Tray.Popup;
 /// than the fit and visibly too abrupt, it reached ~70% before the platform reaches 15%,
 /// which reads as a pop rather than a rise. Named curves were not close enough to trust.
 ///
-/// An earlier attempt scaled the whole surface from 97%. Smooth but wrong: it read as a
-/// zoom rather than as a panel rising out of the taskbar, which is what the platform does
-/// and what this was asked to match.
+/// Two other gestures were tried on the surfaces before the wipe and neither is coming back.
+/// Scaling the whole surface from 97% was smooth but wrong: it read as a zoom rather than as a
+/// panel rising out of the taskbar. A fade read as a dissolve, which is why this one moves at
+/// full opacity from its first frame to its last.
 /// </summary>
 internal static class FlyoutAnimation
 {
-    /// <summary>
-    /// The entrance and exit durations, from the trace in the class remarks. These are the
-    /// base figures, not paced ones: the reveal still runs at the platform's own speed.
-    /// </summary>
-    internal static readonly Duration OpenDuration = WpfMotion.Duration(PanelMotion.SurfaceOpenBaseMs);
+    private static readonly double OpenMs = PanelMotion.Ms(PanelMotion.SurfaceOpenBaseMs);
 
-    /// <inheritdoc cref="OpenDuration"/>
-    internal static readonly Duration CloseDuration = WpfMotion.Duration(PanelMotion.SurfaceCloseBaseMs);
+    private static readonly double CloseMs = PanelMotion.Ms(PanelMotion.SurfaceCloseBaseMs);
 
-    /// <summary>How far the content travels into place, on top of the reveal.</summary>
-    private const double SlideDistance = 20;
+    /// <summary>How long a surface takes to arrive, as it runs on screen.</summary>
+    internal static readonly Duration OpenDuration = WpfMotion.Duration(OpenMs);
+
+    /// <summary>How long a surface takes to leave, as it runs on screen.</summary>
+    internal static readonly Duration CloseDuration = WpfMotion.Duration(CloseMs);
 
     /// <summary>
     /// The fitted decelerate curve. See the class remarks for the fit; the numbers are
@@ -68,32 +80,35 @@ internal static class FlyoutAnimation
     internal static readonly KeySpline Accelerate = WpfMotion.Spline(PanelMotion.Accelerate);
 
 
-    public static void Open(Window window, Point origin)
+    /// <summary>
+    /// Slides the card to rest, at full opacity. With Windows' animations off the card is
+    /// simply at rest.
+    /// </summary>
+    /// <param name="continuing">
+    /// True when this interrupts a close, so the card is already on its way out: it turns round
+    /// from wherever it is on screen, rather than snapping out of view and replaying.
+    /// </param>
+    public static void Open(Window window, Point origin, bool continuing = false)
     {
-        if (Prepare(window, origin) is not { } surface)
+        if (!PanelMotion.Runs(WpfMotion.AnimationsOn, OpenMs) || Prepare(window) is not { } surface)
         {
-            window.Opacity = 1;
+            Reset(window);
             return;
         }
 
-        var (content, clip, slide, fromBottom) = surface;
-        var w = content.ActualWidth;
-        var h = content.ActualHeight;
-        if (w <= 0 || h <= 0)
+        var (content, translate) = surface;
+
+        // Before the opacity, not after: the first frame the window is visible for must not be
+        // the card at rest. Released first, because an attached animation holds its end value
+        // over the local one and this assignment would be silently ignored.
+        if (!continuing)
         {
-            window.Opacity = 1;
-            return;
+            translate.BeginAnimation(TranslateTransform.YProperty, null);
+            translate.Y = OutOfView(content, origin);
         }
 
-        // Collapsed against the docked edge, expanding to the full surface.
-        var closed = fromBottom ? new Rect(0, h, w, 0) : new Rect(0, 0, w, 0);
-        Reveal(clip, closed, new Rect(0, 0, w, h), OpenDuration, Decelerate);
-        Slide(slide, fromBottom ? SlideDistance : -SlideDistance, 0, OpenDuration, Decelerate);
-
-        // Barely a fade: the trace showed the flyout at near-full intensity from its
-        // first visible frame, so opacity only takes the edge off the first instant.
-        window.BeginAnimation(UIElement.OpacityProperty,
-            BuildFade(0, 1, new Duration(TimeSpan.FromMilliseconds(90)), Decelerate));
+        window.Opacity = 1;
+        translate.BeginAnimation(TranslateTransform.YProperty, BuildSlide(window, 0, OpenDuration, Decelerate));
     }
 
     /// <summary>
@@ -101,27 +116,20 @@ internal static class FlyoutAnimation
     /// The caller does the actual Hide() there rather than here: the window must stay
     /// visible for the duration, and only the caller knows whether it still wants to be
     /// hidden by the time the animation ends.
+    ///
+    /// <para>The slide has no start value, so one that interrupts an open leaves from wherever
+    /// the card has got to. With Windows' animations off nothing runs and the caller hides the
+    /// window at once.</para>
     /// </summary>
     public static void Close(Window window, Point origin, Action onClosed)
     {
-        if (Prepare(window, origin) is not { } surface)
+        if (!PanelMotion.Runs(WpfMotion.AnimationsOn, CloseMs) || Prepare(window) is not { } surface)
         {
             onClosed();
             return;
         }
 
-        var (content, clip, slide, fromBottom) = surface;
-        var w = content.ActualWidth;
-        var h = content.ActualHeight;
-        if (w <= 0 || h <= 0)
-        {
-            onClosed();
-            return;
-        }
-
-        var closed = fromBottom ? new Rect(0, h, w, 0) : new Rect(0, 0, w, 0);
-        Reveal(clip, new Rect(0, 0, w, h), closed, CloseDuration, Accelerate);
-        Slide(slide, 0, fromBottom ? SlideDistance : -SlideDistance, CloseDuration, Accelerate);
+        var (content, translate) = surface;
 
         // Exactly once, however the transition ends.
         var finished = false;
@@ -141,9 +149,9 @@ internal static class FlyoutAnimation
         // an object nothing will ever raise, which is precisely what broke the toggle:
         // Hide() never ran, the window sat visible at zero opacity, and every later click
         // saw it as "open" and tried to close it again. The icon looked dead.
-        var fade = BuildFade(window.Opacity, 0, CloseDuration, Accelerate);
-        fade.Completed += (_, _) => Finish();
-        window.BeginAnimation(UIElement.OpacityProperty, fade);
+        var slide = BuildSlide(window, OutOfView(content, origin), CloseDuration, Accelerate);
+        slide.Completed += (_, _) => Finish();
+        translate.BeginAnimation(TranslateTransform.YProperty, slide);
 
         // Backstop. The symptom of a missed completion is not a dropped frame, it is a
         // permanently unresponsive tray icon, so the hide does not depend on the event
@@ -162,38 +170,9 @@ internal static class FlyoutAnimation
     }
 
     /// <summary>
-    /// Re-fits the reveal clip to the content's size, for a surface that has changed size
-    /// while open.
-    ///
-    /// <para><b>Why this is needed at all.</b> <see cref="Open"/> clips the content to a
-    /// <see cref="Rect"/> measured when the flyout opened, and that rectangle is a fixed
-    /// number, it does not track the content. A surface that then grows is drawn only as far
-    /// as the old height and sliced off below it. The tray menu hit this the moment the
-    /// threshold list could expand: the window grew correctly and re-docked correctly, and
-    /// the card was still rendered at its former height, so the rows past the fold lost their
-    /// bottoms along with the border and the rounded corner.</para>
-    ///
-    /// <para><b>Releasing the animation first is mandatory, not tidiness.</b>
-    /// <c>BeginAnimation</c> defaults to <c>FillBehavior.HoldEnd</c>, so the animated
-    /// <c>Rect</c> goes on overriding local values for as long as it is attached, assigning
-    /// <c>clip.Rect</c> without clearing it first is silently ignored, and the fix would look
-    /// like it had been applied while changing nothing.</para>
-    /// </summary>
-    public static void FitClipToContent(Window window)
-    {
-        if (window.Content is not FrameworkElement content || content.Clip is not RectangleGeometry clip)
-        {
-            return;
-        }
-
-        clip.BeginAnimation(RectangleGeometry.RectProperty, null);
-        clip.Rect = new Rect(0, 0, content.ActualWidth, content.ActualHeight);
-    }
-
-    /// <summary>
     /// Clears any running animations and restores the surface to plain, fully visible
-    /// state. Used by verification paths that need a still, and by an open that follows
-    /// a cancelled close.
+    /// state. Used by verification paths that need a still, and by an open with Windows'
+    /// animations off.
     /// </summary>
     public static void Reset(Window window)
     {
@@ -205,76 +184,112 @@ internal static class FlyoutAnimation
             return;
         }
 
-        if (content.Clip is RectangleGeometry clip)
-        {
-            clip.BeginAnimation(RectangleGeometry.RectProperty, null);
-            content.Clip = null;
-        }
+        // Nothing here sets a clip any more, but one left on the content would still cut the
+        // card, so a still must not inherit it.
+        content.Clip = null;
 
-        if (content.RenderTransform is TranslateTransform slide)
+        if (content.RenderTransform is TranslateTransform translate)
         {
-            slide.BeginAnimation(TranslateTransform.YProperty, null);
-            slide.Y = 0;
+            translate.BeginAnimation(TranslateTransform.YProperty, null);
+            translate.Y = 0;
         }
     }
 
     /// <summary>
-    /// Ensures the content carries the clip and translate the transitions drive. Both are
-    /// created once and reused, so repeated opens do not stack transforms.
+    /// Ensures the content carries the translate the transitions drive, created once and
+    /// reused so repeated opens do not stack transforms. Null for a surface with nothing laid
+    /// out to move.
     /// </summary>
-    private static (FrameworkElement Content, RectangleGeometry Clip, TranslateTransform Slide, bool FromBottom)?
-        Prepare(Window window, Point origin)
+    private static (FrameworkElement Content, TranslateTransform Translate)? Prepare(Window window)
     {
-        if (window.Content is not FrameworkElement content)
+        if (window.Content is not FrameworkElement { ActualHeight: > 0 } content)
         {
             return null;
         }
 
-        if (content.Clip is not RectangleGeometry clip)
+        if (content.RenderTransform is not TranslateTransform translate)
         {
-            clip = new RectangleGeometry();
-            content.Clip = clip;
+            translate = new TranslateTransform();
+            content.RenderTransform = translate;
         }
 
-        if (content.RenderTransform is not TranslateTransform slide)
-        {
-            slide = new TranslateTransform();
-            content.RenderTransform = slide;
-        }
-
-        // origin.Y == 1 means docked at the bottom, so the surface grows upward; a
-        // top-docked taskbar reverses it. PopupPositioner is the only thing that knows.
-        return (content, clip, slide, origin.Y >= 0.5);
-    }
-
-    private static void Reveal(
-        RectangleGeometry clip, Rect from, Rect to, Duration duration, KeySpline spline)
-    {
-        var animation = new RectAnimationUsingKeyFrames { Duration = duration };
-        animation.KeyFrames.Add(new DiscreteRectKeyFrame(from, KeyTime.FromPercent(0)));
-        animation.KeyFrames.Add(new SplineRectKeyFrame(to, KeyTime.FromPercent(1), spline));
-        clip.BeginAnimation(RectangleGeometry.RectProperty, animation);
-    }
-
-    private static void Slide(
-        TranslateTransform slide, double from, double to, Duration duration, KeySpline spline)
-    {
-        var animation = new DoubleAnimationUsingKeyFrames { Duration = duration };
-        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(from, KeyTime.FromPercent(0)));
-        animation.KeyFrames.Add(new SplineDoubleKeyFrame(to, KeyTime.FromPercent(1), spline));
-        slide.BeginAnimation(TranslateTransform.YProperty, animation);
+        return (content, translate);
     }
 
     /// <summary>
-    /// Builds the fade without starting it, so a caller can attach Completed first,
+    /// The offset that puts the card fully past its docked edge. origin.Y == 1 means docked at
+    /// the bottom, so the card waits below and rises; a top-docked taskbar reverses it.
+    /// PopupPositioner is the only thing that knows.
+    /// </summary>
+    private static double OutOfView(FrameworkElement content, Point origin) =>
+        origin.Y >= 0.5 ? content.ActualHeight : -content.ActualHeight;
+
+    /// <summary>
+    /// Builds the slide without starting it, so a caller can attach Completed first,
     /// which is mandatory, not stylistic. See <see cref="Close"/>.
     /// </summary>
-    private static DoubleAnimationUsingKeyFrames BuildFade(
-        double from, double to, Duration duration, KeySpline spline)
+    private static WholePixelSlide BuildSlide(Window window, double to, Duration duration, KeySpline spline) =>
+        new()
+        {
+            To = to,
+            Spline = spline,
+            DeviceScale = VisualTreeHelper.GetDpi(window).DpiScaleY,
+            Duration = duration,
+        };
+
+    /// <summary>
+    /// Eases from wherever the property is to <see cref="To"/>, landing on whole device pixels.
+    ///
+    /// <para><b>Why the rounding.</b> Both windows set <c>TextFormattingMode="Display"</c>,
+    /// which fits glyphs to whole pixels, so text carried at a fractional offset shimmers, and
+    /// the long, slow tail of the decelerate curve is where the eye has time to see it.</para>
+    ///
+    /// <para><b>Why dependency properties.</b> WPF animates a frozen copy of the timeline, made
+    /// by cloning its dependency properties, so a plain field would reach the clock at its
+    /// default.</para>
+    ///
+    /// <para><b>Why there is no From.</b> WPF hands a replacement animation the on-screen value
+    /// of the one it replaces, which is what lets a click mid-slide turn the card round where
+    /// it is rather than snapping it to an end.</para>
+    /// </summary>
+    private sealed class WholePixelSlide : DoubleAnimationBase
     {
-        var animation = new DoubleAnimationUsingKeyFrames { Duration = duration };
-        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(from, KeyTime.FromPercent(0)));
-        animation.KeyFrames.Add(new SplineDoubleKeyFrame(to, KeyTime.FromPercent(1), spline));
-        return animation;
+        private static readonly DependencyProperty ToProperty =
+            DependencyProperty.Register(nameof(To), typeof(double), typeof(WholePixelSlide));
+
+        private static readonly DependencyProperty SplineProperty =
+            DependencyProperty.Register(nameof(Spline), typeof(KeySpline), typeof(WholePixelSlide));
+
+        private static readonly DependencyProperty DeviceScaleProperty =
+            DependencyProperty.Register(
+                nameof(DeviceScale), typeof(double), typeof(WholePixelSlide), new PropertyMetadata(1.0));
+
+        public double To
+        {
+            get => (double)GetValue(ToProperty);
+            init => SetValue(ToProperty, value);
+        }
+
+        public KeySpline Spline
+        {
+            get => (KeySpline)GetValue(SplineProperty);
+            init => SetValue(SplineProperty, value);
+        }
+
+        public double DeviceScale
+        {
+            get => (double)GetValue(DeviceScaleProperty);
+            init => SetValue(DeviceScaleProperty, value);
+        }
+
+        protected override Freezable CreateInstanceCore() => new WholePixelSlide();
+
+        protected override double GetCurrentValueCore(
+            double defaultOriginValue, double defaultDestinationValue, AnimationClock animationClock)
+        {
+            var eased = Spline.GetSplineProgress(animationClock.CurrentProgress ?? 0);
+            var value = defaultOriginValue + (To - defaultOriginValue) * eased;
+            return Math.Round(value * DeviceScale) / DeviceScale;
+        }
     }
 }
