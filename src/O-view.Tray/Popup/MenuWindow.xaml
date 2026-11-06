@@ -17,7 +17,11 @@
 
         <!-- One row = one Button. Buttons rather than bare Borders so rows keep keyboard
              focus, Space/Enter activation and the pressed state for free; the template
-             strips the chrome down to a rounded hover fill. -->
+             strips the chrome down to a rounded hover fill.
+
+             The fills are layers, because a setter cannot fade. HoverFill's opacity is driven
+             from code (MenuWindow.UpdateFill), the only place that can ask Windows whether
+             animations are on. A press stays a trigger, so it never fades. -->
         <Style x:Key="MenuRow" TargetType="Button">
             <Setter Property="Height" Value="34"/>
             <Setter Property="Padding" Value="8,0"/>
@@ -29,24 +33,21 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
-                                CornerRadius="6" Padding="{TemplateBinding Padding}"
+                        <Border Background="{TemplateBinding Background}" CornerRadius="6"
                                 SnapsToDevicePixels="True">
-                            <ContentPresenter VerticalAlignment="Center"
-                                              HorizontalAlignment="Stretch"/>
+                            <Grid>
+                                <Border x:Name="HoverFill" Background="{DynamicResource RowHover}"
+                                        CornerRadius="6" Opacity="0"/>
+                                <Border x:Name="PressedFill" Background="{DynamicResource RowPressed}"
+                                        CornerRadius="6" Visibility="Collapsed"/>
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  VerticalAlignment="Center"
+                                                  HorizontalAlignment="Stretch"/>
+                            </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background"
-                                        Value="{DynamicResource RowHover}"/>
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Bd" Property="Background"
-                                        Value="{DynamicResource RowHover}"/>
-                            </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background"
-                                        Value="{DynamicResource RowPressed}"/>
+                                <Setter TargetName="PressedFill" Property="Visibility" Value="Visible"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -62,6 +63,7 @@
             <Setter Property="StrokeThickness" Value="1.9"/>
             <Setter Property="StrokeStartLineCap" Value="Round"/>
             <Setter Property="StrokeEndLineCap" Value="Round"/>
+            <Setter Property="StrokeDashCap" Value="Round"/>
             <Setter Property="StrokeLineJoin" Value="Round"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="HorizontalAlignment" Value="Left"/>
@@ -78,7 +80,8 @@
              system ComboBox: a ComboBox drops a Popup, and a Popup lives in its own HWND
              outside this window's visual tree, so it would appear in no menu-samples render
              at all, and the surface with the app's worst regression record would be the one
-             surface that could not be verified from an image. -->
+             surface that could not be verified from an image.
+             Its fills are MenuRow's, inside the border, with the pill's corner less the stroke. -->
         <Style x:Key="SelectorPill" TargetType="Button">
             <Setter Property="Height" Value="22"/>
             <Setter Property="Padding" Value="8,0,6,0"/>
@@ -90,24 +93,21 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Pill" Background="{TemplateBinding Background}"
+                        <Border Background="{TemplateBinding Background}"
                                 BorderBrush="{DynamicResource PanelBorder}" BorderThickness="1"
-                                CornerRadius="5" Padding="{TemplateBinding Padding}"
-                                SnapsToDevicePixels="True">
-                            <ContentPresenter VerticalAlignment="Center"/>
+                                CornerRadius="5" SnapsToDevicePixels="True">
+                            <Grid>
+                                <Border x:Name="HoverFill" Background="{DynamicResource TileHover}"
+                                        CornerRadius="4" Opacity="0"/>
+                                <Border x:Name="PressedFill" Background="{DynamicResource TilePressed}"
+                                        CornerRadius="4" Visibility="Collapsed"/>
+                                <ContentPresenter Margin="{TemplateBinding Padding}"
+                                                  VerticalAlignment="Center"/>
+                            </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Pill" Property="Background"
-                                        Value="{DynamicResource TileHover}"/>
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Pill" Property="Background"
-                                        Value="{DynamicResource TileHover}"/>
-                            </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Pill" Property="Background"
-                                        Value="{DynamicResource TilePressed}"/>
+                                <Setter TargetName="PressedFill" Property="Visibility" Value="Visible"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -131,6 +131,7 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
             <Setter Property="HorizontalAlignment" Value="Left"/>
             <Setter Property="Margin" Value="2,0,0,0"/>
+            <Setter Property="RenderTransformOrigin" Value="0.5,0.5"/>
         </Style>
         </ResourceDictionary>
     </Window.Resources>
@@ -244,10 +245,14 @@
             <!-- The opened list. Inline in the card rather than a floating Popup, so it is
                  part of the visual tree the verification renders capture, and so nothing can
                  take activation away from the flyout and dismiss it mid-choice (issue #11).
-                 The card is SizeToContent, so opening this grows it, MenuWindow re-docks
-                 afterwards, which is what keeps the group clear of the taskbar. -->
-            <StackPanel x:Name="ThresholdOptions" Visibility="Collapsed" Margin="0,1,0,3">
-                <Button x:Name="Threshold70" Style="{StaticResource OptionRow}" Tag="70">
+                 The card is SizeToContent, so opening this grows it, MenuWindow re-docks on
+                 every frame of the fold, which is what keeps the group clear of the taskbar.
+
+                 The 1 px above and 3 px below are on the rows rather than a margin here: the fold
+                 pins Height, and a margin stays outside it, so the card would jump at both ends. -->
+            <StackPanel x:Name="ThresholdOptions" Visibility="Collapsed">
+                <Button x:Name="Threshold70" Style="{StaticResource OptionRow}" Tag="70"
+                        Margin="0,1,0,0">
                     <Grid Margin="22,0,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="18"/>
@@ -267,7 +272,8 @@
                         <TextBlock x:Name="Label80" Grid.Column="1" Style="{StaticResource RowLabel}"/>
                     </Grid>
                 </Button>
-                <Button x:Name="Threshold90" Style="{StaticResource OptionRow}" Tag="90">
+                <Button x:Name="Threshold90" Style="{StaticResource OptionRow}" Tag="90"
+                        Margin="0,0,0,3">
                     <Grid Margin="22,0,0,0">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="18"/>
