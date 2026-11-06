@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using OView.App.Rendering;
 using Point = System.Windows.Point;
 
 namespace OView.Tray.Popup;
@@ -40,23 +41,20 @@ namespace OView.Tray.Popup;
 internal static class FlyoutAnimation
 {
     /// <summary>
-    /// The entrance and exit durations, from the trace in the class remarks.
-    ///
-    /// <para>Internal for the same reason as the curves below: a transition that travels a
-    /// shorter distance is <b>scaled from these</b> rather than timed independently
-    /// (<see cref="DisclosureAnimation"/>), so the in : out ratio the platform uses survives
-    /// wherever it is applied.</para>
+    /// The entrance and exit durations, from the trace in the class remarks. These are the
+    /// base figures, not paced ones: the reveal still runs at the platform's own speed.
     /// </summary>
-    internal static readonly Duration OpenDuration = new(TimeSpan.FromMilliseconds(230));
+    internal static readonly Duration OpenDuration = WpfMotion.Duration(PanelMotion.SurfaceOpenBaseMs);
 
     /// <inheritdoc cref="OpenDuration"/>
-    internal static readonly Duration CloseDuration = new(TimeSpan.FromMilliseconds(150));
+    internal static readonly Duration CloseDuration = WpfMotion.Duration(PanelMotion.SurfaceCloseBaseMs);
 
     /// <summary>How far the content travels into place, on top of the reveal.</summary>
     private const double SlideDistance = 20;
 
     /// <summary>
-    /// The fitted decelerate curve. See the class remarks for the fit.
+    /// The fitted decelerate curve. See the class remarks for the fit; the numbers are
+    /// <see cref="PanelMotion.Decelerate"/>.
     ///
     /// <para>Internal rather than private because it is the app's motion vocabulary, not this
     /// file's private constant: <see cref="DisclosureAnimation"/> folds the panel's token
@@ -64,10 +62,10 @@ internal static class FlyoutAnimation
     /// the same way. Fitting it a second time by eye is how two surfaces end up with two
     /// different ideas of what "smooth" means here.</para>
     /// </summary>
-    internal static readonly KeySpline Decelerate = new(0.02, 0.16, 0.20, 0.96);
+    internal static readonly KeySpline Decelerate = WpfMotion.Spline(PanelMotion.Decelerate);
 
     /// <summary>Its mirror, for getting out of the way.</summary>
-    internal static readonly KeySpline Accelerate = new(0.80, 0.04, 0.98, 0.84);
+    internal static readonly KeySpline Accelerate = WpfMotion.Spline(PanelMotion.Accelerate);
 
 
     public static void Open(Window window, Point origin)

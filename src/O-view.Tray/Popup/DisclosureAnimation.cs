@@ -15,12 +15,11 @@ namespace OView.Tray.Popup;
 /// had already been tuned against a frame-by-frame trace of the platform, and the disclosure
 /// ignored all of it.</para>
 ///
-/// <para><b>The motion is inherited, not invented.</b> Both the curve and the timing come
-/// from <see cref="FlyoutAnimation"/>, whose numbers were fitted to a recording of Windows'
-/// own Quick Settings flyout. The fold travels a fraction of the distance the entrance does,
-/// so the durations are <b>scaled</b> from it, <see cref="Scale"/>, rather than picked by
-/// feel, which keeps the platform's in : out ratio and stops the app growing a second,
-/// slightly different idea of "smooth".</para>
+/// <para><b>The curve is inherited, not invented.</b> It comes from
+/// <see cref="FlyoutAnimation"/>, whose numbers were fitted to a recording of Windows' own
+/// Quick Settings flyout, so the app has one idea of "smooth". The durations are the
+/// caller's: the panel's fold and the menu's threshold list travel different distances and
+/// have different figures.</para>
 ///
 /// <para><b>A geometric reveal, not a dissolve.</b> There is deliberately no fade: the body's
 /// height animates and its content is clipped to it, so the text slides out from behind the
@@ -43,27 +42,16 @@ namespace OView.Tray.Popup;
 /// carries no arrow</b>, the Bars/Breakdown switch (issue #253) shows its state by which
 /// segment is lit, so a chevron there would be a second, redundant indicator.
 /// </param>
+/// <param name="expandDuration">How long the fold takes to open.</param>
+/// <param name="collapseDuration">
+/// How long it takes to close. Shorter than opening: getting out of the way is not a gesture
+/// anyone waits to watch.
+/// </param>
 /// <param name="reposition">Re-docks the host, called on every frame the height changes.</param>
 internal sealed class DisclosureAnimation(
-    Window host, FrameworkElement body, RotateTransform? chevron, Action reposition)
+    Window host, FrameworkElement body, RotateTransform? chevron,
+    Duration expandDuration, Duration collapseDuration, Action reposition)
 {
-    /// <summary>
-    /// How much of the entrance's travel this fold covers. The panel is ~700 px tall and
-    /// enters in 230 ms; the explanation adds ~60 px, and matching the entrance's duration
-    /// over a twelfth of its distance reads as hesitation rather than as motion.
-    ///
-    /// <para>Applied to both durations, so the fold keeps the traced 230 : 150 ratio between
-    /// opening and closing, out is quicker than in, because getting out of the way is not a
-    /// gesture anyone waits to watch.</para>
-    /// </summary>
-    private const double Scale = 0.83;
-
-    private static readonly Duration ExpandDuration = Scaled(FlyoutAnimation.OpenDuration);
-    private static readonly Duration CollapseDuration = Scaled(FlyoutAnimation.CloseDuration);
-
-    private static Duration Scaled(Duration d) =>
-        new(TimeSpan.FromMilliseconds(Math.Round(d.TimeSpan.TotalMilliseconds * Scale)));
-
     /// <summary>Rotation of the chevron in each state. 180° turns the arrow to point back up.</summary>
     private const double ExpandedAngle = 180;
 
@@ -175,7 +163,7 @@ internal sealed class DisclosureAnimation(
     {
         Stop();
 
-        var duration = expanded ? ExpandDuration : CollapseDuration;
+        var duration = expanded ? expandDuration : collapseDuration;
         var spline = expanded ? FlyoutAnimation.Decelerate : FlyoutAnimation.Accelerate;
 
         // Visible throughout, in both directions: collapsed content has no height to animate,
