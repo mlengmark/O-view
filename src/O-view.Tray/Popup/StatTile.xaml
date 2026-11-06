@@ -29,26 +29,21 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}"
-                                CornerRadius="6" Padding="{TemplateBinding Padding}"
-                                SnapsToDevicePixels="True">
-                            <ContentPresenter/>
-                        </Border>
+                        <!-- Three stacked fills rather than one Background the triggers swap,
+                             because a setter cannot fade. HoverFill's opacity is driven from
+                             code (StatTile.UpdateFill): only code can ask Windows whether
+                             animations are on. A press stays a trigger, so it never fades. -->
+                        <Grid SnapsToDevicePixels="True">
+                            <Border Background="{TemplateBinding Background}" CornerRadius="6"/>
+                            <Border x:Name="HoverFill" Background="{DynamicResource TileHover}"
+                                    CornerRadius="6" Opacity="0"/>
+                            <Border x:Name="PressedFill" Background="{DynamicResource TilePressed}"
+                                    CornerRadius="6" Visibility="Collapsed"/>
+                            <ContentPresenter Margin="{TemplateBinding Padding}"/>
+                        </Grid>
                         <ControlTemplate.Triggers>
-                            <!-- IsEnabled is false when there is nothing to break down,
-                                 so a tile that cannot expand never offers the affordance. -->
-                            <MultiTrigger>
-                                <MultiTrigger.Conditions>
-                                    <Condition Property="IsEnabled" Value="True"/>
-                                    <Condition Property="IsMouseOver" Value="True"/>
-                                </MultiTrigger.Conditions>
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TileHover}"/>
-                            </MultiTrigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TileHover}"/>
-                            </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource TilePressed}"/>
+                                <Setter TargetName="PressedFill" Property="Visibility" Value="Visible"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -62,11 +57,16 @@
         <!-- Both views live in the same Grid and the inactive one is Hidden, never
              Collapsed: the Grid therefore always measures to the taller of the two, so
              the tile is the same size before and after a click and the panel never
-             jumps (issue #37 asks for the breakdown to reuse the same space). -->
+             jumps (issue #37 asks for the breakdown to reuse the same space). Both are
+             Visible for the length of a flip, and the shifts only ever move what is drawn,
+             so that holds while they cross too. -->
         <Grid>
 
             <!-- Summary -->
             <StackPanel x:Name="SummaryView">
+                <StackPanel.RenderTransform>
+                    <TranslateTransform x:Name="SummaryShift"/>
+                </StackPanel.RenderTransform>
                 <TextBlock x:Name="LabelText" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
                 <TextBlock x:Name="ValueText" FontSize="17" FontWeight="SemiBold"
                            Foreground="{DynamicResource TextPrimary}" Margin="0,2,0,0"/>
@@ -78,6 +78,9 @@
                  room for the chart; the total stays so the tile still answers its own
                  question at a glance. -->
             <StackPanel x:Name="BreakdownView" Visibility="Hidden">
+                <StackPanel.RenderTransform>
+                    <TranslateTransform x:Name="BreakdownShift"/>
+                </StackPanel.RenderTransform>
                 <Grid>
                     <TextBlock x:Name="BreakdownTotal" FontSize="13" FontWeight="SemiBold"
                                Foreground="{DynamicResource TextPrimary}"/>
@@ -120,7 +123,15 @@
                   Data="M0,2.5 L8,2.5 M5.6,0.4 L8,2.5 L5.6,4.6 M8,7.5 L0,7.5 M2.4,5.4 L0,7.5 L2.4,9.6"
                   Stroke="{DynamicResource TextMuted}" StrokeThickness="1.3"
                   StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
-                  Opacity="{x:Static rendering:PanelMetrics.TileGlyphIdleOpacity}" Margin="0,1,0,0"/>
+                  Opacity="{x:Static rendering:PanelMetrics.TileGlyphIdleOpacity}" Margin="0,1,0,0">
+                <!-- Turned about the mark's own centre. RenderTransformOrigin="0.5,0.5" looks
+                     equivalent and is not: the element's box includes the stroke, so its
+                     centre is off the mark's by a fraction of a pixel, and the mark comes to
+                     rest visibly shifted after half a turn. -->
+                <Path.RenderTransform>
+                    <RotateTransform x:Name="GlyphTurn" CenterX="4" CenterY="5"/>
+                </Path.RenderTransform>
+            </Path>
         </Grid>
     </Button>
 </UserControl>

@@ -1,6 +1,8 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using OView.App.Rendering;
 using OView.Presentation.Panel;
 using Brush = System.Windows.Media.Brush;
@@ -24,12 +26,25 @@ namespace OView.Tray.Popup;
 /// keeps its ledger at (date × model) grain and the totals were only ever the last
 /// step, so flipping is a re-render of data in hand, which is what the issue's
 /// "pre-loaded, no wait" requirement asks for.
+///
+/// <para>The flip is a crossfade between two faces that are both laid out all the time, so
+/// nothing it does can change the tile's size. <see cref="ApplyView"/> is the only place the
+/// finished state is written: an instant change goes straight there, and a flip ends there.</para>
 /// </summary>
 public partial class StatTile : UserControl
 {
     private const double SegmentGap = PanelMetrics.TileSegmentGapDip;
 
     private const double DataEndRadius = PanelMetrics.TileDataEndRadiusDip;
+
+    /// <summary>The glyph's turn on the breakdown. The mark is symmetric, so it rests the same.</summary>
+    private const double GlyphOpenAngle = 180;
+
+    /// <summary>How finely a face's travel is stepped: about a frame.</summary>
+    private const double TravelStepMs = 16;
+
+    /// <summary>How long after its last animation a flip is settled by the timer.</summary>
+    private const double SettleMarginMs = 150;
 
     // ── hover timing for the per-model figures ────────────────────────────────────
     //
@@ -49,12 +64,31 @@ public partial class StatTile : UserControl
     private PanelTileView _view = new("", "", "", [], "", null);
     private bool _expanded;
 
+    /// <summary>The fill the template stacks under the content for hover and keyboard focus.</summary>
+    private readonly Border _hoverFill;
+
+    /// <summary>Scales the bar's clip, from nothing to the bar's full width.</summary>
+    private readonly ScaleTransform _barReveal = new();
+
+    /// <summary>
+    /// Which flip is the current one. A replaced animation can still raise <c>Completed</c> at
+    /// its original time, even after being released, so each flip's handler checks it is still
+    /// the current one before it hides a face a later click has brought back.
+    /// </summary>
+    private int _flip;
+    private DispatcherTimer? _settleTimer;
+
     public StatTile()
     {
         InitializeComponent();
+
+        Root.ApplyTemplate();
+        _hoverFill = (Border)Root.Template.FindName("HoverFill", Root);
+
         Root.Click += (_, _) => Toggle();
-        Root.MouseEnter += (_, _) => UpdateGlyph();
-        Root.MouseLeave += (_, _) => UpdateGlyph();
+        Root.MouseEnter += (_, _) => { UpdateGlyph(); UpdateFill(); };
+        Root.MouseLeave += (_, _) => { UpdateGlyph(); UpdateFill(); };
+        Root.IsKeyboardFocusedChanged += (_, _) => UpdateFill();
     }
 
     /// <summary>
@@ -101,8 +135,8 @@ public partial class StatTile : UserControl
         // bites: a Hidden element only reserves the space its CONTENT needs, so an
         // empty breakdown reserves nothing and the tile visibly grows the first time
         // it is opened. Building here gives the Grid both real sizes up front, so the
-        // tile is one fixed height and the panel never jumps. It also makes the flip a
-        // pure visibility change, which is what "no wait between clicks" asks for.
+        // tile is one fixed height and the panel never jumps. It also means a flip has
+        // nothing to build, which is what "no wait between clicks" asks for.
         BuildBreakdown();
         ApplyView();
     }
@@ -110,7 +144,178 @@ public partial class StatTile : UserControl
     private void Toggle()
     {
         _expanded = !_expanded;
-        ApplyView();
+
+        if (PanelMotion.Runs(WpfMotion.AnimationsOn, PanelMotion.Ms(PanelMotion.TileFaceInBaseMs)))
+        {
+            Flip();
+        }
+        else
+        {
+            ApplyView();
+        }
+    }
+
+    /// <summary>
+    /// Crossfades to the face <see cref="_expanded"/> asks for. Every animation starts from
+    /// the value on screen, so a click mid-flip turns the tile round where it is. That is also
+    /// why the old flip is simply replaced here rather than settled first.
+    /// </summary>
+    private void Flip()
+    {
+        var (going, goingShift, coming, comingShift) = _expanded
+            ? (SummaryView, SummaryShift, BreakdownView, BreakdownShift)
+            : (BreakdownView, BreakdownShift, SummaryView, SummaryShift);
+
+        // Total to breakdown: the total leaves upward and the breakdown arrives from below.
+        // The return is the reverse, which is the same as each face retracing its way.
+        var travel = _expanded ? PanelMotion.TileFaceTravelDip : -PanelMotion.TileFaceTravelDip;
+
+        // Hidden means the face left the screen completely, so this one starts from scratch.
+        // Still visible means a click caught it leaving, and it comes back from where it is.
+        var fresh = coming.Visibility != Visibility.Visible;
+        if (fresh)
+        {
+            Place(coming, OpacityProperty, 0);
+            Place(comingShift, TranslateTransform.YProperty, travel);
+            coming.Visibility = Visibility.Visible;
+        }
+
+        coming.IsHitTestVisible = true;
+
+        var flip = ++_flip;
+        var outMs = PanelMotion.Ms(PanelMotion.TileFaceOutBaseMs);
+        var inMs = PanelMotion.Ms(PanelMotion.TileFaceInBaseMs);
+        var inDelayMs = PanelMotion.Ms(PanelMotion.TileFaceInDelayBaseMs);
+        var turnMs = PanelMotion.Ms(PanelMotion.TileGlyphTurnBaseMs);
+
+        // Completed MUST be attached before BeginAnimation: WPF animates its own copy of the
+        // timeline, so a handler added afterwards is on an object nothing will ever raise.
+        var fadeOut = WpfMotion.DelayedFade(going.Opacity, 0, outMs, 0, PanelMotion.Accelerate);
+        fadeOut.Completed += (_, _) => Retire(flip, going);
+        going.BeginAnimation(OpacityProperty, fadeOut);
+        goingShift.BeginAnimation(
+            TranslateTransform.YProperty, Travel(goingShift.Y, -travel, outMs, 0, PanelMotion.Accelerate));
+
+        Run(coming, OpacityProperty, 1, inMs, inDelayMs, PanelMotion.Decelerate);
+        comingShift.BeginAnimation(
+            TranslateTransform.YProperty, Travel(comingShift.Y, 0, inMs, inDelayMs, PanelMotion.Decelerate));
+
+        Run(GlyphTurn, RotateTransform.AngleProperty, _expanded ? GlyphOpenAngle : 0,
+            turnMs, 0, PanelMotion.Decelerate);
+        UpdateGlyph();
+
+        var lastMs = Math.Max(inDelayMs + inMs, turnMs);
+        if (_expanded)
+        {
+            lastMs = Math.Max(lastMs, RevealBreakdown(fresh));
+        }
+
+        // Settled by a timer rather than by a last Completed because which part ends last
+        // depends on the direction and on the number of legend entries. It is also the
+        // backstop for the Completed above: if that one is ever missed, the face that left
+        // stays hit-testable at zero opacity, showing hover cards for a bar nobody can see.
+        _settleTimer?.Stop();
+        _settleTimer = new DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(lastMs + SettleMarginMs),
+        };
+        _settleTimer.Tick += (_, _) => SettleFaces();
+        _settleTimer.Start();
+    }
+
+    /// <summary>
+    /// Draws the bar in and fades the legend in behind it. Returns when the last of it ends.
+    /// </summary>
+    /// <param name="fresh">
+    /// True when the breakdown is arriving from nothing. False when a click caught it leaving,
+    /// and whatever was on screen carries on: a bar already drawn is not drawn again.
+    /// </param>
+    private double RevealBreakdown(bool fresh)
+    {
+        var entries = LegendHost.Children.Cast<UIElement>().ToList();
+
+        if (fresh)
+        {
+            // On the clip, never the star columns: those are what size the segments, and
+            // animating them would change the shares the bar is there to show.
+            BarHost.Clip = new RectangleGeometry(new Rect(0, 0, BarHost.ActualWidth, BarHost.ActualHeight))
+            {
+                Transform = _barReveal,
+            };
+            Place(_barReveal, ScaleTransform.ScaleXProperty, 0);
+            entries.ForEach(entry => Place(entry, OpacityProperty, 0));
+        }
+
+        var barMs = PanelMotion.Ms(PanelMotion.TileModelBarBaseMs);
+        var barDelayMs = PanelMotion.Ms(PanelMotion.TileModelBarDelayBaseMs);
+        var legendMs = PanelMotion.Ms(PanelMotion.TileLegendFadeBaseMs);
+
+        if (BarHost.Clip is not null)
+        {
+            Run(_barReveal, ScaleTransform.ScaleXProperty, 1, barMs, barDelayMs, PanelMotion.Decelerate);
+        }
+
+        for (var i = 0; i < entries.Count; i++)
+        {
+            Run(entries[i], OpacityProperty, 1, legendMs, PanelMotion.LegendStartMs(i), PanelMotion.Decelerate);
+        }
+
+        return Math.Max(barDelayMs + barMs, PanelMotion.LegendStartMs(entries.Count - 1) + legendMs);
+    }
+
+    /// <summary>Takes the face that has finished leaving out of the way of the pointer.</summary>
+    private void Retire(int flip, FrameworkElement going)
+    {
+        if (flip != _flip)
+        {
+            return;
+        }
+
+        // Hidden, not Collapsed, see the XAML: it keeps the tile one fixed size.
+        going.Visibility = Visibility.Hidden;
+        going.IsHitTestVisible = false;
+    }
+
+    /// <summary>
+    /// A face's travel on whole device pixels. Both windows draw Display-mode text, which
+    /// shimmers when it is carried at a fractional offset, and the slow end of the curve is
+    /// where that has time to show.
+    /// </summary>
+    private DoubleAnimationUsingKeyFrames Travel(
+        double from, double to, double ms, double delayMs, PanelMotion.Curve curve)
+    {
+        var scale = VisualTreeHelper.GetDpi(this).DpiScaleY;
+        var animation = new DoubleAnimationUsingKeyFrames { Duration = WpfMotion.Duration(delayMs + ms) };
+        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(from, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+
+        for (var at = 0.0; at < ms; at += TravelStepMs)
+        {
+            var here = from + (to - from) * curve.ValueAt(at / ms);
+            animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(
+                Math.Round(here * scale) / scale,
+                KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(delayMs + at))));
+        }
+
+        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(
+            to, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(delayMs + ms))));
+        return animation;
+    }
+
+    /// <summary>Animates from the value on screen, which is what a replaced animation hands on.</summary>
+    private static void Run(
+        DependencyObject target, DependencyProperty property, double to, double ms, double delayMs,
+        PanelMotion.Curve curve) =>
+        ((IAnimatable)target).BeginAnimation(
+            property, WpfMotion.DelayedFade((double)target.GetValue(property), to, ms, delayMs, curve));
+
+    /// <summary>
+    /// Assigns a value at once. Released first because an animation holds its end value over
+    /// the local one for as long as it is attached, so the assignment alone would be ignored.
+    /// </summary>
+    private static void Place(DependencyObject target, DependencyProperty property, double value)
+    {
+        ((IAnimatable)target).BeginAnimation(property, null);
+        target.SetValue(property, value);
     }
 
     /// <summary>
@@ -156,18 +361,86 @@ public partial class StatTile : UserControl
         ApplyView();
     }
 
+    /// <summary>
+    /// Puts the tile in its finished state at once with nothing in flight: the path for
+    /// <see cref="Populate"/>, the verification renders, and Windows' animations being off.
+    /// </summary>
     private void ApplyView()
     {
-        // Hidden, not Collapsed, see the XAML: it keeps the tile one fixed size.
-        SummaryView.Visibility = _expanded ? Visibility.Hidden : Visibility.Visible;
-        BreakdownView.Visibility = _expanded ? Visibility.Visible : Visibility.Hidden;
-        UpdateGlyph();
+        SettleFaces();
+        UpdateGlyph(animate: false);
+        UpdateFill(animate: false);
     }
 
-    private void UpdateGlyph() =>
-        ExpandGlyph.Opacity = _expanded
+    /// <summary>
+    /// The finished faces, bar, legend and turn. A flip ends here too, so this leaves the hover
+    /// state alone: the pointer may have moved, and that fade has its own timing.
+    /// </summary>
+    private void SettleFaces()
+    {
+        _flip++;
+        _settleTimer?.Stop();
+        _settleTimer = null;
+
+        Place(SummaryView, OpacityProperty, 1);
+        Place(SummaryShift, TranslateTransform.YProperty, 0);
+        Place(BreakdownView, OpacityProperty, 1);
+        Place(BreakdownShift, TranslateTransform.YProperty, 0);
+        Place(GlyphTurn, RotateTransform.AngleProperty, _expanded ? GlyphOpenAngle : 0);
+
+        BarHost.Clip = null;
+        Place(_barReveal, ScaleTransform.ScaleXProperty, 1);
+        foreach (UIElement entry in LegendHost.Children)
+        {
+            Place(entry, OpacityProperty, 1);
+        }
+
+        // Hidden, not Collapsed, see the XAML: it keeps the tile one fixed size.
+        SummaryView.Visibility = _expanded ? Visibility.Hidden : Visibility.Visible;
+        SummaryView.IsHitTestVisible = !_expanded;
+        BreakdownView.Visibility = _expanded ? Visibility.Visible : Visibility.Hidden;
+        BreakdownView.IsHitTestVisible = _expanded;
+    }
+
+    private void UpdateGlyph(bool animate = true)
+    {
+        var opacity = _expanded
             ? PanelMetrics.TileGlyphOpenOpacity
             : Root.IsMouseOver ? PanelMetrics.TileGlyphHoverOpacity : PanelMetrics.TileGlyphIdleOpacity;
+
+        Ease(ExpandGlyph, opacity, PanelMotion.Ms(PanelMotion.TileGlyphFadeBaseMs), PanelMotion.Decelerate, animate);
+    }
+
+    /// <summary>
+    /// Fades the hover and keyboard-focus fill. IsEnabled is false when there is nothing to
+    /// break down, so a tile that cannot expand never offers the affordance.
+    /// </summary>
+    private void UpdateFill(bool animate = true)
+    {
+        var lit = (Root.IsEnabled && Root.IsMouseOver) || Root.IsKeyboardFocused;
+
+        if (lit)
+        {
+            Ease(_hoverFill, 1, PanelMotion.Ms(PanelMotion.HoverFillInBaseMs), PanelMotion.Decelerate, animate);
+        }
+        else
+        {
+            Ease(_hoverFill, 0, PanelMotion.Ms(PanelMotion.HoverFillOutBaseMs), PanelMotion.Accelerate, animate);
+        }
+    }
+
+    /// <summary>Moves an opacity to <paramref name="to"/>, at once when animations are off.</summary>
+    private static void Ease(UIElement target, double to, double ms, PanelMotion.Curve curve, bool animate)
+    {
+        if (animate && PanelMotion.Runs(WpfMotion.AnimationsOn, ms))
+        {
+            Run(target, OpacityProperty, to, ms, 0, curve);
+        }
+        else
+        {
+            Place(target, OpacityProperty, to);
+        }
+    }
 
     private void BuildBreakdown()
     {
