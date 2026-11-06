@@ -46,6 +46,18 @@ callbacks each head supplies, so neither head orders those steps itself. The lay
 both heads draw with (panel width, scroll bar, tile bar and graph figures) are stated once in
 `PanelMetrics` beside it.
 
+- **Both faces measure the content, never the window.** A flyout is sized to its own content,
+  so its frame is already capped by whatever the display granted before `PanelFit` is ever
+  asked, reading the frame back would describe the screen, not what the content wants. Each
+  face has its own `NaturalHeightDip()` that measures the tree directly instead
+  (`PanelContent.NaturalHeightDip` on Linux, `PopupFit.NaturalHeightDip` on Windows).
+- **A display too short even for the compact layout (`PanelDensity`) gets a scroll viewport,**
+  built only once `PanelFit` says the content overflows, a panel with room keeps exactly the
+  tree it always had, so no existing render moves. Windows: `PopupScroll`. Linux:
+  `PanelContent.ScrollContent`.
+- **Neither face decides the cap or the scroll choice itself.** Both call `PanelFit.Resolve`
+  and act on what it returns; the rule never duplicates into a skin.
+
 ## The panel's motion
 
 `PanelMotion` (`src/O-view.App/Rendering/PanelMotion.cs`) states the Windows head's motion once:
@@ -60,18 +72,6 @@ which answers "are animations on?" from `SystemParameters.ClientAreaAnimation` a
 `DisclosureAnimation`, `MenuWindow` and `StatTile` ask those two and decide nothing about how
 long anything takes. The Linux head reads none of it: it has no motion. What each figure is, and
 why, is in [ui-spec.md](ui-spec.md) section 4.
-
-- **Both faces measure the content, never the window.** A flyout is sized to its own content,
-  so its frame is already capped by whatever the display granted before `PanelFit` is ever
-  asked, reading the frame back would describe the screen, not what the content wants. Each
-  face has its own `NaturalHeightDip()` that measures the tree directly instead
-  (`PanelContent.NaturalHeightDip` on Linux, `PopupFit.NaturalHeightDip` on Windows).
-- **A display too short even for the compact layout (`PanelDensity`) gets a scroll viewport,**
-  built only once `PanelFit` says the content overflows, a panel with room keeps exactly the
-  tree it always had, so no existing render moves. Windows: `PopupScroll`. Linux:
-  `PanelContent.ScrollContent`.
-- **Neither face decides the cap or the scroll choice itself.** Both call `PanelFit.Resolve`
-  and act on what it returns; the rule never duplicates into a skin.
 
 ## Where a dragged panel's place lives
 

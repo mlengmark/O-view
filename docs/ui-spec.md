@@ -525,17 +525,18 @@ The animated offset is snapped to whole device pixels. Both windows format text 
 
 ### When Windows animations are off
 
-`WpfMotion.AnimationsOn` reads `SystemParameters.ClientAreaAnimation` (Settings > Accessibility > Visual effects > Animation effects) each time a transition starts, so changing the setting takes effect without a restart. With it off, **every transition in this section is skipped**: each state is applied at once through the same instant paths the verification renders use, and hover fills switch instantly. `PanelMotion.Runs` is the one rule that says so. The live checks that need something mid-flight (`--motion-check`, and the reversed-close claims of `--fold-check`) report NOT RUN on such a machine instead of failing for the machine's setting.
+`WpfMotion.AnimationsOn` reads `SystemParameters.ClientAreaAnimation` (Settings > Accessibility > Visual effects > Animation effects) each time a transition starts, so changing the setting takes effect without a restart. With it off, **every transition in this section is skipped**: each state is applied at once through the same instant paths the verification renders use, and hover fills switch instantly. `PanelMotion.Runs` is the one rule that says so. The live checks that need something mid-flight report NOT RUN on such a machine instead of failing for the machine's setting: `--motion-check` as a whole, and for `--fold-check` the two claims that need a fold in flight (the click reversing a close landing mid-fold, and the fold continuing from the height on screen), while its end-state claims still run and it can still end `RESULT: PASS`.
 
-### The disclosure fold
+### The breakdown fold
 
-"Why so large?" **folds**, on the same curves as the entrance: the explanation's height animates
-from where it is to full, **400 ms** on the decelerate curve, or to zero, **280 ms** on the
-accelerate curve, and its content is clipped to it, so the text slides out from behind the fold
-edge while the panel grows *upward* out of the docked corner. It used to appear whole, the body,
-the `SizeToContent` window's height and the re-dock all changing in one frame, three
-discontinuities in the one surface on screen that had been tuned against a trace of the
-platform. The chevron rotates 180° over the same curve and duration instead of swapping glyph.
+The tokens-used **Breakdown** view **folds** open under the Bars / Breakdown switch, on the same
+curves as the entrance: the breakdown's height animates from where it is to full, **400 ms** on
+the decelerate curve, or to zero, **280 ms** on the accelerate curve, and its content is clipped
+to it, so the table slides out from behind the fold edge while the panel grows *upward* out of
+the docked corner. It used to appear whole, the body, the `SizeToContent` window's height and
+the re-dock all changing in one frame, three discontinuities in the one surface on screen that
+had been tuned against a trace of the platform. The panel's fold carries no chevron: the switch
+shows its state by which segment is lit.
 
 The durations are `PanelMotion` figures handed to
 [`DisclosureAnimation`](../src/O-view.Tray/Popup/DisclosureAnimation.cs) by its caller. They used
@@ -569,7 +570,7 @@ and grabs the pixels the compositor actually presented:
   laying it out, the obvious way to measure where the fold ends, resizes a window docked by
   its top-left, and that HWND is presented before the re-dock catches up: one frame of
   full-height panel 72 px down, its bottom inside the taskbar. The end point is measured off
-  the explanation alone instead, and the body is pinned at the fold's starting height before
+  the breakdown alone instead, and the body is pinned at the fold's starting height before
   any layout runs, so every size the window takes is one the fold docks it for.
 - **Dock against the content's `DesiredSize`, never the window's `ActualHeight`.** A
   `SizeToContent` window's own size trails the layout pass that produced it, and the fold
@@ -578,7 +579,7 @@ and grabs the pixels the compositor actually presented:
 
 Measured over the opening fold on 2026-11-06 with the 400 ms figures, per rendered frame: the
 body steps 4.4 → 20.7 → 28.7 → 35.6 → 41.6 → … → 101 px, and the panel's bottom edge stays
-within a pixel of the taskbar's line (1379.5 to 1380.5 in screen pixels) the whole way.
+within a pixel of the docked edge (1379.5 to 1380.5 in screen pixels, 12 px clear of the taskbar) the whole way.
 
 ### The menu's threshold list, ticks and highlights
 
