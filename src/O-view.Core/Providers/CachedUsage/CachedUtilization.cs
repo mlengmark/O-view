@@ -72,6 +72,25 @@ public sealed record CachedUtilization(
     public ExtraUsageStatus ExtraUsage { get; init; } = ExtraUsageStatus.Unknown;
 
     /// <summary>
+    /// Each model's own weekly limit, in file order, with the counts of rows seen and skipped
+    /// for <c>--diagnose</c>. Empty when the block lists none. Not gated on freshness, for the
+    /// reason <see cref="ExtraUsage"/> is not: a row whose reset has passed is kept, and the
+    /// reader asks <see cref="CachedUtilizationProvider.CurrentWindowPercent(UtilizationBar?, DateTimeOffset, TimeSpan)"/>
+    /// whether it still describes its window.
+    ///
+    /// <para>An <c>init</c> property for the same reason as <see cref="ExtraUsage"/>, and read
+    /// independently of the two meters and of <see cref="Spend"/>: a malformed <c>limits</c>
+    /// costs this property and nothing beside it.</para>
+    /// </summary>
+    public ModelLimitRead ModelLimits { get; init; } = ModelLimitRead.None;
+
+    /// <summary>
+    /// What Claude reports having been spent past the plan, or why that is not known. Dated by
+    /// <see cref="FetchedAtUtc"/> rather than gated, like <see cref="ExtraUsage"/>.
+    /// </summary>
+    public SpendRead Spend { get; init; } = SpendRead.Absent;
+
+    /// <summary>
     /// Where to look, the same candidates as the account badge, so the two can never disagree
     /// about which <c>.claude.json</c> is in effect, and so this follows
     /// <c>CLAUDE_CONFIG_DIR</c> for free (<see cref="ClaudeAccount.Candidates"/>).
@@ -134,6 +153,8 @@ public sealed record CachedUtilization(
             ReadBar(bars, "seven_day"))
         {
             ExtraUsage = ExtraUsageStatus.Read(bars),
+            ModelLimits = ModelLimitRead.Read(bars),
+            Spend = SpendRead.Read(bars),
         };
     }
 
