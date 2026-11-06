@@ -62,9 +62,10 @@ unknown with no fill, and the row stays.
 - **Only the zero `spend` shape has been seen.** A non-zero amount is read as `amount_minor`
   over ten to the `exponent` from the field names alone. The sample states and the tests prove
   the panel's handling of one; no real account has.
-- **The client does not read `limits[]`.** `weekly_all` counts zero in Claude Code's binary, so
-  the shape may change without notice. If it does, the row stops qualifying and the account
-  falls back to no bar and the estimate, with `--diagnose` showing what the file held.
+- **The client may not read `limits[]`.** `weekly_all` counts zero in Claude Code's binary, which
+  suggests it, though `limits` itself was not counted. If so, the shape could change without
+  notice; the row would then stop qualifying and the account would fall back to no bar and the
+  estimate, with `--diagnose` showing what the file held.
 - Neither panel has been watched changing live with a real model limit on a real desktop.
 
 If a real account contradicts any of this, supersede the ADR rather than patching it.

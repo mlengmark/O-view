@@ -162,7 +162,7 @@ Account data is read from local config, so the header needs no token and no netw
 
 ### Usage bars
 
-Both bars show **percentage of quota consumed**, consistent metric, with time-to-reset as adjacent plain text.
+Every bar shows **percentage of quota consumed**, consistent metric, with time-to-reset as adjacent plain text.
 
 | Row | Bar | Text |
 |---|---|---|
@@ -372,7 +372,7 @@ The two registers are independent by design: the section shows even when the cur
 
 **The tray icon is unchanged**, session % remains the headline per the product decision. The off-plan signal lives in the panel and notifications.
 
-Exact credit *balances* remain deferred (no local or API source found). What the section shows is estimated **spend**, not remaining balance.
+Exact credit *balances* remain deferred (no local or API source found). What the section shows is **spend**, estimated or as Claude reports it, not remaining balance.
 
 `Limit Reset Credits` from the original spec could not be mapped to a documented concept and needs clarification.
 
