@@ -324,6 +324,11 @@
             </Grid>
             <TextBlock x:Name="WeeklyResetText" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
 
+            <!-- A bar for each model with a weekly limit of its own (PopupModelMeters). Built in
+                 code because how many there are comes from the data, and with none this draws
+                 nothing and takes no room. -->
+            <StackPanel x:Name="ModelLimitMeters"/>
+
             <!-- Stats tiles 2×2. Each flips to a per-model breakdown on click (issue
                  #37), see StatTile; the four were four copies of the same markup, so
                  they are one control now rather than four places to keep in step. -->

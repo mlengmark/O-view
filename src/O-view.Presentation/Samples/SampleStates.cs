@@ -195,6 +195,17 @@ public static class SampleStates
                 "A live promo at its widest: three countdown units beside \"100% used\" (issue #254)",
                 Live with { WeeklyPercentValue = UsageSnapshot.Percent(100) }, Stats, Account, BothSources, Boost: Promo()),
 
+            new("model-limit",
+                "A model with a weekly limit of its own: an amber bar under the account's green Weekly",
+                Live, Stats, Account, BothSources,
+                CachedUsage: new CachedUtilization(Now, null, null, null)
+                {
+                    ModelLimits = new ModelLimitRead(
+                        [new ModelLimit("Fable", new UtilizationBar(58, NextWeeklyReset))],
+                        RowsSeen: 3,
+                        RowsSkipped: 2),
+                }),
+
             new("offplan-unknown",
                 "Plan window exhausted; extra-usage setting unknown (issue #259)",
                 offPlanSnapshot, offPlanStats, Account, BothSources),

@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using OView.Presentation.Panel;
 using OView.Presentation.Samples;
 
 namespace OView.Presentation.Tests;
@@ -54,6 +55,26 @@ public class SampleStatesTests
                 Assert.Equal(s.Stats.Tokens31Days, s.Stats.Composition31Days.Output);
             }
         }
+    }
+
+    /// <summary>
+    /// The state renders the bar on both heads, and it is the only one that does, which is what
+    /// leaves every other state's golden image untouched by the bar existing.
+    /// </summary>
+    [Fact]
+    public void OnlyTheModelLimitStateHasAModelBar()
+    {
+        var withABar = SampleStates.All
+            .Where(s => PanelSections.ModelLimitMeters(s.CachedUsage, SampleStates.Now, SampleStates.Zone).Count > 0)
+            .ToList();
+
+        var state = Assert.Single(withABar);
+        Assert.Equal("model-limit", state.Name);
+
+        var meter = Assert.Single(PanelSections.ModelLimitMeters(state.CachedUsage, SampleStates.Now, SampleStates.Zone));
+        Assert.Equal("Weekly · Fable", meter.Label);
+        Assert.NotNull(meter.FillPercent);
+        Assert.NotNull(meter.ResetLine);
     }
 
     [Fact]

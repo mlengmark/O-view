@@ -34,6 +34,13 @@ public static class PanelText
     public const string WeeklyBarLabel = "Weekly";
 
     /// <summary>
+    /// The name of a model's own weekly meter, under the account-wide one:
+    /// <c>Weekly · Fable</c>. The model's name is the one Claude Code cached, unedited, and the
+    /// first word is <see cref="WeeklyBarLabel"/> so the two rows name one window.
+    /// </summary>
+    public static string ModelWeeklyBarLabel(string model) => $"{WeeklyBarLabel} · {model}";
+
+    /// <summary>
     /// The figure beside a meter: <c>47% used</c>.
     ///
     /// <para><b>"used", never the bare percentage.</b> A plan meter reading <c>47%</c> says
