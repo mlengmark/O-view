@@ -324,22 +324,22 @@ public static class PanelSections
                 OffPlanText.UsageSettingsUrl)
             : null;
 
-        return new PanelOffPlanView(
-            banner,
-            // The day count is the window the figure beside it covers, exactly as the chart's
-            // heading above is. A literal 31 here and a shorter window in the data would read
-            // as a full month of spend.
-            OffPlanText.OffPlanHeading(stats.WindowDays),
-            stats.HasCreditUsage ? PanelText.CreditBadgeRecorded : PanelText.CreditBadgeNoneRecorded,
-            PanelText.CreditSpendLabel,
-            // Zero is stated, not blanked: nothing credit-billed was recorded in the window,
-            // which is a measurement rather than an absence of one. The coverage caveat beside
-            // it is what qualifies how much of the window was actually watched.
-            UsageFormatter.Usd(stats.HasCreditUsage ? stats.EstCredit31DaysValue.Value : 0m),
-            stats.HasCreditUsage ? TokenText.CoverageNote(stats) : "",
-            OffPlanText.OffPlanHint(stats.HasCreditUsage),
-            valueTileLabel,
-            valueTileNote);
+        // Gated on the recorded tokens, not on the price: usage with no published rate has an
+        // unknown figure, and hiding it would state a zero by omission (rule 6).
+        var section = stats.HasCreditUsage
+            ? new PanelOffPlanSectionView(
+                // The day count is the window the figure beside it covers, exactly as the
+                // chart's heading above is. A literal 31 here and a shorter window in the data
+                // would read as a full month of spend.
+                OffPlanText.OffPlanHeading(stats.WindowDays),
+                PanelText.CreditBadgeRecorded,
+                PanelText.CreditSpendLabel,
+                UsageFormatter.Usd(stats.EstCredit31DaysValue.Value),
+                TokenText.CoverageNote(stats),
+                OffPlanText.OffPlanHint)
+            : null;
+
+        return new PanelOffPlanView(banner, section, valueTileLabel, valueTileNote);
     }
 
     /// <summary>

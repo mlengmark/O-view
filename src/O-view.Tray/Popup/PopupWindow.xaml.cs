@@ -126,7 +126,8 @@ public partial class PopupWindow : Window, IFlyout
         _weeklyRow = new PopupWeeklyRow(this, WeeklyResetText, BoostChip, BoostChipText);
         _divergence = new PopupDivergence(
             this, DivergenceBanner, DivergenceTitle, DivergenceDetail, DivergenceLinkAnchor,
-            CreditsHeading, CreditsBadgeText, CreditsSpendLabel, CreditsSpendValue, CreditsCoverage, CreditsSection);
+            CreditsHeading, CreditsBadgeText, CreditsSpendLabel, CreditsSpendValue, CreditsCoverage, CreditsSection,
+            CreditsSeparator);
         _graph = new PopupGraph(this, GraphHost);
         _fit = new PopupFit(this, PanelRoot, _scroll, ApplyDensity, (stats, snapshot) => _graph.Draw(stats, snapshot, LocalZone));
 

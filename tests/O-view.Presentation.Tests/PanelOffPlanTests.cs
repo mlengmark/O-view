@@ -11,9 +11,9 @@ namespace OView.Presentation.Tests;
 /// <para>These assert the decisions the Windows panel used to make alone and the Linux panel
 /// did not make at all: whether a banner is drawn, which of the three billing headings it is
 /// allowed to carry, whether the detail line is stamped with when the setting was read, and
-/// what the section says when nothing credit-billed was recorded. The sentences themselves are
-/// <see cref="OffPlanText"/>'s and are asserted against it rather than re-typed, so a reworded
-/// sentence does not fail here, only a face choosing the wrong one does.</para>
+/// whether the section exists at all. The sentences themselves are <see cref="OffPlanText"/>'s
+/// and are asserted against it rather than re-typed, so a reworded sentence does not fail here,
+/// only a face choosing the wrong one does.</para>
 /// </summary>
 public class PanelOffPlanTests
 {
@@ -211,66 +211,94 @@ public class PanelOffPlanTests
     [Fact]
     public void TheHeadingCountsTheWindowTheFigureCovers()
     {
-        var offPlan = PanelSections.OffPlan(Stats() with { WindowDays = 14 }, null, Now, Utc);
+        var section = PanelSections.OffPlan(Stats() with { WindowDays = 14 }, null, Now, Utc).Section;
 
-        Assert.Equal(OffPlanText.OffPlanHeading(14), offPlan.Heading);
+        Assert.NotNull(section);
+        Assert.Equal(OffPlanText.OffPlanHeading(14), section.Heading);
     }
 
     /// <summary>Recorded credit usage: the badge says so and the figure is the estimate.</summary>
     [Fact]
     public void RecordedCreditUsageIsBadgedAndPriced()
     {
-        var offPlan = PanelSections.OffPlan(Stats(), null, Now, Utc);
+        var section = PanelSections.OffPlan(Stats(), null, Now, Utc).Section;
 
-        Assert.Equal(PanelText.CreditBadgeRecorded, offPlan.Badge);
-        Assert.Equal(PanelText.CreditSpendLabel, offPlan.SpendLabel);
-        Assert.Equal(UsageFormatter.Usd(92.75m), offPlan.SpendValue);
+        Assert.NotNull(section);
+        Assert.Equal(PanelText.CreditBadgeRecorded, section.Badge);
+        Assert.Equal(PanelText.CreditSpendLabel, section.SpendLabel);
+        Assert.Equal(UsageFormatter.Usd(92.75m), section.SpendValue);
     }
 
     /// <summary>
-    /// None recorded still draws the section, with a stated zero. A section that vanished would
-    /// leave the reader unable to tell no off-plan usage from O-view not having looked, and a
-    /// blank figure would not distinguish them either.
+    /// Nothing recorded means no section at all, on every account. Null is what both heads
+    /// collapse on, so a head cannot draw an empty heading or keep a stated zero of its own.
     /// </summary>
     [Fact]
-    public void NoCreditUsageStatesAZeroRatherThanVanishing()
+    public void NoCreditUsageHidesTheSectionRatherThanStatingAZero()
     {
         var offPlan = PanelSections.OffPlan(Stats(creditTokens: 0, creditUsd: null), null, Now, Utc);
 
-        Assert.Equal(PanelText.CreditBadgeNoneRecorded, offPlan.Badge);
-        Assert.Equal(UsageFormatter.Usd(0m), offPlan.SpendValue);
-        Assert.Equal("", offPlan.Coverage);
+        Assert.Null(offPlan.Section);
+    }
+
+    /// <summary>
+    /// The gate is the usage, not its value. Tokens on a model with no price leave the figure
+    /// unknown rather than zero, and hiding the section would report them as nothing (rule 6).
+    /// </summary>
+    [Fact]
+    public void CreditUsageWithNoPriceKeepsTheSectionWithAnUnknownFigure()
+    {
+        var section = PanelSections.OffPlan(Stats(creditUsd: null), null, Now, Utc).Section;
+
+        Assert.NotNull(section);
+        Assert.Equal(UsageFormatter.Usd(null), section.SpendValue);
+    }
+
+    /// <summary>
+    /// The two registers stay independent: a window that has gone off-plan before any credit
+    /// usage was recorded raises the banner and still has no section.
+    /// </summary>
+    [Fact]
+    public void TheBannerShowsWithoutTheSection()
+    {
+        var stats = Exhausted() with { CreditTokens31Days = 0 };
+
+        var offPlan = PanelSections.OffPlan(stats, null, Now, Utc);
+
+        Assert.NotNull(offPlan.Banner);
+        Assert.Null(offPlan.Section);
     }
 
     /// <summary>
     /// A partial window qualifies the figure on screen. This caveat is the difference between a
-    /// real total and one covering nine days, so unlike <see cref="PanelOffPlanView.Hint"/> it
-    /// is not a sentence either head may put behind a hover.
+    /// real total and one covering nine days, so unlike
+    /// <see cref="PanelOffPlanSectionView.Hint"/> it is not a sentence either head may put
+    /// behind a hover.
     /// </summary>
     [Fact]
     public void APartialWindowQualifiesTheFigureInPlace()
     {
         var stats = Stats(recordedDays: 9);
 
-        var offPlan = PanelSections.OffPlan(stats, null, Now, Utc);
+        var section = PanelSections.OffPlan(stats, null, Now, Utc).Section;
 
-        Assert.Equal(TokenText.CoverageNote(stats), offPlan.Coverage);
-        Assert.NotEqual("", offPlan.Coverage);
+        Assert.NotNull(section);
+        Assert.Equal(TokenText.CoverageNote(stats), section.Coverage);
+        Assert.NotEqual("", section.Coverage);
     }
 
     /// <summary>
-    /// Both wordings of the hint keep the rule-6 caveat that the figure is not the charge, the
-    /// reason it is a carried sentence rather than something a head writes beside the number.
+    /// The hint keeps the rule-6 caveat that the figure is not the charge, the reason it is a
+    /// carried sentence rather than something a head writes beside the number.
     /// </summary>
-    [Theory]
-    [InlineData(395_000L)]
-    [InlineData(0L)]
-    public void TheHintNamesWhatTheFigureIsNot(long creditTokens)
+    [Fact]
+    public void TheHintNamesWhatTheFigureIsNot()
     {
-        var offPlan = PanelSections.OffPlan(Stats(creditTokens: creditTokens), null, Now, Utc);
+        var section = PanelSections.OffPlan(Stats(), null, Now, Utc).Section;
 
-        Assert.Equal(OffPlanText.OffPlanHint(creditTokens > 0), offPlan.Hint);
-        Assert.Contains(OffPlanText.CreditModelsCaption, offPlan.Hint);
+        Assert.NotNull(section);
+        Assert.Equal(OffPlanText.OffPlanHint, section.Hint);
+        Assert.Contains(OffPlanText.CreditModelsCaption, section.Hint);
     }
 
     // ── the value tile's relabel ────────────────────────────────────────────────────

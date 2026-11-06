@@ -308,8 +308,8 @@ public sealed class PanelContent : Border
         // a missing plan file beside working transcripts is a CLI-only user, not a fault
         // (issue #170).
         // Both off-plan registers at once: the live banner below, and the standing 31-day
-        // section at the foot of the panel. Built here rather than at each use so the two
-        // halves of one claim are read from one object.
+        // section at the foot of the panel, each absent when it has nothing to say. Built here
+        // rather than at each use so the two halves of one claim are read from one object.
         var offPlan = PanelSections.OffPlan(stats, cachedUsage, utcNow, local);
 
         // What the plan meters cannot show: work running past a meter that is not moving, or
@@ -338,7 +338,10 @@ public sealed class PanelContent : Border
         _tiles.AddTo(_root, stats, Density);
         _tokenBars.AddTo(_root, PanelSections.TokenBars(stats, report));
         _graph.AddTo(_root, PanelSections.Graph(stats, snapshot, local), Density);
-        _offPlan.AddSectionTo(_root, offPlan);
+        if (offPlan.Section is { } offPlanSection)
+        {
+            _offPlan.AddSectionTo(_root, offPlanSection);
+        }
 
         if (PanelSections.ScopeNote(stats, snapshot, report) is { } note)
         {
