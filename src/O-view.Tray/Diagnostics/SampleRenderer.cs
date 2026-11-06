@@ -527,7 +527,8 @@ internal static class SampleRenderer
     ///
     /// <para>And once with the click reversing a CLOSE: open, start closing, click again partway.
     /// That is the case that found the fold snapping to the wrong height, so it is read, not just
-    /// traced: the height must be the same either side of the click, and the fold must end open.</para>
+    /// traced: the frames that follow the click must carry on from the height it caught and not
+    /// sit still or jump away from it, and the fold must end open.</para>
     /// </summary>
     public static void RunFoldCheck(string dir, Action shutdown)
     {
@@ -573,7 +574,8 @@ internal static class SampleRenderer
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var phase = Phase.WarmUp;
         double? secondClickAtMs = null;
-        double heightBeforeClick = 0, heightAfterClick = 0;
+        double heightBeforeClick = 0;
+        List<(double Ms, double Height)>? afterReversal = null;
         var settledHeights = new Dictionary<Phase, double>();
         var frames = new List<(long Ms, System.Drawing.Bitmap Image)>();
         var capture = System.Drawing.Rectangle.Empty;
@@ -613,6 +615,14 @@ internal static class SampleRenderer
 
             Record();
 
+            // Rendered frames only, never the height read in the turn of the click: that turn
+            // has not run a frame, so the pinned height it reads is the one the click just read,
+            // whatever the animation goes on to do.
+            if (afterReversal is not null && clock.ElapsedMilliseconds <= ReversalWindowMs(foldOpenMs))
+            {
+                afterReversal.Add((clock.ElapsedMilliseconds, popup.DisclosureHeight));
+            }
+
             // The screen, not the visual tree. What the numbers above cannot answer is whether
             // any frame between them was ever WRONG, a window resized before it is re-docked
             // presents one frame in the taskbar, and an offscreen render of the same tree shows
@@ -632,7 +642,7 @@ internal static class SampleRenderer
                     heightBeforeClick = popup.DisclosureHeight;
                     clock.Restart();
                     Fold();
-                    heightAfterClick = popup.DisclosureHeight;
+                    afterReversal = phase == Phase.ReverseCloses ? [] : null;
                 }
 
                 return;
@@ -700,7 +710,7 @@ internal static class SampleRenderer
                 default:
                     CompositionTarget.Rendering -= OnFrame;
                     var pass = ReportFoldVerdict(
-                        report, settledHeights, heightBeforeClick, heightAfterClick);
+                        report, settledHeights, heightBeforeClick, afterReversal ?? [], foldOpenMs);
                     report.AppendLine($"RESULT: {(pass ? "PASS" : "FAIL")}");
                     File.WriteAllText(Path.Combine(dir, "fold-check.txt"), report.ToString());
                     shutdown();
@@ -733,17 +743,35 @@ internal static class SampleRenderer
     private const double FoldHeightToleranceDip = 1;
 
     /// <summary>
+    /// How long after the reversing click its frames are judged, as a share of the fold's open
+    /// time. A fold that carries on has moved by then and a frame can be this late on a loaded
+    /// machine without the real code failing.
+    /// </summary>
+    private const double ReversalWindowShare = 0.25;
+
+    private static double ReversalWindowMs(double foldOpenMs) => foldOpenMs * ReversalWindowShare;
+
+    /// <summary>
     /// States what the fold's end states and its reversed close add up to, and returns whether
     /// they hold. The trace above is for a person; these are the claims a machine can make.
     /// </summary>
     private static bool ReportFoldVerdict(
-        System.Text.StringBuilder report, Dictionary<Phase, double> settled, double before, double after)
+        System.Text.StringBuilder report, Dictionary<Phase, double> settled, double before,
+        List<(double Ms, double Height)> frames, double foldOpenMs)
     {
         var open = settled[Phase.ReverseOpens];
         var pass = true;
 
-        void Claim(string what, bool holds, string measured)
+        void Claim(string what, bool holds, string measured, bool needsMotion = false)
         {
+            // With Windows' animation setting off nothing is ever mid-fold, so a claim about a
+            // click landing in one is the machine's setting and not the fold's fault.
+            if (needsMotion && !WpfMotion.AnimationsOn)
+            {
+                report.AppendLine($"NOT RUN {what,-49} animations are off");
+                return;
+            }
+
             pass &= holds;
             report.AppendLine($"{(holds ? "ok  " : "FAIL")} {what,-52} {measured}");
         }
@@ -759,9 +787,24 @@ internal static class SampleRenderer
             $"height={H(settled[Phase.SecondClickInRows])}");
         Claim("the click reversing a close lands mid-fold",
             before > FoldHeightToleranceDip && before < open - FoldHeightToleranceDip,
-            $"height={H(before)} of {H(open)}");
+            $"height={H(before)} of {H(open)}", needsMotion: true);
+
+        // The frames after the click, on the curve the fold opens by from where it stood: the
+        // first of them has moved (a fold that sits still is the one that ignored the height on
+        // screen), and none has fallen below the start or run past what the curve reaches by
+        // then (one that restarts from the wrong end). Reached by the window's end rather than
+        // by each frame's own time, because a late frame is not a fault.
+        var windowMs = ReversalWindowMs(foldOpenMs);
+        var reach = before + (open - before) * PanelMotion.Decelerate.ValueAt(2 * windowMs / foldOpenMs);
+        var moved = frames.Any(f => f.Height > before + FoldHeightToleranceDip);
+        var strayed = frames.Where(f => f.Height < before - FoldHeightToleranceDip || f.Height > reach + FoldHeightToleranceDip)
+            .Select(f => (f.Ms, f.Height)).ToList();
         Claim("the fold continues from the height on screen",
-            Math.Abs(after - before) <= FoldHeightToleranceDip, $"before={H(before)} after={H(after)}");
+            frames.Count > 0 && moved && strayed.Count == 0,
+            $"from {H(before)}, {frames.Count} frames, " +
+            (strayed.Count > 0 ? $"left {H(before)}..{H(reach)} at {strayed[0].Ms:0} ms ({H(strayed[0].Height)})"
+                : moved ? $"rose to {H(frames.Max(f => f.Height))}" : "never moved"),
+            needsMotion: true);
         Claim("the reversed close ends open",
             Math.Abs(settled[Phase.ReverseCloses] - open) <= FoldHeightToleranceDip,
             $"height={H(settled[Phase.ReverseCloses])}");
