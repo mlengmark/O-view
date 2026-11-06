@@ -88,6 +88,9 @@ public sealed class LinuxApp : Application, IShellToSkin
     private PanelWindow? _panel;
     private CancellationTokenSource? _hostWatch;
 
+    /// <summary>What keeps the icon off the bus until there is a reading to put in it.</summary>
+    private FirstReadingHold? _firstReading;
+
     /// <summary>
     /// How long a host that has just appeared is given to list the icon before this head
     /// registers it itself. The toolkit's own registration lands within milliseconds of the
@@ -178,17 +181,6 @@ public sealed class LinuxApp : Application, IShellToSkin
         };
         _tray.Clicked += OpenPanelHandler(host.Shell);
 
-        // What actually publishes the icon, and the line whose absence meant this head never
-        // reached a notification area on any desktop. A constructed TrayIcon has no platform
-        // implementation behind it: the toolkit builds one only for an icon in the
-        // application's own collection, and until then every property set above is dropped by
-        // a null-conditional call that reports nothing and returns nothing to check. So the
-        // gauge was drawn every poll, the icon reported itself visible, and the session bus
-        // never heard a word, which is also why the toolkit's log has nothing to say about
-        // it (see Program.AvaloniaLog): the backend that would have complained was never
-        // constructed.
-        TrayIcon.SetIcons(this, new TrayIcons { _tray });
-
         // Says a newer version exists; never downloads or runs anything (ADR-0009 as
         // amended). Without this the shell says it is time to check and nothing listens, which
         // is how a Linux install ended up with no update path at all: the app said nothing,
@@ -204,11 +196,18 @@ public sealed class LinuxApp : Application, IShellToSkin
         // nothing platform-specific about asking a public page what it says.
         _rates = new RateCardFeed(_log);
 
+        var timers = new AvaloniaTimerFactory();
+
+        // The icon is built above and published once the first poll has been drawn into it, so
+        // the first thing a notification area reads is the reading (see FirstReadingHold).
+        _firstReading = new FirstReadingHold(PublishTray, timers, _log);
+        _firstReading.Start();
+
         // Last, so the four pushes below cannot arrive before what answers them exists. Ticks
         // arrive on the UI thread; the reading happens off it and comes back through the
         // dispatcher this head handed the shell. The pair is what keeps the icon and the menu
         // responsive while a first run ingests a large transcript history (issue #125).
-        host.Start(new AvaloniaTimerFactory());
+        host.Start(timers);
 
         // The icon reports IsVisible = true whether or not anything can display it, so a
         // missing host has to be discovered from the bus and said out loud. Notifications
@@ -226,6 +225,18 @@ public sealed class LinuxApp : Application, IShellToSkin
         }
     }
 
+    /// <summary>
+    /// What actually publishes the icon, and the line whose absence meant this head never
+    /// reached a notification area on any desktop. A constructed TrayIcon has no platform
+    /// implementation behind it: the toolkit builds one only for an icon in the application's
+    /// own collection, and until then every property set on it is dropped by a null-conditional
+    /// call that reports nothing and returns nothing to check. So the gauge was drawn every
+    /// poll, the icon reported itself visible, and the session bus never heard a word, which is
+    /// also why the toolkit's log has nothing to say about it (see Program.AvaloniaLog): the
+    /// backend that would have complained was never constructed.
+    /// </summary>
+    private void PublishTray() => TrayIcon.SetIcons(this, new TrayIcons { _tray! });
+
     // ── what the shell pushes at this skin ───────────────────────────────────────────
     //
     // All four arrive on the UI thread without a Post of their own: the shell puts every push
@@ -233,7 +244,14 @@ public sealed class LinuxApp : Application, IShellToSkin
     // this thread, so there is no per-callback rule for this head to get wrong (issue #125).
 
     /// <summary>A new snapshot to draw, in the icon and its tooltip.</summary>
-    public void ShowSnapshot(UsageSnapshot snapshot) => Render(snapshot);
+    public void ShowSnapshot(UsageSnapshot snapshot)
+    {
+        Render(snapshot);
+
+        // Outside Render, whose catch keeps a bad frame from killing the app: a failure to
+        // publish is not a bad frame, and swallowing it would leave no icon and no reason.
+        _firstReading?.ReadingArrived();
+    }
 
     /// <summary>
     /// A freedesktop notification.

@@ -95,6 +95,10 @@ public sealed class StandInTrayHost : IAsyncDisposable
     private readonly TaskCompletionSource<RegisteredItem> _firstItem =
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
+    /// <summary>What the first item answered when it was asked for its icon on arrival.</summary>
+    private readonly TaskCompletionSource<IReadOnlyList<TrayIconPixmap>?> _firstOffer =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     private StandInTrayHost(DBusConnection connection) => _connection = connection;
 
     /// <summary>
@@ -161,6 +165,19 @@ public sealed class StandInTrayHost : IAsyncDisposable
     /// </summary>
     public async Task<RegisteredItem> WaitForItemAsync(TimeSpan timeout) =>
         await _firstItem.Task.WaitAsync(timeout);
+
+    /// <summary>
+    /// The icon the first item offered at the moment it registered, waiting up to
+    /// <paramref name="timeout"/> for the answer. Null when it could not be asked.
+    ///
+    /// <para><b>Asked before its registration is answered,</b> which is the earliest any host
+    /// can ask, and the only read in this class that does not depend on when a test got round
+    /// to it. A real notification area reads an item the moment it hears of it, and from then
+    /// on what it shows rests on hearing every later change, so this is the read that decides
+    /// what a host that misses one is left showing.</para>
+    /// </summary>
+    public async Task<IReadOnlyList<TrayIconPixmap>?> WaitForFirstOfferAsync(TimeSpan timeout) =>
+        await _firstOffer.Task.WaitAsync(timeout);
 
     /// <summary>
     /// Asks an item for one of its <c>org.kde.StatusNotifierItem</c> properties, the way a
@@ -254,6 +271,7 @@ public sealed class StandInTrayHost : IAsyncDisposable
 
         _connection.Dispose();
         _firstItem.TrySetCanceled();
+        _firstOffer.TrySetCanceled();
     }
 
     /// <summary>
@@ -299,13 +317,25 @@ public sealed class StandInTrayHost : IAsyncDisposable
 
     private void Register(RegisteredItem item)
     {
+        bool first;
         lock (_gate)
         {
             _items.Add(item);
+            first = _items.Count == 1;
+        }
+
+        // Not awaited: this runs on the connection's receive loop, which is what would deliver
+        // the answer. The question itself is on the bus before this returns.
+        if (first)
+        {
+            _ = ReadFirstOfferAsync(item);
         }
 
         _firstItem.TrySetResult(item);
     }
+
+    private async Task ReadFirstOfferAsync(RegisteredItem item) =>
+        _firstOffer.TrySetResult(await ReadIconPixmapAsync(item));
 
     private void RegisterHost(string service)
     {
