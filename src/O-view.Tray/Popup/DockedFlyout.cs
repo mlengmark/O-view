@@ -291,8 +291,9 @@ internal sealed class DockedFlyout(Window host)
     /// </param>
     public void Show(Action? afterLayout = null, bool takeForeground = false)
     {
-        // Cancels a close still in flight, so clicking the tray icon again mid-fade brings
-        // the surface straight back instead of letting it finish disappearing.
+        // Cancels a close still in flight, so a surface reopened mid-close comes straight back
+        // from where it is instead of letting it finish disappearing.
+        var interruptedClose = _closing;
         _closing = false;
 
         host.Opacity = 0;
@@ -309,12 +310,12 @@ internal sealed class DockedFlyout(Window host)
 
         if (PinForVerification)
         {
-            // Stills need the finished state, not a frame from the middle of a fade.
+            // Stills need the finished state, not a frame from the middle of a slide.
             FlyoutAnimation.Reset(host);
         }
         else
         {
-            FlyoutAnimation.Open(host, _dockOrigin);
+            FlyoutAnimation.Open(host, _dockOrigin, interruptedClose);
         }
 
         if (takeForeground)
@@ -339,24 +340,16 @@ internal sealed class DockedFlyout(Window host)
     {
         if (_closing)
         {
-            return;   // it is on its way out; moving it now only makes the fade travel
+            return;   // it is on its way out; moving it now would only make the exit jump
         }
-
-        // Before moving it, not after, and not left to the caller: the open transition clipped
-        // the content to the size it had when the flyout opened, so a surface that has grown
-        // is drawn with everything past that line sliced off, the window is the right size
-        // and the card inside it is not. Re-placing a surface and re-fitting it are the same
-        // event, so they live together rather than in two places one of which gets forgotten.
-        FlyoutAnimation.FitClipToContent(host);
 
         (host.Left, host.Top, _dockOrigin) = PopupPositioner.Place(PlacementMemory, widthDip, heightDip);
     }
 
     /// <summary>
-    /// Fades and shrinks back into the docked corner, then hides, and only then runs
-    /// <paramref name="after"/>. Waiting the ~110 ms costs nothing perceptible and keeps the
-    /// guarantee that an action's balloon or modal never appears behind a still-visible
-    /// topmost surface.
+    /// Slides back out of the docked edge, then hides, and only then runs
+    /// <paramref name="after"/>. Waiting for the transition keeps the guarantee that an
+    /// action's balloon or modal never appears behind a still-visible topmost surface.
     /// </summary>
     public void BeginClose(Action? after = null)
     {
@@ -389,8 +382,8 @@ internal sealed class DockedFlyout(Window host)
                 // Hiding the foreground window raises Deactivated, which re-enters this
                 // method, by which point _closing is already false, so it would start a
                 // SECOND close transition on an already-hidden window and, worse, push
-                // _closedAt forward by another ~150 ms, silently stretching the toggle's
-                // grace window. The menu guarded against this; the panel did not.
+                // _closedAt forward by another full transition, silently stretching the
+                // toggle's grace window. The menu guarded against this; the panel did not.
                 _suppressDeactivate = true;
                 try
                 {
