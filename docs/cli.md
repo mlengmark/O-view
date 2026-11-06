@@ -34,8 +34,9 @@ These drive the real surfaces on the real desktop and write a report, because th
 
 | Flag | What it does |
 |---|---|
-| `--menu-check [report]` | Opens, toggles and closes the real flyout over about 25 seconds and writes what it found. Runs before the single-instance guard. |
-| `--fold-check <dir>` | Plays the tokens-used disclosure fold on screen and writes a per-frame geometry trace with filmstrips grabbed from the compositor. Runs before the single-instance guard. |
+| `--menu-check [report]` | Opens, toggles and closes the real flyout over about 37 seconds (measured on 2026-11-06 at the current motion pace, so a retuned pace changes it) and writes what it found, ending with `RESULT: PASS` or `FAIL`. Runs before the single-instance guard. |
+| `--fold-check <dir>` | Plays the tokens-used disclosure fold on screen and writes a per-frame geometry trace with filmstrips grabbed from the compositor. It also checks a second click: one mid-opening must end closed, and one that reverses a close, landing mid-fold, must continue from the height on screen and end open. The report ends with `RESULT: PASS` or `FAIL`; with Windows' animation setting off the claims that need a fold in flight read `NOT RUN`. Runs before the single-instance guard. |
+| `--motion-check [report]` | Flips a stat tile and folds the menu's threshold list on the real windows, each to its end, then clicks a second time while the first transition is still running, reversing an opening and reversing a closing, and reads the state each rests in, over about 14 seconds at the current pace. Ends with `RESULT: PASS` or `FAIL`, or `RESULT: NOT RUN` when Windows' animation setting is off, since nothing is then ever mid-flight. Runs before the single-instance guard. |
 | `--popup-check [report]` | Drives the real tray-click path to open the panel and reports the panel's state. Needs the assembled app, so it cannot run beside a live instance; if one is running it writes a report saying so rather than nothing. |
 | `--toggle-check [report]` | Drives the icon's open, close, open sequence and reports the panel's state after each step. |
 | `--show-popup`, `--popup-pin`, `--popup-theme light\|dark` | Opens the panel at once; pinned means auto-hide is off so a screenshot can be taken; the theme can be forced. |

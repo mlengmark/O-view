@@ -82,7 +82,7 @@ O-view asks its questions on its own window rather than a system box: the same m
 These four need a real desktop and are described rather than shown.
 
 - **The icon in the taskbar.** On Windows 11 a new tray icon lands in the overflow flyout behind the `^` chevron; drag it onto the taskbar to pin it. On Linux it appears wherever the desktop's notification area draws it, and on GNOME only once the AppIndicator extension is installed.
-- **The flyout against the taskbar.** The panel and the menu rise out of the taskbar edge over 230 ms on Windows, fitted to the motion of Windows' own quick-settings flyout, and dock 12 px clear of it in the corner nearest the icon.
+- **The flyout against the taskbar.** The panel and the menu slide out of the taskbar edge as one piece on Windows, 460 ms in and 300 ms out, on curves fitted to the motion of Windows' own quick-settings flyout, and dock 12 px clear of it in the corner nearest the icon.
 - **A notification.** A balloon tip on Windows and a desktop notification on Linux, drawn by the system with O-view's title and body, once per session window when usage crosses your threshold, and once per onset when work stops drawing from the plan.
 - **The installer.** A per-user Inno Setup wizard with a terracotta panel carrying the mark and wordmark on its welcome and finish pages, an optional start-at-sign-in task, and a Start Menu entry.
 

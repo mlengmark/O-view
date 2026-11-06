@@ -46,6 +46,21 @@ callbacks each head supplies, so neither head orders those steps itself. The lay
 both heads draw with (panel width, scroll bar, tile bar and graph figures) are stated once in
 `PanelMetrics` beside it.
 
+## The panel's motion
+
+`PanelMotion` (`src/O-view.App/Rendering/PanelMotion.cs`) states the Windows head's motion once:
+the pace, every base duration and delay, the two fitted curves as four numbers each, and the
+small arithmetic they imply (when row `i` of a group starts, where a curve is at a given
+fraction of its time, whether a transition runs at all when Windows' animation setting is off).
+It holds no WPF or Avalonia type, so App's tests on Linux pin the rules between the figures: an
+exit is quicker than its entrance, every figure scales with the pace, a curve is monotonic from
+0 to 1. The Windows head reads it through `WpfMotion` (`src/O-view.Tray/Popup/WpfMotion.cs`),
+which answers "are animations on?" from `SystemParameters.ClientAreaAnimation` and turns a
+`PanelMotion` curve and figure into a `KeySpline` and a `Duration`; `FlyoutAnimation`,
+`DisclosureAnimation`, `MenuWindow` and `StatTile` ask those two and decide nothing about how
+long anything takes. The Linux head reads none of it: it has no motion. What each figure is, and
+why, is in [ui-spec.md](ui-spec.md) section 4.
+
 - **Both faces measure the content, never the window.** A flyout is sized to its own content,
   so its frame is already capped by whatever the display granted before `PanelFit` is ever
   asked, reading the frame back would describe the screen, not what the content wants. Each
