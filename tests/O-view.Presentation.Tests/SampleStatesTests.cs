@@ -58,23 +58,27 @@ public class SampleStatesTests
     }
 
     /// <summary>
-    /// The state renders the bar on both heads, and it is the only one that does, which is what
-    /// leaves every other state's golden image untouched by the bar existing.
+    /// The model-limit states render the bar on both heads, and they are the only ones that do,
+    /// which is what leaves every other state's golden image untouched by the bar existing.
     /// </summary>
     [Fact]
-    public void OnlyTheModelLimitStateHasAModelBar()
+    public void OnlyTheModelLimitStatesHaveAModelBar()
     {
         var withABar = SampleStates.All
             .Where(s => PanelSections.ModelLimitMeters(s.CachedUsage, SampleStates.Now, SampleStates.Zone).Count > 0)
             .ToList();
 
-        var state = Assert.Single(withABar);
-        Assert.Equal("model-limit", state.Name);
+        Assert.Equal(
+            ["model-limit", "model-limit-spend", "model-limit-spend-unknown"],
+            withABar.Select(s => s.Name));
 
-        var meter = Assert.Single(PanelSections.ModelLimitMeters(state.CachedUsage, SampleStates.Now, SampleStates.Zone));
-        Assert.Equal("Weekly · Fable", meter.Label);
-        Assert.NotNull(meter.FillPercent);
-        Assert.NotNull(meter.ResetLine);
+        Assert.All(withABar, state =>
+        {
+            var meter = Assert.Single(PanelSections.ModelLimitMeters(state.CachedUsage, SampleStates.Now, SampleStates.Zone));
+            Assert.Equal("Weekly · Fable", meter.Label);
+            Assert.NotNull(meter.FillPercent);
+            Assert.NotNull(meter.ResetLine);
+        });
     }
 
     [Fact]
