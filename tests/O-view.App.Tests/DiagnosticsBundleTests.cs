@@ -540,7 +540,7 @@ public class DiagnosticsBundleTests : IDisposable
 
     // ── limits[] and spend ──────────────────────────────────────────────────────────
 
-    private string BuildWithCached(CachedUtilization? cached) =>
+    private string BuildWithCached(CachedUtilization? cached, string? readFailure = null) =>
         DiagnosticsBundle.Build(
             Windows,
             PlanHistoryDiagnostics.Inspect(_dir.File("absent.json")),
@@ -548,7 +548,7 @@ public class DiagnosticsBundleTests : IDisposable
             account: null,
             new WeeklyResetAnchor(_dir.File("weekly-reset.json")),
             new DateTimeOffset(2026, 11, 6, 12, 0, 0, TimeSpan.Zero),
-            cachedUtilization: cached);
+            cachedUtilization: cached, cachedReadFailure: readFailure);
 
     // The block as a value, so no test reads the developer's own Claude files. Fetched at
     // 2026-11-06 11:30 UTC, half an hour before the bundle is built.
@@ -571,7 +571,7 @@ public class DiagnosticsBundleTests : IDisposable
 
         // An old reset is printed as the file has it; the bundle passes no verdict on it.
         Assert.Contains("model       : Fable, 73%, resets 2026-11-02 21:00:00Z", bundle, StringComparison.Ordinal);
-        Assert.Contains("model       : Opus, 5%, resets no reset reported", bundle, StringComparison.Ordinal);
+        Assert.Contains("model       : Opus, 5%, resets no readable reset", bundle, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -642,5 +642,62 @@ public class DiagnosticsBundleTests : IDisposable
         {
             Assert.DoesNotContain(forbidden, bundle, StringComparison.OrdinalIgnoreCase);
         }
+    }
+
+    [Fact]
+    public void AnEmptyLimitsListIsNotCalledAShapeProblem()
+    {
+        var bundle = BuildWithCached(Block("""{"limits":[]}"""));
+
+        Assert.Contains("0 row(s) seen", bundle, StringComparison.Ordinal);
+        Assert.Contains("absent, null, not a list or empty", bundle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AResetThatCouldNotBeReadIsNotReportedAsNoReset()
+    {
+        var bundle = BuildWithCached(Block("""
+            {"limits":[{"group":"weekly","percent":73.4,"resets_at":"garbage","scope":{"model":{"display_name":"Fable"}}}]}
+            """));
+
+        Assert.Contains("model       : Fable, 73%, resets no readable reset", bundle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ABlockThatCannotBeParsedIsNamedAsUnreadableNotAsMissing()
+    {
+        var bundle = BuildWithCached(null, readFailure: "ArgumentOutOfRangeException");
+
+        Assert.Contains("cached block unreadable (ArgumentOutOfRangeException)", bundle, StringComparison.Ordinal);
+        Assert.DoesNotContain("no cached block", bundle, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("""{"cachedUsageUtilization":{"fetchedAtMs":9000000000000000000,"utilization":{}}}""")]
+    [InlineData("[]")]
+    public void AMalformedCachedFileIsReportedAndRaisesNothing(string json)
+    {
+        var file = _dir.File("claude.json");
+        File.WriteAllText(file, json);
+
+        var block = DiagnosticsBundle.ReadCached([file], out var failure);
+
+        Assert.Null(block);
+        Assert.NotNull(failure);
+        Assert.Contains("cached block unreadable", BuildWithCached(block, failure), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AReadableBlockBeatsAnUnreadableOneBesideIt()
+    {
+        var bad = _dir.File("bad.json");
+        var good = _dir.File("good.json");
+        File.WriteAllText(bad, "[]");
+        File.WriteAllText(good, """{"cachedUsageUtilization":{"fetchedAtMs":1793964600000,"utilization":{}}}""");
+
+        var block = DiagnosticsBundle.ReadCached([bad, good], out var failure);
+
+        Assert.NotNull(block);
+        Assert.Null(failure);
     }
 }

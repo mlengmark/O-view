@@ -73,7 +73,7 @@ public static class DiagnosticsBundle
             CorruptBackups.Inspect(), FileLog.Tail(), RollupStoreReport.Inspect(),
             deepAudit ? IngestAuditReport.Run() : IngestAuditReport.NotRun,
             CoworkSessionReport.Inspect(), ClaudeWriteSurvey.Inspect(), InspectWindow(),
-            CachedUtilization.TryRead());
+            ReadCached(out var cachedFailure), cachedFailure);
 
     /// <summary>
     /// The bundle as the <b>running</b> app sees it: identical except that the store is read
@@ -85,7 +85,7 @@ public static class DiagnosticsBundle
             ClaudeAccount.TryRead(), new WeeklyResetAnchor(), DateTimeOffset.UtcNow,
             CorruptBackups.Inspect(), FileLog.Tail(), store, IngestAuditReport.NotRun,
             CoworkSessionReport.Inspect(), ClaudeWriteSurvey.Inspect(), InspectWindow(),
-            CachedUtilization.TryRead());
+            ReadCached(out var cachedFailure), cachedFailure);
 
     /// <summary>Overload taking every input explicitly, so the layout is testable.</summary>
     public static string Build(
@@ -102,7 +102,8 @@ public static class DiagnosticsBundle
         CoworkSessionReport? coworkSessions = null,
         ClaudeWriteSurvey? writeSurvey = null,
         WindowPlacement? window = null,
-        CachedUtilization? cachedUtilization = null)
+        CachedUtilization? cachedUtilization = null,
+        string? cachedReadFailure = null)
     {
         var text = new StringBuilder();
         text.Append(planHistory.ToClipboardText(environment.Version));
@@ -111,7 +112,7 @@ public static class DiagnosticsBundle
         AppendRoots(text);
         AppendAccount(text, account);
         AppendSessionWindow(text, window);
-        AppendCachedLimits(text, cachedUtilization, utcNow);
+        AppendCachedLimits(text, cachedUtilization, cachedReadFailure, utcNow);
         text.Append(scope.ToClipboardText());
 
         // Directly after the transcript scan, because it is the answer to the question that
@@ -219,9 +220,10 @@ public static class DiagnosticsBundle
             var state = !File.Exists(candidate) ? "missing"
                 : ClaudeAccount.TryRead(candidate) is not null ? "has oauthAccount"
                 : "no oauthAccount";
-            var cached = File.Exists(candidate) && CachedUtilization.TryRead(candidate) is { } u
-                ? $", cached figures {(DateTimeOffset.UtcNow - u.FetchedAtUtc).TotalMinutes:0} min old"
-                : File.Exists(candidate) ? ", no cached figures" : "";
+            var cached = !File.Exists(candidate) ? ""
+                : TryReadCached(candidate, out _) is { } u
+                    ? $", cached figures {(DateTimeOffset.UtcNow - u.FetchedAtUtc).TotalMinutes:0} min old"
+                    : ", no cached figures";
 
             // Paths are redacted by Redact.Bundle on the way out, as everywhere else here.
             text.AppendLine($"    candidate   : {candidate}  <-- {state}{cached}");
@@ -278,12 +280,65 @@ public static class DiagnosticsBundle
     }
 
     /// <summary>
+    /// The newest cached block across the candidates, or null with the reason when a file
+    /// could not be parsed. <see cref="CachedUtilization.TryRead(string?)"/> throws on a file
+    /// whose JSON is valid but oddly shaped (a root that is not an object, a timestamp out of
+    /// range), and that file is the one a bug report most needs the rest of the bundle for.
+    /// Public so a test can aim it at a file rather than at the developer's profile.
+    /// </summary>
+    public static CachedUtilization? ReadCached(out string? failure) =>
+        ReadCached(CachedUtilization.Candidates(), out failure);
+
+    /// <summary>The same over an explicit candidate list.</summary>
+    public static CachedUtilization? ReadCached(IReadOnlyList<string> candidates, out string? failure)
+    {
+        CachedUtilization? newest = null;
+        failure = null;
+        foreach (var candidate in candidates)
+        {
+            if (TryReadCached(candidate, out var error) is { } read)
+            {
+                if (newest is null || read.FetchedAtUtc > newest.FetchedAtUtc)
+                {
+                    newest = read;
+                }
+            }
+            else if (error is not null)
+            {
+                failure ??= error;
+            }
+        }
+
+        // A readable block elsewhere wins: the failure only explains an absence.
+        if (newest is not null)
+        {
+            failure = null;
+        }
+
+        return newest;
+    }
+
+    private static CachedUtilization? TryReadCached(string path, out string? failure)
+    {
+        failure = null;
+        try
+        {
+            return CachedUtilization.TryRead(path);
+        }
+        catch (Exception ex)
+        {
+            failure = ex.GetType().Name;
+            return null;
+        }
+    }
+
+    /// <summary>
     /// What was found in the cached block's <c>limits[]</c> and <c>spend</c>, so a report about
     /// a missing model bar or a missing spend figure says whether the file held them.
     ///
-    /// <para>Percentages and resets are printed exactly as the file reports them, with the age
-    /// of the figures beside them and no judgement of freshness: a reader of a report has to
-    /// be able to see an old reset <i>as</i> old. Only the model names, percentages, reset
+    /// <para>Percentages are the read's rounded whole numbers and resets are in UTC, with the
+    /// age of the figures beside them and no judgement of freshness: a reader of a report has
+    /// to be able to see an old reset <i>as</i> old. Only the model names, percentages, reset
     /// instants, the spend amount, its currency and <c>enabled</c> are taken from the block;
     /// nothing else in it reaches the bundle.</para>
     ///
@@ -292,11 +347,14 @@ public static class DiagnosticsBundle
     /// into every test that builds a bundle. Null is "no cached block", and each of the three
     /// ways a field can fail to be there prints its own line.</para>
     /// </summary>
-    private static void AppendCachedLimits(StringBuilder text, CachedUtilization? cached, DateTimeOffset utcNow)
+    private static void AppendCachedLimits(StringBuilder text, CachedUtilization? cached, string? readFailure, DateTimeOffset utcNow)
     {
         if (cached is null)
         {
-            text.AppendLine("  model limits  : no cached block, so no limits[] and no spend to report");
+            // A block that could not be parsed is not a missing one: the file is there and says something.
+            text.AppendLine(readFailure is null
+                ? "  model limits  : no cached block, so no limits[] and no spend to report"
+                : $"  model limits  : cached block unreadable ({readFailure}), so no limits[] and no spend to report");
             return;
         }
 
@@ -306,13 +364,13 @@ public static class DiagnosticsBundle
 
         if (read.RowsSeen == 0)
         {
-            // limits[] absent, null and not a list all read as no rows; the read does not keep which.
-            text.AppendLine("    (no rows: limits[] is absent, null or not a list)");
+            // limits[] absent, null, not a list and an empty list all read as no rows; the read does not keep which.
+            text.AppendLine("    (no rows: limits[] is absent, null, not a list or empty)");
         }
 
         foreach (var limit in read.Limits)
         {
-            var reset = limit.Bar.ResetsAtUtc is { } at ? $"{at:u}" : "no reset reported";
+            var reset = limit.Bar.ResetsAtUtc is { } at ? $"{at:u}" : "no readable reset";
             text.AppendLine($"    model       : {limit.Model}, {limit.Bar.Percent}%, resets {reset}");
         }
 
