@@ -26,6 +26,16 @@ namespace OView.Tray.Popup;
 /// </summary>
 public partial class PopupWindow : Window, IFlyout
 {
+    /// <summary>
+    /// How long the token breakdown's fold takes to open and to close, in milliseconds. These
+    /// are what the fold has always measured (the entrance's 230 and 150 scaled by 0.83 and
+    /// rounded to even), kept as plain figures now that the fold no longer derives them.
+    /// </summary>
+    private const double FoldOpenMs = 191;
+
+    /// <inheritdoc cref="FoldOpenMs"/>
+    private const double FoldCloseMs = 124;
+
     /// <summary>Forces a theme for verification screenshots; null follows the OS.</summary>
     public bool? ThemeOverride { get; set; }
 
@@ -137,6 +147,9 @@ public partial class PopupWindow : Window, IFlyout
             // No chevron: the Bars/Breakdown switch shows its state by which segment is lit
             // (issue #253), and an arrow beside it would be a second indicator of one thing.
             this, TokenBreakdownView, null,
+            // The fold's own durations: the entrance's 230 and 150 ms scaled by 0.83, as the
+            // fold has always run, now stated here instead of derived from the entrance.
+            WpfMotion.Duration(FoldOpenMs), WpfMotion.Duration(FoldCloseMs),
             // Re-dock, exactly as the menu does when its threshold list opens (issue #33).
             // The panel is docked by its top-left and is SizeToContent, so growing it without
             // this pushes the new content down into the taskbar, which is the failure the
