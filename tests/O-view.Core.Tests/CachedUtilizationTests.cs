@@ -194,6 +194,129 @@ public class CachedUtilizationTests
     }
 
     /// <summary>
+    /// A block with <c>limits</c> and <c>spend</c> in the shape read from a real cache on
+    /// 2026-11-06 (dates scrubbed): a session row, an account-wide weekly row and one
+    /// model-scoped weekly row, then a spend block at zero.
+    /// </summary>
+    private static string BlockWith(string limits = Limits, string spend = Spend) =>
+        $$"""
+        {
+          "cachedUsageUtilization": {
+            "fetchedAtMs": {{Ms(Fetched)}},
+            "utilization": {
+              "five_hour": { "utilization": 7, "resets_at": "2026-08-24T05:00:00+00:00" },
+              "seven_day": { "utilization": 13, "resets_at": "2026-08-24T21:00:00+00:00" },
+              "extra_usage": { "is_enabled": false },
+              "limits": {{limits}},
+              "spend": {{spend}}
+            }
+          }
+        }
+        """;
+
+    private const string Limits = """
+        [
+          {"kind": "session", "group": "session", "percent": 7, "severity": "normal",
+           "resets_at": "2026-08-24T05:00:00+00:00", "scope": null, "is_active": false},
+          {"kind": "weekly_all", "group": "weekly", "percent": 13, "severity": "normal",
+           "resets_at": "2026-08-24T21:00:00+00:00", "scope": null, "is_active": true},
+          {"kind": "weekly_scoped", "group": "weekly", "percent": 10, "severity": "normal",
+           "resets_at": "2026-08-24T21:00:00+00:00",
+           "scope": {"model": {"id": null, "display_name": "Fable"}, "surface": null},
+           "is_active": false}
+        ]
+        """;
+
+    private const string Spend = """
+        {
+          "used": {"amount_minor": 0, "currency": "USD", "exponent": 2},
+          "limit": null, "percent": 0, "severity": "normal", "enabled": false,
+          "disabled_reason": null, "cap": null, "balance": null, "auto_reload": null,
+          "can_purchase_credits": false, "can_toggle": false
+        }
+        """;
+
+    [Fact]
+    public void TheRealBlockYieldsTheModelLimitAndTheSpendBesideTheMeters()
+    {
+        var parsed = CachedUtilization.Parse(BlockWith());
+
+        Assert.Equal(7, parsed!.FiveHour!.Percent);
+        Assert.Equal(13, parsed.SevenDay!.Percent);
+        var limit = Assert.Single(parsed.ModelLimits.Limits);
+        Assert.Equal("Fable", limit.Model);
+        Assert.Equal(10, limit.Bar.Percent);
+        Assert.Equal(3, parsed.ModelLimits.RowsSeen);
+        Assert.Equal(2, parsed.ModelLimits.RowsSkipped);
+        Assert.Equal(SpendReadState.Read, parsed.Spend.State);
+    }
+
+    /// <summary>
+    /// The two meters come from the same block as the new parts, and a lost meter is the
+    /// expensive failure: every shape below must cost only its own part.
+    /// </summary>
+    [Theory]
+    [InlineData("\"limits\"", "{}")]
+    [InlineData("\"limits\"", "\"nope\"")]
+    [InlineData("\"limits\"", "null")]
+    [InlineData("\"limits\"", "[null, 7, \"x\", [], {\"group\": 5}]")]
+    [InlineData("\"spend\"", "7")]
+    [InlineData("\"spend\"", "[]")]
+    [InlineData("\"spend\"", "{\"used\": \"lots\", \"enabled\": true}")]
+    [InlineData("\"spend\"", "null")]
+    public void ABrokenLimitsOrSpendLeavesBothMetersIntact(string property, string value)
+    {
+        var json = property == "\"limits\""
+            ? BlockWith(limits: value)
+            : BlockWith(spend: value);
+
+        var parsed = CachedUtilization.Parse(json);
+
+        Assert.Equal(7, parsed!.FiveHour!.Percent);
+        Assert.Equal(13, parsed.SevenDay!.Percent);
+        Assert.Equal(ExtraUsageState.Disabled, parsed.ExtraUsage.State);
+    }
+
+    [Fact]
+    public void ABlockWithNeitherLimitsNorSpendReadsAsNothingForBoth()
+    {
+        var parsed = CachedUtilization.Parse(Document());
+
+        Assert.Empty(parsed!.ModelLimits.Limits);
+        Assert.Equal(0, parsed.ModelLimits.RowsSeen);
+        Assert.Equal(SpendReadState.Absent, parsed.Spend.State);
+    }
+
+    /// <summary>
+    /// A meter's rule and a model limit's rule are one rule: the same percentage, reset and
+    /// age give the same answer through either, so a limit cannot outlive its window or keep
+    /// an aged zero when the meter beside it has dropped them.
+    /// </summary>
+    [Theory]
+    [InlineData(10, "2026-08-24T21:00:00+00:00", 3, 10)]   // live
+    [InlineData(10, "2026-08-23T21:00:00+00:00", 3, null)] // window rolled over
+    [InlineData(0, "2026-08-24T21:00:00+00:00", 3, 0)]     // fresh zero
+    [InlineData(0, "2026-08-24T21:00:00+00:00", 60, null)] // aged zero
+    public void AModelLimitIsJudgedByTheSameRuleAsAMeter(int percent, string resets, int ageMinutes, int? expected)
+    {
+        var block = BlockWith(limits: $$$"""
+            [{"group": "weekly", "percent": {{{percent}}}, "resets_at": "{{{resets}}}",
+              "scope": {"model": {"display_name": "Fable"}, "surface": null}}]
+            """);
+        var parsed = CachedUtilization.Parse(block)!;
+        var limit = Assert.Single(parsed.ModelLimits.Limits);
+        var age = TimeSpan.FromMinutes(ageMinutes);
+        var now = Fetched + age;
+
+        var viaLimit = CachedUtilizationProvider.CurrentWindowPercent(limit.Bar, now, age);
+        var viaMeter = CachedUtilizationProvider.CurrentWindowPercent(
+            new UtilizationBar(percent, limit.Bar.ResetsAtUtc), now, age);
+
+        Assert.Equal(expected, viaLimit);
+        Assert.Equal(viaMeter, viaLimit);
+    }
+
+    /// <summary>
     /// The provider's rules, which are where the honesty lives, parsing is the easy half.
     /// </summary>
     public class Provider
