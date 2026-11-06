@@ -134,8 +134,11 @@ public sealed class CachedUtilizationProvider : IUsageProvider
     /// the window is empty, see <see cref="PlanHistoryProvider.ZeroReadingFreshness"/>, whose
     /// argument and threshold apply here unchanged and are shared rather than restated.</item>
     /// </list>
+    ///
+    /// <para>Public so the model limits (<see cref="ModelLimit.Bar"/>) ask the same question
+    /// the two meters do, rather than a second rule that could drift from this one.</para>
     /// </summary>
-    private static int? CurrentWindowPercent(UtilizationBar? bar, DateTimeOffset utcNow, TimeSpan age)
+    public static int? CurrentWindowPercent(UtilizationBar? bar, DateTimeOffset utcNow, TimeSpan age)
     {
         if (bar is null || bar.ResetsAtUtc is { } resets && resets <= utcNow)
         {
