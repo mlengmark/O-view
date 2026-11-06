@@ -26,11 +26,12 @@ References run one way: **skins → App → Presentation → Core**. A project m
 | Session/weekly meters, boost chip | `PanelMeterView`, `PanelBoostChipView` |
 | Stat tiles, per-model breakdown | `PanelTileView`, `PanelTilesView`, `PanelTileSegmentView` |
 | 31-day graph, weekly-reset gridlines | `PanelGraphView`, `PanelGraphColumnView`, `PanelGraphBoundaryView` |
-| Off-plan banner and section | `PanelOffPlanView`, `PanelOffPlanBannerView` |
+| A model's own weekly limit bar | `PanelSections.ModelLimitMeters`, one `PanelMeterView` per model |
+| Off-plan banner and section | `PanelOffPlanView`, `PanelOffPlanBannerView`, `PanelOffPlanSectionView` |
 | Tokens-used bars, legend and breakdown table | `PanelTokenBarsView`, `PanelTokenBarView`, `PanelTokenBreakdownRow` |
 | The scope note beneath the tiles | `PanelSections.ScopeNote` |
 
-A skin only lays the view model it is given out, it computes no figure, no band and no word. Windows does this in `src/O-view.Tray/Popup/` (`PopupWindow.xaml.cs`, plus `PopupMeter.cs`, `PopupTiles.cs`, `PopupGraph.cs`, `PopupDivergence.cs` and `PopupWeeklyRow.cs`); Linux does it in `src/O-view.Linux/Panel/` (`PanelContent.cs`, plus `PanelGraph.cs`, `PanelOffPlan.cs`, `PanelStatTiles.cs` and `PanelTokenBars.cs`). Both files that assemble a whole panel, `PopupWindow.xaml.cs` and `PanelContent.cs`, stay under 600 lines by design, a skin that grows past that is usually a skin that has started computing content again.
+A skin only lays the view model it is given out, it computes no figure, no band and no word. Windows does this in `src/O-view.Tray/Popup/` (`PopupWindow.xaml.cs`, plus `PopupMeter.cs`, `PopupModelMeters.cs`, `PopupTiles.cs`, `PopupGraph.cs`, `PopupDivergence.cs` and `PopupWeeklyRow.cs`); Linux does it in `src/O-view.Linux/Panel/` (`PanelContent.cs`, plus `PanelGraph.cs`, `PanelOffPlan.cs`, `PanelStatTiles.cs` and `PanelTokenBars.cs`). Both files that assemble a whole panel, `PopupWindow.xaml.cs` and `PanelContent.cs`, stay under 600 lines by design, a skin that grows past that is usually a skin that has started computing content again.
 
 ## The panel's height
 
@@ -94,7 +95,7 @@ head clamps, snaps, steps or reads the file itself ([ADR-0017](adr/0017-remember
                     IShellToSkin  ◀── skins render view models ◀──┘
                     ISkinToShell  ──▶ user commands (open panel, toggle setting, exit)
 
-- **Snapshots are chosen whole**, from one source at a time, and never merged field by field.
+- **Snapshots are chosen whole**, from one source at a time, and never merged field by field. Two things are not in a snapshot and are read from Claude Code's cached block directly: a model's own weekly limit and the spend Claude reports past the plan. `PanelSections.ModelLimitMeters` and the off-plan section take that block, never a snapshot, so the same block gives the same bar and the same figure whichever source won ([ADR-0019](adr/0019-model-limit-and-reported-spend.md)).
 - **Every value says what it is.** A session percentage, a reset time, a token count and a modelled USD figure are never a bare nullable, each is one of Core's four status-paired types (`UsagePercent`, `UsageInstant`, `TokenCount`, `EstimatedUsd`), a `Value` beside a `UsageValueStatus` of `Real` (measured), `Estimated` (derived or modelled) or `Unavailable` (no source produced one). A value flagged `Unavailable` never carries a figure, so a reader never has to decide whether a null means "nothing was read" or "the answer is nothing" (CLAUDE.md rule 6). Core produces these pairs; Presentation is the only layer that turns a status into wording, "local estimate", "unavailable", the as-of suffix on a stale tooltip, so a skin never has to decide what a status means, only how to lay out what Presentation already said.
 - **The shell calls skins on the UI thread, always, and only through `IUiDispatcher`.** `ShellHost` is the one place the engine is built, started and disposed; it posts every `IShellToSkin` push onto the dispatcher, including the ones that already arrive on the UI thread, so a skin never has to work out which of the four it can assume the thread on. On Linux, D-Bus callbacks arrive on a thread of their own first: they go through `BusCallback`, which posts to the UI thread and never blocks it, before reaching `ShellHost`'s dispatcher the same way every other push does.
 

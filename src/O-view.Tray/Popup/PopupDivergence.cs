@@ -11,10 +11,12 @@ namespace OView.Tray.Popup;
 /// Draws off-plan usage in the two registers <see cref="PanelOffPlanView"/> decides:
 ///   • a live banner for what is happening in the CURRENT session window (the divergence
 ///     detector's real-time signal), and
-///   • a standing 31-day off-plan SPEND total (GitHub issue #3), estimated from
-///     credit-billed models rather than the 5-hour session.
-/// The two are independent: a recorded 31-day figure shows even when the current window is
-/// on-plan, and the banner shows even before any credit spend has accrued.
+///   • a standing off-plan SPEND section (GitHub issue #3). Without a model limit it is the
+///     estimated value of credit-billed models over the chart's window; on an account with
+///     one it is the amount Claude reports as spent, with no window stated. It is absent
+///     while there is nothing to show.
+/// The two are independent: the section shows even when the current window is on-plan, and
+/// the banner shows even before any credit spend has accrued.
 ///
 /// <para>Every sentence and figure below arrives built. What is left here is the three
 /// things WPF has an opinion about: whether each register is collapsed or taking space, how a
@@ -49,7 +51,7 @@ internal sealed class PopupDivergence(
             linkAnchor.Inlines.Add(b.LinkLabel);
         }
 
-        // ── standing 31-day off-plan spend (issue #3) ────────────────────────────
+        // ── standing off-plan spend (issue #3) ───────────────────────────────────
         // The separator is its own element in the panel's stack, so it collapses with the
         // section: left behind it would close the panel on a rule with nothing under it.
         var sectionVisibility = offPlan.Section is null ? Visibility.Collapsed : Visibility.Visible;
@@ -65,8 +67,9 @@ internal sealed class PopupDivergence(
             coverage.Text = s.Coverage;
 
             // The explanation is on hover now rather than standing under the figure (issue #181).
-            // It still carries the rule-6 caveat that this is not what was charged, moving a
-            // caveat behind a hover is the obvious way to lose one, so the sentence lives in
+            // It still carries the rule-6 caveat of what the figure is (an estimate, or another
+            // application's cached answer), moving a caveat behind a hover is the obvious way
+            // to lose one, so the sentence lives in
             // OffPlanText where it has one definition and a test can assert it.
             creditsSection.ToolTip = HoverCard.Text(owner, s.Hint);
             HoverCard.ApplyTiming(creditsSection);

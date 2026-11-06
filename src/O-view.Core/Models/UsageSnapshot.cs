@@ -26,7 +26,8 @@ namespace OView.Core.Models;
 /// ends it, rather than as a wait (GitHub issue #6).
 /// </param>
 /// <param name="WeeklyResetPeriod">
-/// Cadence between weekly resets, as derived. Carried so the usage graph can step back from
+/// Cadence between weekly resets: the fixed seven days of the weekly grid, a constant rather
+/// than something worked out per snapshot. Carried so the usage graph can step back from
 /// <paramref name="WeeklyResetAtUtcValue"/> to draw past week boundaries on exactly the cadence
 /// the countdown uses. Null alongside an unavailable <paramref name="WeeklyResetAtUtcValue"/>.
 ///

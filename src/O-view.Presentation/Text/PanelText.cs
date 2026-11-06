@@ -269,9 +269,11 @@ public static class PanelText
     /// #248 is the removal it promised.</para>
     ///
     /// <para><b>The five-hour window is the opposite and keeps its <c>~</c></b>
-    /// (<see cref="SessionReset"/>). It rolls from first use rather than sitting on a grid, so its
-    /// reset is still derived and still bracketed. Applying one rule to both windows is the
-    /// mistake ADR-0014 exists to prevent, so <see cref="IsApproximate"/> stays for that caller.</para>
+    /// (<see cref="SessionReset"/>). It rolls from first use rather than sitting on a grid, so
+    /// its reset is exact only while Claude Code reports one that is ahead of now; otherwise it
+    /// is derived from the sampled series and bracketed. Applying one rule to both windows is
+    /// the mistake ADR-0014 exists to prevent, so <see cref="IsApproximate"/> stays for that
+    /// caller.</para>
     /// </summary>
     public static string WeeklyReset(
         DateTimeOffset resetAtUtc, DateTimeOffset utcNow, TimeZoneInfo local)

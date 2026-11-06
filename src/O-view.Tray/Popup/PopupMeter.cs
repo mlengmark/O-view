@@ -12,8 +12,9 @@ using Color = System.Windows.Media.Color;
 namespace OView.Tray.Popup;
 
 /// <summary>
-/// Draws one usage meter (session or weekly): the figure's own words, the band it falls in,
-/// and how wide the fill runs. The band's colour comes from the tray icon's shared rule
+/// Draws one usage meter (session, weekly or a model's own weekly limit): the figure's own
+/// words, the band it falls in, and how wide the fill runs. The band's colour comes from the
+/// tray icon's shared rule
 /// (<see cref="TrayIconGeometry.LevelColor"/>), theme-aware, exactly as the Linux panel's
 /// does; this head used to restate the dark-theme shades and so painted the same reading a
 /// different colour in the light theme.

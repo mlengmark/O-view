@@ -168,6 +168,13 @@ Both bars show **percentage of quota consumed**, consistent metric, with time-to
 |---|---|---|
 | **Current session** | % of 5-hour rolling limit used | `Resets in 2h 14m · 16:32` |
 | **Weekly** | % of 7-day limit used | `Resets in 6d 3h · Tue 06:28`, same shape, plus a weekday (see below) |
+| **Weekly · Fable** | % of that model's own 7-day limit used, one row per model limit the account has | The weekly row's line, exact and never `~` |
+
+**A model's own limit ([ADR-0019](adr/0019-model-limit-and-reported-spend.md)).** An account with a weekly limit on one model gets that limit as its own bar under Weekly, labelled `Weekly · ` and the model's name as Claude Code cached it. It is built from the cached block alone, never from the snapshot, so it shows whichever source supplied the two meters above; Claude Desktop's history carries no model limits, and a bar that followed the snapshot would vanish whenever Desktop's reading won. A row has no boost chip.
+
+- **A reading that no longer describes its window is unknown, and the row stays.** A passed reset or an aged zero reads `unknown` with no fill, by the rule the two meters' cached figures use. A passed reset also loses its reset line, since nothing steps it forward; an aged zero's reset is still ahead and keeps its line. Dropping the row instead would say the limit went away, when all that is known is that the reading is old (rule 6).
+- **An account with no such row sees no bar, and nothing else changes.**
+- **Windows** places the rows under the weekly reset line at the meters' own sizes, with the gap above each following the panel's density; a long model name is trimmed rather than drawn over the figure. **Linux** wraps a long name onto a second line and the panel grows to fit.
 
 **Boost chip ([GitHub issue #254](https://github.com/mlengmark/O-view/issues/254)).** When Claude Code has cached a promo notice for a meter, that meter's heading carries a chip between its label and its percentage: `50% Boosted · until 31 Aug · ends in 2w 4d 14h`. It reuses the tier badge's `BadgeBg`/`BadgeText` pair, nothing is added to `PanelPalette`, so it reads as a factual label about the account rather than a warning; amber stays reserved for things needing attention.
 
@@ -346,15 +353,22 @@ Two rules on the wording:
 
 The banner also carries a link to Claude's own usage settings, the address Claude Code itself uses for that screen, not a plausible-looking guess. Every wording above ends by sending the reader there for the figure O-view will not state, so the instruction is the thing you click.
 
+**The model limit has three sample states** (`model-limit`, `model-limit-spend` and `model-limit-spend-unknown`), the only ones with a model bar: the bar with its section hidden because nothing was reported, the bar with a reported figure beside $92.75 of recorded credit estimate that it must ignore, and the bar with extra usage on and no `spend`.
+
 **The three states have offscreen renders** (`--popup-samples` → `panel-offplan-{unknown,off,on}-{light,dark}.png`). They had none before, which is how a banner asserting a charge at accounts that could not be charged survived: no fixture had an exhausted meter, so nobody ever looked at it. Same shape as issues #58 and #170.
 
-**Standing (last 31 days)**, the `Off-plan usage · last 31 days` section ([GitHub issue #3](https://github.com/mlengmark/O-view/issues/3)):
+**Standing**, the `Off-plan usage` section ([GitHub issue #3](https://github.com/mlengmark/O-view/issues/3)). **It is shown only when there is off-plan usage to show, on every account and in both panels.** With nothing to show there is no heading, no `$0.00` and no gap, and the Windows panel loses the separator above it as well. Without a model limit, usage with no published price still shows the section, with an unknown figure, because unknown is not zero. Which figure it carries depends on the account:
 
-- Shows **estimated credit spend over 31 days**, the API-rate value of usage on credit-billed models ([`CreditBilledModels`](../src/O-view.Core/Models/CreditBilledModels.cs), currently Fable, the one case verified against billing).
+- **Without a model limit** the heading reads `Off-plan usage · last 31 days` (the day count is the chart's window), and the section shows **estimated credit spend over 31 days**, the API-rate value of usage on credit-billed models ([`CreditBilledModels`](../src/O-view.Core/Models/CreditBilledModels.cs), currently Fable, the one case verified against billing).
 - **Why not a lookback classifier:** there is no per-request billing-tier field (`service_tier` is uniformly `"standard"`, even on requests known to have billed to credits), and the plan meter's short retention makes retroactive divergence impossible. So the 31-day figure is a per-model estimate, not a per-request fact, hence the explicit "models billed as extra usage (Fable)" caption.
 - Carries the same coverage caveat as the other 31-day tiles (`N of 31 days recorded`) and, since [issue #32](https://github.com/mlengmark/O-view/issues/32), a **two-clause** caption: published API rates, balance unreadable, check billing for exact. The mechanics that used to be spelled out here (deduplicated locally; an upper bound, as bundles discount up to 30%) were cut for space, they described *how* the estimate is built, whereas the two clauses kept are the ones that stop the figure being read as money charged, which is what rule 6 actually requires.
 
-The two registers are independent by design: the 31-day figure shows even when the current session is on-plan, and the live banner shows even before any credit spend has accrued.
+- **With a model limit** (any model-scoped weekly row in the cached block, one whose reset has passed included) usage of that model draws from its own limit, so pricing it would call plan usage off-plan. The section instead shows **what Claude reports as spent past the plan**, from the block's `spend` ([ADR-0019](adr/0019-model-limit-and-reported-spend.md)): heading `Off-plan usage` with no day count, badge `from Claude`, label `Reported spend`, no `Est.` and no coverage note, because `spend` states no period and any span written beside it would be O-view's invention. The hint says so and carries the `(reported by Claude Code, read 10:47)` stamp.
+  - **The amount decides, whatever `spend.enabled` says.** A non-zero amount shows; zero hides the section however heavily the model was used. USD reads `$12.34`; any other currency shows its own code, never `$`, with the decimal places it came with (`12.30 EUR`, `1234 JPY`).
+  - **With no readable amount the setting decides.** `extra_usage.is_enabled` on (that field alone, because an unreadable `spend` keeps no `enabled` of its own) shows `unknown`, since money may have moved and nobody reported how much; off or not stated hides the section.
+  - **The two figures are never added or shown together.** The banner, the value tile's relabel and the notification still read the estimate, because they answer a different question.
+
+The two registers are independent by design: the section shows even when the current session is on-plan, and the live banner shows even before any credit spend has accrued.
 
 **The tray icon is unchanged**, session % remains the headline per the product decision. The off-plan signal lives in the panel and notifications.
 
@@ -570,7 +584,9 @@ Images are generated from `brand/o-view-mark.svg` into `installer/brand/` as BMP
 | Tokens today / 31 days | Rollup store, fed from Claude Code and Cowork transcripts ([ADR-0006](adr/0006-local-rollup-store.md)) |
 | Est. value | Rollup store and the bundled price table, checked weekly against the published one ([ADR-0016](adr/0016-published-reference-data-is-fetchable.md)) |
 | Usage graph | Rollup store |
-| Off-plan usage | The divergence detector and the credit-billed model list; an exact credit balance has no local source and is not shown |
+| A model's weekly limit | `cachedUsageUtilization.utilization.limits[]` in `~/.claude.json`, read directly rather than through the snapshot ([ADR-0019](adr/0019-model-limit-and-reported-spend.md)) |
+| Off-plan banner | The divergence detector, with the account's extra-usage setting from the same cached block |
+| Off-plan section | Without a model limit, the rollup store priced over the credit-billed model list; with one, `cachedUsageUtilization.utilization.spend`, which states no period. An exact credit balance has no local source and is not shown |
 
 Every element is served from local files and from invoking Claude's own client, with no credential handled ([ADR-0015](adr/0015-no-credential-based-usage-sources.md)).
 

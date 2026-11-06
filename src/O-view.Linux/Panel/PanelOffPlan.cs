@@ -10,7 +10,7 @@ namespace OView.Linux.Panel;
 
 /// <summary>
 /// Both off-plan registers: the live banner near the top of the panel, and the standing
-/// 31-day spend section at its foot.
+/// spend section at its foot, which is absent while there is nothing to show.
 ///
 /// <para>One class for the two because they are two halves of one claim, built from one
 /// <see cref="PanelOffPlanView"/>; every word and figure in them arrives built.</para>
@@ -35,14 +35,16 @@ internal sealed class PanelOffPlan(LinuxPanelTheme theme)
             banner.Title, banner.Detail, $"{banner.LinkLabel}: {banner.LinkUrl}"));
 
     /// <summary>
-    /// The standing 31-day off-plan spend section (<see cref="PanelOffPlanSectionView"/>):
-    /// heading and badge, the figure, the coverage caveat, and what the figure is.
+    /// The standing off-plan spend section (<see cref="PanelOffPlanSectionView"/>): heading and
+    /// badge, the figure, the coverage caveat when the figure has a window, and what the figure
+    /// is. The figure is the estimate over the chart's window, or on an account with a model
+    /// limit what Claude reports as spent, which has no window and so no coverage caveat.
     ///
     /// <para><b>The explanation stands rather than hovering.</b> The Windows panel moved it to
     /// a hover card to save three permanent lines (issue #181), which is the right trade where
     /// hover exists; a compositor may never deliver it here, and what would be lost is the
-    /// rule-6 caveat that this is an estimate and not the charge, the one sentence the
-    /// section cannot ship without. The same reasoning puts the weekly reset's action on its
+    /// rule-6 caveat of what the figure is (an estimate, not the charge, or another
+    /// application's cached answer), the one sentence the section cannot ship without. The same reasoning puts the weekly reset's action on its
     /// row rather than behind a card (<see cref="PanelMeterView.ResetLineWithAction"/>).</para>
     /// </summary>
     public void AddSectionTo(StackPanel root, PanelOffPlanSectionView offPlan)

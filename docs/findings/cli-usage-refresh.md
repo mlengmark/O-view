@@ -141,9 +141,9 @@ contradicts the first one on two fields, and the correction is the point of this
 |---|---|---|
 | `five_hour` | `20%`, exact `resets_at` | yes |
 | `seven_day` | `2%`, exact `resets_at` | yes |
-| `limits[]` | two entries, see below | **no** (issue #238) |
+| `limits[]` | two entries on this account, see below | the model-scoped rows only; the two account-wide rows repeat `five_hour` and `seven_day` |
 | `extra_usage` | four real booleans, see below | yes, since issue #259 |
-| `spend` | `enabled:false`, `used: {0, USD}`, a `disclaimer` sentence | no |
+| `spend` | `enabled:false`, `used: {0, USD}`, a `disclaimer` sentence | yes, see [cached-usage-utilization.md](cached-usage-utilization.md#model-limits-and-spend) |
 | `member_dashboard_available` | `false` | no |
 | `nimbus_quill` | `0%`, no `resets_at` | no |
 
@@ -185,11 +185,17 @@ That answer is now the basis of the off-plan banner's wording (issue #259). Befo
 told every user whose 5-hour window ran out that "usage is billing beyond your plan", including
 the ones who could not be billed anything.
 
-`spend` is populated too, though nothing needs it yet: `enabled:false`, `used` as a minor-unit
-money object, and a `disclaimer` sentence with a support link in it. `member_dashboard_available`
+`spend` is populated too: `enabled:false`, `used` as a minor-unit
+money object, and a `disclaimer` sentence with a support link in it. It is read now, for an
+account with a model limit, and the other findings page has its shape. `member_dashboard_available`
 is `false`, again a value, not an absence.
 
-### `limits[]` is a re-projection, not a second source
+### `limits[]`: a re-projection on this account, and the carrier of a model's own limit
+
+**Re-measured 2026-11-06 on an account with a model limit: the list then held a third row,
+`weekly_scoped`, with `scope` set.** See
+[cached-usage-utilization.md](cached-usage-utilization.md#model-limits-and-spend). What follows
+is the 2026-09-01 reading of the two account-wide rows, which is still how those two look.
 
 ```
 kind=session     group=session  pct=20  severity=normal  is_active=true   scope=null
@@ -198,17 +204,17 @@ kind=weekly_all  group=weekly   pct=2   severity=normal  is_active=false  scope=
                  resets_at=2026-09-07T21:00:00.156196+00:00
 ```
 
-Both entries match `five_hour` and `seven_day` **to the microsecond**. So `limits[]` holds no
-percentage and no reset instant O-view is not already reading. What it holds that nothing else
-does is three fields:
+Both entries match `five_hour` and `seven_day` **to the microsecond**. So these two rows hold no
+percentage and no reset instant O-view is not already reading. What they hold that nothing else
+does is three fields, none of which O-view reads:
 
 - **`is_active`**, which limit currently binds. Session on both measurements; a case where the
   weekly meter is the higher of the two has never been observed, so *what the flag means* is not
   established from this data, only that it is reported rather than derived.
 - **`severity`**, Anthropic's own classification. **Only `normal` has ever been observed**, at
   70%, 20% and 2%. The value names of the rest of the scale are unknown.
-- **`scope`**, null on both. The obvious carrier for a model-scoped limit, which makes `limits[]`
-  the shape a Max account's Opus limit would arrive in.
+- **`scope`**, null on both of these rows. It is the carrier of a model-scoped limit, and on an
+  account with one it is not null: see the 2026-11-06 note above.
 
 ### No client contract, the fact that decides how much weight these can bear
 
@@ -234,6 +240,12 @@ nothing in the vendor's own product would break if the server renamed or dropped
 here is discouraged by that, `extra_usage.is_enabled` is consumed by Claude Code and is read on
 that basis, while `user_disabled` and `spend_limit_reached` are carried for diagnostics and
 deliberately not branched on. It is the asymmetry to weigh before making any of them load-bearing.
+
+`limits[]` and `spend` now are load-bearing, for the model bar and the off-plan section, and
+neither string was counted here. `weekly_all` counting zero suggests the client does not read
+the list, so its shape could change without notice. If it does, the row stops qualifying and the
+account falls back to no bar and the estimate; the readers skip a row of the wrong shape and
+never throw ([ADR-0019](../adr/0019-model-limit-and-reported-spend.md)).
 
 ## 5. The `/usage` text output carries more
 

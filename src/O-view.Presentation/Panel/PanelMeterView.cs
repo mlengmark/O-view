@@ -3,8 +3,9 @@ using OView.Core.Models;
 namespace OView.Presentation.Panel;
 
 /// <summary>
-/// One of the two usage meters, as a head has to place it: a label, the figure beside it, the
-/// fill, the line under it, and, on the weekly meter, the boost chip.
+/// One usage meter, as a head has to place it: a label, the figure beside it, the fill, the
+/// line under it, and, on the weekly meter, the boost chip. The session and weekly meters are
+/// two of these, and an account with a model limit gets one more per model.
 ///
 /// <para><b>Why the figure and the fill are separate.</b> <see cref="Value"/> is what the row
 /// says; <see cref="FillPercent"/> is how wide to draw. They part company exactly where it
