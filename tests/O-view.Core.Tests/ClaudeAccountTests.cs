@@ -83,6 +83,18 @@ public class ClaudeAccountTests : IDisposable
         Assert.Null(ClaudeAccount.TryRead(bad));
     }
 
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("42")]
+    [InlineData("null")]
+    public void ARootThatIsNotAnObject_ReturnsNull_NeverThrows(string json)
+    {
+        var path = Path.Combine(_dir, "root.json");
+        File.WriteAllText(path, json);
+
+        Assert.Null(ClaudeAccount.TryRead(path));
+    }
+
     [Fact]
     public void EmptyStrings_ReadAsNull_NotBlankBadges()
     {

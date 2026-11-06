@@ -1,5 +1,6 @@
 using OView.App.Diagnostics;
 using OView.Core.Models;
+using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.Core.Storage;
@@ -535,5 +536,179 @@ public class DiagnosticsBundleTests : IDisposable
 
         Assert.Contains("RelativeError", bundle, StringComparison.Ordinal);
         Assert.Contains("never installs rates", bundle, StringComparison.Ordinal);
+    }
+
+    // ── limits[] and spend ──────────────────────────────────────────────────────────
+
+    private string BuildWithCached(CachedUtilization? cached, string? readFailure = null) =>
+        DiagnosticsBundle.Build(
+            Windows,
+            PlanHistoryDiagnostics.Inspect(_dir.File("absent.json")),
+            TranscriptScopeReport.Inspect(null, []),
+            account: null,
+            new WeeklyResetAnchor(_dir.File("weekly-reset.json")),
+            new DateTimeOffset(2026, 11, 6, 12, 0, 0, TimeSpan.Zero),
+            cachedUtilization: cached, cachedReadFailure: readFailure);
+
+    // The block as a value, so no test reads the developer's own Claude files. Fetched at
+    // 2026-11-06 11:30 UTC, half an hour before the bundle is built.
+    private static CachedUtilization Block(string utilization) =>
+        CachedUtilization.Parse(
+            "{\"cachedUsageUtilization\":{\"fetchedAtMs\":1793964600000,\"utilization\":" + utilization + "}}")!;
+
+    [Fact]
+    public void EachScopedRowIsPrintedWithItsModelPercentAndResetAndSkippedRowsAreCounted()
+    {
+        var bundle = BuildWithCached(Block("""
+            {"limits":[
+              {"group":"session","percent":12,"resets_at":"2026-11-06T15:00:00+00:00"},
+              {"group":"weekly_all","percent":40,"resets_at":"2026-11-09T21:00:00+00:00"},
+              {"group":"weekly","percent":73,"resets_at":"2026-11-02T21:00:00+00:00","scope":{"model":{"display_name":"Fable"}}},
+              {"group":"weekly","percent":5,"scope":{"model":{"display_name":"Opus"}}}]}
+            """));
+
+        Assert.Contains("4 row(s) seen, 2 skipped, 2 scoped to a model (figures 30 min old)", bundle, StringComparison.Ordinal);
+
+        // An old reset is printed as the file has it; the bundle passes no verdict on it.
+        Assert.Contains("model       : Fable, 73%, resets 2026-11-02 21:00:00Z", bundle, StringComparison.Ordinal);
+        Assert.Contains("model       : Opus, 5%, resets no readable reset", bundle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void SpendReadPrintsAmountCurrencyAndEnabled()
+    {
+        var bundle = BuildWithCached(Block("""
+            {"spend":{"enabled":true,"used":{"amount_minor":1250,"currency":"EUR","exponent":2}}}
+            """));
+
+        Assert.Contains("spend         : read, 12.50 EUR, enabled true", bundle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ASpendOfZeroIsReadNotAbsent()
+    {
+        var bundle = BuildWithCached(Block("""
+            {"spend":{"enabled":false,"used":{"amount_minor":0,"currency":"USD","exponent":2}}}
+            """));
+
+        Assert.Contains("spend         : read, 0.00 USD, enabled false", bundle, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// The three ways a field can fail to be there each get their own line, because "no
+    /// figure" is a different bug report depending on which one it was.
+    /// </summary>
+    [Fact]
+    public void ANoBlockAMissingFieldAndAMalformedFieldEachPrintTheirOwnLine()
+    {
+        var noBlock = BuildWithCached(null);
+        var missing = BuildWithCached(Block("{}"));
+        var malformed = BuildWithCached(Block("""{"limits":"nope","spend":{"enabled":"yes"}}"""));
+
+        Assert.Contains("no cached block", noBlock, StringComparison.Ordinal);
+        Assert.DoesNotContain("spend         :", noBlock, StringComparison.Ordinal);
+
+        Assert.Contains("limits[] is absent or null", missing, StringComparison.Ordinal);
+        Assert.Contains("spend         : absent", missing, StringComparison.Ordinal);
+
+        Assert.Contains("limits[] is present but not a list", malformed, StringComparison.Ordinal);
+        Assert.Contains("spend         : unreadable", malformed, StringComparison.Ordinal);
+        Assert.DoesNotContain("no cached block", malformed, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void OnlyTheNamedFieldsOfTheBlockReachTheBundle()
+    {
+        var bundle = BuildWithCached(Block("""
+            {"extra_usage":{"is_enabled":true,"monthly_limit":99999},
+             "limits":[{"group":"weekly","percent":1,"label":"PRIVATE-LABEL","scope":{"model":{"display_name":"Fable"}}}],
+             "spend":{"enabled":true,"note":"PRIVATE-NOTE","used":{"amount_minor":1,"currency":"USD","exponent":2}}}
+            """));
+
+        Assert.DoesNotContain("PRIVATE", bundle, StringComparison.Ordinal);
+        Assert.DoesNotContain("99999", bundle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TheLimitsSectionRaisesNothingAndLeavesTheCredentialRuleIntact()
+    {
+        var bundle = BuildWithCached(Block("""
+            {"limits":[null,3,"x",{"group":"weekly","scope":5}],"spend":[]}
+            """));
+
+        Assert.Contains("4 row(s) seen, 4 skipped", bundle, StringComparison.Ordinal);
+
+        foreach (var forbidden in new[] { "token", "sk-ant", "Bearer", "password", "secret" })
+        {
+            Assert.DoesNotContain(forbidden, bundle, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void AnEmptyLimitsListIsNotCalledAShapeProblem()
+    {
+        var bundle = BuildWithCached(Block("""{"limits":[]}"""));
+
+        Assert.Contains("0 row(s) seen", bundle, StringComparison.Ordinal);
+        Assert.Contains("limits[] is an empty list", bundle, StringComparison.Ordinal);
+        Assert.DoesNotContain("not a list", bundle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AResetThatCouldNotBeReadIsNotReportedAsNoReset()
+    {
+        var bundle = BuildWithCached(Block("""
+            {"limits":[{"group":"weekly","percent":73.4,"resets_at":"garbage","scope":{"model":{"display_name":"Fable"}}}]}
+            """));
+
+        Assert.Contains("model       : Fable, 73%, resets no readable reset", bundle, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ABlockThatCannotBeParsedIsNamedAsUnreadableNotAsMissing()
+    {
+        var bundle = BuildWithCached(null, readFailure: "ArgumentOutOfRangeException");
+
+        Assert.Contains("cached block unreadable (ArgumentOutOfRangeException)", bundle, StringComparison.Ordinal);
+        Assert.DoesNotContain("no cached block", bundle, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("""{"cachedUsageUtilization":{"fetchedAtMs":9000000000000000000,"utilization":{}}}""")]
+    [InlineData("[]")]
+    [InlineData("""{"cachedUsageUtilization":{"fetchedAtMs":179""")]
+    public void AMalformedCachedFileIsReportedAndRaisesNothing(string json)
+    {
+        var file = _dir.File("claude.json");
+        File.WriteAllText(file, json);
+
+        var block = DiagnosticsBundle.ReadCached([file], out var failure);
+
+        Assert.Null(block);
+        Assert.NotNull(failure);
+        Assert.Contains("cached block unreadable", BuildWithCached(block, failure), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AMissingCachedFileIsNotAFailure()
+    {
+        var block = DiagnosticsBundle.ReadCached([_dir.File("absent.json")], out var failure);
+
+        Assert.Null(block);
+        Assert.Null(failure);
+    }
+
+    [Fact]
+    public void AReadableBlockBeatsAnUnreadableOneBesideIt()
+    {
+        var bad = _dir.File("bad.json");
+        var good = _dir.File("good.json");
+        File.WriteAllText(bad, "[]");
+        File.WriteAllText(good, """{"cachedUsageUtilization":{"fetchedAtMs":1793964600000,"utilization":{}}}""");
+
+        var block = DiagnosticsBundle.ReadCached([bad, good], out var failure);
+
+        Assert.NotNull(block);
+        Assert.Null(failure);
     }
 }

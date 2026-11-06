@@ -178,6 +178,23 @@ public class ModelLimitTests
         Assert.Equal(0, read.RowsSkipped);
     }
 
+    [Theory]
+    [InlineData("{}", ModelLimitsState.Absent)]
+    [InlineData("""{"limits":null}""", ModelLimitsState.Absent)]
+    [InlineData("""{"limits":"nope"}""", ModelLimitsState.Unreadable)]
+    [InlineData("""{"limits":{}}""", ModelLimitsState.Unreadable)]
+    [InlineData("""{"limits":[]}""", ModelLimitsState.Read)]
+    public void TheStateSaysWhetherLimitsWasAbsentNotAListOrAList(string utilization, ModelLimitsState expected)
+    {
+        Assert.Equal(expected, Read(utilization).State);
+    }
+
+    [Fact]
+    public void ARowCountBuiltByHandReadsAsAList()
+    {
+        Assert.Equal(ModelLimitsState.Read, new ModelLimitRead([], 3, 3).State);
+    }
+
     [Fact]
     public void ANonObjectUtilizationYieldsNothing()
     {
