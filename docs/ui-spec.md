@@ -15,7 +15,7 @@ mixed together throughout, and they are not equally binding:
 | | Binds where | Lives in |
 |---|---|---|
 | **The shared contract**: *what* a surface says and when. Icon geometry and colour bands, the tooltip's wording and its degraded forms, panel copy, the reset-line phrasing, the countdown format, tile labels, which states are "unknown" rather than zero | **Both heads.** A user should not be told a different thing on a different OS | `O-view.Presentation` for the wording and view models (`PanelText`, `PanelSections` and the rest), `O-view.App` for the geometry and palette (`TrayIconGeometry`, `PanelPalette`, `PanelMetrics`). Changing the wording means changing it in one place, and exact-string tests pin it |
-| **Windows presentation**: *where* a surface appears and how it moves. Docked placement, `PopupPositioner`, work-area insets, the 230 ms rise, foreground/`AttachThreadInput` handling, `Shell_NotifyIcon` behaviour, Segoe glyph avoidance | **The Windows head only** | `O-view.Tray` |
+| **Windows presentation**: *where* a surface appears and how it moves. Docked placement, `PopupPositioner`, work-area insets, the slide in and out, foreground/`AttachThreadInput` handling, `Shell_NotifyIcon` behaviour, Segoe glyph avoidance | **The Windows head only** | `O-view.Tray` |
 
 Read every section below as Windows presentation unless it is describing content. Where Linux
 **cannot** meet a section, it is noted inline rather than left to be inferred, the four real
@@ -462,15 +462,42 @@ Measured on a 2560×1440 display, taskbar bottom-docked at `y=1392`, **before th
 
 ## 4. Motion
 
-> **Windows-only, and for a stated reason.** The motion below is *fitted to Windows' own
-> Quick Settings flyout*: it exists to make O-view's surfaces indistinguishable from the
-> shell's. Copying that curve onto a window in a Linux desktop's corner would imitate nothing;
-> it would just be an animation borrowed from another platform's shell. The Linux panel opens
-> without it.
+> **Windows-only, and for a stated reason.** The curves below are *fitted to Windows' own
+> Quick Settings flyout*: they exist to make O-view's surfaces move like the shell's.
+> Copying that curve onto a window in a Linux desktop's corner would imitate nothing; it would
+> just be an animation borrowed from another platform's shell. The Linux panel opens, closes,
+> flips its tiles and folds its breakdown without any of the motion described here, and the
+> Linux menu is drawn by the desktop, so O-view cannot animate it at all. Nothing in this
+> section is built for Linux.
 
-Both docked surfaces, the detail panel and the tray menu, **rise out of the docked edge**: a clip reveals the surface from that edge while the content slides the last 20 px into place, over **230 ms** opening and 150 ms closing. They previously appeared and vanished in a single frame, which reads as a glitch rather than as a window opening.
+Every figure in this section is a base figure in
+[`PanelMotion`](../src/O-view.App/Rendering/PanelMotion.cs) multiplied by its `Pace`, which is
+**2**. The figures quoted here are what runs on screen, so retuning the whole app is one edit to
+that constant and this section's figures follow it. `PanelMotion` holds no toolkit type, so a
+test on Linux can pin the rules between the figures; the Windows head turns them into WPF
+animations through `WpfMotion`.
 
-**The motion is copied from the platform, not invented.** Windows' own Quick Settings flyout was recorded frame by frame on this machine: its top edge rises while the bottom stays pinned to the taskbar, travelling the full height in ~230 ms with almost no fade. It is a *geometric reveal*, not a zoom, not a dissolve.
+### Opening and closing a surface
+
+Both docked surfaces, the detail panel and the tray menu, **slide out of the docked edge as one
+rigid piece**: border, corners and content move together, at full opacity, with no clip of
+their own. Opening takes **460 ms** on the decelerate curve. Closing is the reverse, **300 ms**
+on the accelerate curve, and the window is hidden when it ends. Docked at the bottom the card
+rises; docked at the top it drops. The window's bounds are the edge the card emerges from, so it
+appears out of a line 12 px above the taskbar, not out of the taskbar itself. The panel and the
+menu use the same figures.
+
+**What changed, and why.** Until 2026-11-06 the surfaces were a wipe: a clip rectangle grew from
+the docked edge over 230 ms while the content moved the last 20 px behind it and a 90 ms fade
+took the edge off the first instant, and closing ran the same in reverse over 150 ms. That was
+three motions at three rates, so the card was uncovered by a moving line instead of moving, and
+its border and rounded top corners existed only on the last frame. The menu, a third of the
+panel's height, took the same time and so crossed its edge at a third of the speed. Maximilian
+compared the wipe with a plain slide in a side-by-side demo on 2026-11-06, chose the slide, and
+asked for every duration to be twice the first proposal. The wipe's clip, its 20 px content
+shift and its fade are gone.
+
+**The motion is copied from the platform, not invented.** Windows' own Quick Settings flyout was recorded frame by frame on this machine: its top edge rises while the bottom stays pinned to the taskbar, travelling the full height in ~230 ms with almost no fade. The slide's durations are deliberately slower than that recording; its curves are still the platform's.
 
 The easing is **fitted** to that trace by searching cubic-Bezier control points against measured progress, rather than picked by name:
 
@@ -484,30 +511,56 @@ The easing is **fitted** to that trace by searching cubic-Bezier control points 
 
 The third row was the first attempt here, on the assumption that Windows uses `cubic-bezier(0,0,0,1)`. Measured against the real thing it is twenty times further out and visibly too abrupt, it passes 70% before the platform reaches 15%, which reads as a pop rather than a rise. **No named easing was close enough to trust.**
 
-A **scale** transform was tried first and rejected: smooth, but it reads as a zoom rather than as a panel rising out of the taskbar. A plain slide was rejected too, the content fills the window, so the part sliding in from beyond the edge is clipped by the window bounds; the clip is what makes the slide work.
+A **scale** transform was tried first and rejected: smooth, but it reads as a zoom rather than as a panel rising out of the taskbar. A plain slide was rejected next, because the content fills the window, so the part sliding in from beyond the edge is cut off by the window's bounds. That cut-off is exactly what the demo showed, and on 2026-11-06 it was chosen over the wipe that had replaced it.
 
-The reveal direction comes from [`PopupPositioner`](../src/O-view.Tray/Popup/PopupPositioner.cs), the only thing that knows which edge was docked to, so a top-docked taskbar reveals downward.
+The slide direction comes from [`PopupPositioner`](../src/O-view.Tray/Popup/PopupPositioner.cs), the only thing that knows which edge was docked to, so a top-docked taskbar drops the card down.
 
-**Verified by re-measuring O-view the same way**: the reveal reaches 0.60 at 33–41 ms and 0.83 at ~87 ms against the reference's 57 ms and 115 ms. That gap sits inside the measurement's own precision, ~8 ms of sampling granularity plus screen-capture latency, and a start instant known only to within one frame, so it is a match to the limit of what this method can resolve, not an exact one.
+**The curve was verified against the trace when the wipe was built**, by re-measuring O-view the same way: the reveal reached 0.60 at 33–41 ms and 0.83 at ~87 ms against the reference's 57 ms and 115 ms. That gap sat inside the measurement's own precision, ~8 ms of sampling granularity plus screen-capture latency, and a start instant known only to within one frame, so it was a match to the limit of what the method could resolve. The curves are unchanged, but the durations are now twice the reference's by design, so that comparison was not repeated for the slide.
 
-Closing defers `Hide()` to the end of the animation, since hiding first would make the animation invisible. A close in flight is cancelled if the surface is re-opened, so clicking the tray icon again mid-fade brings it straight back rather than letting it finish disappearing. Menu **actions** run after the animation completes, which preserves the rule that a balloon or modal never appears behind a still-visible topmost flyout.
+Closing defers `Hide()` to the end of the slide, since hiding first would make the slide invisible, and the menu and the panel each carry a guard timer 150 ms past the close that settles the surface if the animation never reports it finished. A close in flight is cancelled if the surface is shown again by anything other than the icon. A click on the icon during the close is the second half of the toggle and leaves the surface closed (see *Clicking the icon toggles* below). Menu **actions** run after the slide completes, 300 ms after the choice instead of the 150 ms they once waited, which preserves the rule that a balloon or modal never appears behind a still-visible topmost flyout.
 
-`--popup-pin` and `--menu-pin` skip the animation entirely: a verification still needs the finished state, not a frame from the middle of a fade.
+The animated offset is snapped to whole device pixels. Both windows format text for pixel grids (`TextFormattingMode="Display"`), and a fractional translate makes that text shimmer, most visibly in the long slow end of the decelerate curve.
 
-### The disclosure fold
+`--popup-pin` and `--menu-pin` skip the animation entirely: a verification still needs the finished state, not a frame from the middle of a slide.
 
-"Why so large?" **folds**, on the same curve as the entrance: the explanation's height animates
-from zero and its content is clipped to it, so the text slides out from behind the fold edge
-while the panel grows *upward* out of the docked corner. It used to appear whole, the body,
-the `SizeToContent` window's height and the re-dock all changing in one frame, three
-discontinuities in the one surface on screen that had been tuned against a trace of the
-platform.
+### When Windows animations are off
 
-Durations are **scaled** from the entrance's, not chosen: **191 ms** open and **125 ms** close,
-the traced 230 : 150 at 0.83. The fold covers a twelfth of the entrance's distance, and giving
-60 px the time 700 px needs reads as hesitation. There is deliberately **no fade**, the same
-reasoning that made the entrance a geometric reveal rather than a dissolve, and the chevron
-rotates 180° over the same curve instead of swapping glyph.
+`WpfMotion.AnimationsOn` reads `SystemParameters.ClientAreaAnimation` (Settings > Accessibility > Visual effects > Animation effects) each time a transition starts, so changing the setting takes effect without a restart. With it off, **every transition in this section is skipped**: each state is applied at once through the same instant paths the verification renders use, and hover fills switch instantly. `PanelMotion.Runs` is the one rule that says so. The live checks that need something mid-flight report NOT RUN on such a machine instead of failing for the machine's setting: `--motion-check` as a whole, and for `--fold-check` the two claims that need a fold in flight (the click reversing a close landing mid-fold, and the fold continuing from the height on screen), while its end-state claims still run and it can still end `RESULT: PASS`.
+
+### The breakdown fold
+
+The tokens-used **Breakdown** view **folds** open under the Bars / Breakdown switch, on the same
+curves as the entrance: the breakdown's height animates from where it is to full, **400 ms** on
+the decelerate curve, or to zero, **280 ms** on the accelerate curve, and its content is clipped
+to it, so the table slides out from behind the fold edge while the panel grows *upward* out of
+the docked corner. It used to appear whole, the body, the `SizeToContent` window's height and
+the re-dock all changing in one frame, three discontinuities in the one surface on screen that
+had been tuned against a trace of the platform. The panel's fold carries no chevron: the switch
+shows its state by which segment is lit.
+
+The durations are `PanelMotion` figures handed to
+[`DisclosureAnimation`](../src/O-view.Tray/Popup/DisclosureAnimation.cs) by its caller. They used
+to be scaled from the entrance's by a fixed 0.83 (191 ms open, 125 ms close); the panel's fold
+and the menu's threshold list now travel different distances and have figures of their own, so
+nothing is derived from the entrance any more.
+
+**The rows now fade.** The fold was a pure geometric reveal with no fade, on the reasoning that
+the entrance was one, but a hard edge passing through rows at full strength read as unfinished.
+Opening, each of the six table rows fades in and rises 4 DIP into place over **300 ms**, row
+`i` (0 at the top) starting **100 + 36 × i ms** after the fold begins, so the last starts before
+the fold ends. Closing, all rows fade out together over **140 ms**, linear, so they are gone
+before the fold line reaches them. Opacity and a render transform take no part in layout, so the
+fold's measured height is unchanged.
+
+**The Bars / Breakdown switch** moves its highlight: one element slides from the old segment to
+the new, position and width together, **360 ms** on the decelerate curve in both directions,
+while the labels crossfade their text colour over **280 ms**. It used to jump in a frame.
+
+**The frozen mid-fold render is a point in time.** `typical-tokens-folding` is a still taken
+partway through the fold, and it renders the state the live animation is in at a stated moment:
+the body's height from the curve at that time, and each row's opacity and offset from its own
+start and duration at that time, all read through `PanelMotion` so the still and the animation
+cannot drift apart. It is not a fraction of the way through anything.
 
 **Two failures here are invisible to any offscreen render**, and both were found by
 [`--fold-check`](../src/O-view.Tray/Diagnostics/SampleRenderer.cs), which drives the real panel
@@ -517,21 +570,70 @@ and grabs the pixels the compositor actually presented:
   laying it out, the obvious way to measure where the fold ends, resizes a window docked by
   its top-left, and that HWND is presented before the re-dock catches up: one frame of
   full-height panel 72 px down, its bottom inside the taskbar. The end point is measured off
-  the explanation alone instead, and the body is pinned at the fold's starting height before
+  the breakdown alone instead, and the body is pinned at the fold's starting height before
   any layout runs, so every size the window takes is one the fold docks it for.
 - **Dock against the content's `DesiredSize`, never the window's `ActualHeight`.** A
   `SizeToContent` window's own size trails the layout pass that produced it, and the fold
   changes that height sixty times a second; docking against the trailing number left a collapse
   settled 13 px above its edge.
 
-Measured over the fold, per rendered frame: the body steps 0 → 22.6 → 35.4 → 47.3 → … → 72.0 px
-opening and mirrors it closing, with the docked edge holding to within half a pixel throughout.
+Measured over the opening fold on 2026-11-06 with the 400 ms figures, per rendered frame: the
+body steps 4.4 → 20.7 → 28.7 → 35.6 → 41.6 → … → 101 px, and the panel's bottom edge stays
+within a pixel of the docked edge (1379.5 to 1380.5 in screen pixels, 12 px clear of the taskbar) the whole way.
+
+### The menu's threshold list, ticks and highlights
+
+The menu's alert-threshold list folds the same way, with `DisclosureAnimation` and its own
+figures: **340 ms** open on the decelerate curve, **240 ms** closed on the accelerate curve, the
+chevron turning 0 to 180° with it, and the window re-docked on every frame. The three option
+rows fade in over **260 ms**, row `i` starting **80 + 50 × i ms** in; closing, they fade out
+together over **120 ms**. Choosing a threshold shows the new value in the pill at once, scales
+the dot on the chosen row from 0.3 to 1 while it fades in over **240 ms**, and starts folding the
+list closed **300 ms** after the click so the dot is seen first. If the menu is dismissed during
+that hold, nothing fires afterwards.
+
+A tick **draws itself** from its start to its end over **320 ms** (decelerate) when it turns
+on, and fades out over **200 ms** when it turns off. Each row holds its state in a field and the
+visual follows it, because a tick still fading out is still visible and reading it back would
+give the wrong answer to a quick second click. A row's hover and keyboard-focus fill fades in
+over **140 ms** and out over **320 ms**; a press is never animated, so pressed fills stay
+instant.
+
+### The stat tile flip
+
+A tile flips between its total and its per-model view with both faces in the layout, so the
+tile never changes size. The face going out fades to 0 and moves 5 DIP over **180 ms** on the
+accelerate curve; the face coming in fades to 1 and moves 5 DIP to rest over **340 ms** on the
+decelerate curve, starting **100 ms** in so the two overlap. Going to the breakdown, the total
+leaves upward and the breakdown arrives from below; going back, the reverse. Only when flipping
+to the breakdown, the model bar is revealed left to right over **520 ms**, starting at **180 ms**,
+and each legend entry fades in over **280 ms**, entry `i` starting **300 + 70 × i ms** in. The
+glyph turns half a circle over **480 ms** while its opacity moves between its resting values
+over **280 ms**; the mark is symmetric, so it looks the same at rest either way. The tile's own
+hover fill fades like the menu's.
+
+### A second click lands where it asked
+
+Every open starts at rest: the panel on Bars with every tile on its total, the menu with the
+threshold list closed, set at once with nothing in flight. Past that, **a click during a
+transition continues from what is on screen**. It never snaps to an end and replays. The
+breakdown fold, the threshold list and the tile flip each turn round from where they are, and a
+second click during a flip or a fold ends in the state **that click** asked for, whichever
+way the first one was going. That is a small state machine with several ways to end up wrong,
+so it is proved on the real windows rather than assumed:
+
+- [`--motion-check`](cli.md) flips a stat tile and folds the menu's threshold list to each end,
+  then clicks a second time while the first transition is still running, once reversing an
+  opening and once reversing a closing, and reads the state each rests in. Every wait is a
+  `PanelMotion` figure, so a retuned pace retunes the check.
+- `--fold-check` does the same for the breakdown fold: a click mid-opening ends closed, and a
+  click reversing a close, landing mid-fold, continues from the height on screen and ends open.
 
 ### Clicking the icon toggles
 
 The tray icon **opens and closes** the surface, as every taskbar flyout does. Left-click toggles the panel, right-click toggles the menu.
 
-This needs more than an `IsVisible` check. The click itself dismisses the surface by taking focus from it, so by the time the click handler runs the surface is already closing and looks closed, which is why it used to reopen immediately and could only ever open. Each surface therefore records **when it last began closing from lost focus**, and a click arriving within 400 ms is treated as the second half of the toggle. The window is wide enough to cover the deactivate-then-click ordering plus the close transition, and short enough that a deliberate click a moment later still opens.
+This needs more than an `IsVisible` check. The click itself dismisses the surface by taking focus from it, so by the time the click handler runs the surface is already closing and looks closed, which is why it used to reopen immediately and could only ever open. Each surface therefore records **when it last began closing from lost focus**, and a click arriving within 400 ms is treated as the second half of the toggle. The window is wide enough to cover the deactivate-then-click ordering plus the 300 ms close slide, and short enough that a deliberate click a moment later still opens. A click during the close therefore leaves the surface closed; it does not bring it back. The window is a contract with the tray icon, not a tuning knob, and `--toggle-check` and `--menu-check` are what notice if a longer slide ever outruns it.
 
 ---
 

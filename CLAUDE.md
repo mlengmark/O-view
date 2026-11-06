@@ -137,7 +137,8 @@ O-view.slnx
 │   ├── O-view.Core/            Providers, the rollup store, pricing, window maths. No UI, no Win32.
 │   ├── O-view.Presentation/    Wording, formatting and a view model per panel section; the sample states.
 │   ├── O-view.App/             The shell: UsageEngine and its pieces, ShellHost, the shared rendering rules
-│   │                           (PanelFit, PanelMetrics, PanelPlacementMemory, TrayIconGeometry, PanelPalette).
+│   │                           (PanelFit, PanelMetrics, PanelMotion, PanelPlacementMemory, TrayIconGeometry,
+│   │                            PanelPalette).
 │   ├── O-view.Tray/            The Windows head: WPF, NotifyIcon, the registry, the updater.
 │   └── O-view.Linux/           The Linux head: Avalonia, SNI over D-Bus, notifications, XDG autostart.
 ├── tests/
