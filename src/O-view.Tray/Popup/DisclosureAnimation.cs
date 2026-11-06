@@ -2,31 +2,36 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using OView.App.Rendering;
 
 namespace OView.Tray.Popup;
+
+/// <summary>
+/// How a disclosure's rows move as it folds: when row <c>i</c> starts, how long one fades in,
+/// how long they all take to fade out together, and how far one rises into place, in DIP.
+/// </summary>
+internal sealed record DisclosureRowMotion(
+    Func<int, double> StartMs, double FadeMs, double CloseFadeMs, double RiseDip);
 
 /// <summary>
 /// The fold that opens and closes the panel's "Why so large?" explanation.
 ///
 /// <para>It used to be a <c>Visibility</c> flip: the body appeared whole, the
 /// <c>SizeToContent</c> window jumped to its new height in one frame, and the re-dock moved
-/// it to a new position in the same frame. Three simultaneous discontinuities in a surface
-/// whose entrance is a 230 ms geometric reveal, the panel is the one thing on screen that
-/// had already been tuned against a frame-by-frame trace of the platform, and the disclosure
-/// ignored all of it.</para>
+/// it to a new position in the same frame. Three simultaneous discontinuities in the one
+/// thing on screen that had already been tuned against a frame-by-frame trace of the
+/// platform, and the disclosure ignored all of it.</para>
 ///
 /// <para><b>The curve is inherited, not invented.</b> It comes from
-/// <see cref="FlyoutAnimation"/>, whose numbers were fitted to a recording of Windows' own
+/// <see cref="PanelMotion"/>, whose numbers were fitted to a recording of Windows' own
 /// Quick Settings flyout, so the app has one idea of "smooth". The durations are the
 /// caller's: the panel's fold and the menu's threshold list travel different distances and
 /// have different figures.</para>
 ///
-/// <para><b>A geometric reveal, not a dissolve.</b> There is deliberately no fade: the body's
-/// height animates and its content is clipped to it, so the text slides out from behind the
-/// fold edge exactly as the panel itself rises out of the taskbar. <c>FlyoutAnimation</c>'s
-/// remarks record that a fade and a scale were both tried on the entrance and both read as
-/// the wrong gesture; adding either here would say the panel and its own disclosure move by
-/// different rules.</para>
+/// <para><b>The rows fade.</b> This was once a pure geometric reveal, with no fade at all, but
+/// a hard edge passing through rows at full strength read as unfinished, so the rows now arrive
+/// behind that edge and leave ahead of it. The last one finishes after the fold has. Opacity
+/// and a render transform take no part in layout, so the fold's measured height is unchanged.</para>
 ///
 /// <para><b>Re-docking per frame is load-bearing.</b> The window is <c>SizeToContent</c> and
 /// docked by its top-left, so a fold that grows it without re-placing it pushes the new
@@ -42,30 +47,59 @@ namespace OView.Tray.Popup;
 /// carries no arrow</b>, the Bars/Breakdown switch (issue #253) shows its state by which
 /// segment is lit, so a chevron there would be a second, redundant indicator.
 /// </param>
-/// <param name="expandDuration">How long the fold takes to open.</param>
-/// <param name="collapseDuration">
+/// <param name="expandMs">How long the fold takes to open, in milliseconds.</param>
+/// <param name="collapseMs">
 /// How long it takes to close. Shorter than opening: getting out of the way is not a gesture
 /// anyone waits to watch.
 /// </param>
+/// <param name="rowMotion">How the rows given to <see cref="SetRows"/> move.</param>
 /// <param name="reposition">Re-docks the host, called on every frame the height changes.</param>
 internal sealed class DisclosureAnimation(
     Window host, FrameworkElement body, RotateTransform? chevron,
-    Duration expandDuration, Duration collapseDuration, Action reposition)
+    double expandMs, double collapseMs, DisclosureRowMotion rowMotion, Action reposition)
 {
     /// <summary>Rotation of the chevron in each state. 180° turns the arrow to point back up.</summary>
     private const double ExpandedAngle = 180;
 
+    /// <summary>The spacing of a row's rise frames: one frame of a 60 Hz display.</summary>
+    private const double RiseFrameMs = 16;
+
+    /// <summary>One row's cells: a row of a grid is not an element, so they move as a group.</summary>
+    private sealed record Row(IReadOnlyList<UIElement> Cells, TranslateTransform Rise);
+
+    private IReadOnlyList<Row> _rows = [];
     private SizeChangedEventHandler? _tracking;
     private DispatcherTimer? _guard;
     private bool _running;
+    private int _run;
 
     /// <summary>
     /// Where the fold is right now, so a click that lands mid-animation continues from what
     /// is on screen instead of snapping to one end and travelling the whole way again.
+    ///
+    /// <para>Read from the <c>Height</c> property, which returns its animated value:
+    /// <c>ActualHeight</c> keeps reporting the content's full height while the body is pinned
+    /// shorter. Auto (NaN) means nothing is animating, so the arranged height is the answer.</para>
     /// </summary>
     public (double Height, double Angle) Current => (
-        body.Visibility == Visibility.Visible ? body.ActualHeight : 0,
+        body.Visibility != Visibility.Visible ? 0
+            : double.IsNaN(body.Height) ? body.ActualHeight
+            : body.Height,
         chevron?.Angle ?? 0);
+
+    /// <summary>Names the rows to fade, top first. <see cref="Apply"/> gives them their resting state.</summary>
+    public void SetRows(IEnumerable<IReadOnlyList<UIElement>> rows)
+    {
+        _rows = rows.Select(cells => new Row(cells, new TranslateTransform())).ToList();
+
+        foreach (var row in _rows)
+        {
+            foreach (var cell in row.Cells)
+            {
+                cell.RenderTransform = row.Rise;
+            }
+        }
+    }
 
     /// <summary>
     /// Puts the fold in its finished state immediately, with nothing left animating.
@@ -83,30 +117,34 @@ internal sealed class DisclosureAnimation(
     public void Apply(bool expanded)
     {
         Stop();
-
-        body.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-        body.Height = double.NaN;   // back to auto, so later content changes size naturally
-        if (chevron is not null) chevron.Angle = expanded ? ExpandedAngle : 0;
+        Settle(expanded);
+        SettleRows(expanded);
     }
 
     /// <summary>
     /// Freezes the fold partway through, for a verification render of a state that otherwise
-    /// exists only for a tenth of a second on a real desktop.
+    /// exists only for a fraction of a second on a real desktop.
     ///
-    /// <para>Exact rather than approximate: the height and the chevron are driven by one
-    /// curve over one duration, so at a given fraction of the height's travel the arrow is at
-    /// the same fraction of its turn. A rendered frame is therefore a real frame.</para>
+    /// <para>Exact rather than approximate: a moment rather than a fraction of the height,
+    /// because the rows run on their own clocks. Everything is read from the same curves and
+    /// figures <see cref="Run"/> animates, so a rendered frame is a real frame.</para>
     /// </summary>
-    /// <param name="fraction">How far open, 0–1.</param>
+    /// <param name="atMs">How long after the click, in milliseconds.</param>
     /// <param name="naturalHeight">The body's fully open height, measured by the caller.</param>
-    public void ApplyPartial(double fraction, double naturalHeight)
+    public void ApplyPartial(double atMs, double naturalHeight)
     {
         Stop();
 
-        var f = Math.Clamp(fraction, 0, 1);
+        var travel = PanelMotion.Decelerate.ValueAt(atMs / expandMs);
         body.Visibility = Visibility.Visible;
-        body.Height = naturalHeight * f;
-        if (chevron is not null) chevron.Angle = ExpandedAngle * f;
+        body.Height = naturalHeight * travel;
+        if (chevron is not null) chevron.Angle = ExpandedAngle * travel;
+
+        for (var i = 0; i < _rows.Count; i++)
+        {
+            var shown = PanelMotion.Decelerate.ValueAt((atMs - rowMotion.StartMs(i)) / rowMotion.FadeMs);
+            Pin(_rows[i], shown, WholePixels(rowMotion.RiseDip * (1 - shown)));
+        }
     }
 
     /// <summary>
@@ -138,6 +176,10 @@ internal sealed class DisclosureAnimation(
     /// </summary>
     public double MeasureNatural(double availableWidth)
     {
+        // Released first: a running fold holds Height over the assignment below, and a click that
+        // turns a close round would measure the fold's height instead of the body's.
+        body.BeginAnimation(FrameworkElement.HeightProperty, null);
+
         var height = body.Height;
         var visibility = body.Visibility;
 
@@ -163,8 +205,9 @@ internal sealed class DisclosureAnimation(
     {
         Stop();
 
-        var duration = expanded ? expandDuration : collapseDuration;
-        var spline = expanded ? FlyoutAnimation.Decelerate : FlyoutAnimation.Accelerate;
+        var durationMs = expanded ? expandMs : collapseMs;
+        var duration = WpfMotion.Duration(durationMs);
+        var spline = WpfMotion.Spline(expanded ? PanelMotion.Decelerate : PanelMotion.Accelerate);
 
         // Visible throughout, in both directions: collapsed content has no height to animate,
         // so a fold that closes has to stay on screen until it has finished closing.
@@ -173,20 +216,43 @@ internal sealed class DisclosureAnimation(
 
         _running = true;
 
+        // Windows' animation setting off: the same end state and the same re-docks, in one step.
+        if (!PanelMotion.Runs(WpfMotion.AnimationsOn, durationMs))
+        {
+            SettleRows(expanded);
+            Finish(expanded);
+            return;
+        }
+
         _tracking = (_, _) => reposition();
         host.SizeChanged += _tracking;
 
-        var height = Spline(fromHeight, toHeight, duration, spline);
+        // Less the margin: the measure includes it and Height does not, so aiming at the measure
+        // overshoots and the panel drops back in one frame when the fold lets go.
+        var height = Spline(
+            fromHeight, Math.Max(0, toHeight - body.Margin.Top - body.Margin.Bottom), duration, spline);
 
         // Completed MUST be attached before BeginAnimation. WPF takes its own copy of the
         // timeline when the animation starts, so a handler added afterwards is attached to an
         // object nothing will ever raise, the exact mistake that once left the flyout
         // visible at zero opacity with a dead tray icon (see FlyoutAnimation.Close).
-        height.Completed += (_, _) => Finish(expanded);
+        //
+        // And only this run's: a fold replaced by a second click still reports completion at
+        // its original time, which would finish the new fold in the state the old one wanted.
+        var run = ++_run;
+        height.Completed += (_, _) =>
+        {
+            if (run == _run)
+            {
+                Finish(expanded);
+            }
+        };
         body.BeginAnimation(FrameworkElement.HeightProperty, height);
 
         chevron?.BeginAnimation(RotateTransform.AngleProperty,
             Spline(fromAngle, expanded ? ExpandedAngle : 0, duration, spline));
+
+        RunRows(expanded);
 
         // Backstop, for the same reason the close transition has one: the symptom of a missed
         // completion here is a panel stuck at a fixed height that no longer grows with its
@@ -212,7 +278,16 @@ internal sealed class DisclosureAnimation(
         // Releases the animations and restores auto height, so the body goes back to sizing
         // itself, a panel whose text later rewraps to three lines must not stay pinned to
         // the height this fold happened to end on.
-        Apply(expanded);
+        Stop();
+        Settle(expanded);
+
+        // Not the rows on the way open: the last of them finishes after the fold does, and their
+        // animations end by holding the resting values. Closed, the next open needs them waiting
+        // below their places.
+        if (!expanded)
+        {
+            SettleRows(false);
+        }
 
         // Laid out before it is re-docked, so the dock is computed from the height the panel
         // has FINISHED at rather than from the last animated frame, the fold's last step is
@@ -228,6 +303,90 @@ internal sealed class DisclosureAnimation(
         // from. Loaded priority is the first point after layout, and re-docking an
         // already-correct window costs one SetWindowPos.
         host.Dispatcher.BeginInvoke(DispatcherPriority.Loaded, reposition);
+    }
+
+    /// <summary>
+    /// Starts every row from where it is, so a click mid-fade, even after the fold has finished
+    /// and only the last rows are still arriving, carries on from what is on screen.
+    /// </summary>
+    private void RunRows(bool expanded)
+    {
+        for (var i = 0; i < _rows.Count; i++)
+        {
+            var row = _rows[i];
+            var from = row.Cells[0].Opacity;
+            var startMs = rowMotion.StartMs(i);
+            var fade = expanded
+                ? WpfMotion.DelayedFade(from, 1, rowMotion.FadeMs, startMs, PanelMotion.Decelerate)
+                : WpfMotion.DelayedFade(from, 0, rowMotion.CloseFadeMs, 0);
+
+            foreach (var cell in row.Cells)
+            {
+                cell.BeginAnimation(UIElement.OpacityProperty, fade);
+            }
+
+            // Pinned first, so it holds this frame's value: until a row's delay is up, and for
+            // the whole of a closing fade, where a leaving row fades where it stands.
+            var y = row.Rise.Y;
+            row.Rise.BeginAnimation(TranslateTransform.YProperty, null);
+            row.Rise.Y = y;
+            row.Rise.BeginAnimation(TranslateTransform.YProperty, expanded ? Rise(y, startMs) : null);
+        }
+    }
+
+    /// <summary>
+    /// A row's rise on whole device pixels, for the reason the surface slide has: Display-mode
+    /// text carried at a fractional offset shimmers on the slow end of the curve.
+    /// </summary>
+    private DoubleAnimationUsingKeyFrames Rise(double fromY, double startMs)
+    {
+        var animation = new DoubleAnimationUsingKeyFrames
+        {
+            Duration = WpfMotion.Duration(startMs + rowMotion.FadeMs),
+        };
+
+        for (var ms = 0.0; ms <= rowMotion.FadeMs; ms += RiseFrameMs)
+        {
+            var left = fromY * (1 - PanelMotion.Decelerate.ValueAt(ms / rowMotion.FadeMs));
+            animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(
+                WholePixels(left), KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(startMs + ms))));
+        }
+
+        return animation;
+    }
+
+    private double WholePixels(double dip)
+    {
+        var scale = VisualTreeHelper.GetDpi(host).DpiScaleY;
+        return Math.Round(dip * scale) / scale;
+    }
+
+    private void Settle(bool expanded)
+    {
+        body.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        body.Height = double.NaN;   // back to auto, so later content changes size naturally
+        if (chevron is not null) chevron.Angle = expanded ? ExpandedAngle : 0;
+    }
+
+    private void SettleRows(bool expanded)
+    {
+        foreach (var row in _rows)
+        {
+            Pin(row, expanded ? 1 : 0, expanded ? 0 : rowMotion.RiseDip);
+        }
+    }
+
+    private static void Pin(Row row, double opacity, double rise)
+    {
+        // Released first, for the reason Apply gives.
+        row.Rise.BeginAnimation(TranslateTransform.YProperty, null);
+        row.Rise.Y = rise;
+
+        foreach (var cell in row.Cells)
+        {
+            cell.BeginAnimation(UIElement.OpacityProperty, null);
+            cell.Opacity = opacity;
+        }
     }
 
     private void Stop()
@@ -247,7 +406,7 @@ internal sealed class DisclosureAnimation(
         chevron?.BeginAnimation(RotateTransform.AngleProperty, null);
     }
 
-    private static DoubleAnimationUsingKeyFrames Spline(
+    internal static DoubleAnimationUsingKeyFrames Spline(
         double from, double to, Duration duration, KeySpline spline)
     {
         var animation = new DoubleAnimationUsingKeyFrames { Duration = duration };

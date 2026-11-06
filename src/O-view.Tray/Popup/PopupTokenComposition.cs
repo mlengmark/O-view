@@ -1,11 +1,14 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using OView.App.Rendering;
 using OView.Core.Models;
 using OView.Presentation.Panel;
 using OView.Presentation.Text;
 using Brush = System.Windows.Media.Brush;
+using Color = System.Windows.Media.Color;
+using Control = System.Windows.Controls.Control;
 using Orientation = System.Windows.Controls.Orientation;
 using Point = System.Windows.Point;
 using RadioButton = System.Windows.Controls.RadioButton;
@@ -32,6 +35,8 @@ internal sealed class PopupTokenComposition
     private readonly DisclosureAnimation _disclosure;
     private readonly RadioButton _barsToggle;
     private readonly RadioButton _breakdownToggle;
+    private readonly Border _highlight;
+    private readonly TranslateTransform _highlightOffset;
     private readonly StackPanel _barsView;
     private readonly StackPanel _breakdownView;
     private readonly FrameworkElement _section;
@@ -44,7 +49,7 @@ internal sealed class PopupTokenComposition
 
     public PopupTokenComposition(
         FrameworkElement owner, DisclosureAnimation disclosure,
-        RadioButton barsToggle, RadioButton breakdownToggle,
+        RadioButton barsToggle, RadioButton breakdownToggle, Border highlight,
         StackPanel barsView, StackPanel breakdownView, FrameworkElement section,
         TextBlock heading, TextBlock coverageLine,
         Action<double> refitForPendingGrowth, Action redock)
@@ -53,6 +58,8 @@ internal sealed class PopupTokenComposition
         _disclosure = disclosure;
         _barsToggle = barsToggle;
         _breakdownToggle = breakdownToggle;
+        _highlight = highlight;
+        _highlightOffset = (TranslateTransform)highlight.RenderTransform;
         _barsView = barsView;
         _breakdownView = breakdownView;
         _section = section;
@@ -65,6 +72,13 @@ internal sealed class PopupTokenComposition
         // one handler per state, no need to read IsChecked back off the group.
         barsToggle.Checked += (_, _) => Show(false);
         breakdownToggle.Checked += (_, _) => Show(true);
+
+        // A segment's size comes from its label and the density, neither known until layout.
+        barsToggle.SizeChanged += (_, _) => PlaceHighlight();
+        breakdownToggle.SizeChanged += (_, _) => PlaceHighlight();
+
+        barsToggle.IsKeyboardFocusedChanged += (_, _) => PaintHighlight();
+        breakdownToggle.IsKeyboardFocusedChanged += (_, _) => PaintHighlight();
     }
 
     /// <summary>
@@ -75,25 +89,8 @@ internal sealed class PopupTokenComposition
 
     /// <summary>
     /// The folding body's current height, what <c>--fold-check</c> samples.
-    ///
-    /// <para>Read from the <c>Height</c> property rather than from <c>ActualHeight</c>: a
-    /// dependency property returns its animated value, while <c>ActualHeight</c> reported the
-    /// settled layout throughout the first trace and made a working fold look instant. Auto
-    /// (NaN) means nothing is animating, so the arranged height is the answer.</para>
     /// </summary>
-    public double Height
-    {
-        get
-        {
-            if (_breakdownView.Visibility != Visibility.Visible)
-            {
-                return 0;
-            }
-
-            var height = (double)_breakdownView.GetValue(FrameworkElement.HeightProperty);
-            return double.IsNaN(height) ? _breakdownView.ActualHeight : height;
-        }
-    }
+    public double Height => _disclosure.Current.Height;
 
     /// <summary>
     /// Opens the breakdown for a verification render. The view resets to Bars on every
@@ -108,22 +105,31 @@ internal sealed class PopupTokenComposition
     /// not the instant state: an animation's completion is the thing being checked, and this
     /// app has shipped a missed one before (<see cref="FlyoutAnimation"/>).
     /// </summary>
-    public void ToggleForVerification() => Show(!_expanded);
+    public void ToggleForVerification() => (_expanded ? _barsToggle : _breakdownToggle).IsChecked = true;
 
     /// <summary>
-    /// Freezes the disclosure partway open for a verification render. On a real desktop this
-    /// state exists for about a tenth of a second, which is long enough to look wrong and far
-    /// too short to inspect, and the failure it guards against, content drawn outside the
-    /// height it has been given, is invisible at both ends of the fold.
+    /// Freezes the disclosure, switch included, at one moment of its opening for a verification
+    /// render. On a real desktop this state lasts a fraction of a second, long enough to look
+    /// wrong and far too short to inspect.
     /// </summary>
-    /// <param name="fraction">How far open, 0–1.</param>
-    public void RevealForVerification(double fraction)
+    /// <param name="atMs">How long after the click, in milliseconds.</param>
+    public void RevealForVerification(double atMs)
     {
         // Laid out fully open first: the fold's geometry is a fraction of the body's natural
         // height, which is only known once it has been measured at that height.
         SetExpanded(true);
         _owner.UpdateLayout();
-        _disclosure.ApplyPartial(fraction, _breakdownView.ActualHeight);
+        _disclosure.ApplyPartial(atMs, _breakdownView.ActualHeight);
+
+        var (fromX, fromWidth) = HighlightPlace(false);
+        var (toX, toWidth) = HighlightPlace(true);
+        var slid = PanelMotion.Decelerate.ValueAt(atMs / PanelMotion.Ms(PanelMotion.SwitchHighlightBaseMs));
+        _highlightOffset.X = fromX + (toX - fromX) * slid;
+        _highlight.Width = fromWidth + (toWidth - fromWidth) * slid;
+
+        var faded = PanelMotion.Decelerate.ValueAt(atMs / PanelMotion.Ms(PanelMotion.SwitchLabelsBaseMs));
+        _barsToggle.Foreground = new SolidColorBrush(Mix(Colour("TextPrimary"), Colour("TextMuted"), faded));
+        _breakdownToggle.Foreground = new SolidColorBrush(Mix(Colour("TextMuted"), Colour("TextPrimary"), faded));
     }
 
     /// <summary>
@@ -138,7 +144,109 @@ internal sealed class PopupTokenComposition
 
         _expanded = expanded;
         RunFold(expanded, _barsView.ActualWidth);
+
+        // After the fold: its re-fit can change the density, and with it the segments' sizes.
+        SlideSwitch(expanded);
     }
+
+    /// <summary>
+    /// Moves the highlight to the segment that is on, from wherever it is, so a click that
+    /// lands mid-slide turns it round rather than snapping it to an end.
+    /// </summary>
+    private void SlideSwitch(bool expanded)
+    {
+        FadeLabel(_barsToggle, !expanded);
+        FadeLabel(_breakdownToggle, expanded);
+        PaintHighlight();
+
+        var ms = PanelMotion.Ms(PanelMotion.SwitchHighlightBaseMs);
+        if (!PanelMotion.Runs(WpfMotion.AnimationsOn, ms))
+        {
+            PlaceHighlight();
+            return;
+        }
+
+        var (x, width) = HighlightPlace(expanded);
+        var duration = WpfMotion.Duration(ms);
+        var spline = WpfMotion.Spline(PanelMotion.Decelerate);
+        _highlightOffset.BeginAnimation(TranslateTransform.XProperty,
+            DisclosureAnimation.Spline(_highlightOffset.X, x, duration, spline));
+        _highlight.BeginAnimation(FrameworkElement.WidthProperty,
+            DisclosureAnimation.Spline(_highlight.Width, width, duration, spline));
+    }
+
+    /// <summary>
+    /// Crossfades a segment's label to its new colour. A trigger setter cannot fade, so for the
+    /// length of the fade the segment wears a brush of its own, and taking it off hands the label
+    /// back to the template's triggers, hover tint included.
+    /// </summary>
+    private void FadeLabel(RadioButton toggle, bool on)
+    {
+        var ms = PanelMotion.Ms(PanelMotion.SwitchLabelsBaseMs);
+        if (!PanelMotion.Runs(WpfMotion.AnimationsOn, ms))
+        {
+            toggle.ClearValue(Control.ForegroundProperty);
+            return;
+        }
+
+        // The triggers have already moved, so the colour on screen is the state just left,
+        // or wherever a running fade has got to.
+        var from = toggle.ReadLocalValue(Control.ForegroundProperty) is SolidColorBrush fading
+            ? fading.Color
+            : Colour(on ? (toggle.IsMouseOver ? "TextSecondary" : "TextMuted") : "TextPrimary");
+
+        var brush = new SolidColorBrush(from);
+        var fade = new ColorAnimationUsingKeyFrames { Duration = WpfMotion.Duration(ms) };
+        fade.KeyFrames.Add(new SplineColorKeyFrame(
+            Colour(on ? "TextPrimary" : "TextMuted"), KeyTime.FromPercent(1),
+            WpfMotion.Spline(PanelMotion.Decelerate)));
+
+        // Only its own brush: a second click has already replaced it with the next fade's.
+        fade.Completed += (_, _) =>
+        {
+            if (ReferenceEquals(toggle.ReadLocalValue(Control.ForegroundProperty), brush))
+            {
+                toggle.ClearValue(Control.ForegroundProperty);
+            }
+        };
+
+        toggle.Foreground = brush;
+        brush.BeginAnimation(SolidColorBrush.ColorProperty, fade);
+    }
+
+    /// <summary>Puts the highlight on the segment that is on, at once, nothing in flight.</summary>
+    private void PlaceHighlight()
+    {
+        var (x, width) = HighlightPlace(_expanded);
+
+        // Released first: an attached animation holds its end value over the local one.
+        _highlightOffset.BeginAnimation(TranslateTransform.XProperty, null);
+        _highlight.BeginAnimation(FrameworkElement.WidthProperty, null);
+        _highlightOffset.X = x;
+        _highlight.Width = width;
+        PaintHighlight();
+    }
+
+    /// <summary>
+    /// A click focuses the segment it lands on, and that segment's fill is the highlight: drawn on
+    /// the segment itself it would light in one frame and the slide would arrive at it already lit.
+    /// </summary>
+    private void PaintHighlight()
+    {
+        var on = _expanded ? _breakdownToggle : _barsToggle;
+        _highlight.SetResourceReference(Border.BackgroundProperty, on.IsKeyboardFocused ? "TilePressed" : "BarTrack");
+    }
+
+    private (double X, double Width) HighlightPlace(bool expanded)
+    {
+        var segment = expanded ? _breakdownToggle : _barsToggle;
+        return (segment.TranslatePoint(new Point(0, 0), (UIElement)_highlight.Parent).X, segment.ActualWidth);
+    }
+
+    private Color Colour(string key) => ((SolidColorBrush)_owner.FindResource(key)).Color;
+
+    private static Color Mix(Color from, Color to, double amount) =>
+        from + Color.Multiply(to - from, (float)amount);
 
     /// <summary>
     /// The fold itself.
@@ -211,7 +319,9 @@ internal sealed class PopupTokenComposition
         AddBar(view.Today, first: true);
         AddBar(view.Window31, first: false);
 
-        _breakdownView.Children.Add(BuildBreakdown(view.Breakdown));
+        var rows = new List<IReadOnlyList<UIElement>>();
+        _breakdownView.Children.Add(BuildBreakdown(view.Breakdown, rows));
+        _disclosure.SetRows(rows);
 
         PopupText.SetLine(_coverageLine, view.CoverageLine);
 
@@ -358,8 +468,10 @@ internal sealed class PopupTokenComposition
     /// <summary>
     /// The breakdown table, laid out from the rows <see cref="PanelSections.TokenBars"/> built:
     /// the header row muted and small, each kind's row with its colour chip, the total row bold.
+    /// One grid rather than a panel per row, because its columns are sized across all the rows,
+    /// so <paramref name="cells"/> is filled with each row's cells, for the fold to move as a group.
     /// </summary>
-    private Grid BuildBreakdown(IReadOnlyList<PanelTokenBreakdownRow> rows)
+    private Grid BuildBreakdown(IReadOnlyList<PanelTokenBreakdownRow> rows, List<IReadOnlyList<UIElement>> cells)
     {
         var table = new Grid();
         table.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -382,15 +494,15 @@ internal sealed class PopupTokenComposition
                 _ => (secondary, 10.5, false),
             };
 
-            AddRow(table, i, row.Kind is { } kind ? KindBrush(kind) : null,
+            cells.Add(AddRow(table, i, row.Kind is { } kind ? KindBrush(kind) : null,
                 row.Label, row.TodayTokens, row.TodayShare, row.WindowTokens, row.WindowShare,
-                foreground, size, bold);
+                foreground, size, bold));
         }
 
         return table;
     }
 
-    private static void AddRow(
+    private static List<UIElement> AddRow(
         Grid table, int row, Brush? chip, string kind, string todayTokens, string todayShare,
         string windowTokens, string windowShare, Brush foreground, double fontSize, bool bold = false)
     {
@@ -420,6 +532,7 @@ internal sealed class PopupTokenComposition
         Grid.SetRow(label, row);
         Grid.SetColumn(label, 0);
         table.Children.Add(label);
+        var added = new List<UIElement> { label };
 
         var cells = new[] { todayTokens, todayShare, windowTokens, windowShare };
         for (var i = 0; i < cells.Length; i++)
@@ -436,7 +549,10 @@ internal sealed class PopupTokenComposition
             Grid.SetRow(cell, row);
             Grid.SetColumn(cell, i + 1);
             table.Children.Add(cell);
+            added.Add(cell);
         }
+
+        return added;
     }
 
     /// <summary>
@@ -456,6 +572,10 @@ internal sealed class PopupTokenComposition
         _breakdownToggle.IsChecked = expanded;
 
         _disclosure.Apply(expanded);
+
+        _barsToggle.ClearValue(Control.ForegroundProperty);
+        _breakdownToggle.ClearValue(Control.ForegroundProperty);
+        PlaceHighlight();
     }
 
     // Token formatting lives in OView.Presentation.Text.UsageFormatter, shared with the

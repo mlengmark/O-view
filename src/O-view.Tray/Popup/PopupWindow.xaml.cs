@@ -26,16 +26,6 @@ namespace OView.Tray.Popup;
 /// </summary>
 public partial class PopupWindow : Window, IFlyout
 {
-    /// <summary>
-    /// How long the token breakdown's fold takes to open and to close, in milliseconds. These
-    /// are what the fold has always measured (the entrance's 230 and 150 scaled by 0.83 and
-    /// rounded to even), kept as plain figures now that the fold no longer derives them.
-    /// </summary>
-    private const double FoldOpenMs = 191;
-
-    /// <inheritdoc cref="FoldOpenMs"/>
-    private const double FoldCloseMs = 124;
-
     /// <summary>Forces a theme for verification screenshots; null follows the OS.</summary>
     public bool? ThemeOverride { get; set; }
 
@@ -147,22 +137,22 @@ public partial class PopupWindow : Window, IFlyout
             // No chevron: the Bars/Breakdown switch shows its state by which segment is lit
             // (issue #253), and an arrow beside it would be a second indicator of one thing.
             this, TokenBreakdownView, null,
-            // The fold's own durations: the entrance's 230 and 150 ms scaled by 0.83, as the
-            // fold has always run, now stated here instead of derived from the entrance.
-            WpfMotion.Duration(FoldOpenMs), WpfMotion.Duration(FoldCloseMs),
+            PanelMotion.Ms(PanelMotion.FoldOpenBaseMs), PanelMotion.Ms(PanelMotion.FoldCloseBaseMs),
+            new DisclosureRowMotion(
+                PanelMotion.RowStartMs, PanelMotion.Ms(PanelMotion.RowFadeBaseMs),
+                PanelMotion.Ms(PanelMotion.RowsCloseFadeBaseMs), PanelMotion.RowRiseDip),
             // Re-dock, exactly as the menu does when its threshold list opens (issue #33).
             // The panel is docked by its top-left and is SizeToContent, so growing it without
             // this pushes the new content down into the taskbar, which is the failure the
             // docked placement was introduced to avoid, reintroduced the moment the panel
-            // gained something that could grow. It also re-fits the open animation's clip,
-            // without which the window is the right size and the card inside it is not.
+            // gained something that could grow.
             //
             // The fold calls this on every frame it changes the window's height, so the
             // bottom edge stays pinned to the docked corner for the whole transition.
             () => _flyout.Redock(ActualWidth, DockHeight));
         _composition = new PopupTokenComposition(
-            this, disclosure, TokenViewBars, TokenViewBreakdown, TokenBarsView, TokenBreakdownView,
-            TokensUsedSection, TokensUsedHeading, TokenCoverageLine,
+            this, disclosure, TokenViewBars, TokenViewBreakdown, TokenViewHighlight,
+            TokenBarsView, TokenBreakdownView, TokensUsedSection, TokensUsedHeading, TokenCoverageLine,
             _fit.RefitForPendingGrowth, () => _flyout.Redock(ActualWidth, DockHeight));
     }
 
@@ -208,13 +198,10 @@ public partial class PopupWindow : Window, IFlyout
     internal void ToggleCompositionForVerification() => _composition.ToggleForVerification();
 
     /// <summary>
-    /// Freezes the disclosure partway open for a verification render. On a real desktop this
-    /// state exists for about a tenth of a second, which is long enough to look wrong and far
-    /// too short to inspect, and the failure it guards against, content drawn outside the
-    /// height it has been given, is invisible at both ends of the fold.
+    /// Freezes the disclosure at one moment of its opening for a verification render.
     /// </summary>
-    /// <param name="fraction">How far open, 0–1.</param>
-    internal void RevealCompositionForVerification(double fraction) => _composition.RevealForVerification(fraction);
+    /// <param name="atMs">How long after the click, in milliseconds.</param>
+    internal void RevealCompositionForVerification(double atMs) => _composition.RevealForVerification(atMs);
 
     /// <summary>
     /// Closes the panel from outside, the tray icon completing a toggle. Idempotent, so
@@ -324,7 +311,7 @@ public partial class PopupWindow : Window, IFlyout
     /// </param>
     internal System.Windows.Media.Imaging.BitmapSource RenderToBitmap(
         UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account, double scale,
-        bool expandComposition = false, PanelDensity? density = null, double? compositionReveal = null,
+        bool expandComposition = false, PanelDensity? density = null, double? compositionRevealMs = null,
         double? availableHeightDip = null)
     {
         _light = ThemeOverride ?? PanelTheme.IsAppsLight();
@@ -344,9 +331,9 @@ public partial class PopupWindow : Window, IFlyout
         // rather than before it, because Populate resets it.
         return VisualRenderer.RenderContent(this, scale, betweenPasses: () =>
         {
-            if (compositionReveal is { } fraction)
+            if (compositionRevealMs is { } atMs)
             {
-                RevealCompositionForVerification(fraction);
+                RevealCompositionForVerification(atMs);
             }
             else if (expandComposition)
             {

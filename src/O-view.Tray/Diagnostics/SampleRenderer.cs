@@ -96,11 +96,11 @@ internal static class SampleRenderer
                     expandComposition: true),
                 File("typical-tokens-explained", light));
 
-            // Caught mid-fold, at 45%, where the clip crosses the first sentence. On a desktop
-            // this frame lasts about 80 ms, and the fault it catches (the explanation drawn at
-            // full size outside the height the fold has given it) shows at neither end.
+            // Caught 40% of the way through the fold's time, with the fold line inside the table
+            // and the first two rows part-faded. No frame of the opening has the line through a
+            // row at strength any more: the rows arrive behind it.
             SavePng(NewPopup(light, typical).RenderToBitmap(typical.Snapshot, typical.Stats, typical.Account, scale,
-                    compositionReveal: 0.45),
+                    compositionRevealMs: PanelMotion.Ms(PanelMotion.FoldOpenBaseMs) * 0.4),
                 File("typical-tokens-folding", light));
 
             // Compact density with the disclosure open: the tallest the panel can be, which is
@@ -521,6 +521,9 @@ internal static class SampleRenderer
     /// it does (the fold grows upward out of the docked corner), and both ends settle back
     /// to a self-sizing body. It is run twice, because the second fold is the one that
     /// inherits any state the first left behind.</para>
+    ///
+    /// <para>Then twice more with a second click mid-opening, during the fold and after it while
+    /// the last rows arrive. Both end closed, which is what that click asked for.</para>
     /// </summary>
     public static void RunFoldCheck(string dir, Action shutdown)
     {
@@ -560,8 +563,12 @@ internal static class SampleRenderer
         // 40 ms timer and produced a trace showing the fold already finished at its first
         // sample, a timer competing with the layout passes the fold itself causes drifts
         // exactly when there is something to measure, which is the one moment it must not.
+        var foldOpenMs = PanelMotion.Ms(PanelMotion.FoldOpenBaseMs);
+        var lastRowEndMs = PanelMotion.RowStartMs(PanelMotion.BreakdownRowCount - 1)
+                           + PanelMotion.Ms(PanelMotion.RowFadeBaseMs);
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var phase = Phase.WarmUp;
+        double? secondClickAtMs = null;
         var frames = new List<(long Ms, System.Drawing.Bitmap Image)>();
         var capture = System.Drawing.Rectangle.Empty;
 
@@ -610,9 +617,26 @@ internal static class SampleRenderer
                 frames.Add((clock.ElapsedMilliseconds, Grab(capture)));
             }
 
-            // Each fold is given 400 ms, comfortably past the 191 ms expand and the 125 ms
-            // collapse, so the settled state is part of every phase rather than assumed.
-            if (clock.ElapsedMilliseconds < 400)
+            if (secondClickAtMs is { } clickAt)
+            {
+                if (clock.ElapsedMilliseconds >= clickAt)
+                {
+                    secondClickAtMs = null;
+                    report.AppendLine($"{phase,-14} second click");
+                    clock.Restart();
+                    Fold();
+                }
+
+                return;
+            }
+
+            // Each fold is given its own time and a margin, so the settled state is part of
+            // every phase rather than assumed. Opening lasts until the last row has arrived.
+            var settle = phase is Phase.WarmUp or Phase.CaptureExpand
+                ? Math.Max(foldOpenMs, lastRowEndMs)
+                : PanelMotion.Ms(PanelMotion.FoldCloseBaseMs);
+
+            if (clock.ElapsedMilliseconds < settle + FoldSettleMarginMs)
             {
                 return;
             }
@@ -639,8 +663,18 @@ internal static class SampleRenderer
                     phase = Phase.CaptureCollapse;
                     break;
 
-                default:
+                case Phase.CaptureCollapse:
                     SaveFilmstrip(frames, Path.Combine(dir, "fold-collapse.png"));
+                    phase = Phase.SecondClickInFold;
+                    secondClickAtMs = foldOpenMs / 2;
+                    break;
+
+                case Phase.SecondClickInFold:
+                    phase = Phase.SecondClickInRows;
+                    secondClickAtMs = (foldOpenMs + lastRowEndMs) / 2;
+                    break;
+
+                default:
                     CompositionTarget.Rendering -= OnFrame;
                     File.WriteAllText(Path.Combine(dir, "fold-check.txt"), report.ToString());
                     shutdown();
@@ -657,7 +691,10 @@ internal static class SampleRenderer
         Fold();
     }
 
-    private enum Phase { WarmUp, WarmDown, CaptureExpand, CaptureCollapse }
+    private enum Phase { WarmUp, WarmDown, CaptureExpand, CaptureCollapse, SecondClickInFold, SecondClickInRows }
+
+    /// <summary>How long past a fold's own time <c>--fold-check</c> keeps sampling.</summary>
+    private const double FoldSettleMarginMs = 200;
 
     /// <summary>
     /// The panel's place on the physical screen, with room for it to grow. Device pixels, not
@@ -705,9 +742,10 @@ internal static class SampleRenderer
             return;
         }
 
-        // Every second frame: a 60 Hz display gives ~24 frames over a fold, which tiled at a
+        // Nine evenly spaced frames: a 60 Hz display gives dozens over a fold, which tiled at a
         // legible size is wider than anything can be looked at.
-        var chosen = frames.Where((_, i) => i % 2 == 0).Take(9).ToList();
+        var stride = Math.Max(1, frames.Count / 9);
+        var chosen = frames.Where((_, i) => i % stride == 0).Take(9).ToList();
         const int gap = 6;
         const int label = 16;
 
