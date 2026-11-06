@@ -3,6 +3,8 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
+using OView.App.Rendering;
 using OView.Core.Models;
 using OView.Presentation.Text;
 using OView.Tray.Tray;
@@ -42,6 +44,22 @@ public partial class MenuWindow : Window, IFlyout
     /// detail panel rather than reimplemented here (issue #54).
     /// </summary>
     private readonly DockedFlyout _flyout;
+
+    /// <summary>The threshold list's fold, the same one the panel's breakdown uses.</summary>
+    private readonly DisclosureAnimation _options;
+
+    /// <summary>The beat between a choice and the list folding away, so the dot is seen first.</summary>
+    private readonly DispatcherTimer _closeAfterChoice = new()
+    {
+        Interval = TimeSpan.FromMilliseconds(PanelMotion.Ms(PanelMotion.ChosenCloseDelayBaseMs)),
+    };
+
+    private readonly Tick _startupTick;
+    private readonly Tick _updateAutoTick;
+    private readonly Tick _notifyTick;
+
+    /// <summary>Whether the list is meant to be open: one folding closed, or about to, already is not.</summary>
+    private bool _optionsOpen;
 
     /// <summary>Disables auto-hide for verification screenshots.</summary>
     public bool PinForVerification
@@ -104,6 +122,46 @@ public partial class MenuWindow : Window, IFlyout
         _flyout = new DockedFlyout(this);
         Deactivated += (_, _) => _flyout.OnDeactivated();
 
+        _options = new DisclosureAnimation(
+            this, ThresholdOptions, ChevronRotation,
+            PanelMotion.Ms(PanelMotion.ThresholdOpenBaseMs),
+            PanelMotion.Ms(PanelMotion.ThresholdCloseBaseMs),
+            new DisclosureRowMotion(
+                PanelMotion.OptionStartMs,
+                PanelMotion.Ms(PanelMotion.OptionFadeBaseMs),
+                PanelMotion.Ms(PanelMotion.OptionsCloseFadeBaseMs),
+                RiseDip: 0),
+            () => _flyout.Redock(ActualWidth, ActualHeight));
+        _options.SetRows(OptionRows.Select(row => (IReadOnlyList<UIElement>)[row]));
+
+        // One check rather than a stop on each of the ways out of the menu: a menu dismissed
+        // during the hold has no list to fold, whichever way it went.
+        _closeAfterChoice.Tick += (_, _) =>
+        {
+            _closeAfterChoice.Stop();
+            if (IsVisible && !_flyout.IsClosing)
+            {
+                SetOptionsExpanded(false);
+            }
+        };
+
+        _startupTick = new Tick(StartupCheck);
+        _updateAutoTick = new Tick(UpdateAutoCheck);
+        _notifyTick = new Tick(NotifyCheck);
+
+        foreach (var mark in OptionMarks)
+        {
+            mark.RenderTransform = new ScaleTransform();
+        }
+
+        foreach (var row in FilledRows)
+        {
+            row.ApplyTemplate();
+            row.MouseEnter += (_, _) => UpdateFill(row);
+            row.MouseLeave += (_, _) => UpdateFill(row);
+            row.IsKeyboardFocusedChanged += (_, _) => UpdateFill(row);
+        }
+
         // Rows are Buttons, so Tab, Space and Enter work already; Up/Down is added back
         // because the ContextMenu this replaces had it and it is how a menu is expected
         // to behave from the keyboard.
@@ -127,16 +185,17 @@ public partial class MenuWindow : Window, IFlyout
 
         // Toggles leave the flyout open so the tick confirms the change; actions close it
         // first, so a balloon or a modal never appears behind a topmost window.
-        StartupRow.Click += (_, _) => Toggle(SetRunAtStartup, StartupCheck);
-        UpdateAutoRow.Click += (_, _) => Toggle(SetUpdateAutomatically, UpdateAutoCheck);
-        NotifyRow.Click += (_, _) => Toggle(SetNotifyOnThreshold, NotifyCheck);
+        StartupRow.Click += (_, _) => Toggle(SetRunAtStartup, _startupTick);
+        UpdateAutoRow.Click += (_, _) => Toggle(SetUpdateAutomatically, _updateAutoTick);
+        NotifyRow.Click += (_, _) => Toggle(SetNotifyOnThreshold, _notifyTick);
 
         // Marked handled, or the Click bubbles to NotifyRow above and every interaction with
-        // the selector would silently switch the notification off as a side effect.
+        // the selector would silently switch the notification off as a side effect. A click
+        // during the hold after a choice sees an open list, so it closes it, just sooner.
         ThresholdPill.Click += (_, e) =>
         {
             e.Handled = true;
-            SetOptionsExpanded(ThresholdOptions.Visibility != Visibility.Visible);
+            SetOptionsExpanded(!_optionsOpen && !_closeAfterChoice.IsEnabled);
         };
 
         foreach (var (option, label) in OptionRows.Zip(OptionLabels))
@@ -198,7 +257,13 @@ public partial class MenuWindow : Window, IFlyout
 
         // The list always opens closed. Reopening the flyout with it still expanded would
         // show a taller card with no explanation of why, and the choice has already been made.
-        SetOptionsExpanded(false, redock: false);
+        SetOptionsExpanded(false, animate: false);
+
+        // Every open starts at rest, with no fill left fading from the last one.
+        foreach (var row in FilledRows)
+        {
+            UpdateFill(row, animate: false);
+        }
 
         // takeForeground: a tray-resident app owns no activated window, so Activate()
         // alone is not guaranteed the foreground, and without it the flyout never
@@ -219,8 +284,8 @@ public partial class MenuWindow : Window, IFlyout
             ? state.WeeklyReset
             : MenuText.WeeklyResetDerived;
         NotifySuffix.Text = MenuText.NotifySuffix;
-        SetChecked(StartupCheck, state.RunAtStartup);
-        SetChecked(NotifyCheck, state.NotifyOnThreshold);
+        _startupTick.Place(state.RunAtStartup);
+        _notifyTick.Place(state.NotifyOnThreshold);
         ShowThreshold(state.ThresholdPercent);
 
         // Collapsed, not hidden: Hidden would keep the row's 34px of height and leave a gap
@@ -238,7 +303,7 @@ public partial class MenuWindow : Window, IFlyout
             ResumeRefreshLabel.Text = PanelText.UsageRefreshBlockedRow;
             ResumeRefreshRow.ToolTip = PanelText.UsageRefreshBlockedHint(state.UsageRefreshBlocked);
         }
-        SetChecked(UpdateAutoCheck, state.UpdateAutomatically && state.CanUpdateAutomatically);
+        _updateAutoTick.Place(state.UpdateAutomatically && state.CanUpdateAutomatically);
     }
 
     /// <summary>
@@ -249,15 +314,42 @@ public partial class MenuWindow : Window, IFlyout
     /// hand-edited settings.json is a legitimate way to hold one; showing 75 as "80%" would
     /// be the menu asserting something about the machine that is not true.</para>
     /// </summary>
-    private void ShowThreshold(int percent)
+    private void ShowThreshold(int percent, bool animate = false)
     {
+        var moved = percent != _thresholdPercent;
         _thresholdPercent = percent;
         ThresholdText.Text = MenuText.ThresholdPercent(percent);
 
         foreach (var (row, mark) in OptionRows.Zip(OptionMarks))
         {
-            mark.Visibility = ChoiceOf(row) == percent ? Visibility.Visible : Visibility.Hidden;
+            var chosen = ChoiceOf(row) == percent;
+            PlaceDot(mark, chosen);
+
+            if (chosen && moved && animate && WpfMotion.AnimationsOn)
+            {
+                GrowDot(mark);
+            }
         }
+    }
+
+    private static void PlaceDot(System.Windows.Shapes.Ellipse mark, bool chosen)
+    {
+        // Released first: an attached animation holds its end value over the local one.
+        var scale = (ScaleTransform)mark.RenderTransform;
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, null);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, null);
+        mark.BeginAnimation(OpacityProperty, null);
+        mark.Visibility = chosen ? Visibility.Visible : Visibility.Hidden;
+    }
+
+    private static void GrowDot(System.Windows.Shapes.Ellipse mark)
+    {
+        var ms = PanelMotion.Ms(PanelMotion.ChosenDotBaseMs);
+        var scale = (ScaleTransform)mark.RenderTransform;
+        var grow = WpfMotion.DelayedFade(PanelMotion.ChosenDotFromScale, 1, ms, 0, PanelMotion.Decelerate);
+        scale.BeginAnimation(ScaleTransform.ScaleXProperty, grow);
+        scale.BeginAnimation(ScaleTransform.ScaleYProperty, grow);
+        mark.BeginAnimation(OpacityProperty, WpfMotion.DelayedFade(0, 1, ms, 0, PanelMotion.Decelerate));
     }
 
     private System.Windows.Controls.Button[] OptionRows => [Threshold70, Threshold80, Threshold90];
@@ -273,6 +365,33 @@ public partial class MenuWindow : Window, IFlyout
 
     private System.Windows.Controls.TextBlock[] OptionLabels => [Label70, Label80, Label90];
 
+    /// <summary>Every row whose hover and keyboard-focus fill fades.</summary>
+    private System.Windows.Controls.Button[] FilledRows =>
+    [
+        ResetPanelRow, StartupRow, UpdateAutoRow, NotifyRow, ThresholdPill,
+        Threshold70, Threshold80, Threshold90,
+        WeeklyResetRow, ResumeRefreshRow, DiagnosticsRow, UpdatesRow, ExitRow,
+    ];
+
+    /// <summary>Fades a row's hover and keyboard-focus fill from wherever it is. Never a press.</summary>
+    private static void UpdateFill(System.Windows.Controls.Button row, bool animate = true)
+    {
+        var fill = (System.Windows.Controls.Border)row.Template.FindName("HoverFill", row);
+        var lit = row.IsMouseOver || row.IsKeyboardFocused;
+        var ms = PanelMotion.Ms(lit ? PanelMotion.HoverFillInBaseMs : PanelMotion.HoverFillOutBaseMs);
+
+        if (animate && PanelMotion.Runs(WpfMotion.AnimationsOn, ms))
+        {
+            fill.BeginAnimation(OpacityProperty, WpfMotion.DelayedFade(
+                fill.Opacity, lit ? 1 : 0, ms, 0, lit ? PanelMotion.Decelerate : PanelMotion.Accelerate));
+            return;
+        }
+
+        // Released first, for the reason PlaceDot gives.
+        fill.BeginAnimation(OpacityProperty, null);
+        fill.Opacity = lit ? 1 : 0;
+    }
+
     /// <summary>
     /// Applies a chosen percentage and closes the list. Renders what the setter
     /// <em>returns</em>, exactly as the toggle rows do, a settings write can fail, and a
@@ -281,35 +400,72 @@ public partial class MenuWindow : Window, IFlyout
     /// </summary>
     private void ChooseThreshold(int percent)
     {
-        ShowThreshold(SetThresholdPercent?.Invoke(percent) ?? percent);
-        SetOptionsExpanded(false);
+        ShowThreshold(SetThresholdPercent?.Invoke(percent) ?? percent, animate: true);
+
+        if (!PanelMotion.Runs(WpfMotion.AnimationsOn, _closeAfterChoice.Interval.TotalMilliseconds))
+        {
+            SetOptionsExpanded(false);
+            return;
+        }
+
+        // Restarted, not left running: the beat is counted from the latest click.
+        _optionsOpen = false;
+        _closeAfterChoice.Stop();
+        _closeAfterChoice.Start();
     }
 
     /// <summary>
-    /// Opens or closes the option list, then re-docks, the card is <c>SizeToContent</c>, so
-    /// growing it downward from a fixed top would push the new rows into the taskbar, which
-    /// is the failure the docked placement exists to prevent (issue #33).
+    /// Opens or closes the option list, re-docking on every frame, the card is
+    /// <c>SizeToContent</c>, so growing it downward from a fixed top would push the new rows
+    /// into the taskbar, which is the failure the docked placement exists to prevent (issue
+    /// #33). In the order the panel's fold uses, see <see cref="DisclosureAnimation.Prepare"/>.
     /// </summary>
-    private void SetOptionsExpanded(bool expanded, bool redock = true)
+    private void SetOptionsExpanded(bool expanded, bool animate = true)
     {
-        ThresholdOptions.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
-        ChevronRotation.Angle = expanded ? 180 : 0;
+        _closeAfterChoice.Stop();
+        _optionsOpen = expanded;
 
-        if (redock && IsVisible)
+        // For the fold alone: a clip at rest moves the labels by a level of antialiasing, and
+        // the stills must not move.
+        var folding = animate && IsVisible;
+        ThresholdOptions.ClipToBounds = folding;
+
+        if (!folding)
         {
-            UpdateLayout();
-            _flyout.Redock(ActualWidth, ActualHeight);
+            _options.Apply(expanded);
+            return;
+        }
+
+        var (fromHeight, fromAngle) = _options.Current;
+        var toHeight = expanded ? _options.MeasureNatural(NotifyRow.ActualWidth) : 0;
+
+        _options.Prepare(fromHeight);
+        UpdateLayout();
+        _flyout.Redock(ActualWidth, ActualHeight);
+
+        _options.Run(expanded, fromHeight, fromAngle, toHeight);
+
+        // The fold's own fade out is the linear one the panel's table calls for. These rows leave
+        // on the curve everything else leaves on, so it is replaced in the same frame.
+        var fadeMs = PanelMotion.Ms(PanelMotion.OptionsCloseFadeBaseMs);
+        if (!expanded && PanelMotion.Runs(WpfMotion.AnimationsOn, fadeMs))
+        {
+            foreach (var row in OptionRows)
+            {
+                row.BeginAnimation(OpacityProperty,
+                    WpfMotion.DelayedFade(row.Opacity, 0, fadeMs, 0, PanelMotion.Accelerate));
+            }
         }
     }
 
-    private void Toggle(Func<bool, bool>? apply, Path check)
+    private static void Toggle(Func<bool, bool>? apply, Tick tick)
     {
         if (apply is null)
         {
             return;
         }
 
-        SetChecked(check, apply(!IsChecked(check)));
+        tick.Turn(apply(!tick.On));
     }
 
     private void Dismiss(EventHandler? handler) =>
@@ -359,26 +515,25 @@ public partial class MenuWindow : Window, IFlyout
     }
 
     /// <summary>
-    /// Opens or closes the threshold list for an offscreen render. Skips the re-dock, which
-    /// needs a placed window; the sample renderer never shows one.
+    /// Opens or closes the threshold list for an offscreen render. Skips the fold and its re-dock,
+    /// which need a placed window; the sample renderer never shows one.
     ///
-    /// <para>Note that skipping the re-dock also skips the clip re-fit, so this path cannot
-    /// see the clipping bug that <see cref="ContentFullyDrawn"/> exists for, nothing here
-    /// ever animates, so there is no clip to be stale. <c>--menu-check</c> drives the real
+    /// <para>So this path cannot see the fault <see cref="ContentFullyDrawn"/> exists for,
+    /// nothing here ever animates. <c>--menu-check</c> drives the real
     /// window and is where that property is actually asserted.</para>
     /// </summary>
     internal void ExpandThresholdsForVerification(bool expanded) =>
-        SetOptionsExpanded(expanded, redock: false);
+        SetOptionsExpanded(expanded, animate: false);
 
     /// <summary>The pill's current text, so a verification run can assert what it reads.</summary>
     internal string ThresholdLabel => ThresholdText.Text;
 
     /// <summary>Whether the option list is open, the state a click on the pill must flip.</summary>
-    internal bool ThresholdOptionsOpen => ThresholdOptions.Visibility == Visibility.Visible;
+    internal bool ThresholdOptionsOpen => _optionsOpen;
 
     /// <summary>
-    /// Whether every pixel of the card is actually being drawn, i.e. the open transition's
-    /// clip, if one is still attached, covers the whole content.
+    /// Whether every pixel of the card is actually being drawn, i.e. no clip is attached, and
+    /// an open list's fold has let go of its height, with every row at full strength.
     ///
     /// <para>This exists because expanding the threshold list severed the two: the card grew,
     /// the window grew with it, and the content stayed clipped to the height it had when the
@@ -388,9 +543,9 @@ public partial class MenuWindow : Window, IFlyout
     /// verification asserted could see it.</para>
     /// </summary>
     internal bool ContentFullyDrawn =>
-        Content is not FrameworkElement content
-        || content.Clip is not RectangleGeometry clip
-        || (clip.Rect.Width + 0.5 >= content.ActualWidth && clip.Rect.Height + 0.5 >= content.ActualHeight);
+        Content is not FrameworkElement { Clip: not null }
+        && (!_optionsOpen
+            || (double.IsNaN(ThresholdOptions.Height) && OptionRows.All(row => row.Opacity >= 1)));
 
     /// <summary>
     /// Activates the pill through its automation peer, exactly as <see cref="InvokeRow"/>
@@ -411,9 +566,9 @@ public partial class MenuWindow : Window, IFlyout
     /// <summary>Tick state of a toggle row, for asserting a toggle actually flipped.</summary>
     internal bool RowIsChecked(MenuRow row) => row switch
     {
-        MenuRow.Startup => IsChecked(StartupCheck),
-        MenuRow.UpdateAuto => IsChecked(UpdateAutoCheck),
-        _ => IsChecked(NotifyCheck),
+        MenuRow.Startup => _startupTick.On,
+        MenuRow.UpdateAuto => _updateAutoTick.On,
+        _ => _notifyTick.On,
     };
 
     /// <summary>Whether a row is present at all, the automatic-update row is dropped on a
@@ -423,17 +578,94 @@ public partial class MenuWindow : Window, IFlyout
     /// <summary>Whether a close transition is in flight, the state that made rows dead.</summary>
     internal bool IsClosing => _flyout.IsClosing;
 
-    private static bool IsChecked(Path check) => check.Visibility == Visibility.Visible;
-
-    // Hidden rather than removed: the row keeps its 22px check gutter either way, so
-    // labels stay on one left edge whichever settings are on.
-    private static void SetChecked(Path check, bool value) =>
-        check.Visibility = value ? Visibility.Visible : Visibility.Hidden;
-
     /// <summary>
     /// Renders the flyout to a bitmap without showing it, the menu's equivalent of the
     /// tray icon's <c>--samples</c> hook, so both themes can be eyeballed side by side
     /// without a desktop session or disturbing a running instance.
     /// </summary>
     internal BitmapSource RenderToBitmap(double scale) => VisualRenderer.RenderContent(this, scale);
+
+    /// <summary>
+    /// One row's tick. The state is held here and not read back off the mark: a tick fading out
+    /// is still visible, so a second click would read the wrong state and write it to the machine.
+    /// </summary>
+    private sealed class Tick(Path mark)
+    {
+        /// <summary>The RowCheck stroke's length in DIP, a touch over, so no end shows.</summary>
+        private const double StrokeLength = 14.3;
+
+        private int _run;
+
+        public bool On { get; private set; }
+
+        public void Place(bool on)
+        {
+            _run++;
+            On = on;
+            Rest();
+        }
+
+        /// <summary>Draws the tick on or fades it out, carrying on from what is on screen.</summary>
+        public void Turn(bool on)
+        {
+            if (on == On)
+            {
+                return;
+            }
+
+            var ms = PanelMotion.Ms(on ? PanelMotion.TickOnBaseMs : PanelMotion.TickOffBaseMs);
+            if (!PanelMotion.Runs(WpfMotion.AnimationsOn, ms))
+            {
+                Place(on);
+                return;
+            }
+
+            On = on;
+
+            if (on && mark.Visibility != Visibility.Visible)
+            {
+                // Dash units are multiples of the stroke thickness.
+                var dash = StrokeLength / mark.StrokeThickness;
+                mark.StrokeDashArray = [dash, dash];
+                mark.StrokeDashOffset = dash;
+                mark.Visibility = Visibility.Visible;
+            }
+
+            var curve = on ? PanelMotion.Decelerate : PanelMotion.Accelerate;
+            var fade = WpfMotion.DelayedFade(mark.Opacity, on ? 1 : 0, ms, 0, curve);
+
+            // Attached first and only this run's, as in DisclosureAnimation.Run. No guard timer:
+            // a missed completion still looks like the state it ended in.
+            var run = ++_run;
+            fade.Completed += (_, _) =>
+            {
+                if (run == _run)
+                {
+                    Rest();
+                }
+            };
+
+            // Held where it is on the way out: a half-drawn tick fades as it stands.
+            var drawn = mark.StrokeDashOffset;
+            mark.BeginAnimation(
+                Path.StrokeDashOffsetProperty,
+                on ? WpfMotion.DelayedFade(drawn, 0, ms, 0, curve) : null);
+            mark.StrokeDashOffset = drawn;
+
+            mark.BeginAnimation(OpacityProperty, fade);
+        }
+
+        // Hidden rather than removed: the row keeps its 22px check gutter either way, so
+        // labels stay on one left edge whichever settings are on. And no dash left on it, so a
+        // tick at rest is drawn exactly as a plain stroke.
+        private void Rest()
+        {
+            mark.BeginAnimation(OpacityProperty, null);
+            mark.BeginAnimation(Path.StrokeDashOffsetProperty, null);
+            mark.Opacity = 1;
+            mark.ClearValue(Path.StrokeDashArrayProperty);
+            mark.ClearValue(Path.StrokeDashOffsetProperty);
+            mark.Visibility = On ? Visibility.Visible : Visibility.Hidden;
+        }
+    }
 }
