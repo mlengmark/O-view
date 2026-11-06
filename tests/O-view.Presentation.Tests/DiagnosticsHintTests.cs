@@ -14,6 +14,7 @@ namespace OView.Presentation.Tests;
 /// already gone wrong, so sending the reader to a menu item that does not exist turns one
 /// failure into two.</para>
 /// </summary>
+[Collection(DiagnosticsHintCollection.Name)]
 public class DiagnosticsHintTests : IDisposable
 {
     private readonly string _dir = Directory.CreateTempSubdirectory("oview-hint-").FullName;
