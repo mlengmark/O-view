@@ -6,7 +6,7 @@ using OView.Presentation.Text;
 namespace OView.Presentation.Tests;
 
 /// <summary>
-/// The off-plan banner and the standing 31-day section, built once for both heads.
+/// The off-plan banner and the standing section, built once for both heads.
 ///
 /// <para>These assert the decisions the Windows panel used to make alone and the Linux panel
 /// did not make at all: whether a banner is drawn, which of the three billing headings it is
@@ -56,6 +56,27 @@ public class PanelOffPlanTests
         {
             ExtraUsage = new ExtraUsageStatus(state, userDisabled),
         };
+
+    /// <summary>
+    /// A block with a model limit. <paramref name="percent"/> is that model's usage, which the
+    /// figure must take no notice of.
+    /// </summary>
+    private static CachedUtilization Limited(
+        SpendRead? spend = null,
+        ExtraUsageState extraUsage = ExtraUsageState.Unknown,
+        int percent = 58,
+        DateTimeOffset? resetsAtUtc = null) =>
+        Cached(extraUsage) with
+        {
+            ModelLimits = new ModelLimitRead(
+                [new ModelLimit("Fable", new UtilizationBar(percent, resetsAtUtc ?? Now.AddDays(3)))],
+                RowsSeen: 3,
+                RowsSkipped: 2),
+            Spend = spend ?? SpendRead.Absent,
+        };
+
+    private static SpendRead Reported(decimal amount, string currency = "USD", bool enabled = true) =>
+        new(SpendReadState.Read, new ReportedSpend(amount, currency, enabled));
 
     // ── the live banner ─────────────────────────────────────────────────────────────
 
@@ -202,7 +223,7 @@ public class PanelOffPlanTests
         Assert.Equal(OffPlanText.DivergenceDetail(69_091, 1), offPlan.Banner.Detail);
     }
 
-    // ── the standing 31-day section ─────────────────────────────────────────────────
+    // ── the standing section ────────────────────────────────────────────────────────
 
     /// <summary>
     /// The heading counts the window the figure beside it covers, exactly as the chart's does.
@@ -300,6 +321,194 @@ public class PanelOffPlanTests
         Assert.Equal(OffPlanText.OffPlanHint, section.Hint);
         Assert.Contains(OffPlanText.CreditModelsCaption, section.Hint);
     }
+
+    // ── the section on an account with a model limit ────────────────────────────────
+
+    /// <summary>
+    /// Both figures non-zero, the one case that could add them: the row alone decides which is
+    /// shown, and the other leaves no trace in the section.
+    /// </summary>
+    [Fact]
+    public void TheTwoFiguresAreNeverAdded()
+    {
+        var withARow = PanelSections.OffPlan(Stats(), Limited(Reported(12.34m)), Now, Utc).Section;
+        var withoutARow = PanelSections.OffPlan(
+            Stats(), Cached(ExtraUsageState.Enabled) with { Spend = Reported(12.34m) }, Now, Utc).Section;
+
+        Assert.NotNull(withARow);
+        Assert.Equal("$12.34", withARow.SpendValue);
+        Assert.DoesNotContain("92.75", Sentences(withARow));
+        Assert.DoesNotContain("105.09", Sentences(withARow));
+
+        Assert.NotNull(withoutARow);
+        Assert.Equal("$92.75", withoutARow.SpendValue);
+        Assert.DoesNotContain("12.34", Sentences(withoutARow));
+        Assert.DoesNotContain("105.09", Sentences(withoutARow));
+    }
+
+    /// <summary>With no row, reported spend changes nothing: today's estimate, field for field.</summary>
+    [Fact]
+    public void WithNoRowTheEstimateIsUntouchedWhateverSpendReads()
+    {
+        var withoutSpend = PanelSections.OffPlan(Stats(recordedDays: 9), null, Now, Utc).Section;
+        var withSpend = PanelSections.OffPlan(
+            Stats(recordedDays: 9), Cached(ExtraUsageState.Enabled) with { Spend = Reported(12.34m) }, Now, Utc).Section;
+
+        Assert.Equal(withoutSpend, withSpend);
+    }
+
+    /// <summary>
+    /// Heavy use of the limited model is usage inside its limit. Credit usage is on record and
+    /// the model is nearly spent, and with nothing reported there is still no section.
+    /// </summary>
+    [Fact]
+    public void HighUsageOfTheModelWithZeroSpendReportedHidesTheSection()
+    {
+        var cached = Limited(Reported(0m), ExtraUsageState.Enabled, percent: 98);
+
+        var offPlan = PanelSections.OffPlan(Stats(), cached, Now, Utc);
+
+        Assert.Null(offPlan.Section);
+    }
+
+    /// <summary>A passed reset says the reading is old, not that the limit went away.</summary>
+    [Fact]
+    public void ARowWhoseResetHasPassedStillSwitchesTheFigure()
+    {
+        var cached = Limited(Reported(12.34m), resetsAtUtc: Now.AddDays(-1));
+
+        var section = PanelSections.OffPlan(Stats(), cached, Now, Utc).Section;
+
+        Assert.NotNull(section);
+        Assert.Equal("$12.34", section.SpendValue);
+    }
+
+    /// <summary>The amount decides: <c>spend.enabled</c> is not asked, either way.</summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TheAmountDecidesWhateverSpendEnabledSays(bool enabled)
+    {
+        var shown = PanelSections.OffPlan(Stats(), Limited(Reported(12.34m, enabled: enabled)), Now, Utc);
+        var hidden = PanelSections.OffPlan(Stats(), Limited(Reported(0m, enabled: enabled)), Now, Utc);
+
+        Assert.NotNull(shown.Section);
+        Assert.Null(hidden.Section);
+    }
+
+    /// <summary>
+    /// The figure is Claude's, so nothing in the section may read as O-view's: no "Est.", no
+    /// span it does not state, no coverage of a window it does not have, and no claim that the
+    /// usage was credit-billed. An empty badge would draw an empty pill, so the words change
+    /// rather than disappear.
+    /// </summary>
+    [Fact]
+    public void AReportedFigureIsLabelledReportedWithNoEstimateOrPeriod()
+    {
+        var section = PanelSections.OffPlan(Stats(recordedDays: 9), Limited(Reported(12.34m)), Now, Utc).Section;
+
+        Assert.NotNull(section);
+        Assert.Contains("reported", section.SpendLabel, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal("$12.34", section.SpendValue);
+        Assert.DoesNotContain("Est.", Sentences(section));
+        Assert.DoesNotContain("days", Sentences(section));
+        Assert.DoesNotContain("credit-billed", Sentences(section));
+        Assert.Equal("", section.Coverage);
+        Assert.NotEqual("", section.Badge);
+    }
+
+    /// <summary>A currency the block names is the one shown, and it is never dollars.</summary>
+    [Fact]
+    public void AnotherCurrencyShowsItsOwnCode()
+    {
+        var section = PanelSections.OffPlan(Stats(), Limited(Reported(12.34m, "EUR")), Now, Utc).Section;
+
+        Assert.NotNull(section);
+        Assert.Equal("12.34 EUR", section.SpendValue);
+    }
+
+    /// <summary>
+    /// This is another application's cached answer, so the hint carries when it was read: the
+    /// block's own read time, 11:40, not the moment the panel was drawn.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TheHintIsStampedWithWhenTheBlockWasRead(bool amountRead)
+    {
+        var cached = amountRead
+            ? Limited(Reported(12.34m))
+            : Limited(extraUsage: ExtraUsageState.Enabled);
+
+        var section = PanelSections.OffPlan(Stats(), cached, Now, Utc).Section;
+
+        Assert.NotNull(section);
+        Assert.Contains("reported by Claude Code, read 11:40", section.Hint);
+    }
+
+    /// <summary>
+    /// Extra usage on and no amount: money may have moved and nobody said how much, so the
+    /// figure is unknown. Both ways of having no amount read the same, because neither has one.
+    /// </summary>
+    [Theory]
+    [InlineData(SpendReadState.Absent)]
+    [InlineData(SpendReadState.Unreadable)]
+    public void ExtraUsageOnWithNoAmountIsUnknownNeverZero(SpendReadState state)
+    {
+        var cached = Limited(new SpendRead(state, null), ExtraUsageState.Enabled);
+
+        var section = PanelSections.OffPlan(Stats(), cached, Now, Utc).Section;
+
+        Assert.NotNull(section);
+        Assert.Equal(UsageFormatter.Usd(null), section.SpendValue);
+        Assert.DoesNotContain("$0", Sentences(section));
+        Assert.DoesNotContain("Est.", Sentences(section));
+    }
+
+    /// <summary>Off or not stated: nothing says money moved, so nothing is raised.</summary>
+    [Theory]
+    [InlineData(ExtraUsageState.Disabled, SpendReadState.Absent)]
+    [InlineData(ExtraUsageState.Disabled, SpendReadState.Unreadable)]
+    [InlineData(ExtraUsageState.Unknown, SpendReadState.Absent)]
+    [InlineData(ExtraUsageState.Unknown, SpendReadState.Unreadable)]
+    public void ExtraUsageNotOnWithNoAmountHidesTheSection(ExtraUsageState extraUsage, SpendReadState state)
+    {
+        var cached = Limited(new SpendRead(state, null), extraUsage);
+
+        var offPlan = PanelSections.OffPlan(Stats(), cached, Now, Utc);
+
+        Assert.Null(offPlan.Section);
+    }
+
+    /// <summary>
+    /// A model limit changes the section and nothing else. The banner and the tile still read
+    /// the divergence and the estimate, in the same window with and without a row.
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void TheBannerAndTheValueTileIgnoreTheModelLimit(bool exhausted)
+    {
+        var stats = exhausted ? Exhausted() : Stats();
+        var withoutARow = PanelSections.OffPlan(stats, Cached(ExtraUsageState.Enabled), Now, Utc);
+        var withARow = PanelSections.OffPlan(
+            stats, Limited(Reported(12.34m), ExtraUsageState.Enabled), Now, Utc);
+
+        Assert.Equal(withoutARow.Banner, withARow.Banner);
+        Assert.Equal(withoutARow.ValueTileLabel, withARow.ValueTileLabel);
+        Assert.Equal(withoutARow.ValueTileNote, withARow.ValueTileNote);
+    }
+
+    /// <summary>Every sentence a section shows, so a word can be ruled out of all of them at once.</summary>
+    private static string Sentences(PanelOffPlanSectionView section) =>
+        string.Join(
+            "\n",
+            section.Heading,
+            section.Badge,
+            section.SpendLabel,
+            section.SpendValue,
+            section.Coverage,
+            section.Hint);
 
     // ── the value tile's relabel ────────────────────────────────────────────────────
 

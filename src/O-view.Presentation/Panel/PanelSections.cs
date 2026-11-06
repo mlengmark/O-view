@@ -343,7 +343,7 @@ public static class PanelSections
     }
 
     /// <summary>
-    /// The off-plan banner, the standing 31-day section and the value tile's relabel
+    /// The off-plan banner, the standing section and the value tile's relabel
     /// (<see cref="PanelOffPlanView"/>).
     ///
     /// <para>The banner's claim about billing is the part that had to stop being built per
@@ -377,9 +377,36 @@ public static class PanelSections
                 OffPlanText.UsageSettingsUrl)
             : null;
 
+        return new PanelOffPlanView(
+            banner, OffPlanSection(stats, cachedUsage, utcNow, local), valueTileLabel, valueTileNote);
+    }
+
+    /// <summary>
+    /// The standing section, built from one figure or the other and never both.
+    ///
+    /// <para><b>A model limit decides which.</b> Without one, a credit-billed model's usage
+    /// falls outside the plan, so pricing it says what fell outside. With one, the same usage
+    /// draws from that model's own limit, so the estimate would call plan usage off-plan, and
+    /// only what Claude itself reports says anything left the plan. Any row counts, a passed
+    /// reset included: that says the reading is old, not that the limit went away.</para>
+    ///
+    /// <para>They are not added, because they do not measure the same thing: one is a valuation
+    /// of a window of transcripts, the other an amount over a period nothing states.</para>
+    /// </summary>
+    private static PanelOffPlanSectionView? OffPlanSection(
+        PanelStatistics stats,
+        CachedUtilization? cachedUsage,
+        DateTimeOffset utcNow,
+        TimeZoneInfo local)
+    {
+        if (cachedUsage is { ModelLimits.Limits.Count: > 0 })
+        {
+            return ReportedSpendSection(cachedUsage, utcNow, local);
+        }
+
         // Gated on the recorded tokens, not on the price: usage with no published rate has an
         // unknown figure, and hiding it would state a zero by omission (rule 6).
-        var section = stats.HasCreditUsage
+        return stats.HasCreditUsage
             ? new PanelOffPlanSectionView(
                 // The day count is the window the figure beside it covers, exactly as the
                 // chart's heading above is. A literal 31 here and a shorter window in the data
@@ -391,9 +418,45 @@ public static class PanelSections
                 TokenText.CoverageNote(stats),
                 OffPlanText.OffPlanHint)
             : null;
-
-        return new PanelOffPlanView(banner, section, valueTileLabel, valueTileNote);
     }
+
+    /// <summary>
+    /// The section on an account with a model limit: the amount decides, at any setting, and
+    /// a zero hides it however heavily the model was used. With no amount to go on the setting
+    /// decides instead: on means money may have moved, so the figure is unknown rather than
+    /// a zero nobody reported (rule 6), and off or not stated gives no reason to raise it.
+    /// </summary>
+    private static PanelOffPlanSectionView? ReportedSpendSection(
+        CachedUtilization cachedUsage, DateTimeOffset utcNow, TimeZoneInfo local)
+    {
+        if (cachedUsage.Spend.Spend is { } spend)
+        {
+            return spend.Amount == 0
+                ? null
+                : ReportedSpendView(
+                    UsageFormatter.Reported(spend.Amount, spend.Currency),
+                    OffPlanText.ReportedSpendHint(cachedUsage.FetchedAtUtc, utcNow, local));
+        }
+
+        return cachedUsage.ExtraUsage.State == ExtraUsageState.Enabled
+            ? ReportedSpendView(
+                UsageFormatter.Usd(null),
+                OffPlanText.UnreadableSpendHint(cachedUsage.FetchedAtUtc, utcNow, local))
+            : null;
+    }
+
+    /// <summary>
+    /// No coverage note, because the figure comes with no window to be partial against, and no
+    /// day count in the heading for the same reason (<see cref="OffPlanText.ReportedSpendHeading"/>).
+    /// </summary>
+    private static PanelOffPlanSectionView ReportedSpendView(string value, string hint) =>
+        new(
+            OffPlanText.ReportedSpendHeading,
+            PanelText.ReportedSpendBadge,
+            PanelText.ReportedSpendLabel,
+            value,
+            Coverage: "",
+            hint);
 
     /// <summary>
     /// The value tile's label and caveat for the window's off-plan state, read both by

@@ -100,8 +100,8 @@ public static class PanelText
         + "yet, so this is a calendar reference, not your plan's boundary.";
 
     /// <summary>
-    /// The badge on the off-plan section, beside <see cref="OffPlanText.OffPlanHeading"/>. The
-    /// section only exists once credit-billed usage was recorded in the window, so it has one
+    /// The badge on the off-plan section, beside <see cref="OffPlanText.OffPlanHeading"/>. That
+    /// heading only exists once credit-billed usage was recorded in the window, so it has one
     /// wording.
     ///
     /// <para>The section's heading and hint already live in <see cref="OffPlanText"/>, which is
@@ -117,6 +117,19 @@ public static class PanelText
     /// billed rather than the charge itself.
     /// </summary>
     public const string CreditSpendLabel = "Est. credit spend";
+
+    /// <summary>
+    /// The badge on the off-plan section of an account with a model limit, where
+    /// <see cref="CreditBadgeRecorded"/> would be false: usage inside the limit is not
+    /// credit-billed, and the figure beside it is not a reading of usage at all.
+    /// </summary>
+    public const string ReportedSpendBadge = "from Claude";
+
+    /// <summary>
+    /// The label on a reported figure. It is Claude's own, so unlike
+    /// <see cref="CreditSpendLabel"/> it carries no "Est.", and "reported" says whose it is.
+    /// </summary>
+    public const string ReportedSpendLabel = "Reported spend";
 
     /// <summary>
     /// The header's freshness line: <c>As of now</c>, <c>As of 11:34</c>,
