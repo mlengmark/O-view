@@ -196,14 +196,25 @@ public static class SampleStates
                 Live with { WeeklyPercentValue = UsageSnapshot.Percent(100) }, Stats, Account, BothSources, Boost: Promo()),
 
             new("model-limit",
-                "A model with a weekly limit of its own: an amber bar under the account's green Weekly",
+                "A model with a weekly limit of its own: an amber bar under the account's green Weekly, and no off-plan section",
                 Live, Stats, Account, BothSources,
-                CachedUsage: new CachedUtilization(Now, null, null, null)
+                CachedUsage: FableLimit()),
+
+            new("model-limit-spend",
+                "A model limit with spend reported: the amount, labelled reported, and no estimate",
+                Live, Stats, Account, BothSources,
+                CachedUsage: FableLimit() with
                 {
-                    ModelLimits = new ModelLimitRead(
-                        [new ModelLimit("Fable", new UtilizationBar(58, NextWeeklyReset))],
-                        RowsSeen: 3,
-                        RowsSkipped: 2),
+                    ExtraUsage = new ExtraUsageStatus(ExtraUsageState.Enabled),
+                    Spend = new SpendRead(SpendReadState.Read, new ReportedSpend(12.34m, "USD", Enabled: true)),
+                }),
+
+            new("model-limit-spend-unknown",
+                "A model limit with extra usage on and no amount to read: unknown, never $0",
+                Live, Stats, Account, BothSources,
+                CachedUsage: FableLimit() with
+                {
+                    ExtraUsage = new ExtraUsageStatus(ExtraUsageState.Enabled),
                 }),
 
             new("offplan-unknown",
@@ -232,6 +243,15 @@ public static class SampleStates
                 CliOnlyPlan()),
         ];
     }
+
+    private static CachedUtilization FableLimit() =>
+        new(Now, null, null, null)
+        {
+            ModelLimits = new ModelLimitRead(
+                [new ModelLimit("Fable", new UtilizationBar(58, NextWeeklyReset))],
+                RowsSeen: 3,
+                RowsSkipped: 2),
+        };
 
     private static List<DayUsage> BuildSeries(int recordedDays)
     {

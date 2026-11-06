@@ -45,6 +45,27 @@ public class UsageFormatterTests
     }
 
     [Fact]
+    public void Reported_Usd_ReadsAsUsdDoes()
+    {
+        Assert.Equal("$12.34", UsageFormatter.Reported(12.34m, "USD"));
+        Assert.Equal(UsageFormatter.Usd(12.34m), UsageFormatter.Reported(12.34m, "usd"));
+    }
+
+    [Fact]
+    public void Reported_AnotherCurrency_ShowsItsOwnCode_NeverADollarSign()
+    {
+        Assert.Equal("12.30 EUR", UsageFormatter.Reported(12.30m, "EUR"));
+        Assert.DoesNotContain("$", UsageFormatter.Reported(12.30m, "EUR"));
+    }
+
+    [Fact]
+    public void Reported_AnotherCurrency_KeepsTheDecimalPlacesItCameWith()
+    {
+        // Yen has none, and "1234.00 JPY" would state a precision nobody reported.
+        Assert.Equal("1234 JPY", UsageFormatter.Reported(1234m, "JPY"));
+    }
+
+    [Fact]
     public void Formatting_IsInvariant_NotTheMachineCulture()
     {
         // A comma decimal separator would break both figures on a European machine. The
@@ -55,6 +76,7 @@ public class UsageFormatterTests
             Thread.CurrentThread.CurrentCulture = new CultureInfo("de-DE");
 
             Assert.Equal("$1234.50", UsageFormatter.Usd(1234.50m));
+            Assert.Equal("1234.50 EUR", UsageFormatter.Reported(1234.50m, "EUR"));
             Assert.Equal("1.5K", UsageFormatter.Tokens(1_500));
             Assert.Equal("12.7M", UsageFormatter.Tokens(12_700_000));
         }

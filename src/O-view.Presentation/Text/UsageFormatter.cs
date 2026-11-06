@@ -40,4 +40,14 @@ public static class UsageFormatter
     public static string Usd(decimal? usd) => usd is { } value
         ? "$" + value.ToString("0.00", CultureInfo.InvariantCulture)
         : "unknown";
+
+    /// <summary>
+    /// An amount Claude reported, in the currency it reported. USD reads as <see cref="Usd"/>
+    /// does; anything else shows its own code, never a <c>$</c>, with the decimal places the
+    /// amount came with, because not every currency has two.
+    /// </summary>
+    public static string Reported(decimal amount, string currency) =>
+        string.Equals(currency, "USD", StringComparison.OrdinalIgnoreCase)
+            ? Usd(amount)
+            : string.Create(CultureInfo.InvariantCulture, $"{amount} {currency}");
 }

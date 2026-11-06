@@ -235,4 +235,30 @@ public static class OffPlanText
     public static string OffPlanHint { get; } =
         $"Estimated at published API rates for models billed as extra usage ({CreditModelsCaption}). "
         + "O-view cannot read your credit balance; check your billing page for exact figures.";
+
+    /// <summary>
+    /// The section's heading on an account with a model limit. <b>No day count, unlike
+    /// <see cref="OffPlanHeading"/>:</b> the block this figure comes from names no period, so
+    /// any span written here would be O-view's invention.
+    /// </summary>
+    public const string ReportedSpendHeading = "Off-plan usage";
+
+    /// <summary>
+    /// What a reported figure is: another application's cached answer, so it is stamped with
+    /// when it was read for the reason <see cref="OffPlanDetail"/> is, and it says that no
+    /// period comes with it.
+    /// </summary>
+    public static string ReportedSpendHint(
+        DateTimeOffset fetchedAtUtc, DateTimeOffset utcNow, TimeZoneInfo local) =>
+        "What Claude says was spent outside your plan, over a period it does not state "
+        + $"({ReadStamp(fetchedAtUtc, utcNow, local)}). Check your billing page for exact figures.";
+
+    /// <summary>
+    /// Why a reported figure reads "unknown": the setting says money may have moved and the
+    /// amount beside it could not be read. Stamped like <see cref="ReportedSpendHint"/>.
+    /// </summary>
+    public static string UnreadableSpendHint(
+        DateTimeOffset fetchedAtUtc, DateTimeOffset utcNow, TimeZoneInfo local) =>
+        "Extra usage is switched on for this account, but O-view could not read an amount "
+        + $"({ReadStamp(fetchedAtUtc, utcNow, local)}). Check your billing page for the figure.";
 }

@@ -2,11 +2,11 @@ namespace OView.Presentation.Panel;
 
 /// <summary>
 /// Everything the panel says about usage that is not drawing from the plan: the live banner
-/// for the current session window, the standing 31-day spend section, and the relabel the
-/// value tile takes while the two are true (docs/ui-spec.md §2, GitHub issues #3, #259).
+/// for the current session window, the standing spend section, and the relabel the value tile
+/// takes while the two are true (docs/ui-spec.md §2, GitHub issues #3, #259).
 ///
 /// <para><b>Why one view model for two registers.</b> They are independent signals, the
-/// 31-day figure stands while the current window is on-plan, and the banner appears before
+/// standing figure stands while the current window is on-plan, and the banner appears before
 /// any credit spend has accrued, but they make one claim between them, and the Windows panel
 /// was the only place that knew how the halves fit together. The Linux panel showed neither,
 /// so the one thing a reader needs when a meter stops moving existed on one face only.</para>
@@ -22,9 +22,10 @@ namespace OView.Presentation.Panel;
 /// the usual state and draws nothing at all.
 /// </param>
 /// <param name="Section">
-/// The standing section, or null when no credit-billed usage was recorded in the window, which
-/// is the usual state on most accounts and, like an absent banner, draws nothing at all. Null
-/// rather than a flag beside the text, so a head has no heading to draw without a figure.
+/// The standing section, or null when nothing fell outside the plan: no credit-billed usage
+/// recorded in the window, or, on an account with a model limit, no spend reported. That is the
+/// usual state on most accounts and, like an absent banner, draws nothing at all. Null rather
+/// than a flag beside the text, so a head has no heading to draw without a figure.
 /// </param>
 /// <param name="ValueTileLabel">
 /// The value tile's name while this window is off-plan. The "not money charged" framing the
@@ -67,14 +68,16 @@ public sealed record PanelOffPlanBannerView(
 
 /// <summary>
 /// The standing section: the credit-billed usage recorded in the window, valued at published
-/// rates. It exists only once there is some, see <see cref="PanelOffPlanView.Section"/>.
+/// rates, or on an account with a model limit, what Claude reports as spent outside the plan.
+/// It exists only once there is some, see <see cref="PanelOffPlanView.Section"/>.
 /// </summary>
-/// <param name="Heading">The section's heading, naming the window its figure covers.</param>
-/// <param name="Badge">States that the usage was credit-billed.</param>
+/// <param name="Heading">The section's heading, naming the window its figure covers, if it has one.</param>
+/// <param name="Badge">States where the figure comes from.</param>
 /// <param name="SpendLabel">The label on the figure.</param>
 /// <param name="SpendValue">
-/// The figure, or "unknown" when the recorded usage has no price. That keeps the section on
-/// screen: usage O-view cannot value is not the same as no usage (rule 6).
+/// The figure, or "unknown" when the recorded usage has no price or the reported amount could
+/// not be read. That keeps the section on screen: usage O-view cannot value is not the same as
+/// no usage (rule 6).
 /// </param>
 /// <param name="Coverage">
 /// The caveat qualifying the figure directly, or the empty string when the window is fully
@@ -82,9 +85,10 @@ public sealed record PanelOffPlanBannerView(
 /// recorded" is the difference between a real total and a partial one (rule 6).
 /// </param>
 /// <param name="Hint">
-/// What the figure is and is not, in two clauses, an estimate at published rates, and not
-/// the charge. Shown on hover where a head has one (issue #181); a head with nowhere to put
-/// a card still has somewhere to put a sentence, because the caveat is the point of it.
+/// What the figure is and is not, in two clauses: an estimate at published rates, or another
+/// application's cached answer and when it was read, and not the charge either way. Shown on
+/// hover where a head has one (issue #181); a head with nowhere to put a card still has
+/// somewhere to put a sentence, because the caveat is the point of it.
 /// </param>
 public sealed record PanelOffPlanSectionView(
     string Heading,
