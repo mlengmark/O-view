@@ -321,9 +321,18 @@ public static class DiagnosticsBundle
     private static CachedUtilization? TryReadCached(string path, out string? failure)
     {
         failure = null;
+
+        // A missing file is not a failure. Parse is called here rather than TryRead because
+        // TryRead swallows a JsonException, and a file cut off mid-write would then read as
+        // having no block instead of as one that could not be parsed.
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
         try
         {
-            return CachedUtilization.TryRead(path);
+            return CachedUtilization.Parse(File.ReadAllText(path));
         }
         catch (Exception ex)
         {

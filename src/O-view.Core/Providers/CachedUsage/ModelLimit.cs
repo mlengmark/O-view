@@ -58,7 +58,7 @@ public sealed record ModelLimitRead(IReadOnlyList<ModelLimit> Limits, int RowsSe
     /// <summary>Property inside <c>utilization</c> that holds the rows.</summary>
     public const string PropertyName = "limits";
 
-    /// <summary>A block that listed no rows, or whose list could not be read.</summary>
+    /// <summary>A block with no <c>limits</c>, or a JSON <c>null</c> one.</summary>
     public static readonly ModelLimitRead None = new([], 0, 0) { State = ModelLimitsState.Absent };
 
     private static readonly ModelLimitRead NotAList = new([], 0, 0) { State = ModelLimitsState.Unreadable };

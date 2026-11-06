@@ -676,6 +676,7 @@ public class DiagnosticsBundleTests : IDisposable
     [Theory]
     [InlineData("""{"cachedUsageUtilization":{"fetchedAtMs":9000000000000000000,"utilization":{}}}""")]
     [InlineData("[]")]
+    [InlineData("""{"cachedUsageUtilization":{"fetchedAtMs":179""")]
     public void AMalformedCachedFileIsReportedAndRaisesNothing(string json)
     {
         var file = _dir.File("claude.json");
@@ -686,6 +687,15 @@ public class DiagnosticsBundleTests : IDisposable
         Assert.Null(block);
         Assert.NotNull(failure);
         Assert.Contains("cached block unreadable", BuildWithCached(block, failure), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AMissingCachedFileIsNotAFailure()
+    {
+        var block = DiagnosticsBundle.ReadCached([_dir.File("absent.json")], out var failure);
+
+        Assert.Null(block);
+        Assert.Null(failure);
     }
 
     [Fact]
