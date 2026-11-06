@@ -1,14 +1,12 @@
 using System.Windows;
-using System.Windows.Media;
 using System.Windows.Media.Animation;
 using OView.App.Rendering;
-using Color = System.Windows.Media.Color;
 
 namespace OView.Tray.Popup;
 
 /// <summary>
 /// What the Windows head's animations share: whether animations are on, the translation of
-/// <see cref="PanelMotion"/>'s toolkit-free figures into WPF types, and the two builders more
+/// <see cref="PanelMotion"/>'s toolkit-free figures into WPF types, and the builder more
 /// than one surface needs. The figures themselves live in <see cref="PanelMotion"/>; nothing
 /// here decides how long anything takes.
 /// </summary>
@@ -57,28 +55,5 @@ internal static class WpfMotion
             ? new SplineDoubleKeyFrame(to, end, Spline(c))
             : new LinearDoubleKeyFrame(to, end));
         return animation;
-    }
-
-    /// <summary>
-    /// Fades <paramref name="brush"/> to <paramref name="target"/> for a hover or focus fill:
-    /// quick in, slower out. With animations off the colour is set at once and nothing is left
-    /// running. A press is never routed through this; pressed fills stay instant.
-    /// </summary>
-    /// <param name="brush">An unfrozen brush the element owns.</param>
-    /// <param name="entering">True when the fill is arriving, false when it is leaving.</param>
-    public static void FadeFill(SolidColorBrush brush, Color target, bool entering)
-    {
-        var duration = PanelMotion.Ms(entering ? PanelMotion.HoverFillInBaseMs : PanelMotion.HoverFillOutBaseMs);
-
-        if (!PanelMotion.Runs(AnimationsOn, duration))
-        {
-            // Released first: an attached animation holds its end value over the local one,
-            // so assigning the colour alone would be silently ignored.
-            brush.BeginAnimation(SolidColorBrush.ColorProperty, null);
-            brush.Color = target;
-            return;
-        }
-
-        brush.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(target, Duration(duration)));
     }
 }

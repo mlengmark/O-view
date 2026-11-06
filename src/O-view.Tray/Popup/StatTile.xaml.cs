@@ -362,6 +362,33 @@ public partial class StatTile : UserControl
     }
 
     /// <summary>
+    /// Clicks the tile by raising its button's <c>Click</c>, the event the mouse and the
+    /// keyboard both end in, at the moment the caller chooses. An automation peer would deliver
+    /// it on a later dispatcher turn.
+    /// </summary>
+    internal void ClickForVerification() =>
+        Root.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent, Root));
+
+    /// <summary>
+    /// What a flip has put on screen, for <c>--motion-check</c>: the face the tile has been
+    /// asked for, whether a flip is still running, and each face's visibility and opacity. A face
+    /// that is <c>Hidden</c> is reset to full opacity when the flip settles, so its opacity says
+    /// nothing and only a visible face's is worth reading.
+    /// </summary>
+    internal FlipReadout Readout => new(
+        _expanded, _settleTimer is not null,
+        SummaryView.Visibility, SummaryView.Opacity,
+        BreakdownView.Visibility, BreakdownView.Opacity,
+        GlyphTurn.Angle, BarHost.Clip is not null);
+
+    /// <summary>See <see cref="Readout"/>.</summary>
+    internal readonly record struct FlipReadout(
+        bool Expanded, bool Flipping,
+        Visibility Summary, double SummaryOpacity,
+        Visibility Breakdown, double BreakdownOpacity,
+        double GlyphAngle, bool BarClipped);
+
+    /// <summary>
     /// Puts the tile in its finished state at once with nothing in flight: the path for
     /// <see cref="Populate"/>, the verification renders, and Windows' animations being off.
     /// </summary>

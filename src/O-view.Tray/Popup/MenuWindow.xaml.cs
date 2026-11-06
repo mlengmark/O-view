@@ -518,9 +518,9 @@ public partial class MenuWindow : Window, IFlyout
     /// Opens or closes the threshold list for an offscreen render. Skips the fold and its re-dock,
     /// which need a placed window; the sample renderer never shows one.
     ///
-    /// <para>So this path cannot see the fault <see cref="ContentFullyDrawn"/> exists for,
-    /// nothing here ever animates. <c>--menu-check</c> drives the real
-    /// window and is where that property is actually asserted.</para>
+    /// <para>So this path cannot see a fold that fails to let go of its height, nothing here
+    /// ever animates. <c>--menu-check</c> and <c>--motion-check</c> drive the real window and are
+    /// where <see cref="ThresholdList"/> is actually asserted.</para>
     /// </summary>
     internal void ExpandThresholdsForVerification(bool expanded) =>
         SetOptionsExpanded(expanded, animate: false);
@@ -532,20 +532,38 @@ public partial class MenuWindow : Window, IFlyout
     internal bool ThresholdOptionsOpen => _optionsOpen;
 
     /// <summary>
-    /// Whether every pixel of the card is actually being drawn, i.e. no clip is attached, and
-    /// an open list's fold has let go of its height, with every row at full strength.
+    /// What the option list reads right now: whether it is logically open, whether it is on
+    /// screen, whether its fold has let go of the height it pinned, the weakest row's opacity
+    /// and the chevron's turn. A settled list is open with all of it at the far end and closed
+    /// with all of it at the near end.
     ///
-    /// <para>This exists because expanding the threshold list severed the two: the card grew,
-    /// the window grew with it, and the content stayed clipped to the height it had when the
-    /// flyout opened. Rows below the fold were sliced in half and the bottom border and corner
-    /// vanished, which reads as the UI breaking outright. Logical state was entirely correct
-    /// throughout, the list was open, the label had moved, the tick had not, so nothing the
-    /// verification asserted could see it.</para>
+    /// <para>Logical state alone passes while the fold is stuck: the list can be open, the label
+    /// moved and the tick untouched, with the body still pinned to the height of the last
+    /// animated frame, so it no longer sizes itself and the window follows it.</para>
     /// </summary>
-    internal bool ContentFullyDrawn =>
-        Content is not FrameworkElement { Clip: not null }
-        && (!_optionsOpen
-            || (double.IsNaN(ThresholdOptions.Height) && OptionRows.All(row => row.Opacity >= 1)));
+    internal ThresholdListState ThresholdList => new(
+        _optionsOpen,
+        ThresholdOptions.Visibility == Visibility.Visible,
+        double.IsNaN(ThresholdOptions.Height),
+        OptionRows.Min(row => row.Opacity),
+        ChevronRotation.Angle);
+
+    /// <summary>How many choices the list holds, so a check can time the last one's arrival.</summary>
+    internal int OptionRowCount => OptionRows.Length;
+
+    /// <summary>See <see cref="ThresholdList"/>.</summary>
+    internal readonly record struct ThresholdListState(
+        bool Open, bool Shown, bool Released, double LeastRowOpacity, double ChevronAngle);
+
+    /// <summary>
+    /// Clicks the pill by raising its <c>Click</c> directly. The automation peer
+    /// <see cref="InvokeThresholdPill"/> uses delivers on a later dispatcher turn, which is
+    /// fine for a step a timer spaces out and wrong for a click meant to land at a chosen moment
+    /// of a fold.
+    /// </summary>
+    internal void ClickThresholdPill() =>
+        ThresholdPill.RaiseEvent(new RoutedEventArgs(
+            System.Windows.Controls.Primitives.ButtonBase.ClickEvent, ThresholdPill));
 
     /// <summary>
     /// Activates the pill through its automation peer, exactly as <see cref="InvokeRow"/>

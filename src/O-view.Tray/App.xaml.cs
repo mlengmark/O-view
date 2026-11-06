@@ -111,11 +111,21 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        // The disclosure fold, sampled on the real desktop over ~2 s: a per-frame geometry
-        // trace plus filmstrips grabbed off the screen. Same shape as the two above and
-        // pre-mutex for the same reason, it drives a panel of its own and must not fight the
-        // running instance for the tray or the display. Takes a DIRECTORY, like the sample
-        // renderers, because it writes several files.
+        // The tile flip and the threshold list's fold, each driven to its end and then clicked
+        // again mid-flight, over about 14 s at the current pace. Pre-mutex like --menu-check,
+        // for the same reason: it opens windows of its own.
+        if (args.TryGetValue("--motion-check", out var motionCheckReport))
+        {
+            MotionChecks.Run(motionCheckReport ?? "motion-check.txt", Shutdown);
+            return;
+        }
+
+        // The disclosure fold, sampled on the real desktop over about 6 s at the current pace
+        // (it is the sum of the phases' own figures from PanelMotion, so it follows the pace): a
+        // per-frame geometry trace plus filmstrips grabbed off the screen. Same shape as the
+        // two above and pre-mutex for the same reason, it drives a panel of its own and must
+        // not fight the running instance for the tray or the display. Takes a DIRECTORY, like
+        // the sample renderers, because it writes several files.
         if (args.TryGetValue("--fold-check", out var foldCheckDir))
         {
             SampleRenderer.RunFoldCheck(foldCheckDir ?? "fold-check", Shutdown);
