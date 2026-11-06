@@ -200,7 +200,7 @@ public sealed class LinuxApp : Application, IShellToSkin
 
         // The icon is built above and published once the first poll has been drawn into it, so
         // the first thing a notification area reads is the reading (see FirstReadingHold).
-        _firstReading = new FirstReadingHold(PublishTray, timers, _log);
+        PublishTray(); _firstReading = new FirstReadingHold(() => { }, timers, _log);
         _firstReading.Start();
 
         // Last, so the four pushes below cannot arrive before what answers them exists. Ticks
