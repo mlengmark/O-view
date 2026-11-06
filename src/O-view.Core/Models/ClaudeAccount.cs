@@ -71,7 +71,10 @@ public sealed record ClaudeAccount(
         try
         {
             using var doc = JsonDocument.Parse(File.ReadAllText(path));
-            if (!doc.RootElement.TryGetProperty("oauthAccount", out var account) ||
+
+            // Valid JSON of the wrong shape: TryGetProperty throws on a root that is not an object.
+            if (doc.RootElement.ValueKind != JsonValueKind.Object ||
+                !doc.RootElement.TryGetProperty("oauthAccount", out var account) ||
                 account.ValueKind != JsonValueKind.Object)
             {
                 return null;
