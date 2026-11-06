@@ -93,31 +93,21 @@ public static class PanelText
         + "yet, so this is a calendar reference, not your plan's boundary.";
 
     /// <summary>
-    /// The badge on the off-plan section when credit-billed usage was recorded in the window,
-    /// beside <see cref="OffPlanText.OffPlanHeading"/>.
+    /// The badge on the off-plan section, beside <see cref="OffPlanText.OffPlanHeading"/>. The
+    /// section only exists once credit-billed usage was recorded in the window, so it has one
+    /// wording.
     ///
     /// <para>The section's heading and hint already live in <see cref="OffPlanText"/>, which is
-    /// where this pair reads as a neighbour; they are here because the slice that moved them out
-    /// of the Windows panel was scoped to this class. Worth consolidating, not worth a second
-    /// copy in the meantime.</para>
+    /// where this reads as a neighbour; it is here because the slice that moved it out of the
+    /// Windows panel was scoped to this class. Worth consolidating, not worth a second copy in
+    /// the meantime.</para>
     /// </summary>
     public const string CreditBadgeRecorded = "credit-billed";
 
     /// <summary>
-    /// The same badge when none was. <b>Lower case, like the unknown-account stand-ins</b>
-    /// (<see cref="AccountUnknown"/>): it reports an absence in the slot a billing state goes
-    /// in, and a capitalised "None recorded" reads as the name of one.
-    ///
-    /// <para>The row is shown either way rather than hidden when empty. A section that vanishes
-    /// leaves the reader unable to tell "no off-plan usage" from "O-view did not look".</para>
-    /// </summary>
-    public const string CreditBadgeNoneRecorded = "none recorded";
-
-    /// <summary>
-    /// The label on the credit figure. <b>"Est." stays on both branches</b>, O-view prices
-    /// credit usage from the same public rates as everything else, so it is a valuation of what
-    /// was billed rather than the charge itself, and the zero case is no less an estimate for
-    /// being zero.
+    /// The label on the credit figure. <b>"Est." is not optional</b>, O-view prices credit
+    /// usage from the same public rates as everything else, so it is a valuation of what was
+    /// billed rather than the charge itself.
     /// </summary>
     public const string CreditSpendLabel = "Est. credit spend";
 

@@ -21,23 +21,10 @@ namespace OView.Presentation.Panel;
 /// The live banner, or null when this window is drawing from the plan as expected, which is
 /// the usual state and draws nothing at all.
 /// </param>
-/// <param name="Heading">
-/// The standing section's heading, naming the window its figure covers. Always present: the
-/// section is shown whether or not anything was recorded, because a section that vanishes
-/// leaves the reader unable to tell no off-plan usage from O-view not having looked.
-/// </param>
-/// <param name="Badge">Whether credit-billed usage was recorded in the window, in two words.</param>
-/// <param name="SpendLabel">The label on the figure.</param>
-/// <param name="SpendValue">The figure, a true zero when nothing was recorded, not a blank.</param>
-/// <param name="Coverage">
-/// The caveat qualifying the figure directly, or the empty string when the window is fully
-/// covered. <b>This one belongs on screen</b>, unlike <see cref="Hint"/>: "30 of 31 days
-/// recorded" is the difference between a real total and a partial one (rule 6).
-/// </param>
-/// <param name="Hint">
-/// What the figure is and is not, in two clauses, an estimate at published rates, and not
-/// the charge. Shown on hover where a head has one (issue #181); a head with nowhere to put
-/// a card still has somewhere to put a sentence, because the caveat is the point of it.
+/// <param name="Section">
+/// The standing section, or null when no credit-billed usage was recorded in the window, which
+/// is the usual state on most accounts and, like an absent banner, draws nothing at all. Null
+/// rather than a flag beside the text, so a head has no heading to draw without a figure.
 /// </param>
 /// <param name="ValueTileLabel">
 /// The value tile's name while this window is off-plan. The "not money charged" framing the
@@ -47,12 +34,7 @@ namespace OView.Presentation.Panel;
 /// <param name="ValueTileNote">The caveat under that tile naming the mixture, or empty.</param>
 public sealed record PanelOffPlanView(
     PanelOffPlanBannerView? Banner,
-    string Heading,
-    string Badge,
-    string SpendLabel,
-    string SpendValue,
-    string Coverage,
-    string Hint,
+    PanelOffPlanSectionView? Section,
     string ValueTileLabel,
     string ValueTileNote);
 
@@ -82,3 +64,32 @@ public sealed record PanelOffPlanBannerView(
     string Detail,
     string LinkLabel,
     string LinkUrl);
+
+/// <summary>
+/// The standing section: the credit-billed usage recorded in the window, valued at published
+/// rates. It exists only once there is some, see <see cref="PanelOffPlanView.Section"/>.
+/// </summary>
+/// <param name="Heading">The section's heading, naming the window its figure covers.</param>
+/// <param name="Badge">States that the usage was credit-billed.</param>
+/// <param name="SpendLabel">The label on the figure.</param>
+/// <param name="SpendValue">
+/// The figure, or "unknown" when the recorded usage has no price. That keeps the section on
+/// screen: usage O-view cannot value is not the same as no usage (rule 6).
+/// </param>
+/// <param name="Coverage">
+/// The caveat qualifying the figure directly, or the empty string when the window is fully
+/// covered. <b>This one belongs on screen</b>, unlike <see cref="Hint"/>: "30 of 31 days
+/// recorded" is the difference between a real total and a partial one (rule 6).
+/// </param>
+/// <param name="Hint">
+/// What the figure is and is not, in two clauses, an estimate at published rates, and not
+/// the charge. Shown on hover where a head has one (issue #181); a head with nowhere to put
+/// a card still has somewhere to put a sentence, because the caveat is the point of it.
+/// </param>
+public sealed record PanelOffPlanSectionView(
+    string Heading,
+    string Badge,
+    string SpendLabel,
+    string SpendValue,
+    string Coverage,
+    string Hint);

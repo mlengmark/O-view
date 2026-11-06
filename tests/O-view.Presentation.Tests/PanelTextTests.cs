@@ -544,38 +544,25 @@ public class PanelTextTests
 
     /// <summary>
     /// The off-plan explanation moved from standing text to a hover card (issue #181), and
-    /// the risk in that move is losing the caveat rather than relocating it. Both wordings
-    /// must still say the figure is not what was charged, an "Est." number presented without
-    /// that reads as money taken (rule 6).
+    /// the risk in that move is losing the caveat rather than relocating it. It must still say
+    /// the figure is not what was charged, an "Est." number presented without that reads as
+    /// money taken (rule 6).
     /// </summary>
     [Fact]
-    public void TheOffPlanHintKeepsItsCaveatInBothStates()
+    public void TheOffPlanHintKeepsItsCaveat()
     {
-        var withUsage = OffPlanText.OffPlanHint(hasCreditUsage: true);
-        Assert.Contains("Estimated at published API rates", withUsage, StringComparison.Ordinal);
-        Assert.Contains("billing page", withUsage, StringComparison.Ordinal);
-        Assert.Contains("cannot read your credit balance", withUsage, StringComparison.Ordinal);
-
-        // The zero state has its own caveat, and it is the more important of the two: a
-        // confident "$0.00" is only honest alongside "usage while O-view wasn't running
-        // isn't captured".
-        var without = OffPlanText.OffPlanHint(hasCreditUsage: false);
-        Assert.Contains("No credit-billed usage", without, StringComparison.Ordinal);
-        Assert.Contains("wasn't running isn't captured", without, StringComparison.Ordinal);
+        Assert.Contains("Estimated at published API rates", OffPlanText.OffPlanHint, StringComparison.Ordinal);
+        Assert.Contains("billing page", OffPlanText.OffPlanHint, StringComparison.Ordinal);
+        Assert.Contains("cannot read your credit balance", OffPlanText.OffPlanHint, StringComparison.Ordinal);
     }
 
-    /// <summary>Both wordings name the models, so "credit-billed" is never an unexplained label.</summary>
+    /// <summary>It names the models, so "credit-billed" is never an unexplained label.</summary>
     [Fact]
-    public void TheOffPlanHintNamesTheCreditBilledModels()
-    {
-        foreach (var hasUsage in new[] { true, false })
-        {
-            Assert.Contains(
-                OffPlanText.CreditModelsCaption,
-                OffPlanText.OffPlanHint(hasUsage),
-                StringComparison.Ordinal);
-        }
-    }
+    public void TheOffPlanHintNamesTheCreditBilledModels() =>
+        Assert.Contains(
+            OffPlanText.CreditModelsCaption,
+            OffPlanText.OffPlanHint,
+            StringComparison.Ordinal);
 
     /// <summary>
     /// The caption joins names with non-breaking spaces so a model never splits across a
@@ -818,14 +805,11 @@ public class PanelTextTests
 
     /// <summary>
     /// The off-plan badge and the label beside its figure, as the Windows panel showed them.
-    /// Both branches of the badge are pinned: the Windows panel wrote the spend label twice,
-    /// once per branch, which is the shape a drift takes.
     /// </summary>
     [Fact]
-    public void TheOffPlanBadgeReportsBothStatesAndKeepsTheEstPrefix()
+    public void TheOffPlanBadgeNamesTheBillingAndTheLabelKeepsTheEstPrefix()
     {
         Assert.Equal("credit-billed", PanelText.CreditBadgeRecorded);
-        Assert.Equal("none recorded", PanelText.CreditBadgeNoneRecorded);
         Assert.Equal("Est. credit spend", PanelText.CreditSpendLabel);
     }
 }

@@ -35,8 +35,8 @@ internal sealed class PanelOffPlan(LinuxPanelTheme theme)
             banner.Title, banner.Detail, $"{banner.LinkLabel}: {banner.LinkUrl}"));
 
     /// <summary>
-    /// The standing 31-day off-plan spend section (<see cref="PanelOffPlanView"/>): heading and
-    /// badge, the figure, the coverage caveat, and what the figure is.
+    /// The standing 31-day off-plan spend section (<see cref="PanelOffPlanSectionView"/>):
+    /// heading and badge, the figure, the coverage caveat, and what the figure is.
     ///
     /// <para><b>The explanation stands rather than hovering.</b> The Windows panel moved it to
     /// a hover card to save three permanent lines (issue #181), which is the right trade where
@@ -45,7 +45,7 @@ internal sealed class PanelOffPlan(LinuxPanelTheme theme)
     /// section cannot ship without. The same reasoning puts the weekly reset's action on its
     /// row rather than behind a card (<see cref="PanelMeterView.ResetLineWithAction"/>).</para>
     /// </summary>
-    public void AddSectionTo(StackPanel root, PanelOffPlanView offPlan)
+    public void AddSectionTo(StackPanel root, PanelOffPlanSectionView offPlan)
     {
         var heading = new Grid { ColumnDefinitions = new ColumnDefinitions("*,Auto") };
         heading.Children.Add(Text(offPlan.Heading, 13, _theme["TextPrimary"], FontWeight.SemiBold));
