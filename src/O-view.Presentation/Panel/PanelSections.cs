@@ -8,7 +8,7 @@ using OView.Presentation.Text;
 namespace OView.Presentation.Panel;
 
 /// <summary>
-/// Builds the panel's header, its two meters, its four statistics tiles and its 31-day graph,
+/// Builds the panel's header, its meters, its four statistics tiles and its 31-day graph,
 /// once, for both heads.
 ///
 /// <para><b>Why this exists above <see cref="PanelText"/>.</b> That class already held every
@@ -226,6 +226,59 @@ public static class PanelSections
             ResetLineWithAction =
                 $"{PanelText.WeeklyResetUnknown} · {PanelText.WeeklyResetUnknownAction}",
             ResetHint = PanelText.WeeklyResetUnknownHint,
+        };
+    }
+
+    /// <summary>
+    /// One meter per model with a weekly limit of its own, in the order Claude Code lists them,
+    /// and none for an account with no such limit or a machine with no cached block.
+    ///
+    /// <para><b>It takes no snapshot, deliberately.</b> The session and weekly meters ask
+    /// <see cref="IsAuthoritative"/>, because their figures belong to the snapshot that won.
+    /// Snapshots are chosen whole and Claude Desktop's carries no model limits, so a bar gated on
+    /// the winner would blink out each time Desktop's reading was chosen, over an account whose
+    /// limit had not changed. The cached block is read here directly, so the same block gives
+    /// the same bars whichever source won.</para>
+    ///
+    /// <para><b>A row with no current figure still draws.</b>
+    /// <see cref="CachedUtilizationProvider.CurrentWindowPercent(UtilizationBar?, DateTimeOffset, TimeSpan)"/>
+    /// is the rule the two meters' cached figures pass through, so a passed reset or an aged zero
+    /// reads unknown with no fill. Dropping the bar instead would say the limit went away, when
+    /// all that is known is that the reading is old (rule 6).</para>
+    /// </summary>
+    /// <param name="cachedUsage">What Claude Code last cached, or null when nothing was readable.</param>
+    public static IReadOnlyList<PanelMeterView> ModelLimitMeters(
+        CachedUtilization? cachedUsage, DateTimeOffset utcNow, TimeZoneInfo local)
+    {
+        if (cachedUsage is null)
+        {
+            return [];
+        }
+
+        var age = utcNow - cachedUsage.FetchedAtUtc;
+
+        return [.. cachedUsage.ModelLimits.Limits.Select(limit => ModelLimitMeter(limit, age, utcNow, local))];
+    }
+
+    /// <summary>
+    /// One model's meter. The reset line is the weekly meter's, with no <c>~</c>, and there is
+    /// none once the reset has passed: nothing here steps it forward, because a stepped instant
+    /// would be an inference wearing a reported value's precision.
+    /// </summary>
+    private static PanelMeterView ModelLimitMeter(
+        ModelLimit limit, TimeSpan age, DateTimeOffset utcNow, TimeZoneInfo local)
+    {
+        var line = limit.Bar.ResetsAtUtc is { } reset && reset > utcNow
+            ? PanelText.WeeklyReset(reset, utcNow, local)
+            : null;
+
+        return Meter(
+            PanelText.ModelWeeklyBarLabel(limit.Model),
+            CachedUtilizationProvider.CurrentWindowPercent(limit.Bar, utcNow, age),
+            PanelBanner.UnknownGauge) with
+        {
+            ResetLine = line,
+            ResetLineWithAction = line,
         };
     }
 
@@ -585,29 +638,34 @@ public static class PanelSections
     }
 
     /// <summary>
-    /// What both meters share: the figure, the band and the fill, or the placeholder that
-    /// stands in for all three. A percentage is shown only when the snapshot is authoritative,
-    /// an estimate has no meter to fill (ADR-0002).
+    /// The session and weekly meters' start: a percentage is shown only when the snapshot is
+    /// authoritative, an estimate has no meter to fill (ADR-0002).
     /// </summary>
     private static PanelMeterView Meter(
-        string label, UsagePercent reported, UsageSnapshot snapshot, PanelBanner? banner)
-    {
+        string label, UsagePercent reported, UsageSnapshot snapshot, PanelBanner? banner) =>
         // Integer precision only, which is what the meter has always carried, the typed value
         // widens to a double so one percent type can serve figures that are not whole numbers,
         // and these two are.
-        var percent = IsAuthoritative(snapshot) ? (int?)reported.Value : null;
+        Meter(
+            label,
+            IsAuthoritative(snapshot) ? (int?)reported.Value : null,
+            banner?.GaugePlaceholder ?? PanelBanner.UnknownGauge);
 
-        return new PanelMeterView(
+    /// <summary>
+    /// What every meter shares: the figure, the band and the fill, or the placeholder that
+    /// stands in for all three.
+    /// </summary>
+    private static PanelMeterView Meter(string label, int? percent, string placeholder) =>
+        new(
             label,
             percent,
-            percent is { } p ? PanelText.BarPercentUsed(p) : banner?.GaugePlaceholder ?? PanelBanner.UnknownGauge,
+            percent is { } p ? PanelText.BarPercentUsed(p) : placeholder,
             percent is { } band ? UsageLevels.Classify(band) : null,
             percent is { } fill ? Math.Clamp(fill, 0, 100) : null,
             ResetLine: null,
             ResetLineWithAction: null,
             ResetHint: null,
             Chip: null);
-    }
 
     /// <summary>
     /// The chip, when Claude Code has cached a promo for the weekly meter and it has not

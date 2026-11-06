@@ -19,7 +19,7 @@ namespace OView.Tray.Popup;
 ///
 /// <para>What the panel draws lives in one piece per thing drawn,
 /// <see cref="PopupTiles"/>, <see cref="PopupWeeklyRow"/>, <see cref="PopupMeter"/>,
-/// <see cref="PopupDivergence"/>, <see cref="PopupGraph"/> and
+/// <see cref="PopupModelMeters"/>, <see cref="PopupDivergence"/>, <see cref="PopupGraph"/> and
 /// <see cref="PopupTokenComposition"/>, each reading exactly the section view model
 /// <see cref="PanelSections"/> already built, and placing it. This file is left with
 /// the window's own lifecycle, layout and verification hooks.</para>
@@ -67,6 +67,7 @@ public partial class PopupWindow : Window, IFlyout
 
     private readonly PopupTiles _tiles;
     private readonly PopupWeeklyRow _weeklyRow;
+    private readonly PopupModelMeters _modelMeters;
     private readonly PopupDivergence _divergence;
     private readonly PopupGraph _graph;
     private readonly PopupTokenComposition _composition;
@@ -124,6 +125,7 @@ public partial class PopupWindow : Window, IFlyout
 
         _tiles = new PopupTiles(TokenScopeLine, TileTokensToday, TileEstToday, TileTokens31, TileEst31, TokenScopeNote);
         _weeklyRow = new PopupWeeklyRow(this, WeeklyResetText, BoostChip, BoostChipText);
+        _modelMeters = new PopupModelMeters(this, ModelLimitMeters);
         _divergence = new PopupDivergence(
             this, DivergenceBanner, DivergenceTitle, DivergenceDetail, DivergenceLinkAnchor,
             CreditsHeading, CreditsBadgeText, CreditsSpendLabel, CreditsSpendValue, CreditsCoverage, CreditsSection,
@@ -257,12 +259,13 @@ public partial class PopupWindow : Window, IFlyout
     public BoostNotices? BoostNotices { get; set; }
 
     /// <summary>
-    /// Claude Code's cached usage block, for the one thing the snapshot does not carry: whether
-    /// extra usage is switched on for this account, and when that was last read (issue #259).
+    /// Claude Code's cached usage block, for what the snapshot does not carry: whether extra
+    /// usage is switched on for this account and when that was last read (issue #259), and each
+    /// model's own weekly limit.
     ///
     /// <para>Set on open from the engine, which owns the read. Null renders the banner's
-    /// unknown wording, the same thing a machine with no Claude Code gets, and correctly so.
-    /// </para>
+    /// unknown wording and no model bars, the same thing a machine with no Claude Code gets, and
+    /// correctly so.</para>
     /// </summary>
     public CachedUtilization? CachedUsage { get; set; }
 
@@ -382,6 +385,7 @@ public partial class PopupWindow : Window, IFlyout
         CreditsSeparator.Margin = new Thickness(0, density.SeparatorGap, 0, density.CreditsSeparatorBottom);
 
         WeeklyHeading.Margin = new Thickness(0, density.SectionGap, 0, 0);
+        _modelMeters.ApplyDensity(density);
         TileGrid.Margin = new Thickness(0, density.TileGridTop, 0, 0);
 
         GraphHeading.Margin = new Thickness(
@@ -446,6 +450,7 @@ public partial class PopupWindow : Window, IFlyout
             snapshot, banner, _lastSettings, BoostNotices, utcNow, local);
         PopupMeter.Populate(WeeklyPctText, WeeklyBar, WeeklyBarFill, weekly, _light);
         _weeklyRow.Populate(weekly);
+        _modelMeters.Populate(PanelSections.ModelLimitMeters(CachedUsage, utcNow, local), _light);
 
         var report = ScopeReport ?? TranscriptScopeReport.Inspect();
         _tiles.Populate(stats, PanelSections.ScopeNote(stats, snapshot, report));

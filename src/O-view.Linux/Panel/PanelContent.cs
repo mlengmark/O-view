@@ -334,6 +334,11 @@ public sealed class PanelContent : Border
         // never appears here. Plumbing them through is a change to this head's shell.
         AddBar(PanelSections.WeeklyMeter(snapshot, banner, null, boostNotices, utcNow, local));
 
+        foreach (var modelLimit in PanelSections.ModelLimitMeters(cachedUsage, utcNow, local))
+        {
+            AddBar(modelLimit);
+        }
+
         var report = scopeReport ?? TranscriptScopeReport.Inspect();
         _tiles.AddTo(_root, stats, Density);
         _tokenBars.AddTo(_root, PanelSections.TokenBars(stats, report));
