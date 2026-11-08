@@ -21,24 +21,29 @@ namespace OView.Linux.Panel;
 /// the two panels differ is visible side by side.</para>
 ///
 /// <para>Every state is rendered at the height it asks for, which is the panel a display with
-/// room shows. One state is rendered a second time at a short display's work area, because
-/// that panel, compacted, capped and scrolling, is a layout no natural-height render
-/// contains, and it is the one that was reported broken.</para>
+/// room shows. Two more renders are views of a state no natural-height render contains: the
+/// compact density, and the tallest state at a short display's work area, compacted, capped
+/// and scrolling, which is the layout that was reported broken.</para>
 /// </summary>
 public static class PanelSampleRenderer
 {
     private const double ShortWorkAreaDip = SampleStates.ShortWorkAreaDip;
 
-    /// <summary>The state rendered a second time for the short display: <see cref="SampleStates.ShortState"/>.</summary>
-    public const string ShortState = SampleStates.ShortState;
-
     /// <summary>
-    /// That state as the short display is shown it: in Overall, as on the Windows panel, because
-    /// the table's rows are what take the panel past the work area and a state that fits shows
-    /// nothing about capping it.
+    /// The state rendered a second time for the short display: the tallest that shows the model
+    /// face, as the Windows panel's second short render is, because a state that fits shows
+    /// nothing about capping it. It is not <see cref="SampleStates.ShortState"/>, which is what
+    /// the Windows head photographs in the totals face.
     /// </summary>
-    public static SampleState ShortSample =>
-        SampleStates.All.First(s => s.Name == ShortState) with { View = new(PanelMeasure.Overall) };
+    public const string ShortState = "offplan-on-models";
+
+    /// <summary>The short display's state, with the view it carries: the model face, counting everything billed.</summary>
+    public static SampleState ShortSample => SampleStates.All.First(s => s.Name == ShortState);
+
+    /// <summary>The state rendered at the compact density, the one the Windows panel uses for it.</summary>
+    public const string CompactState = "typical-overall";
+
+    public static SampleState CompactSample => SampleStates.All.First(s => s.Name == CompactState);
 
     public static void RenderAll(string directory)
     {
@@ -57,17 +62,13 @@ public static class PanelSampleRenderer
                 written++;
             }
 
-            var shortState = ShortSample;
-            var panel = Build(shortState, light, PanelDensity.Compact);
+            // The density a small display gets while the panel still fits: tighter gaps are a
+            // layout no normal-density render contains.
+            Save(Build(CompactSample, light, PanelDensity.Compact),
+                Path.Combine(directory, $"panel-typical-compact-{Theme(light)}.png"));
+            written++;
 
-            // Exactly what the window does on that desktop: compact first, then capped at the
-            // work area, with the content scrolling inside the cap. The height is pinned here
-            // rather than granted by a window, because there is no window offscreen.
-            var fit = PanelFit.Resolve(panel.NaturalHeightDip(), ShortWorkAreaDip);
-            panel.ScrollContent(fit.MustScroll);
-            panel.Height = fit.WindowHeightDip;
-
-            Save(panel, Path.Combine(directory, $"panel-{shortState.Name}-short-{Theme(light)}.png"),
+            Save(ShortPanel(light), Path.Combine(directory, $"panel-{ShortState}-short-{Theme(light)}.png"),
                 CappedLayoutPasses);
             written++;
         }
@@ -77,7 +78,24 @@ public static class PanelSampleRenderer
 
     private static string Theme(bool light) => light ? "light" : "dark";
 
-    private static PanelContent Build(SampleState state, bool light, PanelDensity density)
+    /// <summary>
+    /// The short display's panel, not yet laid out: exactly what the window does on that
+    /// desktop, compact first, then capped at the work area, with the content scrolling inside
+    /// the cap. The height is pinned here rather than granted by a window, because there is no
+    /// window offscreen. Public so a test can check the tree this renders.
+    /// </summary>
+    public static PanelContent ShortPanel(bool light)
+    {
+        var panel = Build(ShortSample, light, PanelDensity.Compact);
+
+        var fit = PanelFit.Resolve(panel.NaturalHeightDip(), ShortWorkAreaDip);
+        panel.ScrollContent(fit.MustScroll);
+        panel.Height = fit.WindowHeightDip;
+        return panel;
+    }
+
+    /// <summary>A sample state as the panel draws it, populated and not yet laid out.</summary>
+    public static PanelContent Build(SampleState state, bool light, PanelDensity density)
     {
         var content = new PanelContent(new LinuxPanelTheme(light)) { Density = density };
         content.Populate(state.Snapshot, state.Stats, state.Account, state.Plan, state.Scope,

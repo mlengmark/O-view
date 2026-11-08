@@ -24,7 +24,7 @@ namespace OView.Linux.Tests;
 /// section 3.3's at every measurement.
 ///
 /// <para>Avalonia raises no pointer events without a windowing subsystem, so these raise the
-/// routed event a click raises, as <see cref="PanelViewSwitchTests"/> does.</para>
+/// routed event a click raises, as <see cref="PanelModelFaceTests"/> does.</para>
 /// </summary>
 public class PanelMeasureSwitchTests
 {
@@ -398,26 +398,20 @@ public class PanelMeasureSwitchTests
     }
 
     /// <summary>
-    /// The short render uses the taller measure, as Windows' does, so its picture shows a panel
-    /// that scrolls.
+    /// The short render is the model face counting everything billed, the tallest panel, and its
+    /// picture is capped at the work area.
     ///
     /// <para><b>The picture is read from the committed golden, not measured here,</b> because this
     /// panel's height depends on the font: it overflows 712 where the goldens are rendered and
-    /// fits inside 712 with Ubuntu's. A panel the fit has capped is exactly as tall as the work
-    /// area, so the image's height says which it was. That Overall is the taller measure holds in
-    /// any font, so that half is measured live.</para>
+    /// could fit inside 712 with Ubuntu's. A panel the fit has capped is exactly as tall as the
+    /// work area, so the image's height says which it was.</para>
     /// </summary>
     [Fact]
-    public void TheShortSampleIsInOverallAndItsPictureIsCappedAtTheWorkArea()
+    public void TheShortSampleIsTheModelFaceAndItsPictureIsCappedAtTheWorkArea()
     {
         var sample = PanelSampleRenderer.ShortSample;
-        var overall = Build(sample, sample.View, PanelDensity.Compact).NaturalHeightDip();
-        var output = Build(sample, sample.View with { Measure = PanelMeasure.Output }, PanelDensity.Compact).NaturalHeightDip();
 
-        Assert.Equal(PanelMeasure.Overall, sample.View.Measure);
-        Assert.True(
-            PanelFit.Resolve(overall, output).MustScroll,
-            $"Overall measures {overall:0} against Output's {output:0}, so Overall is no longer what takes the panel past the work area");
+        Assert.Equal(new PanelViewChoice(PanelMeasure.Overall, PanelFace.Models), sample.View);
 
         foreach (var theme in new[] { "dark", "light" })
         {

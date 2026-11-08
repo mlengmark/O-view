@@ -22,9 +22,6 @@ internal static class PanelPrimitives
     /// <summary>How much of a hideable card's right side its sentences keep clear of the hide control.</summary>
     private const double HideControlReserveDip = 28;
 
-    internal static TextBlock Muted(LinuxPanelTheme theme, string text) =>
-        Text(text, 11, theme["TextMuted"]);
-
     /// <summary>
     /// The hairline between blocks and above the off-plan row. Soft, because on a flat surface a
     /// full-strength line reads as a box.
