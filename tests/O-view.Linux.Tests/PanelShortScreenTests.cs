@@ -35,11 +35,13 @@ namespace OView.Linux.Tests;
 /// </summary>
 public class PanelShortScreenTests
 {
-    /// <summary>The 1024×768 desktop the panel was reported cut off on, and what its work area
-    /// leaves once <see cref="WorkAreaPlacement.DefaultMarginPx"/> is taken at each end.</summary>
-    private const double ScreenHeightDip = 768;
+    /// <summary>A display the fullest panel does not fit, and what its work area leaves once
+    /// <see cref="WorkAreaPlacement.DefaultMarginPx"/> is taken at each end. The 1024×768 desktop
+    /// the panel was reported cut off on now has room for it once compacted, so that one proves
+    /// nothing here any more.</summary>
+    private const double ScreenHeightDip = 600;
 
-    private const double ShortWorkAreaDip = OView.Presentation.Samples.SampleStates.ShortWorkAreaDip;
+    private const double ShortWorkAreaDip = ScreenHeightDip - 56;
 
     private const double PanelWidthDip = 400;
 
@@ -57,7 +59,7 @@ public class PanelShortScreenTests
         var panel = Panel(PanelSampleRenderer.ShortState, light: false, PanelDensity.Normal);
         var natural = panel.NaturalHeightDip();
 
-        // Exactly what a 1024×768 compositor does: hand back a frame no taller than the screen.
+        // Exactly what a compositor does on a short display: hand back a frame no taller than the screen.
         panel.Measure(new Size(PanelWidthDip, ScreenHeightDip));
         panel.Arrange(new Rect(0, 0, PanelWidthDip, ScreenHeightDip));
 
@@ -140,12 +142,6 @@ public class PanelShortScreenTests
     /// The state the verification renders photograph for a short display is the tallest one,
     /// a picture of a state that nearly fitted would prove nothing. Named in the renderer so
     /// the golden image keeps its name; checked here so the name cannot go quietly stale.
-    ///
-    /// <para><b>The states that carry per-model data are left out.</b> This head lists the
-    /// models under the tiles whenever it has them, so those states are taller than any other
-    /// by the legend alone, and renaming the short render to one of them would rename its
-    /// golden image. They are the states the redesigned panel is measured against, not the
-    /// ones the short render was chosen from.</para>
     /// </summary>
     [Fact]
     public void TheStateRenderedForAShortScreenIsTheTallestOfThem()
@@ -153,7 +149,7 @@ public class PanelShortScreenTests
         var rendered = Panel(PanelSampleRenderer.ShortState, light: false, PanelDensity.Normal)
             .NaturalHeightDip();
 
-        foreach (var state in SampleStates.All.Where(s => s.Stats.Models31Days.Count == 0))
+        foreach (var state in SampleStates.All)
         {
             var height = Panel(state.Name, light: false, PanelDensity.Normal).NaturalHeightDip();
 
@@ -183,15 +179,15 @@ public class PanelShortScreenTests
     /// <summary>
     /// The promise scrolling is for: every section of the capped panel can be brought fully
     /// into view, and the last of them sits at the very foot of the content, so nothing is
-    /// past the end of what the scroll reaches. Both views, because the breakdown's table is
-    /// the taller of the two and is the one most likely to run off.
+    /// past the end of what the scroll reaches. In both themes, because a capped panel lays out
+    /// through its viewport in each.
     /// </summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void EverySectionIsReachableWhenTheWindowHasBeenCapped(bool breakdown)
+    public void EverySectionIsReachableWhenTheWindowHasBeenCapped(bool light)
     {
-        var panel = Capped(light: false, breakdown);
+        var panel = Capped(light);
         var sections = ((StackPanel)panel.Viewport.Child!).Children;
         var viewport = panel.Viewport.Bounds.Height;
         var hidden = panel.Viewport.Extent.Height - viewport;
@@ -223,7 +219,7 @@ public class PanelShortScreenTests
     [Fact]
     public void TheChartFillsTheColumnTheScrollBarLeaves()
     {
-        var panel = Capped(light: false, breakdown: false);
+        var panel = Capped(light: false);
         var chart = PanelGraphLayoutTests.ChartOf(panel);
         var column = panel.Viewport.Bounds.Width;
         var open = panel.Bounds.Width - 2 * (panel.BorderThickness.Left + panel.Padding.Left);
@@ -239,7 +235,7 @@ public class PanelShortScreenTests
     [Fact]
     public void TheMouseWheelScrollsTheCappedContent()
     {
-        var panel = Capped(light: false, breakdown: false);
+        var panel = Capped(light: false);
 
         Assert.Equal(0, panel.Viewport.Offset.Y);
 
@@ -250,8 +246,7 @@ public class PanelShortScreenTests
 
     /// <summary>
     /// The turn a user actually makes: raised on the panel's own border, which is where a
-    /// pointer over the gap between two tiles, over a row of the Breakdown table or over the
-    /// panel's padding really lands.
+    /// pointer over the gap between two sections or over the panel's padding really lands.
     ///
     /// <para><b>This is the test the reported defect needed.</b> The wheel was left to the
     /// viewport, which does answer a turn raised anywhere inside itself, so the test above
@@ -262,12 +257,12 @@ public class PanelShortScreenTests
     /// panel read as having no wheel at all (Maximilian's report of 2026-10-16).</para>
     ///
     /// <para>Both routes are checked to move the content by the same distance, so a turn over a
-    /// tile's fill and a turn over the gap beside it cannot feel different.</para>
+    /// line of text and a turn over the gap beside it cannot feel different.</para>
     /// </summary>
     [Fact]
     public void TheMouseWheelScrollsWhenTheTurnLandsOnThePanelsOwnBorder()
     {
-        var panel = Capped(light: false, breakdown: false);
+        var panel = Capped(light: false);
 
         panel.RaiseEvent(Wheel(panel, panel, deltaY: -3));
         var fromTheBorder = panel.Viewport.Offset.Y;
@@ -275,8 +270,8 @@ public class PanelShortScreenTests
         Assert.True(
             fromTheBorder > 0,
             "a wheel turn that landed on the panel's border did not scroll. Only a turn over a "
-            + "tile's fill or a line of glyphs reaches the viewport, and that is most of the "
-            + "panel's area answering nothing.");
+            + "line of glyphs reaches the viewport, and that is most of the panel's area "
+            + "answering nothing.");
 
         panel.Viewport.Offset = default;
         panel.Viewport.RaiseEvent(Wheel(panel.Viewport, panel, deltaY: -3));
@@ -294,7 +289,7 @@ public class PanelShortScreenTests
     [Fact]
     public void NothingBetweenThePanelsBorderAndItsSectionsPaintsAnything()
     {
-        var panel = Capped(light: false, breakdown: false);
+        var panel = Capped(light: false);
 
         Assert.NotNull(panel.Background);
 
@@ -323,18 +318,18 @@ public class PanelShortScreenTests
     }
 
     /// <summary>
-    /// A turn raised on a leaf deep inside a section, a tile's own text, and a cell of the
-    /// Breakdown table, moves the content both ways. These already worked, because a leaf is
-    /// below the viewport and bubbles up through it; they are here so that stays true now the
-    /// border answers the wheel too, and so neither route can double-scroll.
+    /// A turn raised on a leaf deep inside a section, the table's row label and one of its
+    /// figures, moves the content both ways. These already worked, because a leaf is below the
+    /// viewport and bubbles up through it; they are here so that stays true now the border
+    /// answers the wheel too, and so neither route can double-scroll.
     /// </summary>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
-    public void AWheelTurnOnALeafInsideASectionScrollsBothWays(bool breakdown)
+    public void AWheelTurnOnALeafInsideASectionScrollsBothWays(bool figure)
     {
-        var panel = Capped(light: false, breakdown);
-        var leaf = breakdown ? BreakdownCell(panel) : TileText(panel);
+        var panel = Capped(light: false);
+        var leaf = figure ? TableFigure(panel) : TableLabel(panel);
 
         leaf.RaiseEvent(Wheel(leaf, panel, deltaY: -3));
         var down = panel.Viewport.Offset.Y;
@@ -356,7 +351,7 @@ public class PanelShortScreenTests
     [Fact]
     public void TheMouseWheelStopsAtTheTopAndAtTheFootAsTheThumbDoes()
     {
-        var panel = Capped(light: false, breakdown: false);
+        var panel = Capped(light: false);
         var hidden = panel.Viewport.Extent.Height - panel.Viewport.Viewport.Height;
 
         // Far more turns than the content has room for, in each direction in turn.
@@ -390,26 +385,16 @@ public class PanelShortScreenTests
             KeyModifiers.None,
             new Vector(0, deltaY));
 
-    /// <summary>The first line of text inside a stat tile's card.</summary>
-    private static TextBlock TileText(PanelContent panel)
-    {
-        var tile = panel.GetVisualDescendants().OfType<Border>()
-            .First(b => b.Background is ISolidColorBrush fill
-                && fill.Color == Hex("TileBg", light: false)
-                && b.GetVisualDescendants().OfType<TextBlock>().Any());
+    /// <summary>The local block's table: the one grid with data columns of fixed width.</summary>
+    private static Grid Table(PanelContent panel) =>
+        panel.GetVisualDescendants().OfType<Grid>()
+            .Single(g => g.ColumnDefinitions.Count == 3 && g.ColumnDefinitions[1].Width.IsAbsolute);
 
-        return tile.GetVisualDescendants().OfType<TextBlock>().First();
-    }
+    private static TextBlock TableLabel(PanelContent panel) =>
+        Table(panel).Children.OfType<TextBlock>().First(t => t.Text == TokenText.OutputTokensRowLabel);
 
-    /// <summary>A cell of the Breakdown table, its total row's label.</summary>
-    private static TextBlock BreakdownCell(PanelContent panel)
-    {
-        var table = panel.GetVisualDescendants().OfType<Grid>()
-            .First(g => g.ColumnDefinitions.Count == 5);
-
-        return table.GetVisualDescendants().OfType<TextBlock>()
-            .First(t => t.Text == TokenText.TokenBreakdownTotalLabel);
-    }
+    private static TextBlock TableFigure(PanelContent panel) =>
+        Table(panel).Children.OfType<TextBlock>().Last();
 
     // ── the bar itself ──────────────────────────────────────────────────────────────
 
@@ -422,7 +407,7 @@ public class PanelShortScreenTests
     [InlineData(true)]
     public void TheScrollBarIsThinAndPainted(bool light)
     {
-        var panel = Capped(light, breakdown: false);
+        var panel = Capped(light);
         var track = Assert.IsType<Border>(panel.ScrollBar);
         var thumb = Assert.IsType<Border>(Assert.Single(track.GetVisualChildren().OfType<Border>()));
 
@@ -442,7 +427,7 @@ public class PanelShortScreenTests
     [Fact]
     public void TheThumbShowsHowMuchIsOnScreenAndWhereItIs()
     {
-        var panel = Capped(light: false, breakdown: false);
+        var panel = Capped(light: false);
         var track = Assert.IsType<Border>(panel.ScrollBar);
         var thumb = Assert.IsType<Border>(Assert.Single(track.GetVisualChildren().OfType<Border>()));
 
@@ -465,18 +450,11 @@ public class PanelShortScreenTests
     /// pinned to the work area, the same three steps the window takes, and the same ones the
     /// verification render takes offscreen.
     /// </summary>
-    private static PanelContent Capped(bool light, bool breakdown)
+    private static PanelContent Capped(bool light)
     {
         var panel = Panel(PanelSampleRenderer.ShortState, light, PanelDensity.Compact);
 
-        if (breakdown)
-        {
-            var half = panel.GetVisualDescendants().OfType<Button>()
-                .Single(b => (b.Content as string) == TokenText.TokenViewBreakdownLabel);
-            half.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
-        }
-
-        var fit = PanelFit.Resolve(panel.NaturalHeightDip(), ShortWorkAreaDip);
+        var fit =PanelFit.Resolve(panel.NaturalHeightDip(), ShortWorkAreaDip);
         Assert.True(fit.MustScroll);
 
         panel.ScrollContent(true);

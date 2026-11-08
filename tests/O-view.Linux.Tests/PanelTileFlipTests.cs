@@ -1,3 +1,5 @@
+using Avalonia.Controls;
+using OView.App.Rendering;
 using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
 using OView.Linux.Panel;
@@ -16,14 +18,12 @@ namespace OView.Linux.Tests;
 ///
 /// <para>Avalonia raises no pointer events without a windowing subsystem and CI has none, so
 /// these drive the state a click drives rather than clicking, the same reason
-/// <see cref="PanelDismissal"/> is its own class. The controls under assertion are the ones the
-/// panel really built; what no test here covers is the three event subscriptions that call
-/// <c>Toggle</c>.</para>
+/// <see cref="PanelDismissal"/> is its own class. The tiles have left the panel, so the controls
+/// under assertion are the ones <see cref="PanelStatTiles"/> builds on its own; what no test here
+/// covers is the three event subscriptions that call <c>Toggle</c>.</para>
 /// </summary>
 public class PanelTileFlipTests
 {
-    private static readonly DateTimeOffset Now = new(2026, 10, 14, 12, 0, 0, TimeSpan.Zero);
-
     private static ModelSlice Slice(string model, long tokens, decimal? usd, string name) =>
         new(model, name, tokens) { EstUsdValue = Priced(usd) };
 
@@ -41,7 +41,7 @@ public class PanelTileFlipTests
     ];
 
     /// <summary>
-    /// A panel with per-model rows behind the 31-day tiles and nothing behind today's.
+    /// Figures with per-model rows behind the 31-day tiles and nothing behind today's.
     ///
     /// <para>No token composition, deliberately: that section is the one piece of this panel
     /// that needs a platform cursor, which a test process has none of.</para>
@@ -66,27 +66,11 @@ public class PanelTileFlipTests
         };
     }
 
-    private static PanelContent Panel(IReadOnlyList<ModelSlice>? window = null)
+    private static PanelStatTiles Tiles(IReadOnlyList<ModelSlice>? window = null)
     {
-        var content = new PanelContent(new LinuxPanelTheme(light: true));
-
-        // Live, so the meters are the account's own figures and no banner stands in for them.
-        content.Populate(
-            new UsageSnapshot(
-                DataSource.Live,
-                UsageSnapshot.Percent(25),
-                UsageSnapshot.Percent(3),
-                UsageSnapshot.Instant(Now.AddHours(3)),
-                UsageSnapshot.Instant(Now),
-                UsageSnapshot.Instant(null)),
-            Stats(window),
-            account: null,
-            dataReport: null,
-            scopeReport: null,
-            utcNow: Now,
-            zone: TimeZoneInfo.Utc);
-
-        return content;
+        var tiles = new PanelStatTiles(new LinuxPanelTheme(light: true));
+        tiles.AddTo(new StackPanel(), Stats(window), PanelDensity.Normal);
+        return tiles;
     }
 
     /// <summary>
@@ -97,7 +81,7 @@ public class PanelTileFlipTests
     [Fact]
     public void OnlyTheTilesWithSomethingToBreakDownCanFlip()
     {
-        Assert.Equal(2, Panel().TileFlips.Count);
+        Assert.Equal(2, Tiles().Flips.Count);
     }
 
     /// <summary>A tile with nothing to chart on either window offers no flip at all.</summary>
@@ -106,8 +90,8 @@ public class PanelTileFlipTests
     {
         // One model, priced, so the token tile charts it; the value tile does too. Dropping
         // the price leaves the value tile with rows and no chart.
-        Assert.Equal(2, Panel([Slice("claude-opus-5", 180_000_000, 120.00m, "Opus 5")]).TileFlips.Count);
-        Assert.Single(Panel([Slice("claude-brandnew-9", 4_000_000, null, "Brand New 9")]).TileFlips);
+        Assert.Equal(2, Tiles([Slice("claude-opus-5", 180_000_000, 120.00m, "Opus 5")]).Flips.Count);
+        Assert.Single(Tiles([Slice("claude-brandnew-9", 4_000_000, null, "Brand New 9")]).Flips);
     }
 
     /// <summary>
@@ -117,7 +101,7 @@ public class PanelTileFlipTests
     [Fact]
     public void ATileOpensOnItsTotal()
     {
-        Assert.All(Panel().TileFlips, flip => Assert.False(flip.IsExpanded));
+        Assert.All(Tiles().Flips, flip => Assert.False(flip.IsExpanded));
     }
 
     /// <summary>
@@ -127,7 +111,7 @@ public class PanelTileFlipTests
     [Fact]
     public void ATileFlipsAndFlipsBackAsOftenAsYouLike()
     {
-        var flip = Panel().TileFlips[0];
+        var flip = Tiles().Flips[0];
 
         for (var i = 0; i < 5; i++)
         {
@@ -146,7 +130,7 @@ public class PanelTileFlipTests
     [Fact]
     public void OneFaceShowsAndTheOtherKeepsItsSpace()
     {
-        var flip = Panel().TileFlips[0];
+        var flip = Tiles().Flips[0];
 
         Assert.Equal(1, flip.Summary.Opacity);
         Assert.Equal(0, flip.Breakdown.Opacity);
@@ -174,7 +158,7 @@ public class PanelTileFlipTests
     [Fact]
     public void TheGlyphIsFaintUntilItIsWanted()
     {
-        var flip = Panel().TileFlips[0];
+        var flip = Tiles().Flips[0];
 
         Assert.Equal(0.35, flip.Glyph.Opacity, 3);
 
@@ -197,27 +181,14 @@ public class PanelTileFlipTests
     [Fact]
     public void ASecondOpenStartsFromFreshTiles()
     {
-        var content = Panel();
-        var first = content.TileFlips[0];
+        var tiles = Tiles();
+        var first = tiles.Flips[0];
         first.Toggle();
 
-        content.Populate(
-            new UsageSnapshot(
-                DataSource.Live,
-                UsageSnapshot.Percent(25),
-                UsageSnapshot.Percent(3),
-                UsageSnapshot.Instant(Now.AddHours(3)),
-                UsageSnapshot.Instant(Now),
-                UsageSnapshot.Instant(null)),
-            Stats(),
-            account: null,
-            dataReport: null,
-            scopeReport: null,
-            utcNow: Now,
-            zone: TimeZoneInfo.Utc);
+        tiles.AddTo(new StackPanel(), Stats(), PanelDensity.Normal);
 
-        Assert.Equal(2, content.TileFlips.Count);
-        Assert.DoesNotContain(first, content.TileFlips);
-        Assert.All(content.TileFlips, flip => Assert.False(flip.IsExpanded));
+        Assert.Equal(2, tiles.Flips.Count);
+        Assert.DoesNotContain(first, tiles.Flips);
+        Assert.All(tiles.Flips, flip => Assert.False(flip.IsExpanded));
     }
 }
