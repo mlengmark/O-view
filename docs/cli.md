@@ -11,7 +11,7 @@ The Windows executable is `O-view.Tray.exe`; the Linux one is `o-view`.
 | `--diagnose [path]` | Writes the support bundle: platform, resolved data roots, which locations were searched, transcript counts, the rollup store's state, the weekly-reset anchor, where the session window starts and which source placed it, what Claude Code's cache held for model limits (`limits[]`: rows seen and skipped, then each model's name, percentage and reset, or why there are none) and for `spend` (the amount, currency and `enabled`, or whether it was absent or unreadable), and the tail of the log. Contains no token and no conversation content. On Windows a path is required, because a windowed app has no console. On Linux it prints to stdout unless a path is given. Runs without disturbing a running instance. |
 | `--log <path>` | Where the running app writes its log, instead of the default file under O-view's data folder. |
 | `--interval-ms <n>` | The full poll interval for this run, 50 ms or more; the default is 60 seconds. For watching a change land quickly. |
-| `--startup-on`, `--startup-off` | Enable or disable run at startup and report the state as it stands after the write. On Windows this runs inside the live instance and logs the result; on Linux it runs before the single-instance guard, prints the state and the autostart file's path, and exits non-zero if the write did not take. |
+| `--startup-on`, `--startup-off` | Enable or disable run at startup and report the state as it stands after the write. On Windows this is an ordinary launch that writes the setting and logs the result, so the app carries on running afterwards, and it does nothing while another O-view is already running; on Linux it runs before the single-instance guard, prints the state and the autostart file's path, and exits non-zero if the write did not take. |
 | `--startup-status` | Linux only. Reports the autostart state without changing it. |
 | `--probe` | Linux only. Asks the session bus whether a notification-area host exists and names the desktop and session type. This is the answer to "why can't I see the icon". |
 
@@ -31,6 +31,8 @@ These run before the single-instance guard, need no display or bus, and exit whe
 ## Live checks, Windows
 
 These drive the real surfaces on the real desktop and write a report, because the regressions they exist for have all been stateful: they appear on the second open, not the first, or they differ between what the logic reports and what is drawn.
+
+`--menu-check`, `--motion-check` and `--fold-check` run before the single-instance guard and work beside a running O-view. Every other flag in this section starts the whole app, so while another O-view is running it exits without a word, apart from `--popup-check`, which writes a report saying `NOT RUN`.
 
 | Flag | What it does |
 |---|---|

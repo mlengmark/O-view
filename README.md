@@ -7,6 +7,7 @@ A system tray app for Windows 11 and Linux that shows how much of your Claude us
 | | |
 |---|---|
 | ![The detail panel on Windows, dark theme](docs/images/panel-typical-windows-dark.png) | ![The detail panel on Windows, light theme](docs/images/panel-typical-windows-light.png) |
+| ![The detail panel on Windows with a Weekly · Fable bar, dark theme](docs/images/panel-model-limit-windows-dark.png) | ![The detail panel on Linux with a Weekly · Fable bar, dark theme](docs/images/panel-model-limit-linux-dark.png) |
 | ![The tray menu](docs/images/menu-windows-dark.png) | ![A stat tile flipped to its per-model breakdown](docs/images/tiles-breakdown-dark.png) |
 
 Every surface, on both platforms and in both themes: [docs/overview.md](docs/overview.md).
@@ -37,6 +38,18 @@ Both heads follow the desktop's light or dark theme, re-read every time the pane
 
 Figures labelled **Est.** price tokens at published API rates. They are not money charged; within plan limits the marginal cost is zero. Where a model has no published rate, O-view sums what it can price and names what it left out.
 
+### Motion
+
+On Windows the panel and the menu move; on Linux nothing does.
+
+- **Opening and closing.** The panel and the menu slide out of the taskbar edge they are docked to as one piece, in 460 ms, and slide back in 300 ms. A click while one is moving turns it round from where it had got to rather than jumping to an end.
+- **Folds.** The Bars / Breakdown switch's highlight slides, and the breakdown table folds open with its rows fading in one after another. The menu's threshold list folds the same way, and choosing a threshold shows the choice first and folds the list away a moment later.
+- **Ticks and highlights.** A tick in the menu draws itself on and fades off, and the hover and focus fill on rows fades in and out.
+- **Stat tiles.** Clicking a tile crossfades its total into its breakdown, with the bar drawing from left to right and the legend following one entry at a time. The tile never changes size.
+- **Animations off.** All of it follows Windows' setting for animation effects, read each time a transition starts. With it off, the panel and the menu appear and disappear at once, and folds and flips happen in one step.
+
+At rest the panel looks exactly as it would without motion. The Linux head has no motion: its panel appears and disappears at once, its tiles and breakdown switch change in one step, and its menu is drawn by the desktop's notification-area host. What has and has not been watched on a real desktop is in [docs/platform-status.md](docs/platform-status.md).
+
 ### Why these totals are lower than Claude Code's own
 
 Claude Code writes one line to a transcript per content block, and every line repeats the same `usage` object, so counting lines multiplies a response by the number of blocks it had. O-view keeps one row per request id. Measured on one machine, Claude Code's own stats file ran between 1.5 and 2.6 times O-view's figure for the same day, and the gap was duplicated lines rather than usage O-view missed.
@@ -59,9 +72,11 @@ Supported does not mean identical. The table below says what each platform does;
 | | Windows 11 | Linux |
 |---|---|---|
 | Reading Claude's data | Yes | Yes |
-| Tray icon | Yes | Yes, where the desktop has a notification-area host. GNOME ships none by default; see below |
+| Tray icon | Yes | Yes, where the desktop has a notification-area host. GNOME ships none by default; see below. It is put on the desktop once its first reading is drawn, waiting at most 5 seconds, then shown even if that reading is not ready; not yet watched on a real GNOME desktop |
 | Tooltip | Yes | Not on GNOME. The exact figures are in the panel instead |
 | Detail panel | Docked flyout at the taskbar corner | A window in the work area's corner, not docked to the icon |
+| A model's own limit bar | Yes | Yes |
+| Motion | Panel and menu slide, folds and flips animate, following Windows' animation setting | None |
 | Right-click menu | All rows | Show usage, Reset panel position (X11 and XWayland only), Run at startup, Resume usage refresh when needed, Exit. Diagnostics and updates have command-line equivalents |
 | Notifications | Balloon tip | Freedesktop notifications |
 | Run at startup | Registry `Run` key, from the menu | XDG autostart file, from the menu or `o-view --startup-on` |
