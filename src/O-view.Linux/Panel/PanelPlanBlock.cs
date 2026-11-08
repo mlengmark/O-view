@@ -130,13 +130,11 @@ internal sealed class PanelPlanBlock(LinuxPanelTheme theme, PanelOffPlan offPlan
         }
 
         // Three columns, not an overlay: the label and the figure both keep their space whatever
-        // the chip says, and a chip too long for what is left trims in its own column rather
-        // than running under the figure. The tier badge's colour pair, so it reads as the same
-        // class of object, a factual label about the account and not a warning.
-        var words = Text(chip.Text, 10, _theme["BadgeText"]);
-        words.TextWrapping = TextWrapping.NoWrap;
-        words.TextTrimming = TextTrimming.CharacterEllipsis;
-
+        // the chip says, and a chip too long for what is left wraps in its own column rather
+        // than running under the figure. It wraps where the Windows chip trims because this
+        // head's font is whatever the desktop provides, and the widest promo does not fit one
+        // line of Ubuntu's. The tier badge's colour pair, so it reads as the same class of
+        // object, a factual label about the account and not a warning.
         var badge = new Border
         {
             Background = _theme["BadgeBg"],
@@ -145,7 +143,7 @@ internal sealed class PanelPlanBlock(LinuxPanelTheme theme, PanelOffPlan offPlan
             Margin = new Thickness(8, 0),
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
-            Child = words,
+            Child = Text(chip.Text, 10, _theme["BadgeText"]),
         };
 
         Grid.SetColumn(badge, 1);
