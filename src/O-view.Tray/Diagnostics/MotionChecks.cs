@@ -5,15 +5,16 @@ using System.Windows.Threading;
 using OView.App.Rendering;
 using OView.Core.Models;
 using OView.Presentation.Panel;
+using OView.Presentation.Samples;
 using OView.Tray.Popup;
 using Border = System.Windows.Controls.Border;
 
 namespace OView.Tray.Diagnostics;
 
 /// <summary>
-/// <c>--motion-check</c>: flips a stat tile and folds the menu's threshold list on real
-/// windows, each to its end, and then clicks a second time while the first transition is still
-/// running.
+/// <c>--motion-check</c>: turns the panel's local block over, flips a stat tile and folds the
+/// menu's threshold list on real windows, each to its end, and then clicks a second time while
+/// the first transition is still running.
 ///
 /// <para>What a still cannot show, and a single click cannot catch, is a transition that does
 /// not finish or finishes in the wrong place. This app has shipped a missed completion once
@@ -56,13 +57,26 @@ internal static class MotionChecks
     private const double TurnToleranceDegrees = 0.5;
 
     /// <summary>
+    /// How long after a second click its faces are read again: past the next rendered frame, since
+    /// a read in the click's own turn returns the base value rather than what is on screen.
+    /// </summary>
+    private const double ContinuationProbeMs = 60;
+
+    /// <summary>
+    /// How far a face may have moved by <see cref="ContinuationProbeMs"/>: the most the fades can
+    /// travel in that time. A face that snapped to an end moves much further.
+    /// </summary>
+    private const double ContinuationToleranceOpacity = 0.2;
+
+    /// <summary>
     /// One surface the check drives: how to click it, whether it is mid-transition, and how it
     /// reads when it should be at rest open or closed. <c>Misses</c> returns null when it is,
-    /// and otherwise what is wrong.
+    /// and otherwise what is wrong. <c>Opacities</c> are the faces a second click must carry on
+    /// from, for a surface whose claim is that it does.
     /// </summary>
     private sealed record Surface(
         string Name, Action Click, Func<bool> InFlight, Func<bool, string?> Misses,
-        double OpenMs, double CloseMs, double SettleMs);
+        double OpenMs, double CloseMs, double SettleMs, Func<double[]>? Opacities = null);
 
     public static void Run(string path, Action shutdown)
     {
@@ -90,19 +104,27 @@ internal static class MotionChecks
             foreach (var (label, clicksAtMs, expectOpen) in Script(surface))
             {
                 bool? midFlight = null;
+                string? jumped = null;
                 queue.Enqueue((0, surface.Click));
                 if (clicksAtMs is { } secondAt)
                 {
+                    double[]? before = null;
                     queue.Enqueue((secondAt, () =>
                     {
                         midFlight = surface.InFlight();
+                        before = surface.Opacities?.Invoke();
                         surface.Click();
                     }));
+
+                    if (surface.Opacities is { } opacities)
+                    {
+                        queue.Enqueue((ContinuationProbeMs, () => jumped = ContinuationMiss(before!, opacities())));
+                    }
                 }
 
                 queue.Enqueue((surface.SettleMs, () =>
                 {
-                    var miss = surface.Misses(expectOpen);
+                    var miss = jumped ?? surface.Misses(expectOpen);
                     var why = miss
                               ?? (midFlight == false ? "the second click found it already at rest, so it proved nothing" : null);
                     failures += why is null ? 0 : 1;
@@ -136,6 +158,7 @@ internal static class MotionChecks
 
         try
         {
+            Add(BlockSurface(windows));
             Add(TileSurface(windows));
             // The menu opens only when its turn comes, and is given its own entrance to finish
             // before the list is touched: a fold started under an arriving surface is two
@@ -204,6 +227,83 @@ internal static class MotionChecks
         ("opens again", null, true),
         ("reversed while closing", s.CloseMs * ReverseClosingAt, true),
     ];
+
+    /// <summary>
+    /// The local block's flip on a real panel, from the totals face. Both reversals land while the
+    /// two faces are on screen together, which is what "reverses the crossfade" is a claim about.
+    /// </summary>
+    private static Surface BlockSurface(List<Window> windows)
+    {
+        var state = SampleStates.All.Single(s => s.Name == "offplan-on-models");
+        var panel = new PopupWindow
+        {
+            PinForVerification = true,
+            ThemeOverride = false,
+            FixedNow = SampleStates.Now,
+            FixedZone = SampleStates.Zone,
+            ScopeReport = state.Scope,
+            DataReport = state.Plan,
+            CachedUsage = state.CachedUsage,
+            BoostNotices = state.Boost,
+            ViewChoice = state.View with { Face = PanelFace.Totals },
+        };
+        panel.ShowNearTrayIcon(state.Snapshot, state.Stats, state.Account);
+        windows.Add(panel);
+
+        // Half way through the only time both faces show: after the new one starts, before the
+        // old one has gone.
+        var bothShowingMs = PanelMotion.Ms(PanelMotion.TileFaceInDelayBaseMs + PanelMotion.TileFaceOutBaseMs) / 2;
+
+        // The chart's bars rising on the way back are the longest part of either direction.
+        var flipMs = PanelMotion.ChartBarBackStartMs(state.Stats.DailySeries.Count)
+                     + PanelMotion.Ms(PanelMotion.ChartBarRiseBaseMs);
+
+        return new Surface(
+            "block", panel.ClickFlipForVerification, () => panel.FlipReadout.Flipping,
+            open => BlockMiss(panel.FlipReadout, open),
+            OpenMs: bothShowingMs / ReverseOpeningAt, CloseMs: bothShowingMs / ReverseClosingAt,
+            SettleMs: SettleBudget * flipMs,
+            Opacities: () => [panel.FlipReadout.TotalsOpacity, panel.FlipReadout.ModelsOpacity]);
+    }
+
+    private static string? ContinuationMiss(double[] before, double[] after) =>
+        before.Zip(after).Any(pair => Math.Abs(pair.First - pair.Second) > ContinuationToleranceOpacity)
+            ? $"the faces jumped: opacity {before[0]:0.00}, {before[1]:0.00} became {after[0]:0.00}, {after[1]:0.00}"
+            : null;
+
+    private static string? BlockMiss(PopupLocalBlock.FlipReadout r, bool open)
+    {
+        if (r.Flipping)
+        {
+            return "a flip is still running";
+        }
+
+        if (r.ShowingModels != open)
+        {
+            return $"the block is showing the {(r.ShowingModels ? "model" : "totals")} face";
+        }
+
+        var (shown, shownOpacity, gone) = open
+            ? (r.Models, r.ModelsOpacity, r.Totals)
+            : (r.Totals, r.TotalsOpacity, r.Models);
+
+        if (shown != Visibility.Visible || shownOpacity < 1)
+        {
+            return $"the {(open ? "model" : "totals")} face is {shown} at opacity {shownOpacity:0.00}";
+        }
+
+        if (gone != Visibility.Collapsed)
+        {
+            return $"the {(open ? "totals" : "model")} face is still {gone}";
+        }
+
+        if (r.HeightPinned)
+        {
+            return "the height is still pinned";
+        }
+
+        return r.Clipped ? "the faces are still clipped" : null;
+    }
 
     private static Surface TileSurface(List<Window> windows)
     {

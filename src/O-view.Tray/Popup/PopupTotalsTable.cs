@@ -57,7 +57,10 @@ internal sealed class PopupTotalsTable(
         PanelMotion.Ms(PanelMotion.FoldOpenBaseMs), PanelMotion.Ms(PanelMotion.FoldCloseBaseMs),
         new DisclosureRowMotion(
             PanelMotion.RowStartMs, PanelMotion.Ms(PanelMotion.RowFadeBaseMs), RowsLeaveMs, PanelMotion.RowRiseDip),
-        redock);
+        redock)
+    {
+        Settled = () => host.ClipToBounds = false,
+    };
 
     private PanelLocalTableView? _table;
     private double _scale = 1;
@@ -196,6 +199,8 @@ internal sealed class PopupTotalsTable(
 
         if (!moving)
         {
+            // Again, because a fold that ended while the old rows were leaving has cleared it.
+            host.ClipToBounds = true;
             _fold.Resize(Height, _target);
         }
 

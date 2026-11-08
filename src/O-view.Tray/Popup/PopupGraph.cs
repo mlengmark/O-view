@@ -80,22 +80,27 @@ internal sealed class PopupGraph(FrameworkElement owner, Canvas host)
     }
 
     /// <summary>
-    /// The bars rise from the baseline as the panel arrives, each a few milliseconds after the
-    /// one to its left. A day with no bar neither rises nor takes a turn.
+    /// The bars rise from the baseline, as the panel arrives or as the totals face comes back,
+    /// each a few milliseconds after the one to its left. A day with no bar neither rises nor
+    /// takes a turn.
     /// </summary>
-    public void Rise()
+    /// <param name="startMs">When bar <c>i</c> starts rising.</param>
+    /// <returns>When the last bar finishes, in milliseconds.</returns>
+    public double Rise(Func<int, double> startMs)
     {
         var riseMs = PanelMotion.Ms(PanelMotion.ChartBarRiseBaseMs);
         if (!PanelMotion.Runs(WpfMotion.AnimationsOn, riseMs))
         {
-            return;
+            return 0;
         }
 
         var index = 0;
         foreach (var bar in _bars.Where(bar => bar.Height > 0))
         {
-            Animate(bar, 0, bar.Height, riseMs, PanelMotion.ChartBarStartMs(index++));
+            Animate(bar, 0, bar.Height, riseMs, startMs(index++));
         }
+
+        return startMs(Math.Max(0, index - 1)) + riseMs;
     }
 
     /// <summary>
