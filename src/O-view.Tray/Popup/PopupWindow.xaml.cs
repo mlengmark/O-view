@@ -19,8 +19,8 @@ namespace OView.Tray.Popup;
 ///
 /// <para>What the panel draws lives in one piece per thing drawn,
 /// <see cref="PopupPlanBlock"/>, <see cref="PopupWeeklyRow"/>,
-/// <see cref="PopupMeter"/>, <see cref="PopupModelMeters"/>, <see cref="PopupDivergence"/>
-/// and <see cref="PopupLocalBlock"/>, each reading exactly the section view model
+/// <see cref="PopupMeter"/>, <see cref="PopupModelMeters"/>, <see cref="PopupDivergence"/>,
+/// <see cref="PopupLocalBlock"/> and <see cref="PopupModelFace"/>, each reading exactly the section view model
 /// <see cref="PanelSections"/> already built, and placing it. This file is left with
 /// the window's own lifecycle, layout and verification hooks.</para>
 /// </summary>
@@ -128,7 +128,9 @@ public partial class PopupWindow : Window, IFlyout
         _weeklyRow = new PopupWeeklyRow(this, WeeklyResetText, BoostChip, BoostChipText);
         _modelMeters = new PopupModelMeters(this, ModelLimitMeters);
         _localBlock = new PopupLocalBlock(
-            this, LocalBlock, LocalBlockTitle, LocalBlockSubtitle, GraphHost, LocalChartLine, LocalTotalsTable,
+            this, LocalBlock, LocalBlockTitle, LocalBlockSubtitle,
+            FaceFlipTag, LocalTotalsFace, GraphHost, LocalChartLine, LocalTotalsTable,
+            LocalModelFace, new PopupModelFace(this, LocalDoughnuts, LocalModelTable),
             LocalWindowCaveat, TokenScopeNote, LocalFooter, LocalFooterCaveat,
             MeasureOutput, MeasureOverall, MeasureHighlight, ChooseView,
             growth => _fit!.RefitForPendingGrowth(growth), () => _flyout.Redock(ActualWidth, DockHeight));
@@ -352,7 +354,7 @@ public partial class PopupWindow : Window, IFlyout
         {
             _localBlock.DrawChart();
             ViewChoice = to;
-            ShowLocalBlock((totals, footer, note) => _localBlock.ApplyPartialSwitch(totals, footer, note, atMs));
+            ShowLocalBlock(content => _localBlock.ApplyPartialSwitch(content, atMs));
         });
     }
 
@@ -459,20 +461,21 @@ public partial class PopupWindow : Window, IFlyout
         // The chart itself waits for ShowNearTrayIcon (needs post-layout ActualWidth).
     }
 
-    private void ShowLocalBlock(Action<PanelLocalTotalsView, PanelLocalFooterView, string?> show)
+    private void ShowLocalBlock(Action<LocalBlockContent> show)
     {
         if (_localShown is { } shown)
         {
-            show(
+            show(new LocalBlockContent(
                 PanelSections.LocalTotals(shown.Stats, shown.Snapshot, LocalZone, ViewChoice),
+                ViewChoice.Face == PanelFace.Models ? PanelSections.ModelFace(shown.Stats, ViewChoice) : null,
                 PanelSections.LocalFooter(shown.Report, ViewChoice),
-                PanelSections.ScopeNote(shown.Stats, shown.Snapshot, shown.Report));
+                PanelSections.ScopeNote(shown.Stats, shown.Snapshot, shown.Report)));
         }
     }
 
     /// <summary>
-    /// The switch was pressed: keeps the new view, the moment it is pressed, so a panel closed
-    /// mid-fold still opens on it, and has the block move to it.
+    /// The switch or the flip tag was pressed: keeps the new view, the moment it is pressed, so a
+    /// panel closed mid-fold still opens on it, and has the block move to it.
     /// </summary>
     private void ChooseView(PanelViewChoice next)
     {

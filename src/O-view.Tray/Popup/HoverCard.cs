@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using Brush = System.Windows.Media.Brush;
 using Orientation = System.Windows.Controls.Orientation;
 using ToolTip = System.Windows.Controls.ToolTip;
@@ -16,7 +17,7 @@ namespace OView.Tray.Popup;
 /// to <c>HoverCard.xaml</c> and the construction moved here.</para>
 ///
 /// <para>The two shapes are deliberate and cover everything the panel needs. <see
-/// cref="Figure"/> leads with the number and names it underneath, the reading order for
+/// cref="Figure"/>, and <see cref="ModelFigure"/> for a doughnut section, leads with the number and names it underneath, the reading order for
 /// "what am I pointing at, and how much"; <see cref="Text"/> carries a sentence, for
 /// caveats and explanations. Anything else should reuse one of these rather than hand-roll
 /// a third.</para>
@@ -53,6 +54,12 @@ internal static class HoverCard
     /// really is 5 s.
     /// </summary>
     public const int DurationMs = 20_000;
+
+    /// <summary>
+    /// How wide a doughnut section's card's words may run. Narrower than the other cards so the
+    /// widest card, a long model id, still ends inside the panel from either doughnut.
+    /// </summary>
+    private const double ModelCardMaxWidthDip = 190;
 
     /// <summary>Applies the shared delays. Must be called on each element that owns a card.</summary>
     public static void ApplyTiming(DependencyObject element)
@@ -101,16 +108,62 @@ internal static class HoverCard
         });
         content.Children.Add(heading);
 
-        content.Children.Add(new TextBlock
-        {
-            Text = caption,
-            FontSize = 10,
-            Margin = new Thickness(0, 3, 0, 0),
-            TextWrapping = TextWrapping.Wrap,
-            Foreground = (Brush)owner.FindResource("TextMuted"),
-        });
+        content.Children.Add(CaptionLine(owner, caption));
 
         return Card(owner, content);
+    }
+
+    /// <summary>
+    /// A doughnut section's card: <see cref="Figure"/>'s shape, with the model's chip and name
+    /// above the figure, because a ring says which model only by colour. The name is the raw id
+    /// when the model is not one we can name, and wraps rather than trims, so the id is whole here.
+    /// </summary>
+    public static ToolTip ModelFigure(
+        FrameworkElement owner, string name, Brush swatch, string figure, string shareLine, string valueLine)
+    {
+        var chip = Chip(swatch);
+        chip.VerticalAlignment = VerticalAlignment.Top;
+        chip.Margin = new Thickness(0, 3, 6, 0);
+        DockPanel.SetDock(chip, Dock.Left);
+
+        var heading = new DockPanel();
+        heading.Children.Add(chip);
+        heading.Children.Add(new TextBlock
+        {
+            Text = name,
+            FontSize = 11,
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)owner.FindResource("TextSecondary"),
+        });
+
+        var content = new StackPanel { MaxWidth = ModelCardMaxWidthDip };
+        content.Children.Add(heading);
+        content.Children.Add(new TextBlock
+        {
+            Text = figure,
+            FontSize = 15,
+            FontWeight = FontWeights.SemiBold,
+            Margin = new Thickness(0, 2, 0, 0),
+            Foreground = (Brush)owner.FindResource("TextPrimary"),
+        });
+        content.Children.Add(CaptionLine(owner, $"{shareLine}\n{valueLine}"));
+
+        return Card(owner, content);
+    }
+
+    /// <summary>A model's colour chip, the size every legend and card uses.</summary>
+    public static Border Chip(Brush swatch) =>
+        new() { Width = 8, Height = 8, CornerRadius = new CornerRadius(2), Background = swatch };
+
+    /// <summary>
+    /// Has an element's card open to the left of <paramref name="target"/> rather than at the
+    /// pointer, for a mark near the panel's right edge. No offset: the card's own margin is the gap.
+    /// </summary>
+    public static void OpenLeftOf(DependencyObject element, UIElement target)
+    {
+        ToolTipService.SetPlacement(element, PlacementMode.Left);
+        ToolTipService.SetPlacementTarget(element, target);
+        ToolTipService.SetHorizontalOffset(element, 0);
     }
 
     /// <summary>A card carrying a sentence, caveats, explanations, and anything unmeasured.</summary>
@@ -123,6 +176,16 @@ internal static class HoverCard
             TextWrapping = TextWrapping.Wrap,
             Foreground = (Brush)owner.FindResource("TextSecondary"),
         });
+
+    private static TextBlock CaptionLine(FrameworkElement owner, string text) =>
+        new()
+        {
+            Text = text,
+            FontSize = 10,
+            Margin = new Thickness(0, 3, 0, 0),
+            TextWrapping = TextWrapping.Wrap,
+            Foreground = (Brush)owner.FindResource("TextMuted"),
+        };
 
     private static ToolTip Card(FrameworkElement owner, object content) =>
         new()
