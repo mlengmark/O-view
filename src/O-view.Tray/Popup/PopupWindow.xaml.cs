@@ -130,7 +130,8 @@ public partial class PopupWindow : Window, IFlyout
         _localBlock = new PopupLocalBlock(
             this, LocalBlock, LocalBlockTitle, LocalBlockSubtitle, GraphHost, LocalChartLine, LocalTotalsTable,
             LocalWindowCaveat, TokenScopeNote, LocalFooter, LocalFooterCaveat,
-            MeasureOutput, MeasureOverall, MeasureHighlight, ChooseView);
+            MeasureOutput, MeasureOverall, MeasureHighlight, ChooseView,
+            growth => _fit!.RefitForPendingGrowth(growth), () => _flyout.Redock(ActualWidth, DockHeight));
         _localBlock.Start();
         _fit = new PopupFit(this, PanelRoot, _scroll, ApplyDensity, _localBlock.DrawChart);
 
@@ -276,7 +277,13 @@ public partial class PopupWindow : Window, IFlyout
         // The chart is a Canvas, its ActualWidth is only known after layout, so it is
         // drawn between the flyout's layout pass and its placement rather than in Populate.
         // FitToWorkArea does that drawing, because choosing a density resizes the canvas.
-        _flyout.Show(afterLayout: () => _fit.FitToWorkArea(stats, snapshot));
+        _flyout.Show(
+            afterLayout: () => _fit.FitToWorkArea(stats, snapshot),
+            arriving: () =>
+            {
+                PopupMeter.Arrive(PlanBlock);
+                _localBlock.Arrive();
+            });
     }
 
     /// <summary>
@@ -324,6 +331,29 @@ public partial class PopupWindow : Window, IFlyout
         // The second layout pass is the whole reason betweenPasses exists, see the
         // remarks above and on VisualRenderer.RenderContent.
         return VisualRenderer.RenderContent(this, scale, betweenPasses: _localBlock.DrawChart);
+    }
+
+    /// <summary>
+    /// Renders the panel partway through a press on the switch, from <see cref="ViewChoice"/> to
+    /// <paramref name="to"/>, <paramref name="atMs"/> after the press. The second layout pass is
+    /// what lays the frame out; the first has to run on the settled view, which is what the frame
+    /// is partway from and where the chart's and the highlight's starting points come from.
+    /// </summary>
+    internal System.Windows.Media.Imaging.BitmapSource RenderSwitchFrameToBitmap(
+        UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account, double scale,
+        PanelViewChoice to, double atMs)
+    {
+        _light = ThemeOverride ?? PanelTheme.IsAppsLight();
+        PanelTheme.Apply(Resources, _light);
+        ApplyDensity(PanelDensity.Normal);
+        Populate(snapshot, stats, account);
+
+        return VisualRenderer.RenderContent(this, scale, betweenPasses: () =>
+        {
+            _localBlock.DrawChart();
+            ViewChoice = to;
+            ShowLocalBlock((totals, footer, note) => _localBlock.ApplyPartialSwitch(totals, footer, note, atMs));
+        });
     }
 
     /// <summary>
@@ -424,35 +454,30 @@ public partial class PopupWindow : Window, IFlyout
         _divergence.Populate(plan);
 
         _localShown = (snapshot, stats, ScopeReport ?? TranscriptScopeReport.Inspect());
-        PopulateLocalBlock();
+        ShowLocalBlock(_localBlock.Populate);
 
         // The chart itself waits for ShowNearTrayIcon (needs post-layout ActualWidth).
     }
 
-    private void PopulateLocalBlock()
+    private void ShowLocalBlock(Action<PanelLocalTotalsView, PanelLocalFooterView, string?> show)
     {
-        if (_localShown is not { } shown)
+        if (_localShown is { } shown)
         {
-            return;
+            show(
+                PanelSections.LocalTotals(shown.Stats, shown.Snapshot, LocalZone, ViewChoice),
+                PanelSections.LocalFooter(shown.Report, ViewChoice),
+                PanelSections.ScopeNote(shown.Stats, shown.Snapshot, shown.Report));
         }
-
-        _localBlock.Populate(
-            PanelSections.LocalTotals(shown.Stats, shown.Snapshot, LocalZone, ViewChoice),
-            PanelSections.LocalFooter(shown.Report, ViewChoice),
-            PanelSections.ScopeNote(shown.Stats, shown.Snapshot, shown.Report));
     }
 
     /// <summary>
-    /// The switch was pressed: keeps the new view, the moment it is pressed, and redraws the block
-    /// for it at once. The two measures differ in height, so the panel is fitted to the display
-    /// again and put back on its docked corner rather than left to run under the taskbar.
+    /// The switch was pressed: keeps the new view, the moment it is pressed, so a panel closed
+    /// mid-fold still opens on it, and has the block move to it.
     /// </summary>
     private void ChooseView(PanelViewChoice next)
     {
         ViewChoice = SetViewChoice?.Invoke(next) ?? next;
-        PopulateLocalBlock();
-        _fit.RefitForPendingGrowth(0);
-        _flyout.Redock(ActualWidth, DockHeight);
+        ShowLocalBlock(_localBlock.SwitchTo);
     }
 
     /// <summary>

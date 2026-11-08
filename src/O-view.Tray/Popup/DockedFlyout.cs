@@ -289,7 +289,12 @@ internal sealed class DockedFlyout(Window host)
     /// outside click (issue #11). The panel has always relied on <c>Activate()</c> and does
     /// dismiss correctly, so its behaviour is left alone rather than changed in passing.
     /// </param>
-    public void Show(Action? afterLayout = null, bool takeForeground = false)
+    /// <param name="arriving">
+    /// Starts whatever fills in as the surface arrives, in the same turn as the slide so the two
+    /// keep time. Not for a surface coming back from a close: its bars are already on screen, and
+    /// emptying them to refill would be the snap-and-replay that interrupting exists to avoid.
+    /// </param>
+    public void Show(Action? afterLayout = null, bool takeForeground = false, Action? arriving = null)
     {
         // Cancels a close still in flight, so a surface reopened mid-close comes straight back
         // from where it is instead of letting it finish disappearing.
@@ -316,6 +321,11 @@ internal sealed class DockedFlyout(Window host)
         else
         {
             FlyoutAnimation.Open(host, _dockOrigin, interruptedClose);
+
+            if (!interruptedClose)
+            {
+                arriving?.Invoke();
+            }
         }
 
         if (takeForeground)

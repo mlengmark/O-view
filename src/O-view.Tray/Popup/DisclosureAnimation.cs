@@ -87,6 +87,9 @@ internal sealed class DisclosureAnimation(
             : body.Height,
         chevron?.Angle ?? 0);
 
+    /// <summary>Whether the height is on its way somewhere, as distinct from rows still arriving after it.</summary>
+    public bool IsMoving => _running;
+
     /// <summary>Names the rows to fade, top first. <see cref="Apply"/> gives them their resting state.</summary>
     public void SetRows(IEnumerable<IReadOnlyList<UIElement>> rows)
     {
@@ -131,13 +134,14 @@ internal sealed class DisclosureAnimation(
     /// </summary>
     /// <param name="atMs">How long after the click, in milliseconds.</param>
     /// <param name="naturalHeight">The body's fully open height, measured by the caller.</param>
-    public void ApplyPartial(double atMs, double naturalHeight)
+    /// <param name="fromHeight">Where the fold began, for a body that was never shut.</param>
+    public void ApplyPartial(double atMs, double naturalHeight, double fromHeight = 0)
     {
         Stop();
 
         var travel = PanelMotion.Decelerate.ValueAt(atMs / expandMs);
         body.Visibility = Visibility.Visible;
-        body.Height = naturalHeight * travel;
+        body.Height = fromHeight + (naturalHeight - fromHeight) * travel;
         if (chevron is not null) chevron.Angle = ExpandedAngle * travel;
 
         for (var i = 0; i < _rows.Count; i++)
@@ -203,11 +207,48 @@ internal sealed class DisclosureAnimation(
     /// </param>
     public void Run(bool expanded, double fromHeight, double fromAngle, double toHeight)
     {
+        // Less the margin: the measure includes it and Height does not, so aiming at the measure
+        // overshoots and the panel drops back in one frame when the fold lets go.
+        var moved = Move(
+            expanded, growing: expanded, fromHeight, fromAngle,
+            Math.Max(0, toHeight - body.Margin.Top - body.Margin.Bottom));
+
+        if (moved)
+        {
+            RunRows(expanded);
+        }
+        else
+        {
+            SettleRows(expanded);
+        }
+    }
+
+    /// <summary>
+    /// Moves a body that stays open from one height to another: growing as a fold opens, shrinking
+    /// as one closes, and auto-sized again at the end. The rows are the caller's to start, because
+    /// the table's leave before its height moves and arrive with it.
+    /// </summary>
+    /// <param name="toHeight">The body's own height at the far end, without its margin.</param>
+    public void Resize(double fromHeight, double toHeight) =>
+        Move(endsOpen: true, growing: toHeight >= fromHeight, fromHeight, chevron?.Angle ?? 0, toHeight);
+
+    /// <summary>The rows fade away from wherever they have got to, all together.</summary>
+    public void LeaveRows() => RunRows(expanded: false);
+
+    /// <summary>Holds the rows named by <see cref="SetRows"/> faded out and below their places, ready to arrive.</summary>
+    public void ParkRows() => SettleRows(expanded: false);
+
+    /// <summary>The rows fade and rise into place, one after another, from wherever they have got to.</summary>
+    public void ArriveRows() => RunRows(expanded: true);
+
+    /// <summary>Whether the height is animating; false when Windows' animation setting skipped it.</summary>
+    private bool Move(bool endsOpen, bool growing, double fromHeight, double fromAngle, double toHeight)
+    {
         Stop();
 
-        var durationMs = expanded ? expandMs : collapseMs;
+        var durationMs = growing ? expandMs : collapseMs;
         var duration = WpfMotion.Duration(durationMs);
-        var spline = WpfMotion.Spline(expanded ? PanelMotion.Decelerate : PanelMotion.Accelerate);
+        var spline = WpfMotion.Spline(growing ? PanelMotion.Decelerate : PanelMotion.Accelerate);
 
         // Visible throughout, in both directions: collapsed content has no height to animate,
         // so a fold that closes has to stay on screen until it has finished closing.
@@ -219,18 +260,14 @@ internal sealed class DisclosureAnimation(
         // Windows' animation setting off: the same end state and the same re-docks, in one step.
         if (!PanelMotion.Runs(WpfMotion.AnimationsOn, durationMs))
         {
-            SettleRows(expanded);
-            Finish(expanded);
-            return;
+            Finish(endsOpen);
+            return false;
         }
 
         _tracking = (_, _) => reposition();
         host.SizeChanged += _tracking;
 
-        // Less the margin: the measure includes it and Height does not, so aiming at the measure
-        // overshoots and the panel drops back in one frame when the fold lets go.
-        var height = Spline(
-            fromHeight, Math.Max(0, toHeight - body.Margin.Top - body.Margin.Bottom), duration, spline);
+        var height = Spline(fromHeight, toHeight, duration, spline);
 
         // Completed MUST be attached before BeginAnimation. WPF takes its own copy of the
         // timeline when the animation starts, so a handler added afterwards is attached to an
@@ -244,15 +281,13 @@ internal sealed class DisclosureAnimation(
         {
             if (run == _run)
             {
-                Finish(expanded);
+                Finish(endsOpen);
             }
         };
         body.BeginAnimation(FrameworkElement.HeightProperty, height);
 
         chevron?.BeginAnimation(RotateTransform.AngleProperty,
-            Spline(fromAngle, expanded ? ExpandedAngle : 0, duration, spline));
-
-        RunRows(expanded);
+            Spline(fromAngle, endsOpen ? ExpandedAngle : 0, duration, spline));
 
         // Backstop, for the same reason the close transition has one: the symptom of a missed
         // completion here is a panel stuck at a fixed height that no longer grows with its
@@ -262,8 +297,9 @@ internal sealed class DisclosureAnimation(
         {
             Interval = duration.TimeSpan + TimeSpan.FromMilliseconds(150),
         };
-        _guard.Tick += (_, _) => Finish(expanded);
+        _guard.Tick += (_, _) => Finish(endsOpen);
         _guard.Start();
+        return true;
     }
 
     private void Finish(bool expanded)

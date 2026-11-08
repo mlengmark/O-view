@@ -21,19 +21,23 @@ namespace OView.Tray.Popup;
 /// <see cref="PanelDensity.SpacingScale"/> and its chart the <see cref="PanelDensity.GraphScale"/>,
 /// so a short display tightens this block by the proportion it tightens the rest.</para>
 /// </summary>
+/// <param name="refitForPendingGrowth">Re-fits the panel for height the table is about to gain or lose.</param>
+/// <param name="redock">Re-docks the panel at its current height.</param>
 internal sealed class PopupLocalBlock(
-    FrameworkElement owner, Border block, LetterSpacedText title, TextBlock subtitle,
+    Window owner, Border block, LetterSpacedText title, TextBlock subtitle,
     Canvas chartHost, FrameworkElement chartLine, Grid tableHost,
     TextBlock windowCaveat, TextBlock scopeNote,
     FrameworkElement footer, TextBlock footerCaveat,
     RadioButton outputSegment, RadioButton overallSegment, Border highlight,
-    Action<PanelViewChoice> choose)
+    Action<PanelViewChoice> choose, Action<double> refitForPendingGrowth, Action redock)
 {
     /// <summary>Space from the title's line to the chart, and from the table to the footer.</summary>
     private const double BodyGapDip = 8;
 
+    private static readonly double HighlightMs = PanelMotion.Ms(PanelMotion.SwitchHighlightBaseMs);
+
     private readonly PopupGraph _graph = new(owner, chartHost);
-    private readonly PopupTotalsTable _table = new(owner, tableHost);
+    private readonly PopupTotalsTable _table = new(owner, tableHost, refitForPendingGrowth, redock);
     private readonly TranslateTransform _highlightOffset = (TranslateTransform)highlight.RenderTransform;
 
     private IReadOnlyList<PanelMeasureOption> _options = [];
@@ -54,6 +58,17 @@ internal sealed class PopupLocalBlock(
 
         outputSegment.IsKeyboardFocusedChanged += (_, _) => PlaceHighlight();
         overallSegment.IsKeyboardFocusedChanged += (_, _) => PlaceHighlight();
+
+        foreach (var segment in new[] { outputSegment, overallSegment })
+        {
+            segment.ApplyTemplate();
+            segment.MouseEnter += (_, _) => UpdateHoverFill(segment, animate: true);
+            segment.MouseLeave += (_, _) => UpdateHoverFill(segment, animate: true);
+
+            // A press is never animated: the fill goes the moment the segment lights.
+            segment.Checked += (_, _) => UpdateHoverFill(segment, animate: false);
+            segment.Unchecked += (_, _) => UpdateHoverFill(segment, animate: false);
+        }
     }
 
     /// <summary>
@@ -63,7 +78,7 @@ internal sealed class PopupLocalBlock(
     public double TableScreenTop => tableHost.PointToScreen(new Point(0, 0)).Y;
 
     /// <summary>The table's current height, what <c>--fold-check</c> samples.</summary>
-    public double TableHeight => tableHost.ActualHeight;
+    public double TableHeight => _table.Height;
 
     /// <summary>Presses the segment that is not on, for <c>--fold-check</c>.</summary>
     public void ToggleMeasureForVerification() =>
@@ -75,12 +90,59 @@ internal sealed class PopupLocalBlock(
     /// </param>
     public void Populate(PanelLocalTotalsView totals, PanelLocalFooterView footerView, string? note)
     {
+        _highlightOffset.BeginAnimation(TranslateTransform.XProperty, null);
+        highlight.BeginAnimation(FrameworkElement.WidthProperty, null);
+
+        ShowWords(totals, footerView, note);
+        _chart = totals.Chart;
+        _table.Populate(totals.Table);
+        PlaceHighlight();
+    }
+
+    /// <summary>
+    /// The switch was pressed: the words change at once, because a figure is real from its first
+    /// frame, while the highlight, the chart and the table each move to the new view from wherever
+    /// they are on screen.
+    /// </summary>
+    /// <inheritdoc cref="Populate" path="/param"/>
+    public void SwitchTo(PanelLocalTotalsView totals, PanelLocalFooterView footerView, string? note)
+    {
+        ShowWords(totals, footerView, note);
+        SlideHighlight();
+
+        _chart = totals.Chart;
+        _graph.MoveTo(totals.Chart);
+        _table.SwitchTo(totals.Table);
+    }
+
+    /// <summary>A frame of the press at <paramref name="atMs"/> after it, for a verification render.</summary>
+    /// <inheritdoc cref="Populate" path="/param"/>
+    public void ApplyPartialSwitch(
+        PanelLocalTotalsView totals, PanelLocalFooterView footerView, string? note, double atMs)
+    {
+        var fromX = _highlightOffset.X;
+        var fromWidth = highlight.Width;
+
+        ShowWords(totals, footerView, note);
+        PlaceHighlight();
+
+        var travel = PanelMotion.Decelerate.ValueAt(atMs / HighlightMs);
+        _highlightOffset.X = fromX + (_highlightOffset.X - fromX) * travel;
+        highlight.Width = fromWidth + (highlight.Width - fromWidth) * travel;
+
+        _chart = totals.Chart;
+        _graph.ApplyPartialMove(totals.Chart, atMs);
+        _table.ApplyPartialSwitch(totals.Table, atMs);
+    }
+
+    /// <summary>The chart's half of the fills that play as the panel arrives; the plan bars are <see cref="PopupMeter.Arrive"/>.</summary>
+    public void Arrive() => _graph.Rise();
+
+    private void ShowWords(PanelLocalTotalsView totals, PanelLocalFooterView footerView, string? note)
+    {
         title.Text = totals.Title.ToUpperInvariant();
         AutomationProperties.SetName(title, totals.Title);
         subtitle.Text = totals.Subtitle;
-
-        _chart = totals.Chart;
-        _table.Populate(totals.Table);
 
         // Under the table and flush right, so it ends beneath the 31-day figures it qualifies.
         PopupText.SetLine(windowCaveat, totals.WindowCaveat);
@@ -94,8 +156,6 @@ internal sealed class PopupLocalBlock(
         overallSegment.Content = _options[1].Label;
         overallSegment.IsChecked = _options[1].Selected;
         _populating = false;
-
-        PlaceHighlight();
     }
 
     /// <summary>
@@ -140,15 +200,67 @@ internal sealed class PopupLocalBlock(
     /// </summary>
     private void PlaceHighlight()
     {
-        var segment = _options.Count > 1 && _options[1].Selected ? overallSegment : outputSegment;
+        var segment = LitSegment;
         if (segment.ActualWidth <= 0)
         {
             return;
         }
 
-        _highlightOffset.X = segment.TranslatePoint(new Point(0, 0), (UIElement)highlight.Parent).X;
+        _highlightOffset.X = HighlightX(segment);
         highlight.Width = segment.ActualWidth;
         highlight.SetResourceReference(
             Border.BackgroundProperty, segment.IsKeyboardFocused ? "TilePressed" : "BarTrack");
+    }
+
+    /// <summary>
+    /// The lit fill slides to the segment now on, from wherever it has got to. Reading the
+    /// properties gives the on-screen value mid-slide, and <see cref="PlaceHighlight"/> writes the
+    /// resting one beneath, so nothing is left to release when the slide ends.
+    /// </summary>
+    private void SlideHighlight()
+    {
+        var segment = LitSegment;
+        var fromX = _highlightOffset.X;
+        var fromWidth = highlight.Width;
+
+        PlaceHighlight();
+
+        if (PanelMotion.Runs(WpfMotion.AnimationsOn, HighlightMs) && segment.ActualWidth > 0)
+        {
+            _highlightOffset.BeginAnimation(
+                TranslateTransform.XProperty, WpfMotion.Travel(fromX, HighlightX(segment), HighlightMs));
+            highlight.BeginAnimation(
+                FrameworkElement.WidthProperty, WpfMotion.Travel(fromWidth, segment.ActualWidth, HighlightMs));
+        }
+    }
+
+    private RadioButton LitSegment => _options.Count > 1 && _options[1].Selected ? overallSegment : outputSegment;
+
+    private double HighlightX(RadioButton segment) =>
+        segment.TranslatePoint(new Point(0, 0), (UIElement)highlight.Parent).X;
+
+    /// <summary>
+    /// A segment's hover fill, on the lit one never: the lit fill is the highlight, and a hover
+    /// over it would read as though the selection had moved.
+    /// </summary>
+    private static void UpdateHoverFill(RadioButton segment, bool animate)
+    {
+        var fill = (Border)segment.Template.FindName("HoverFill", segment);
+        var lit = segment.IsMouseOver && segment.IsChecked != true;
+        var from = fill.Opacity;
+        var to = lit ? 1.0 : 0.0;
+        var ms = PanelMotion.Ms(lit ? PanelMotion.HoverFillInBaseMs : PanelMotion.HoverFillOutBaseMs);
+
+        fill.Opacity = to;
+
+        if (animate && PanelMotion.Runs(WpfMotion.AnimationsOn, ms))
+        {
+            fill.BeginAnimation(UIElement.OpacityProperty, WpfMotion.Travel(
+                from, to, ms, curve: lit ? PanelMotion.Decelerate : PanelMotion.Accelerate));
+        }
+        else
+        {
+            fill.BeginAnimation(UIElement.OpacityProperty, null);
+        }
     }
 }
