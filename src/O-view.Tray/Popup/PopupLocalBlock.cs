@@ -411,14 +411,9 @@ internal sealed class PopupLocalBlock(
         _faceHeight.Prepare(from);
         faces.ClipToBounds = true;
 
-        _table.Populate(content.Totals.Table);
-        if (content.Models is { } models)
+        FillFaces(content);
+        if (content.Models is null)
         {
-            modelFace.Populate(models);
-        }
-        else
-        {
-            _chart = content.Totals.Chart;
             _graph.MoveTo(content.Totals.Chart);
         }
 
@@ -590,16 +585,9 @@ internal sealed class PopupLocalBlock(
         var ms = PanelMotion.Ms(lit ? PanelMotion.HoverFillInBaseMs : PanelMotion.HoverFillOutBaseMs);
 
         layer.Opacity = to;
-
-        if (animate && PanelMotion.Runs(WpfMotion.AnimationsOn, ms))
-        {
-            layer.BeginAnimation(UIElement.OpacityProperty, WpfMotion.Travel(
-                from, to, ms, curve: lit ? PanelMotion.Decelerate : PanelMotion.Accelerate));
-        }
-        else
-        {
-            layer.BeginAnimation(UIElement.OpacityProperty, null);
-        }
+        layer.BeginAnimation(UIElement.OpacityProperty, animate && PanelMotion.Runs(WpfMotion.AnimationsOn, ms)
+            ? WpfMotion.Travel(from, to, ms, curve: lit ? PanelMotion.Decelerate : PanelMotion.Accelerate)
+            : null);
     }
 
     /// <summary>
@@ -622,16 +610,9 @@ internal sealed class PopupLocalBlock(
         var from = _tagText.Color;
         var to = Colour(on ? "TextPrimary" : "TextMuted");
         _tagText.Color = to;
-
-        if (PanelMotion.Runs(WpfMotion.AnimationsOn, ms))
-        {
-            _tagText.BeginAnimation(SolidColorBrush.ColorProperty, WpfMotion.TravelColor(
-                from, to, ms, on ? PanelMotion.Decelerate : PanelMotion.Accelerate));
-        }
-        else
-        {
-            _tagText.BeginAnimation(SolidColorBrush.ColorProperty, null);
-        }
+        _tagText.BeginAnimation(SolidColorBrush.ColorProperty, PanelMotion.Runs(WpfMotion.AnimationsOn, ms)
+            ? WpfMotion.TravelColor(from, to, ms, on ? PanelMotion.Decelerate : PanelMotion.Accelerate)
+            : null);
     }
 
     /// <summary>The cue at rest in this open's theme, which is what every panel opens with.</summary>
@@ -662,15 +643,9 @@ internal sealed class PopupLocalBlock(
         var to = _markTurns * HalfTurnDegrees;
 
         _markTurn.Angle = to;
-
-        if (PanelMotion.Runs(WpfMotion.AnimationsOn, MarkTurnMs))
-        {
-            _markTurn.BeginAnimation(RotateTransform.AngleProperty, WpfMotion.Travel(from, to, MarkTurnMs));
-        }
-        else
-        {
-            _markTurn.BeginAnimation(RotateTransform.AngleProperty, null);
-        }
+        _markTurn.BeginAnimation(RotateTransform.AngleProperty, PanelMotion.Runs(WpfMotion.AnimationsOn, MarkTurnMs)
+            ? WpfMotion.Travel(from, to, MarkTurnMs)
+            : null);
     }
 
     private System.Windows.Media.Color Colour(string key) => ((SolidColorBrush)owner.FindResource(key)).Color;
