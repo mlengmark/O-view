@@ -1,5 +1,6 @@
 using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
+using OView.Presentation.Panel;
 
 namespace OView.App.Tests;
 
@@ -53,6 +54,82 @@ public class UsageEngineTests
         Assert.Single(seen);
         Assert.Equal(42, seen[0].SessionPercentValue.Value);
         Assert.Equal(42, engine.Latest.SessionPercentValue.Value);
+    }
+
+    /// <summary>
+    /// Hidden, it stays hidden across a restart: the view is on disk, not in the engine.
+    /// </summary>
+    [Fact]
+    public void ThePanelViewOutlivesTheEngine()
+    {
+        using var dir = new TempDir();
+        var view = new PanelViewChoice(PanelMeasure.Overall, PanelFace.Models, BannerHidden: true);
+
+        var (first, _, _, _) = Build(dir);
+        using (first)
+        {
+            Assert.Equal(new PanelViewChoice(), first.PanelView);
+            Assert.Equal(view, first.SetPanelView(view));
+        }
+
+        var (second, _, _, _) = Build(dir);
+        using var _e = second;
+
+        Assert.Equal(view, second.PanelView);
+    }
+
+    /// <summary>Changing one part keeps the rest, because the setter writes all three together.</summary>
+    [Fact]
+    public void ShowingTheBannerAgainLeavesTheOtherChoicesAlone()
+    {
+        using var dir = new TempDir();
+        var (engine, _, _, _) = Build(dir);
+        using var _e = engine;
+        engine.SetPanelView(new PanelViewChoice(PanelMeasure.Overall, PanelFace.Models, BannerHidden: true));
+
+        engine.SetPanelView(engine.PanelView with { BannerHidden = false });
+
+        Assert.Equal(PanelMeasure.Overall, engine.PanelView.Measure);
+        Assert.Equal(PanelFace.Models, engine.PanelView.Face);
+        Assert.False(engine.PanelView.BannerHidden);
+    }
+
+    /// <summary>
+    /// The whole path, from a real poll: a live window with no off-plan activity reads as not
+    /// off-plan, and the flag is cleared where the setting is stored.
+    /// </summary>
+    [Fact]
+    public void APollOfAnOnPlanWindowClearsAHiddenBannerOnDisk()
+    {
+        using var dir = new TempDir();
+        var at = T0.AddMinutes(-1).ToUnixTimeMilliseconds();
+        var path = dir.File("plan-usage-history.json");
+        File.WriteAllText(path, $"{{\"version\":2,\"samples\":[{{\"t\":{at},\"org\":\"org-1\",\"u\":{{\"fh\":40,\"sd\":12}}}}]}}");
+        var (engine, _, _, _) = Build(dir, o => o with { PlanHistoryPath = path });
+        using var _e = engine;
+        engine.SetPanelView(new PanelViewChoice(BannerHidden: true));
+
+        engine.Refresh();
+
+        Assert.False(engine.PanelView.BannerHidden);
+        Assert.False(TraySettings.Load(dir.File("settings.json")).OffPlanBannerHidden);
+    }
+
+    /// <summary>A poll still off-plan leaves the banner hidden, so the × is not undone within seconds.</summary>
+    [Fact]
+    public void APollStillOffPlanLeavesTheBannerHidden()
+    {
+        using var dir = new TempDir();
+        var at = T0.AddMinutes(-1).ToUnixTimeMilliseconds();
+        var path = dir.File("plan-usage-history.json");
+        File.WriteAllText(path, $"{{\"version\":2,\"samples\":[{{\"t\":{at},\"org\":\"org-1\",\"u\":{{\"fh\":40,\"sd\":12}}}}]}}");
+        var (engine, _, _, _) = Build(dir, o => o with { PlanHistoryPath = path, SimulateDivergence = "limit" });
+        using var _e = engine;
+        engine.SetPanelView(new PanelViewChoice(BannerHidden: true));
+
+        engine.Refresh();
+
+        Assert.True(engine.PanelView.BannerHidden);
     }
 
     [Fact]

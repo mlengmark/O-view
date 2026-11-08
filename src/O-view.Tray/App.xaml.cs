@@ -365,6 +365,7 @@ public partial class App : System.Windows.Application
         // above just refreshed, and the engine's reader is the one that honours the
         // injected-provider guard.
         popup.CachedUsage = _shell.CachedUsage;
+        popup.ViewChoice = _shell.PanelView;
         popup.ShowNearTrayIcon(
             _shell.Latest,
             _shell.BuildStatistics(),
@@ -401,6 +402,7 @@ public partial class App : System.Windows.Application
         // without one, which is correct, they place no window, so a remembered place would be
         // read for a position nothing ever applies.
         PlacementMemory = new PanelPlacementMemory(_panelPositions),
+        SetViewChoice = view => _shell!.SetPanelView(view),
     };
 
     /// <summary>

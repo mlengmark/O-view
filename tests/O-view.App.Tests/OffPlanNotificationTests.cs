@@ -135,6 +135,106 @@ public class OffPlanNotificationTests
         Assert.Equal(NotificationKind.Warning, OffPlanBalloon(dir, ExtraUsageState.Enabled).Kind);
     }
 
+    // ── the hidden banner ─────────────────────────────────────────────────────────
+
+    /// <summary>The alerts on their own, over a settings value this test owns.</summary>
+    private sealed class BannerFixture
+    {
+        public TraySettings Settings { get; private set; } = new(OffPlanBannerHidden: true);
+        public int Saves { get; private set; }
+
+        public UsageAlerts Alerts { get; }
+
+        public BannerFixture()
+        {
+            Alerts = new UsageAlerts(
+                hasPlanHistory: true,
+                () => new PanelStatistics(0, 0, 0, 31, [], 0),
+                () => ExtraUsageState.Unknown,
+                log: null,
+                () => Settings,
+                settings =>
+                {
+                    Settings = settings;
+                    Saves++;
+                },
+                _ => { });
+        }
+    }
+
+    private static PanelStatistics Reading(DivergenceState? state) =>
+        new PanelStatistics(0, 0, 0, 31, [], 0)
+        {
+            Divergence = state is { } s ? new DivergenceResult(s, 0, 0) : null,
+        };
+
+    /// <summary>A period of none is what brings the banner back for the next divergence.</summary>
+    [Theory]
+    [InlineData(DivergenceState.Consistent)]
+    [InlineData(DivergenceState.InsufficientActivity)]
+    public void APollReadingNotOffPlanClearsTheHiddenBanner(DivergenceState state)
+    {
+        var fixture = new BannerFixture();
+
+        fixture.Alerts.CheckOffPlan(Reading(state));
+
+        Assert.False(fixture.Settings.OffPlanBannerHidden);
+    }
+
+    /// <summary>The spell the reader hid it for is still running, so it stays hidden.</summary>
+    [Theory]
+    [InlineData(DivergenceState.Diverging)]
+    [InlineData(DivergenceState.PlanLimitReached)]
+    public void APollStillOffPlanKeepsItHidden(DivergenceState state)
+    {
+        var fixture = new BannerFixture();
+
+        fixture.Alerts.CheckOffPlan(Reading(state));
+
+        Assert.True(fixture.Settings.OffPlanBannerHidden);
+    }
+
+    /// <summary>
+    /// "Cannot tell" is not "not off-plan": Claude Desktop stopping its samples must not bring
+    /// back a banner the reader already dismissed for the same spell.
+    /// </summary>
+    [Theory]
+    [InlineData(DivergenceState.MeterNotReporting)]
+    [InlineData(DivergenceState.RiseNotMeasurable)]
+    [InlineData(null)]
+    public void APollThatCannotTellKeepsItHidden(DivergenceState? state)
+    {
+        var fixture = new BannerFixture();
+
+        fixture.Alerts.CheckOffPlan(Reading(state));
+
+        Assert.True(fixture.Settings.OffPlanBannerHidden);
+    }
+
+    /// <summary>A failed build says nothing either way.</summary>
+    [Fact]
+    public void AFailedReadKeepsItHidden()
+    {
+        var fixture = new BannerFixture();
+
+        fixture.Alerts.CheckOffPlan(null);
+
+        Assert.True(fixture.Settings.OffPlanBannerHidden);
+    }
+
+    /// <summary>This runs on every poll, so a flag that is already clear must not touch the disk.</summary>
+    [Fact]
+    public void AnAlreadyClearFlagIsNotWrittenAgain()
+    {
+        var fixture = new BannerFixture();
+        fixture.Alerts.CheckOffPlan(Reading(DivergenceState.Consistent));
+        var saves = fixture.Saves;
+
+        fixture.Alerts.CheckOffPlan(Reading(DivergenceState.Consistent));
+
+        Assert.Equal(saves, fixture.Saves);
+    }
+
     private static string WritePlanHistory(TempDir dir)
     {
         var path = dir.File("plan-usage-history.json");

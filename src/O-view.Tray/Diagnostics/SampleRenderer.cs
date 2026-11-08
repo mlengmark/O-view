@@ -78,6 +78,7 @@ internal static class SampleRenderer
             DataReport = state.Plan,
             CachedUsage = state.CachedUsage,
             BoostNotices = state.Boost,
+            ViewChoice = state.View,
         };
 
         string File(string name, bool light) => Path.Combine(dir, $"panel-{name}-{(light ? "light" : "dark")}.png");
