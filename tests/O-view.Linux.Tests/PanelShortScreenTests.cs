@@ -216,6 +216,24 @@ public class PanelShortScreenTests
         Assert.True(last.Bounds.Bottom - hidden <= viewport + 0.5, "the last section ends below it");
     }
 
+    /// <summary>
+    /// The scroll bar arrives after the chart is built and takes a column of its own, so a chart
+    /// that had settled on a width when it was built would run under the bar here.
+    /// </summary>
+    [Fact]
+    public void TheChartFillsTheColumnTheScrollBarLeaves()
+    {
+        var panel = Capped(light: false, breakdown: false);
+        var chart = PanelGraphLayoutTests.ChartOf(panel);
+        var column = panel.Viewport.Bounds.Width;
+        var open = panel.Bounds.Width - 2 * (panel.BorderThickness.Left + panel.Padding.Left);
+
+        Assert.True(panel.ScrollBar.IsVisible);
+        Assert.Equal(open - PanelMetrics.ScrollBarWidthDip - PanelMetrics.ScrollBarGapDip, column);
+        Assert.Equal(column, chart.Bounds.Width);
+        Assert.Equal(column - PanelMetrics.ChartBarInsetDip, PanelGraphLayoutTests.BarsOf(chart)[^1].Bounds.Right, 6);
+    }
+
     /// <summary>A wheel turn over the content scrolls it, which is the gesture a user reaches
     /// for before they look for a bar at all.</summary>
     [Fact]
