@@ -1,5 +1,6 @@
 using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
+using OView.Presentation.Panel;
 using OView.Presentation.Text;
 
 namespace OView.App;
@@ -124,6 +125,28 @@ public sealed class UsageAlerts
         return settings.ThresholdPercent;
     }
 
+    /// <summary>The view the panel was left in, as the settings hold it.</summary>
+    public PanelViewChoice PanelView
+    {
+        get
+        {
+            var settings = _getSettings();
+            return new PanelViewChoice(settings.PanelMeasure, settings.PanelFace, settings.OffPlanBannerHidden);
+        }
+    }
+
+    /// <summary>Applies and persists the panel's view, returning what is now in effect.</summary>
+    public PanelViewChoice SetPanelView(PanelViewChoice view)
+    {
+        _saveSettings(_getSettings() with
+        {
+            PanelMeasure = view.Measure,
+            PanelFace = view.Face,
+            OffPlanBannerHidden = view.BannerHidden,
+        });
+        return PanelView;
+    }
+
     public void NotifyOnThreshold(UsageSnapshot snapshot)
     {
         // Branches on the figure rather than the status: an Unavailable percentage carries no
@@ -159,6 +182,7 @@ public sealed class UsageAlerts
         if (!stats.IsOffPlan)
         {
             _offPlanNotified = false;
+            ReleaseHiddenBanner(stats);
             return;
         }
 
@@ -198,6 +222,31 @@ public sealed class UsageAlerts
             OffPlanText.NotificationTitle(extraUsage),
             OffPlanText.NotificationBody(estOffPlanUsd, extraUsage),
             NotificationKind.Warning));
+    }
+
+    /// <summary>
+    /// Clears a hidden banner's flag once a poll reads the account as no longer off-plan, so
+    /// that the next divergence is shown again.
+    ///
+    /// <para><b>Only on a verdict.</b> A meter that stopped reporting and a window with one
+    /// sample are the detector saying it cannot tell, which is not the same as "not off-plan".
+    /// Clearing on those would bring the banner back for the divergence the reader already
+    /// dismissed, every time Claude Desktop stopped sampling.</para>
+    ///
+    /// <para>Written only when it changes, because this runs on every poll.</para>
+    /// </summary>
+    private void ReleaseHiddenBanner(PanelStatistics stats)
+    {
+        if (stats.Divergence?.State is not (DivergenceState.Consistent or DivergenceState.InsufficientActivity))
+        {
+            return;
+        }
+
+        var settings = _getSettings();
+        if (settings.OffPlanBannerHidden)
+        {
+            _saveSettings(settings with { OffPlanBannerHidden = false });
+        }
     }
 
     /// <summary>

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using OView.Core.Providers.PlanHistory;
 
 namespace OView.Core.Models;
@@ -54,6 +55,18 @@ namespace OView.Core.Models;
 /// Time of day of that reset, <c>HH:mm</c>, local. Stored as text so the file stays legible
 /// and no enum ordinal can shift meaning underneath it.
 /// </param>
+/// <param name="PanelMeasure">
+/// What the panel's figures and chart count, as the reader left them. Written as its name for
+/// the reason <paramref name="WeeklyResetTime"/> is text.
+/// </param>
+/// <param name="PanelFace">Which side of the local block the panel was left showing.</param>
+/// <param name="OffPlanBannerHidden">
+/// Whether the reader pressed the off-plan banner's hide control.
+///
+/// <para><b>It belongs to the off-plan spell it was pressed during,</b> so it is not a
+/// preference that lasts for ever: the shell clears it when a poll reads the account as no
+/// longer off-plan, and a later divergence shows the banner again.</para>
+/// </param>
 public sealed record TraySettings(
     bool NotifyOnThreshold = true,
     int ThresholdPercent = UsageLevels.CriticalPercent,
@@ -61,7 +74,12 @@ public sealed record TraySettings(
     bool UpdateAutomatically = false,
     string WeeklyResetDay = "",
     string WeeklyResetTime = "",
-    string WeeklyResetConflictNoticed = "")
+    string WeeklyResetConflictNoticed = "",
+    [property: JsonConverter(typeof(JsonStringEnumConverter<PanelMeasure>))]
+    PanelMeasure PanelMeasure = PanelMeasure.Output,
+    [property: JsonConverter(typeof(JsonStringEnumConverter<PanelFace>))]
+    PanelFace PanelFace = PanelFace.Totals,
+    bool OffPlanBannerHidden = false)
 {
     /// <summary>The user's entered reset, or null when unset or unreadable.</summary>
     public ManualWeeklyReset? WeeklyReset => ManualWeeklyReset.Parse(WeeklyResetDay, WeeklyResetTime);
@@ -76,6 +94,7 @@ public sealed record TraySettings(
         {
             var loaded = JsonSerializer.Deserialize<TraySettings>(File.ReadAllText(path ?? DefaultPath));
             return loaded is null || loaded.ThresholdPercent is < 1 or > 100
+                    || !Enum.IsDefined(loaded.PanelMeasure) || !Enum.IsDefined(loaded.PanelFace)
                 ? new TraySettings()
                 : loaded;
         }

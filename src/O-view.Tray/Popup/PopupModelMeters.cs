@@ -14,14 +14,14 @@ namespace OView.Tray.Popup;
 /// sizes as the markup and filled through the same <see cref="PopupMeter"/>. With none the host
 /// has no children, so the panel is laid out exactly as it was before this existed.</para>
 ///
-/// <para><b>The gap above each row is the density's</b>, the same one above the weekly heading
-/// (<see cref="PanelDensity.SectionGap"/>). The fit changes density after the rows are built, so
-/// it is reapplied to rows already in place rather than only read while building them, or a
+/// <para><b>The space round each row is the density's</b>, the same as the other meters'
+/// (<see cref="PopupPlanBlock.MeterMargin"/>). The fit changes density after the rows are built,
+/// so it is reapplied to rows already in place rather than only read while building them, or a
 /// compacted panel would keep these rows at their natural spacing.</para>
 /// </summary>
 internal sealed class PopupModelMeters(FrameworkElement owner, StackPanel host)
 {
-    private double _gap = PanelDensity.Normal.SectionGap;
+    private Thickness _margin = PopupPlanBlock.MeterMargin(PanelDensity.Normal);
 
     /// <param name="light">Whether the panel is in its light theme, which takes the darker shades.</param>
     public void Populate(IReadOnlyList<PanelMeterView> meters, bool light)
@@ -36,11 +36,11 @@ internal sealed class PopupModelMeters(FrameworkElement owner, StackPanel host)
 
     public void ApplyDensity(PanelDensity density)
     {
-        _gap = density.SectionGap;
+        _margin = PopupPlanBlock.MeterMargin(density);
 
         foreach (FrameworkElement row in host.Children)
         {
-            row.Margin = new Thickness(0, _gap, 0, 0);
+            row.Margin = _margin;
         }
     }
 
@@ -55,7 +55,7 @@ internal sealed class PopupModelMeters(FrameworkElement owner, StackPanel host)
         heading.Children.Add(new TextBlock
         {
             Text = meter.Label,
-            FontSize = 12,
+            FontSize = PanelMetrics.MeterLabelFontSize,
             FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
             TextTrimming = TextTrimming.CharacterEllipsis,
@@ -64,7 +64,7 @@ internal sealed class PopupModelMeters(FrameworkElement owner, StackPanel host)
 
         var figure = new TextBlock
         {
-            FontSize = 12,
+            FontSize = PanelMetrics.MeterLabelFontSize,
             Margin = new Thickness(8, 0, 0, 0),
             VerticalAlignment = VerticalAlignment.Center,
             Foreground = (Brush)owner.FindResource("TextSecondary"),
@@ -72,16 +72,16 @@ internal sealed class PopupModelMeters(FrameworkElement owner, StackPanel host)
         Grid.SetColumn(figure, 1);
         heading.Children.Add(figure);
 
-        var bar = new Grid { Height = 8, Margin = new Thickness(0, 6, 0, 4) };
+        var bar = new Grid { Height = PanelMetrics.MeterBarHeightDip, Margin = new Thickness(0, 5, 0, 4) };
         bar.Children.Add(new Border
         {
             Background = (Brush)owner.FindResource("BarTrack"),
-            CornerRadius = new CornerRadius(4),
+            CornerRadius = new CornerRadius(PanelMetrics.MeterBarRadiusDip),
         });
 
         // A statement of its own, because the guard on window positions reads a trailing
         // ".Left," in an initializer as a tuple placement.
-        var fill = new Border { CornerRadius = new CornerRadius(4) };
+        var fill = new Border { CornerRadius = new CornerRadius(PanelMetrics.MeterBarRadiusDip) };
         fill.HorizontalAlignment = System.Windows.HorizontalAlignment.Left;
         bar.Children.Add(fill);
 
@@ -89,12 +89,12 @@ internal sealed class PopupModelMeters(FrameworkElement owner, StackPanel host)
 
         var reset = new TextBlock
         {
-            FontSize = 11,
-            Foreground = (Brush)owner.FindResource("TextSecondary"),
+            FontSize = PanelMetrics.MeterResetFontSize,
+            Foreground = (Brush)owner.FindResource("TextMuted"),
         };
         PopupText.SetLine(reset, meter.ResetLine ?? "");
 
-        var row = new StackPanel { Margin = new Thickness(0, _gap, 0, 0) };
+        var row = new StackPanel { Margin = _margin };
         row.Children.Add(heading);
         row.Children.Add(bar);
         row.Children.Add(reset);

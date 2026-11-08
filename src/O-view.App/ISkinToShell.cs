@@ -2,6 +2,7 @@ using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.PlanHistory;
 using OView.Core.Storage;
+using OView.Presentation.Panel;
 
 namespace OView.App;
 
@@ -72,6 +73,13 @@ public interface ISkinToShell
     /// <summary>Applies and persists the notification threshold, returning the percentage
     /// now in effect.</summary>
     int SetThresholdPercent(int percent);
+
+    /// <summary>The view the panel was left in, restored on every open and after a restart.</summary>
+    PanelViewChoice PanelView { get; }
+
+    /// <summary>Applies and persists the panel's view, returning what is now in effect. One
+    /// setter for all three parts, so a head changing one cannot lose the other two.</summary>
+    PanelViewChoice SetPanelView(PanelViewChoice view);
 
     /// <summary>Applies and persists the user's weekly reset time, returning what is now in
     /// effect. Null clears it and returns to deriving.</summary>

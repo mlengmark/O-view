@@ -48,6 +48,41 @@
                 </Setter>
             </Style>
 
+            <!-- The off-plan banner's hide control. A Button for the reason StatTile is one,
+                 keyboard focus and Space/Enter. Full strength under the pointer or the keyboard,
+                 at once rather than eased, so nothing about pressing it lags. -->
+            <Style x:Key="BannerHideButton" TargetType="Button">
+                <Setter Property="Width" Value="{x:Static rendering:PanelMetrics.BannerHideSizeDip}"/>
+                <Setter Property="Height" Value="{x:Static rendering:PanelMetrics.BannerHideSizeDip}"/>
+                <Setter Property="HorizontalAlignment" Value="Right"/>
+                <Setter Property="VerticalAlignment" Value="Top"/>
+                <Setter Property="Margin" Value="0,7,8,0"/>
+                <Setter Property="Cursor" Value="Hand"/>
+                <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border Background="Transparent">
+                                <Path x:Name="Mark" Width="9" Height="9"
+                                      Data="M0.9,0.9 L8.1,8.1 M8.1,0.9 L0.9,8.1"
+                                      Stroke="{DynamicResource WarnText}" StrokeThickness="1.44"
+                                      StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                      HorizontalAlignment="Center" VerticalAlignment="Center"
+                                      Opacity="{x:Static rendering:PanelMetrics.BannerHideOpacity}"/>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Mark" Property="Opacity" Value="1"/>
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Mark" Property="Opacity" Value="1"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
             <!-- One segment of the Bars/Breakdown switch (issue #253). Templated off
                  RadioButton so the group keeps exclusivity, arrow-key traversal and the
                  correct accessibility role; the bullet is replaced, not hidden, because a
@@ -241,37 +276,42 @@
                 </StackPanel>
             </Grid>
 
-            <Separator x:Name="HeaderSeparator" Margin="0,12,0,12" Background="{DynamicResource PanelBorder}"/>
-
-            <!-- Off-plan warning: the plan % is true but not the whole story -->
-            <Border x:Name="DivergenceBanner" Background="{DynamicResource WarnBg}" CornerRadius="6"
-                    Padding="10,8" Margin="0,0,0,12" Visibility="Collapsed">
-                <StackPanel>
-                    <TextBlock x:Name="DivergenceTitle" FontSize="12" FontWeight="SemiBold"
-                               Foreground="{DynamicResource WarnText}" TextWrapping="Wrap"/>
-                    <TextBlock x:Name="DivergenceDetail" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"
-                               Foreground="{DynamicResource TextSecondary}"/>
-                    <!-- Every wording in this banner ends by sending the reader to Claude for
-                         the figure O-view will not state (rule 6). Issue #259 asked for the
-                         link that sentence implies, so the instruction is now the thing you
-                         click rather than a place to navigate to by hand. -->
-                    <!-- WarnText, not the brand accent: AccentText is white, chosen for legibility
-                         ON AccentBg, and this link sits on WarnBg. WarnText is the pair already
-                         measured against this background, it is what the title above is drawn
-                         in, and the underline means the affordance does not rest on colour. -->
-                    <TextBlock x:Name="DivergenceLink" FontSize="11" Margin="0,5,0,0" TextWrapping="Wrap">
-                        <Hyperlink x:Name="DivergenceLinkAnchor"
-                                   Foreground="{DynamicResource WarnText}"
-                                   TextDecorations="Underline"
-                                   RequestNavigate="OnUsageSettingsNavigate"/>
-                    </TextBlock>
-                </StackPanel>
-            </Border>
+            <!-- Off-plan warning: the plan % is true but not the whole story. The outer Grid is
+                 what folds when the reader hides it, so the space above the banner goes too. -->
+            <Grid x:Name="DivergenceBannerFold" Visibility="Collapsed">
+                <Border x:Name="DivergenceBanner" Background="{DynamicResource WarnBg}" CornerRadius="6"
+                        Margin="0,12,0,0">
+                    <Grid>
+                        <!-- 28 on the right keeps the sentences clear of the hide control. -->
+                        <StackPanel Margin="10,8,28,8">
+                            <TextBlock x:Name="DivergenceTitle" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource WarnText}" TextWrapping="Wrap"/>
+                            <TextBlock x:Name="DivergenceDetail" FontSize="11" TextWrapping="Wrap" Margin="0,3,0,0"
+                                       Foreground="{DynamicResource TextSecondary}"/>
+                            <!-- Every wording in this banner ends by sending the reader to Claude for
+                                 the figure O-view will not state (rule 6). Issue #259 asked for the
+                                 link that sentence implies, so the instruction is now the thing you
+                                 click rather than a place to navigate to by hand. -->
+                            <!-- WarnText, not the brand accent: AccentText is white, chosen for legibility
+                                 ON AccentBg, and this link sits on WarnBg. WarnText is the pair already
+                                 measured against this background, it is what the title above is drawn
+                                 in, and the underline means the affordance does not rest on colour. -->
+                            <TextBlock x:Name="DivergenceLink" FontSize="11" Margin="0,5,0,0" TextWrapping="Wrap">
+                                <Hyperlink x:Name="DivergenceLinkAnchor"
+                                           Foreground="{DynamicResource WarnText}"
+                                           TextDecorations="Underline"
+                                           RequestNavigate="OnUsageSettingsNavigate"/>
+                            </TextBlock>
+                        </StackPanel>
+                        <Button x:Name="HideBannerButton" Style="{StaticResource BannerHideButton}"/>
+                    </Grid>
+                </Border>
+            </Grid>
 
             <!-- Why the figures read "unknown". A blank panel with no explanation cost
                  four rounds of support to diagnose; the app should state the reason. -->
             <Border x:Name="NoDataBanner" Background="{DynamicResource WarnBg}" CornerRadius="6"
-                    Padding="10,8" Margin="0,0,0,12" Visibility="Collapsed">
+                    Padding="10,8" Margin="0,12,0,0" Visibility="Collapsed">
                 <StackPanel>
                     <TextBlock x:Name="NoDataTitle" FontSize="12" FontWeight="SemiBold"
                                Foreground="{DynamicResource WarnText}" TextWrapping="Wrap"/>
@@ -280,59 +320,122 @@
                 </StackPanel>
             </Border>
 
-            <!-- Session bar -->
-            <Grid>
-                <TextBlock Text="{x:Static text:PanelText.SessionBarLabel}"
-                           FontSize="12" FontWeight="SemiBold"
-                           Foreground="{DynamicResource TextPrimary}"/>
-                <TextBlock x:Name="SessionPctText" FontSize="12" HorizontalAlignment="Right"
-                           Foreground="{DynamicResource TextSecondary}"/>
-            </Grid>
-            <Grid x:Name="SessionBar" Height="8" Margin="0,6,0,4">
-                <Border Background="{DynamicResource BarTrack}" CornerRadius="4"/>
-                <Border x:Name="SessionBarFill" CornerRadius="4" HorizontalAlignment="Left"/>
-            </Grid>
-            <TextBlock x:Name="SessionResetText" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+            <!-- Your plan: its meters and the off-plan row that closes them, flat on the panel.
+                 The block's own space follows the density, so it is set from PopupPlanBlock. -->
+            <Border x:Name="PlanBlock">
+                <StackPanel>
+                    <local:LetterSpacedText x:Name="PlanBlockTitle" HorizontalAlignment="Left"
+                                            TextElement.FontSize="{x:Static rendering:PanelMetrics.BlockTitleFontSize}"
+                                            TextElement.FontWeight="SemiBold"
+                                            TextElement.Foreground="{DynamicResource TextSecondary}"/>
 
-            <!-- Weekly bar -->
-            <!-- Three columns, not an overlay. The percentage is right-aligned in its own
-                 Auto column so it reserves its width, and the chip sits in the star column
-                 between them: the label and the figure both keep their space whatever the
-                 chip says, and an over-long chip is trimmed rather than drawn over the
-                 figure. Note the figure reads "51% used", not "51%", a chip budget worked
-                 out against the shorter string is about 30px too generous. -->
-            <Grid x:Name="WeeklyHeading" Margin="0,12,0,0">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock Text="{x:Static text:PanelText.WeeklyBarLabel}"
-                           FontSize="12" FontWeight="SemiBold"
-                           VerticalAlignment="Center"
-                           Foreground="{DynamicResource TextPrimary}"/>
-                <Border x:Name="BoostChip" Grid.Column="1"
-                        Background="{DynamicResource BadgeBg}" CornerRadius="4"
-                        Padding="6,1" Margin="8,0,8,0" VerticalAlignment="Center"
-                        HorizontalAlignment="Left" Visibility="Collapsed">
-                    <TextBlock x:Name="BoostChipText" FontSize="10"
-                               TextTrimming="CharacterEllipsis"
-                               Foreground="{DynamicResource BadgeText}"/>
-                </Border>
-                <TextBlock x:Name="WeeklyPctText" Grid.Column="2" FontSize="12"
-                           VerticalAlignment="Center" HorizontalAlignment="Right"
-                           Foreground="{DynamicResource TextSecondary}"/>
-            </Grid>
-            <Grid x:Name="WeeklyBar" Height="8" Margin="0,6,0,4">
-                <Border Background="{DynamicResource BarTrack}" CornerRadius="4"/>
-                <Border x:Name="WeeklyBarFill" CornerRadius="4" HorizontalAlignment="Left"/>
-            </Grid>
-            <TextBlock x:Name="WeeklyResetText" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
+                    <StackPanel Margin="0,4,0,0">
+                        <!-- Session bar -->
+                        <StackPanel x:Name="SessionMeter">
+                            <Grid>
+                                <TextBlock Text="{x:Static text:PanelText.SessionBarLabel}"
+                                           FontSize="{x:Static rendering:PanelMetrics.MeterLabelFontSize}" FontWeight="SemiBold"
+                                           Foreground="{DynamicResource TextPrimary}"/>
+                                <TextBlock x:Name="SessionPctText" HorizontalAlignment="Right"
+                                           FontSize="{x:Static rendering:PanelMetrics.MeterLabelFontSize}"
+                                           Foreground="{DynamicResource TextSecondary}"/>
+                            </Grid>
+                            <Grid x:Name="SessionBar" Height="{x:Static rendering:PanelMetrics.MeterBarHeightDip}" Margin="0,5,0,4">
+                                <Border Background="{DynamicResource BarTrack}" CornerRadius="4"/>
+                                <Border x:Name="SessionBarFill" CornerRadius="4" HorizontalAlignment="Left"/>
+                            </Grid>
+                            <TextBlock x:Name="SessionResetText" FontSize="{x:Static rendering:PanelMetrics.MeterResetFontSize}"
+                                       Foreground="{DynamicResource TextMuted}"/>
+                        </StackPanel>
 
-            <!-- A bar for each model with a weekly limit of its own (PopupModelMeters). Built in
-                 code because how many there are comes from the data, and with none this draws
-                 nothing and takes no room. -->
-            <StackPanel x:Name="ModelLimitMeters"/>
+                        <!-- Weekly bar -->
+                        <StackPanel x:Name="WeeklyMeter">
+                            <!-- Three columns, not an overlay. The percentage is right-aligned in its own
+                                 Auto column so it reserves its width, and the chip sits in the star column
+                                 between them: the label and the figure both keep their space whatever the
+                                 chip says, and an over-long chip is trimmed rather than drawn over the
+                                 figure. Note the figure reads "51% used", not "51%", a chip budget worked
+                                 out against the shorter string is about 30px too generous. -->
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{x:Static text:PanelText.WeeklyBarLabel}"
+                                           FontSize="{x:Static rendering:PanelMetrics.MeterLabelFontSize}" FontWeight="SemiBold"
+                                           VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextPrimary}"/>
+                                <Border x:Name="BoostChip" Grid.Column="1"
+                                        Background="{DynamicResource BadgeBg}" CornerRadius="4"
+                                        Padding="6,1" Margin="8,0,8,0" VerticalAlignment="Center"
+                                        HorizontalAlignment="Left" Visibility="Collapsed">
+                                    <TextBlock x:Name="BoostChipText" FontSize="10"
+                                               TextTrimming="CharacterEllipsis"
+                                               Foreground="{DynamicResource BadgeText}"/>
+                                </Border>
+                                <TextBlock x:Name="WeeklyPctText" Grid.Column="2"
+                                           FontSize="{x:Static rendering:PanelMetrics.MeterLabelFontSize}"
+                                           VerticalAlignment="Center" HorizontalAlignment="Right"
+                                           Foreground="{DynamicResource TextSecondary}"/>
+                            </Grid>
+                            <Grid x:Name="WeeklyBar" Height="{x:Static rendering:PanelMetrics.MeterBarHeightDip}" Margin="0,5,0,4">
+                                <Border Background="{DynamicResource BarTrack}" CornerRadius="4"/>
+                                <Border x:Name="WeeklyBarFill" CornerRadius="4" HorizontalAlignment="Left"/>
+                            </Grid>
+                            <TextBlock x:Name="WeeklyResetText" FontSize="{x:Static rendering:PanelMetrics.MeterResetFontSize}"
+                                       Foreground="{DynamicResource TextMuted}"/>
+                        </StackPanel>
+
+                        <!-- A bar for each model with a weekly limit of its own (PopupModelMeters). Built in
+                             code because how many there are comes from the data, and with none this draws
+                             nothing and takes no room. -->
+                        <StackPanel x:Name="ModelLimitMeters"/>
+
+                        <!-- The off-plan row. The whole row is the hover target (issue #181), so a
+                             reader asking "what is this number?" finds the answer wherever the eye
+                             lands. Background="Transparent" is load-bearing: a panel with no
+                             background has no hit-testing in the gaps between its children. -->
+                        <StackPanel x:Name="OffPlanRow" Background="Transparent" Visibility="Collapsed">
+                            <Border Height="1" Margin="0,6,0,0" Background="{DynamicResource PanelBorder}"
+                                    Opacity="{x:Static rendering:PanelMetrics.SoftLineOpacity}" SnapsToDevicePixels="True"/>
+                            <Grid Margin="0,9,0,2">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal">
+                                        <TextBlock x:Name="OffPlanRowTitle" FontWeight="SemiBold" VerticalAlignment="Center"
+                                                   FontSize="{x:Static rendering:PanelMetrics.MeterLabelFontSize}"
+                                                   Foreground="{DynamicResource TextPrimary}"/>
+                                        <Border Background="{DynamicResource WarnBg}" CornerRadius="4" Padding="6,1"
+                                                Margin="4,0,0,0" VerticalAlignment="Center">
+                                            <TextBlock x:Name="OffPlanRowBadge" FontSize="10" Foreground="{DynamicResource WarnText}"/>
+                                        </Border>
+                                    </StackPanel>
+                                    <TextBlock x:Name="OffPlanRowCaption" TextWrapping="Wrap"
+                                               FontSize="{x:Static rendering:PanelMetrics.OffPlanCaptionFontSize}"
+                                               Foreground="{DynamicResource TextMuted}"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                                    <TextBlock x:Name="OffPlanRowValue" FontWeight="SemiBold" TextAlignment="Right"
+                                               FontSize="{x:Static rendering:PanelMetrics.OffPlanFigureFontSize}"
+                                               Foreground="{DynamicResource TextPrimary}"/>
+                                    <TextBlock x:Name="OffPlanRowCoverage" TextAlignment="Right"
+                                               FontSize="{x:Static rendering:PanelMetrics.OffPlanCaveatFontSize}"
+                                               Foreground="{DynamicResource WarnText}"/>
+                                </StackPanel>
+                            </Grid>
+                        </StackPanel>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+
+            <!-- The one line between the blocks: soft, because on a flat surface a
+                 full-strength rule reads as a box. -->
+            <Border Height="1" Background="{DynamicResource PanelBorder}"
+                    Opacity="{x:Static rendering:PanelMetrics.SoftLineOpacity}" SnapsToDevicePixels="True"/>
 
             <!-- Stats tiles 2×2. Each flips to a per-model breakdown on click (issue
                  #37), see StatTile; the four were four copies of the same markup, so
@@ -445,42 +548,6 @@
             <Border Background="{DynamicResource TileBg}" CornerRadius="6" Padding="8,6">
                 <Canvas x:Name="GraphHost" Height="86" HorizontalAlignment="Stretch"/>
             </Border>
-
-            <!-- Credits: deferred pending a data source (ui-spec.md) -->
-            <Separator x:Name="CreditsSeparator" Margin="0,12,0,10" Background="{DynamicResource PanelBorder}"/>
-            <!-- The whole block is the hover target (issue #181): the caveat used to sit
-                 below as two or three permanent lines, which is a lot of standing text for
-                 something most users read once. It moves to a hover card covering both the
-                 heading and the spend figure, the two places a reader's eye actually lands
-                 when asking "what is this number?".
-
-                 Background="Transparent" is load-bearing. A panel with no background has no
-                 hit-testing in the gaps between its children, so the tooltip would appear
-                 over the text and nowhere else, which is exactly the fiddly behaviour the
-                 issue is trying to get away from. -->
-            <StackPanel x:Name="CreditsSection" Background="Transparent">
-                <Grid>
-                    <!-- The heading's text comes from PopulateDivergence: the day count is the
-                         window the figure covers, not a number typed here. -->
-                    <TextBlock x:Name="CreditsHeading" FontSize="12" FontWeight="SemiBold"
-                               Foreground="{DynamicResource TextPrimary}"/>
-                    <Border x:Name="CreditsBadge" Background="{DynamicResource WarnBg}" CornerRadius="4"
-                            Padding="6,1" HorizontalAlignment="Right">
-                        <TextBlock x:Name="CreditsBadgeText" FontSize="10" Foreground="{DynamicResource WarnText}"/>
-                    </Border>
-                </Grid>
-                <Grid Margin="0,6,0,0">
-                    <TextBlock x:Name="CreditsSpendLabel" FontSize="11" Foreground="{DynamicResource TextSecondary}"/>
-                    <TextBlock x:Name="CreditsSpendValue" FontSize="17" FontWeight="SemiBold"
-                               HorizontalAlignment="Right" Foreground="{DynamicResource TextPrimary}"/>
-                </Grid>
-                <!-- The coverage caveat STAYS on screen. It qualifies the figure directly
-                     above it, "30 of 31 days recorded" is the difference between a real
-                     total and a partial one, and rule 6 makes that a requirement rather
-                     than a nicety. Only the explanatory prose moves to hover. -->
-                <TextBlock x:Name="CreditsCoverage" FontSize="10" Margin="0,2,0,0"
-                           Foreground="{DynamicResource WarnText}"/>
-            </StackPanel>
 
         </StackPanel>
     </Border>

@@ -5,6 +5,7 @@ using OView.Core.Providers;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.PlanHistory;
 using OView.Core.Storage;
+using OView.Presentation.Panel;
 
 namespace OView.App;
 
@@ -553,6 +554,12 @@ public sealed class UsageEngine : IDisposable, ISkinToShell
     /// effect (issue #141).
     /// </summary>
     public int SetThresholdPercent(int percent) => _alerts.SetThresholdPercent(percent);
+
+    /// <summary>The view the panel was left in, restored on every open and after a restart.</summary>
+    public PanelViewChoice PanelView => _alerts.PanelView;
+
+    /// <summary>Applies and persists the panel's view, returning what is now in effect.</summary>
+    public PanelViewChoice SetPanelView(PanelViewChoice view) => _alerts.SetPanelView(view);
 
     /// <summary>
     /// Re-times the poll timer for the current data state: fast while still waiting for

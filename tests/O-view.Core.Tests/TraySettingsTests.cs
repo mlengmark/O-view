@@ -47,6 +47,65 @@ public class TraySettingsTests : IDisposable
         Assert.Equal(70, TraySettings.Load(path).ThresholdPercent);
     }
 
+    // ── the panel's remembered view ───────────────────────────────────────────────
+
+    [Fact]
+    public void ThePanelViewSurvivesTheRoundTrip()
+    {
+        var path = Path.Combine(_dir, "settings.json");
+        new TraySettings(PanelMeasure: PanelMeasure.Overall, PanelFace: PanelFace.Models, OffPlanBannerHidden: true)
+            .Save(path);
+
+        var loaded = TraySettings.Load(path);
+
+        Assert.Equal(PanelMeasure.Overall, loaded.PanelMeasure);
+        Assert.Equal(PanelFace.Models, loaded.PanelFace);
+        Assert.True(loaded.OffPlanBannerHidden);
+    }
+
+    /// <summary>Every install upgrading into this version opens on a fresh install's view.</summary>
+    [Fact]
+    public void AFilePredatingTheViewOpensOnTheDefaults()
+    {
+        var path = Path.Combine(_dir, "settings.json");
+        File.WriteAllText(path, "{\"NotifyOnThreshold\":true,\"ThresholdPercent\":80}");
+
+        var loaded = TraySettings.Load(path);
+
+        Assert.Equal(PanelMeasure.Output, loaded.PanelMeasure);
+        Assert.Equal(PanelFace.Totals, loaded.PanelFace);
+        Assert.False(loaded.OffPlanBannerHidden);
+        Assert.Equal(80, loaded.ThresholdPercent);
+    }
+
+    /// <summary>
+    /// Written as words, so the file stays legible and reordering the enum cannot silently
+    /// swap what a saved view means.
+    /// </summary>
+    [Fact]
+    public void TheMeasureAndFaceAreStoredByName()
+    {
+        var path = Path.Combine(_dir, "settings.json");
+        new TraySettings(PanelMeasure: PanelMeasure.Overall, PanelFace: PanelFace.Models).Save(path);
+
+        var text = File.ReadAllText(path);
+
+        Assert.Contains("\"PanelMeasure\":\"Overall\"", text, StringComparison.Ordinal);
+        Assert.Contains("\"PanelFace\":\"Models\"", text, StringComparison.Ordinal);
+    }
+
+    /// <summary>A hand-edited value neither enum has must not reach a layout that has no such view.</summary>
+    [Theory]
+    [InlineData("{\"PanelMeasure\":7}")]
+    [InlineData("{\"PanelFace\":9}")]
+    public void AnUndefinedViewFallsBackToTheDefaults(string json)
+    {
+        var path = Path.Combine(_dir, "settings.json");
+        File.WriteAllText(path, json);
+
+        Assert.Equal(new TraySettings(), TraySettings.Load(path));
+    }
+
     // ── automatic updates (ADR-0009 as amended, issue #140) ───────────────────────
 
     /// <summary>

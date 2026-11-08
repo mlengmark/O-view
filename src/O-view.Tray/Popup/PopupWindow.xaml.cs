@@ -18,9 +18,9 @@ namespace OView.Tray.Popup;
 /// re-read on every open so a theme switch never needs a restart.
 ///
 /// <para>What the panel draws lives in one piece per thing drawn,
-/// <see cref="PopupTiles"/>, <see cref="PopupWeeklyRow"/>, <see cref="PopupMeter"/>,
-/// <see cref="PopupModelMeters"/>, <see cref="PopupDivergence"/>, <see cref="PopupGraph"/> and
-/// <see cref="PopupTokenComposition"/>, each reading exactly the section view model
+/// <see cref="PopupTiles"/>, <see cref="PopupPlanBlock"/>, <see cref="PopupWeeklyRow"/>,
+/// <see cref="PopupMeter"/>, <see cref="PopupModelMeters"/>, <see cref="PopupDivergence"/>,
+/// <see cref="PopupGraph"/> and <see cref="PopupTokenComposition"/>, each reading exactly the section view model
 /// <see cref="PanelSections"/> already built, and placing it. This file is left with
 /// the window's own lifecycle, layout and verification hooks.</para>
 /// </summary>
@@ -66,6 +66,7 @@ public partial class PopupWindow : Window, IFlyout
     private readonly PopupFit _fit;
 
     private readonly PopupTiles _tiles;
+    private readonly PopupPlanBlock _planBlock;
     private readonly PopupWeeklyRow _weeklyRow;
     private readonly PopupModelMeters _modelMeters;
     private readonly PopupDivergence _divergence;
@@ -124,14 +125,27 @@ public partial class PopupWindow : Window, IFlyout
         _scroll = new PopupScroll(PanelRoot, PanelBody);
 
         _tiles = new PopupTiles(TokenScopeLine, TileTokensToday, TileEstToday, TileTokens31, TileEst31, TokenScopeNote);
+        _planBlock = new PopupPlanBlock(
+            this, PlanBlock, PlanBlockTitle, SessionMeter, WeeklyMeter,
+            OffPlanRow, OffPlanRowTitle, OffPlanRowBadge, OffPlanRowCaption, OffPlanRowValue, OffPlanRowCoverage);
         _weeklyRow = new PopupWeeklyRow(this, WeeklyResetText, BoostChip, BoostChipText);
         _modelMeters = new PopupModelMeters(this, ModelLimitMeters);
-        _divergence = new PopupDivergence(
-            this, DivergenceBanner, DivergenceTitle, DivergenceDetail, DivergenceLinkAnchor,
-            CreditsHeading, CreditsBadgeText, CreditsSpendLabel, CreditsSpendValue, CreditsCoverage, CreditsSection,
-            CreditsSeparator);
         _graph = new PopupGraph(this, GraphHost);
         _fit = new PopupFit(this, PanelRoot, _scroll, ApplyDensity, (stats, snapshot) => _graph.Draw(stats, snapshot, LocalZone));
+
+        // The banner has the one fold rule the breakdown has: it fades ahead of its height, and
+        // it never rises, because it is only ever leaving.
+        var bannerFold = new DisclosureAnimation(
+            this, DivergenceBannerFold, null,
+            PanelMotion.Ms(PanelMotion.BannerFoldBaseMs), PanelMotion.Ms(PanelMotion.BannerFoldBaseMs),
+            new DisclosureRowMotion(_ => 0, 0, PanelMotion.Ms(PanelMotion.BannerFadeBaseMs), RiseDip: 0),
+            () => _flyout.Redock(ActualWidth, DockHeight));
+        bannerFold.SetRows([[DivergenceBanner]]);
+        _divergence = new PopupDivergence(
+            this, DivergenceBannerFold, bannerFold,
+            DivergenceTitle, DivergenceDetail, DivergenceLinkAnchor, HideBannerButton,
+            RememberBannerHidden, _fit.RefitForPendingGrowth, () => _flyout.Redock(ActualWidth, DockHeight));
+        _divergence.Start();
 
         var disclosure = new DisclosureAnimation(
             // No chevron: the Bars/Breakdown switch shows its state by which segment is lit
@@ -269,6 +283,18 @@ public partial class PopupWindow : Window, IFlyout
     /// </summary>
     public CachedUtilization? CachedUsage { get; set; }
 
+    /// <summary>
+    /// The view the reader left the panel in, set on open from the shell. The default is what a
+    /// fresh install and a verification render with no view of its own should show.
+    /// </summary>
+    public PanelViewChoice ViewChoice { get; set; }
+
+    /// <summary>
+    /// Stores a changed view and returns what is now in effect. Null on an offscreen render,
+    /// which has nowhere to store one and nothing that presses a control.
+    /// </summary>
+    public Func<PanelViewChoice, PanelViewChoice>? SetViewChoice { get; set; }
+
     private TraySettings? _lastSettings;
 
     public void ShowNearTrayIcon(UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account)
@@ -381,10 +407,7 @@ public partial class PopupWindow : Window, IFlyout
     {
         PanelRoot.Padding = new Thickness(density.RootPadding);
 
-        HeaderSeparator.Margin = new Thickness(0, density.SeparatorGap, 0, density.SeparatorGap);
-        CreditsSeparator.Margin = new Thickness(0, density.SeparatorGap, 0, density.CreditsSeparatorBottom);
-
-        WeeklyHeading.Margin = new Thickness(0, density.SectionGap, 0, 0);
+        _planBlock.ApplyDensity(density);
         _modelMeters.ApplyDensity(density);
         TileGrid.Margin = new Thickness(0, density.TileGridTop, 0, 0);
 
@@ -450,18 +473,34 @@ public partial class PopupWindow : Window, IFlyout
             snapshot, banner, _lastSettings, BoostNotices, utcNow, local);
         PopupMeter.Populate(WeeklyPctText, WeeklyBar, WeeklyBarFill, weekly, _light);
         _weeklyRow.Populate(weekly);
-        _modelMeters.Populate(PanelSections.ModelLimitMeters(CachedUsage, utcNow, local), _light);
+        var modelLimits = PanelSections.ModelLimitMeters(CachedUsage, utcNow, local);
+        _modelMeters.Populate(modelLimits, _light);
+
+        var plan = PanelSections.PlanBlock(
+            session, weekly, modelLimits, PanelSections.OffPlan(stats, CachedUsage, utcNow, local),
+            stats, CachedUsage, ViewChoice);
+        _planBlock.Populate(plan);
+        _divergence.Populate(plan);
 
         var report = ScopeReport ?? TranscriptScopeReport.Inspect();
         _tiles.Populate(stats, PanelSections.ScopeNote(stats, snapshot, report));
         _composition.Populate(PanelSections.TokenBars(stats, report));
-        _divergence.Populate(stats, CachedUsage, utcNow, local);
 
         // Set here rather than in the markup so the day count is the window the bars below it
         // actually cover, which is the same thing the Linux panel's heading reads.
         GraphHeading.Text = PanelText.UsageWindowHeading(stats.WindowDays);
 
         // BuildGraph is deferred to ShowNearTrayIcon (needs post-layout ActualWidth).
+    }
+
+    /// <summary>
+    /// Keeps what the reader pressed, the moment they press it, so a panel closed mid-fold still
+    /// opens without the banner.
+    /// </summary>
+    private void RememberBannerHidden()
+    {
+        var next = ViewChoice with { BannerHidden = true };
+        ViewChoice = SetViewChoice?.Invoke(next) ?? next;
     }
 
     /// <summary>

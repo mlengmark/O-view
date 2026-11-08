@@ -2,6 +2,7 @@ using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.PlanHistory;
 using OView.Core.Storage;
+using OView.Presentation.Panel;
 
 namespace OView.App.Tests;
 
@@ -54,6 +55,8 @@ public class ShellInterfaceTests
         public bool SetNotifyOnThreshold(bool enable) => enable;
         public bool SetUpdateAutomatically(bool enable) => enable;
         public int SetThresholdPercent(int percent) => percent;
+        public PanelViewChoice PanelView { get; private set; }
+        public PanelViewChoice SetPanelView(PanelViewChoice view) => PanelView = view;
         public ManualWeeklyReset? SetWeeklyReset(ManualWeeklyReset? reset) => reset;
         public void MarkWeeklyResetConflictNoticed(DateTimeOffset conflict) => NoticedConflict = conflict;
         public bool IsWeeklyResetConflictUnseen(DateTimeOffset conflict) => NoticedConflict != conflict;
@@ -91,6 +94,10 @@ public class ShellInterfaceTests
         Assert.True(seam.SetNotifyOnThreshold(true));
         Assert.True(seam.SetUpdateAutomatically(true));
         Assert.Equal(80, seam.SetThresholdPercent(80));
+
+        var view = new PanelViewChoice(PanelMeasure.Overall, PanelFace.Models, BannerHidden: true);
+        Assert.Equal(view, seam.SetPanelView(view));
+        Assert.Equal(view, seam.PanelView);
 
         var reset = new ManualWeeklyReset(DayOfWeek.Monday, new TimeOnly(9, 0));
         Assert.Equal(reset, seam.SetWeeklyReset(reset));

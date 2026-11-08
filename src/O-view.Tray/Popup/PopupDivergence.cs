@@ -1,45 +1,51 @@
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Documents;
-using OView.Core.Models;
-using OView.Core.Providers.CachedUsage;
 using OView.Presentation.Panel;
+using Button = System.Windows.Controls.Button;
 
 namespace OView.Tray.Popup;
 
 /// <summary>
-/// Draws off-plan usage in the two registers <see cref="PanelOffPlanView"/> decides:
-///   • a live banner for what is happening in the CURRENT session window (the divergence
-///     detector's real-time signal), and
-///   • a standing off-plan SPEND section (GitHub issue #3). Without a model limit it is the
-///     estimated value of credit-billed models over the chart's window; on an account with
-///     one it is the amount Claude reports as spent, with no window stated. It is absent
-///     while there is nothing to show.
-/// The two are independent: the section shows even when the current window is on-plan, and
-/// the banner shows even before any credit spend has accrued.
+/// Draws the live off-plan banner for what is happening in the CURRENT session window (the
+/// divergence detector's real-time signal), and folds it away when the reader hides it. The
+/// standing off-plan spend is the plan block's last row (<see cref="PopupPlanBlock"/>); the two
+/// are independent, the row shows even when the current window is on-plan, and the banner shows
+/// even before any credit spend has accrued.
 ///
-/// <para>Every sentence and figure below arrives built. What is left here is the three
-/// things WPF has an opinion about: whether each register is collapsed or taking space, how a
-/// hyperlink's inlines are filled, and where a tooltip hangs.</para>
+/// <para>Every sentence arrives built. What is left here is what WPF has an opinion about:
+/// whether the banner is collapsed, how a hyperlink's inlines are filled, and how it leaves.</para>
+///
+/// <para><b>It reuses the panel's fold.</b> <see cref="DisclosureAnimation"/> already releases
+/// its animations, guards against a missed completion, and re-docks on each frame so the panel
+/// shrinks into its docked corner, which is exactly what hiding this needs.</para>
 /// </summary>
+/// <param name="foldHost">What folds: the banner and the space above it, so both leave together.</param>
+/// <param name="onHidden">Records that the reader hid the banner, the moment it is pressed.</param>
+/// <param name="refitForPendingGrowth">Re-fits the panel for height it is about to lose.</param>
+/// <param name="redock">Re-docks the panel at its current height.</param>
 internal sealed class PopupDivergence(
-    FrameworkElement owner,
-    Border banner, TextBlock title, TextBlock detail, Hyperlink linkAnchor,
-    TextBlock creditsHeading, TextBlock badgeText, TextBlock spendLabel, TextBlock spendValue,
-    TextBlock coverage, FrameworkElement creditsSection, FrameworkElement creditsSeparator)
+    FrameworkElement owner, FrameworkElement foldHost, DisclosureAnimation fold,
+    TextBlock title, TextBlock detail, Hyperlink linkAnchor, Button hideButton,
+    Action onHidden, Action<double> refitForPendingGrowth, Action redock)
 {
-    public void Populate(PanelStatistics stats, CachedUtilization? cachedUsage, DateTimeOffset utcNow, TimeZoneInfo local)
+    /// <summary>Whether the banner is gone or going, so a second press on the × changes nothing.</summary>
+    private bool _hidden = true;
+
+    /// <summary>Hooks the × up. Separate from the constructor only because a primary one has no body.</summary>
+    public void Start() => hideButton.Click += (_, _) => Hide();
+
+    public void Populate(PanelPlanBlockView plan)
     {
-        var offPlan = PanelSections.OffPlan(stats, cachedUsage, utcNow, local);
+        // Set on the fold's live path only: a clip left on at rest moves the text under it by
+        // one colour level.
+        foldHost.ClipToBounds = false;
 
-        // The Est.-today tile's label and note also flip with off-plan state; that happens in
-        // PopupTiles, which owns everything the tiles show, from the same view model's
-        // ValueTileLabel and ValueTileNote.
+        _hidden = plan.Banner is null;
+        fold.Apply(!_hidden);
 
-        // ── live, session-scoped signal ──────────────────────────────────────────
-        banner.Visibility = offPlan.Banner is null ? Visibility.Collapsed : Visibility.Visible;
-
-        if (offPlan.Banner is { } b)
+        if (plan.Banner is { } b)
         {
             title.Text = b.Title;
             detail.Text = b.Detail;
@@ -49,30 +55,34 @@ internal sealed class PopupDivergence(
             linkAnchor.NavigateUri = new Uri(b.LinkUrl);
             linkAnchor.Inlines.Clear();
             linkAnchor.Inlines.Add(b.LinkLabel);
+
+            AutomationProperties.SetName(hideButton, plan.HideBannerLabel);
+            hideButton.ToolTip = HoverCard.Text(owner, plan.HideBannerLabel);
+            HoverCard.ApplyTiming(hideButton);
         }
+    }
 
-        // ── standing off-plan spend (issue #3) ───────────────────────────────────
-        // The separator is its own element in the panel's stack, so it collapses with the
-        // section: left behind it would close the panel on a rule with nothing under it.
-        var sectionVisibility = offPlan.Section is null ? Visibility.Collapsed : Visibility.Visible;
-        creditsSeparator.Visibility = sectionVisibility;
-        creditsSection.Visibility = sectionVisibility;
-
-        if (offPlan.Section is { } s)
+    private void Hide()
+    {
+        // Already asked for, and the banner cannot be brought back from here, so a second press
+        // during the fold has nothing to reverse: it ends where the first one was heading.
+        if (_hidden)
         {
-            creditsHeading.Text = s.Heading;
-            badgeText.Text = s.Badge;
-            spendLabel.Text = s.SpendLabel;
-            spendValue.Text = s.SpendValue;
-            coverage.Text = s.Coverage;
-
-            // The explanation is on hover now rather than standing under the figure (issue #181).
-            // It still carries the rule-6 caveat of what the figure is (an estimate, or another
-            // application's cached answer), moving a caveat behind a hover is the obvious way
-            // to lose one, so the sentence lives in
-            // OffPlanText where it has one definition and a test can assert it.
-            creditsSection.ToolTip = HoverCard.Text(owner, s.Hint);
-            HoverCard.ApplyTiming(creditsSection);
+            return;
         }
+
+        _hidden = true;
+        onHidden();
+
+        // The same order the breakdown's fold keeps: pinned before anything is laid out, so the
+        // window is never laid out at the far end of the fold.
+        var (fromHeight, fromAngle) = fold.Current;
+        foldHost.ClipToBounds = true;
+        fold.Prepare(fromHeight);
+        refitForPendingGrowth(-fromHeight);
+        owner.UpdateLayout();
+        redock();
+
+        fold.Run(expanded: false, fromHeight, fromAngle, toHeight: 0);
     }
 }
