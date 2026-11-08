@@ -18,9 +18,9 @@ namespace OView.Tray.Popup;
 /// re-read on every open so a theme switch never needs a restart.
 ///
 /// <para>What the panel draws lives in one piece per thing drawn,
-/// <see cref="PopupTiles"/>, <see cref="PopupPlanBlock"/>, <see cref="PopupWeeklyRow"/>,
-/// <see cref="PopupMeter"/>, <see cref="PopupModelMeters"/>, <see cref="PopupDivergence"/>,
-/// <see cref="PopupGraph"/> and <see cref="PopupTokenComposition"/>, each reading exactly the section view model
+/// <see cref="PopupPlanBlock"/>, <see cref="PopupWeeklyRow"/>,
+/// <see cref="PopupMeter"/>, <see cref="PopupModelMeters"/>, <see cref="PopupDivergence"/>
+/// and <see cref="PopupLocalBlock"/>, each reading exactly the section view model
 /// <see cref="PanelSections"/> already built, and placing it. This file is left with
 /// the window's own lifecycle, layout and verification hooks.</para>
 /// </summary>
@@ -65,13 +65,11 @@ public partial class PopupWindow : Window, IFlyout
     /// </summary>
     private readonly PopupFit _fit;
 
-    private readonly PopupTiles _tiles;
     private readonly PopupPlanBlock _planBlock;
     private readonly PopupWeeklyRow _weeklyRow;
     private readonly PopupModelMeters _modelMeters;
     private readonly PopupDivergence _divergence;
-    private readonly PopupGraph _graph;
-    private readonly PopupTokenComposition _composition;
+    private readonly PopupLocalBlock _localBlock;
 
     /// <summary>Disables auto-hide for verification screenshots.</summary>
     public bool PinForVerification
@@ -124,14 +122,17 @@ public partial class PopupWindow : Window, IFlyout
 
         _scroll = new PopupScroll(PanelRoot, PanelBody);
 
-        _tiles = new PopupTiles(TokenScopeLine, TileTokensToday, TileEstToday, TileTokens31, TileEst31, TokenScopeNote);
         _planBlock = new PopupPlanBlock(
             this, PlanBlock, PlanBlockTitle, SessionMeter, WeeklyMeter,
             OffPlanRow, OffPlanRowTitle, OffPlanRowBadge, OffPlanRowCaption, OffPlanRowValue, OffPlanRowCoverage);
         _weeklyRow = new PopupWeeklyRow(this, WeeklyResetText, BoostChip, BoostChipText);
         _modelMeters = new PopupModelMeters(this, ModelLimitMeters);
-        _graph = new PopupGraph(this, GraphHost);
-        _fit = new PopupFit(this, PanelRoot, _scroll, ApplyDensity, (stats, snapshot) => _graph.Draw(stats, snapshot, LocalZone));
+        _localBlock = new PopupLocalBlock(
+            this, LocalBlock, LocalBlockTitle, LocalBlockSubtitle, GraphHost, LocalChartLine, LocalTotalsTable,
+            LocalWindowCaveat, TokenScopeNote, LocalFooter, LocalFooterCaveat,
+            MeasureOutput, MeasureOverall, MeasureHighlight, ChooseView);
+        _localBlock.Start();
+        _fit = new PopupFit(this, PanelRoot, _scroll, ApplyDensity, _localBlock.DrawChart);
 
         // The banner has the one fold rule the breakdown has: it fades ahead of its height, and
         // it never rises, because it is only ever leaving.
@@ -146,28 +147,6 @@ public partial class PopupWindow : Window, IFlyout
             DivergenceTitle, DivergenceDetail, DivergenceLinkAnchor, HideBannerButton,
             RememberBannerHidden, _fit.RefitForPendingGrowth, () => _flyout.Redock(ActualWidth, DockHeight));
         _divergence.Start();
-
-        var disclosure = new DisclosureAnimation(
-            // No chevron: the Bars/Breakdown switch shows its state by which segment is lit
-            // (issue #253), and an arrow beside it would be a second indicator of one thing.
-            this, TokenBreakdownView, null,
-            PanelMotion.Ms(PanelMotion.FoldOpenBaseMs), PanelMotion.Ms(PanelMotion.FoldCloseBaseMs),
-            new DisclosureRowMotion(
-                PanelMotion.RowStartMs, PanelMotion.Ms(PanelMotion.RowFadeBaseMs),
-                PanelMotion.Ms(PanelMotion.RowsCloseFadeBaseMs), PanelMotion.RowRiseDip),
-            // Re-dock, exactly as the menu does when its threshold list opens (issue #33).
-            // The panel is docked by its top-left and is SizeToContent, so growing it without
-            // this pushes the new content down into the taskbar, which is the failure the
-            // docked placement was introduced to avoid, reintroduced the moment the panel
-            // gained something that could grow.
-            //
-            // The fold calls this on every frame it changes the window's height, so the
-            // bottom edge stays pinned to the docked corner for the whole transition.
-            () => _flyout.Redock(ActualWidth, DockHeight));
-        _composition = new PopupTokenComposition(
-            this, disclosure, TokenViewBars, TokenViewBreakdown, TokenViewHighlight,
-            TokenBarsView, TokenBreakdownView, TokensUsedSection, TokensUsedHeading, TokenCoverageLine,
-            _fit.RefitForPendingGrowth, () => _flyout.Redock(ActualWidth, DockHeight));
     }
 
     /// <summary>
@@ -186,36 +165,21 @@ public partial class PopupWindow : Window, IFlyout
             : ActualHeight;
 
     /// <summary>
-    /// Where the disclosure row sits on the physical screen, so <c>--fold-check</c> can cut
+    /// Where the local block's table sits on the physical screen, so <c>--fold-check</c> can cut
     /// its filmstrip to the band that actually moves rather than to the whole panel.
     /// </summary>
-    internal double DisclosureScreenTop => _composition.ScreenTop;
+    internal double DisclosureScreenTop => _localBlock.TableScreenTop;
 
     /// <summary>
-    /// The folding body's current height, what <c>--fold-check</c> samples.
+    /// The table's current height, what <c>--fold-check</c> samples.
     /// </summary>
-    internal double DisclosureHeight => _composition.Height;
+    internal double DisclosureHeight => _localBlock.TableHeight;
 
     /// <summary>
-    /// Opens the breakdown for a verification render. The view resets to Bars on every
-    /// Populate, so a sample of the expanded state cannot be produced any other way, and an
-    /// unrendered state is how the no-data banner spent its whole life saying the wrong
-    /// thing (issues #58, #170).
+    /// Presses the switch from outside, for <c>--fold-check</c>: the real control, so the check
+    /// sees whatever a reader's press does.
     /// </summary>
-    internal void ExpandCompositionForVerification() => _composition.ExpandForVerification();
-
-    /// <summary>
-    /// Folds the breakdown from outside, for <c>--fold-check</c>. The real transition,
-    /// not the instant state: an animation's completion is the thing being checked, and this
-    /// app has shipped a missed one before (<see cref="FlyoutAnimation"/>).
-    /// </summary>
-    internal void ToggleCompositionForVerification() => _composition.ToggleForVerification();
-
-    /// <summary>
-    /// Freezes the disclosure at one moment of its opening for a verification render.
-    /// </summary>
-    /// <param name="atMs">How long after the click, in milliseconds.</param>
-    internal void RevealCompositionForVerification(double atMs) => _composition.RevealForVerification(atMs);
+    internal void ToggleMeasureForVerification() => _localBlock.ToggleMeasureForVerification();
 
     /// <summary>
     /// Closes the panel from outside, the tray icon completing a toggle. Idempotent, so
@@ -247,7 +211,7 @@ public partial class PopupWindow : Window, IFlyout
     public PlanHistoryReport? DataReport { get; set; }
 
     /// <summary>
-    /// Where the local token counts were read from, for the scope note beneath the tiles.
+    /// Where the local token counts were read from, for the scope note and the footer's caveat.
     /// Inspected on open like <see cref="DataReport"/>, so it reflects the machine as it is
     /// now. Null falls back to inspecting on demand, which keeps the verification renders
     /// honest rather than letting them show a note no real run would produce.
@@ -297,6 +261,12 @@ public partial class PopupWindow : Window, IFlyout
 
     private TraySettings? _lastSettings;
 
+    /// <summary>
+    /// What the local block was last filled from, so pressing the switch redraws it from the
+    /// figures on screen rather than inspecting the transcripts again.
+    /// </summary>
+    private (UsageSnapshot Snapshot, PanelStatistics Stats, TranscriptScopeReport Report)? _localShown;
+
     public void ShowNearTrayIcon(UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account)
     {
         _light = ThemeOverride ?? PanelTheme.IsAppsLight();
@@ -337,8 +307,7 @@ public partial class PopupWindow : Window, IFlyout
     /// </param>
     internal System.Windows.Media.Imaging.BitmapSource RenderToBitmap(
         UsageSnapshot snapshot, PanelStatistics stats, ClaudeAccount? account, double scale,
-        bool expandComposition = false, PanelDensity? density = null, double? compositionRevealMs = null,
-        double? availableHeightDip = null)
+        PanelDensity? density = null, double? availableHeightDip = null)
     {
         _light = ThemeOverride ?? PanelTheme.IsAppsLight();
         PanelTheme.Apply(Resources, _light);
@@ -353,25 +322,12 @@ public partial class PopupWindow : Window, IFlyout
         }
 
         // The second layout pass is the whole reason betweenPasses exists, see the
-        // remarks above and on VisualRenderer.RenderContent. The disclosure is opened here
-        // rather than before it, because Populate resets it.
-        return VisualRenderer.RenderContent(this, scale, betweenPasses: () =>
-        {
-            if (compositionRevealMs is { } atMs)
-            {
-                RevealCompositionForVerification(atMs);
-            }
-            else if (expandComposition)
-            {
-                ExpandCompositionForVerification();
-            }
-
-            _graph.Draw(stats, snapshot, LocalZone);
-        });
+        // remarks above and on VisualRenderer.RenderContent.
+        return VisualRenderer.RenderContent(this, scale, betweenPasses: _localBlock.DrawChart);
     }
 
     /// <summary>
-    /// The graph's hover cards, built standalone for verification. They cannot appear in a
+    /// The chart's hover card, built standalone for verification. They cannot appear in a
     /// render of the panel, a <c>ToolTip</c> throws if given a parent, so it can neither be
     /// laid out inside one nor screenshotted with it, and hover is the only way to reach
     /// them in the running app, so without this they are unverifiable.
@@ -385,8 +341,6 @@ public partial class PopupWindow : Window, IFlyout
         return
         [
             HoverCard.Figure(this, TokenText.DayBarTokens(234_800_000), "Tuesday 21 July"),
-            HoverCard.Figure(this, "Tue 28 Jul · 06:28", PanelText.WeeklyResetMarker),
-            HoverCard.Text(this, PanelText.CalendarWeekMarker),
         ];
     }
 
@@ -398,10 +352,10 @@ public partial class PopupWindow : Window, IFlyout
     /// density: a panel that dropped a section to fit would make a number quietly absent,
     /// which reads as a number that is zero (rule 6).</para>
     ///
-    /// <para>The graph canvas is the one non-spacing change, and it is the reason this is
-    /// worth doing at all, 86 px of hard-coded height that never asked how much room
-    /// existed. Callers must redraw the chart after this: its bars are laid out against the
-    /// canvas height, so a canvas that changed size leaves the previous drawing behind.</para>
+    /// <para>The chart is the one non-spacing change, and it is the reason this is worth doing
+    /// at all: the largest fixed height in the panel. Callers must redraw the chart after this:
+    /// its bars are laid out against the canvas height, so a canvas that changed size leaves
+    /// the previous drawing behind.</para>
     /// </summary>
     internal void ApplyDensity(PanelDensity density)
     {
@@ -409,20 +363,7 @@ public partial class PopupWindow : Window, IFlyout
 
         _planBlock.ApplyDensity(density);
         _modelMeters.ApplyDensity(density);
-        TileGrid.Margin = new Thickness(0, density.TileGridTop, 0, 0);
-
-        GraphHeading.Margin = new Thickness(
-            0, density.GraphHeadingTop, 0, density.GraphHeadingBottom);
-        GraphHost.Height = density.GraphHeight;
-
-        // Four arguments: WPF's Thickness has no (horizontal, vertical) overload, that is
-        // Avalonia's, and the two heads sit close enough together to invite the mistake.
-        var tilePadding = new Thickness(
-            density.TilePaddingX, density.TilePaddingY, density.TilePaddingX, density.TilePaddingY);
-        TileTokensToday.TilePadding = tilePadding;
-        TileEstToday.TilePadding = tilePadding;
-        TileTokens31.TilePadding = tilePadding;
-        TileEst31.TilePadding = tilePadding;
+        _localBlock.ApplyDensity(density);
     }
 
     // ── data ───────────────────────────────────────────────────────────────────
@@ -482,15 +423,36 @@ public partial class PopupWindow : Window, IFlyout
         _planBlock.Populate(plan);
         _divergence.Populate(plan);
 
-        var report = ScopeReport ?? TranscriptScopeReport.Inspect();
-        _tiles.Populate(stats, PanelSections.ScopeNote(stats, snapshot, report));
-        _composition.Populate(PanelSections.TokenBars(stats, report));
+        _localShown = (snapshot, stats, ScopeReport ?? TranscriptScopeReport.Inspect());
+        PopulateLocalBlock();
 
-        // Set here rather than in the markup so the day count is the window the bars below it
-        // actually cover, which is the same thing the Linux panel's heading reads.
-        GraphHeading.Text = PanelText.UsageWindowHeading(stats.WindowDays);
+        // The chart itself waits for ShowNearTrayIcon (needs post-layout ActualWidth).
+    }
 
-        // BuildGraph is deferred to ShowNearTrayIcon (needs post-layout ActualWidth).
+    private void PopulateLocalBlock()
+    {
+        if (_localShown is not { } shown)
+        {
+            return;
+        }
+
+        _localBlock.Populate(
+            PanelSections.LocalTotals(shown.Stats, shown.Snapshot, LocalZone, ViewChoice),
+            PanelSections.LocalFooter(shown.Report, ViewChoice),
+            PanelSections.ScopeNote(shown.Stats, shown.Snapshot, shown.Report));
+    }
+
+    /// <summary>
+    /// The switch was pressed: keeps the new view, the moment it is pressed, and redraws the block
+    /// for it at once. The two measures differ in height, so the panel is fitted to the display
+    /// again and put back on its docked corner rather than left to run under the taskbar.
+    /// </summary>
+    private void ChooseView(PanelViewChoice next)
+    {
+        ViewChoice = SetViewChoice?.Invoke(next) ?? next;
+        PopulateLocalBlock();
+        _fit.RefitForPendingGrowth(0);
+        _flyout.Redock(ActualWidth, DockHeight);
     }
 
     /// <summary>
