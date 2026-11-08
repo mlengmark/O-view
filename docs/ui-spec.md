@@ -18,8 +18,7 @@ mixed together throughout, and they are not equally binding:
 | **Windows presentation**: *where* a surface appears and how it moves. Docked placement, `PopupPositioner`, work-area insets, the slide in and out, foreground/`AttachThreadInput` handling, `Shell_NotifyIcon` behaviour, Segoe glyph avoidance | **The Windows head only** | `O-view.Tray` |
 
 Read every section below as Windows presentation unless it is describing content. Where Linux
-**cannot** meet a section, it is noted inline rather than left to be inferred, the four real
-divergences are the tooltip (§1), the panel's placement (§2), the menu (§3) and motion (§4).
+**cannot** meet a section, it is noted inline rather than left to be inferred, the five real divergences are the tooltip (§1), the panel's placement (§2), the panel's layout (§2, from *The Windows panel* on), the menu (§3) and motion (§4).
 
 The Linux head's own constraints are [ADR-0013](adr/0013-linux-ui-toolkit.md) and the [tray
 spike](findings/linux-tray-spike.md). Nothing in this document has been verified on Linux
@@ -80,7 +79,7 @@ inset (handles all four dock positions and auto-hide).
 > below). A native Wayland compositor refuses to place or report a window, so there the panel
 > keeps the corner and has no drag handle or reset row ([ADR-0013](adr/0013-linux-ui-toolkit.md),
 > [ADR-0017](adr/0017-remembered-panel-position.md)). Everything from *Header* down, the copy,
-> the bands, the tiles and the graph's rules about absent days, is the shared contract and
+> the bands, the figures and the rule that absent days draw no bar, is the shared contract and
 > holds identically.
 
 **The window never grows past the display's work area.** Whatever the content's own height,
@@ -215,7 +214,48 @@ O-view runs that command itself on its own cadence (`ClaudeCliRefresher`, issue 
 
 Percentages come from Claude Desktop's plan history or Claude Code's cached figures, whichever carries more meters most recently. On JSONL fallback they are estimates and must be labelled as such.
 
-### Statistics tiles
+### The Windows panel: two flat blocks
+
+**Added 2026-11-08, with v1.3.0. Windows only: the Linux panel keeps the layout described in the sections after this one, and nothing here is built, or has been seen, on Linux.** The wording and the figures come from the same Presentation view models on both heads, so what a figure says is the shared contract. Where it sits and how it is drawn is the Windows head's.
+
+Below the header, two blocks sit directly on the panel's surface, the full 368 wide (the 400 panel less 16 of padding each side), **with no fill**: **Your plan** and **On this machine**. Each has 10 of vertical padding and no side padding, and one soft hairline lies between them. Nothing on the panel is grey except the controls named below. The measurements are stated once in `PanelMetrics` and the colours are `PanelPalette` keys, so a number here is a figure to read there, not a second copy to keep in step.
+
+- **A block's title** is 11 px, semibold, uppercase and letter-spaced 0.04 em, in `TextSecondary`. A WPF `TextBlock` has no letter-spacing, so a small element draws it, and the same element draws the tables' column headings.
+- **Lines are soft.** Row lines and the hairline between the blocks are 60 percent of `PanelBorder`; the vertical lines in the tables are 35 percent. The strength is set on the brush and not on the element, because a fold fades each cell to full opacity and would otherwise lift the line with it.
+
+**Your plan.** The meters keep their shape and take the block's full width: the name left (12 px semibold), `n% used` right (12 px `TextSecondary`), the 8 px bar beneath with a 4 px radius, then the reset line in 10.5 px `TextMuted`. A model's own weekly limit is one more meter. The block states no reset note of its own; each meter states its own. **Off-plan spend is the block's last row, and only while there is off-plan usage**: `Off-plan usage` with the `credit-billed` chip (or `from Claude` for Claude's own amount), a caption (`est. credit spend · last 31 days`, or `reported by Claude`), the figure at 15 px semibold on the right and, under it, its coverage caveat (`10 of 31 days recorded`). It has a soft line above it and no bar. With nothing to show there is no row and no line.
+
+**The banner** sits above both blocks, unchanged in wording, and has a **hide control**: a 16 by 16 `×` at its top right, labelled `Hide this notice`. Hidden, it stays hidden across opens and restarts, and it comes back only for a new off-plan spell, when a poll has read the account as on-plan in between. The panel closes up over it with a 140 fade and a 280 fold, and the window stays docked while it does. The banner's own wording, its three billing wordings and its link are *Off-plan usage*, below, and did not change.
+
+**On this machine, the totals face.** In order:
+
+1. **The chart,** 96 tall plus a 16 axis band, the full width, in no box. Bars sit 1.2 in from each slot edge with a 1.5 radius, drawn up from a baseline hairline; older bars fade a little, 0.55 at the left rising to 1 at today, and today's bar is `AccentBg`. A hairline stands at every Monday with its date written across it just to the right (`13 Oct`, `20 Oct`), and `today` is right-aligned at the end in `AccentInk`. There are no rotated day labels. Days before install draw **no bar** at all, never a zero-height one (CLAUDE.md rule 6). The week lines are the calendar's Mondays and carry no reset time: they replace the dotted lines at the plan's weekly reset that the Linux chart still draws. The hover card per bar is the existing one.
+2. **A soft line,** then **the table.** Output and Overall differ in their rows, never in their grammar. Column headings are 10 px uppercase, letter-spaced, `TextMuted` and centred; row labels are 12 px `TextSecondary`; figures are 12 px semibold with tabular digits, **centred** in their column; a soft line runs between every row and a 35 percent line stands at the left of every data column.
+   - **Output** (the default for a fresh install) has the columns `label | Today | 31 days` and the rows `Output tokens` and `Est. value of output`.
+   - **Overall** has `Kind | Today | Share | 31 days | Share`: a row each for output, input, cache write and cache read with its chip from the token-kind ramp, a bold `Total`, then `Est. value`, each figure in a **pill** (`TileBg` fill, a 1 px soft border, radius 10) centred across the pair of columns it belongs to. Shares are 11 px `TextSecondary`.
+3. **The footer line:** the one caveat, 10.5 px `TextMuted`, on the left (for example `Claude Code and Cowork transcripts only; chat and cloud sessions not counted.`, worded from the sources the scan found and never claiming one it did not), and on the right the **Output | Overall switch**, a segmented control on `TileBg` whose lit fill is one element behind the labels that slides between them. The partial-history and unpriced caveats sit under the table, flush right, so they end beneath the 31-day figures they qualify.
+
+**What Output and Overall mean** is decided once, in Presentation (`PanelSections.LocalTotals`). **Output** counts output tokens only and prices only them, so `Est. value of output` is the output tokens at the output rate. **Overall** counts everything billed and prices everything, which is what `Est. value` has always meant, cached prompt re-reads included. The chart follows: output per day in Output, all billed per day in Overall. Both read `Est. spend` where F19 does, and an unpriced figure reads unknown in either, never zero. No digit counts up: bars and arcs animate, and every figure is the real one from the first frame.
+
+**On this machine, the model face.** A flip tag at the block's top right, flush with the right edge, reads `by model` with the tile's two-arrow mark on a `TileBg` pill; on the model face it reads `totals`. The block's subtitle reads `by model · output tokens` or `by model · all tokens`. The face is:
+
+1. **Two doughnuts** side by side, 104 across, ring radius 38, stroke 13, with a 1.5 gap between sections, drawn clockwise from the top in the table's order. The centre carries the window's total at 13 px semibold with `output` (or `tokens` in Overall) beneath it; under each ring, `TODAY` and `LAST 31 DAYS`.
+2. **The model table:** `Model | Tokens | Est. value | Tokens | Est. value`, four 62-wide columns under the group headings `TODAY` and `31 DAYS`. **Every model in the store is a row; nothing is folded into "other".** A colour chip and the name sit on the left, tokens in 11.5 px semibold and the value in 11 px `TextSecondary`, both centred. The value of an unpriced model reads `unpriced` in `TextMuted`, never blank and never zero, and a priced model that did nothing today reads a known `$0.00`. A long model name trims in its column and its row's tooltip carries the full id, since rule 6 does not allow a fact to be cut with no way to read it.
+3. The footer line and the switch stay, and the switch applies here too (Overall: all tokens by model).
+
+**Model colours on this face.** The three largest models take the three validated chromatic slots; every model after them takes a grey, in size order, from `SeriesTail1` to `SeriesTail4`, stepping towards the surface so the later a model comes the quieter it draws, and a model past the fourth grey takes the last again. A fourth hue is not added without the six-check validation the palette's comments describe. The later greys sit below 3:1 against the panel, which is the relief case again: every row is named in the table beside the ring and a section's hover card carries the model's name, so no grey is ever the only thing that tells two sections apart. A model has one colour on both rings and in the table, because both are cut from the same rows.
+
+**Hover cards.** A doughnut section's card is the `Figure` shape with the model's chip and name above the figure, then `output · 37% of 31 days` and the estimated value (`$3.10 est. value`). The 31-day ring's card opens to the left of the ring and every card's words are capped at 190 wide, so no card leaves the panel from either ring.
+
+**The view is remembered.** Output or Overall, totals or models, and the hidden banner are saved with the other settings, restored on every open and after a restart, and a fresh install opens on Output and the totals. This replaces the earlier rule that a tile's flipped view was transient and every open started on the summary. The words and the rule are in Presentation (`PanelViewChoice`); where it is stored is in [architecture.md](architecture.md).
+
+**Nothing is clipped.** Every sample state, in both themes and in the compact and short renders, and every hover card, is asked whether anything crosses the panel's edge, is cut to its slot by the layout, or has text that trims. `--popup-samples` writes the answer to `popup-edge-check.txt` and exits 1 on a miss, which fails `tools/check.ps1` and CI's `visual` job. The sample states include the widest figures the formatters produce (`longest-figures`) and the model face with a 47-character id (`longest-figures-models`). The one exemption is a model name in the model table's name column, and only while its full id is in a tooltip.
+
+**Height.** Measured from the dark golden renders: the Output totals face is 588 tall, the Overall face 689, the model face 726, and a Pro account off-plan with the banner showing is 704 on Output, 805 on Overall and 842 on the model face, the tallest the panel gets. The cap and the scrolling are the ones above: on the 712 work area the off-plan Overall state, and the off-plan model face, compact first and then scroll, and each has a short render (`offplan-on-short`, `offplan-on-models-short`) that the clipping check also reads. Compact density applies `PanelDensity`'s steps to the chart's height, the blocks' gaps and the table rows, and leaves the columns and the type alone: `typical-compact` is the Overall face and measures 600, against 689 at normal density.
+
+### Statistics tiles (Linux)
+
+**This section and *Usage graph* describe the layout the Linux panel still has.** On Windows the four figures are the Output table's two columns, the per-model flip is the model face and the chart is the one above, and the tiles are gone. The figures' definitions, the local-day rule, the rule that `Est.` is not money, the coverage caveat, the hover card and rule 6 hold on both heads.
 
 2 × 2 grid:
 
@@ -238,17 +278,17 @@ Percentages come from Claude Desktop's plan history or Claude Code's cached figu
 
 Any tile whose window exceeds recorded history shows coverage: `3 of 31 days recorded`.
 
-#### Per-model breakdown ([GitHub issue #37](https://github.com/mlengmark/O-view/issues/37))
+#### Per-model breakdown (Linux; Windows has the model face, above) ([GitHub issue #37](https://github.com/mlengmark/O-view/issues/37))
 
 Every tile is clickable and flips in place between its total and a **stacked bar split by model**. Clicking again flips back, as often as you like.
 
 **The hover card is styled, not system chrome.** A default WPF tooltip is a pale rectangle with a hard border and nothing to do with the rest of the app, so the template is replaced outright: the panel's rounded 6px card, its palette, its type. It sits on its own `TooltipBg` / `TooltipBorder` step, brighter than the panel in light, lighter than the tile in dark, so it reads as floating *above* the tile rather than as part of it, with a soft drop shadow for the same reason.
 
-> **Every tooltip in the app is this card.** The template and the timing live in [`HoverCard.xaml`](../src/O-view.Tray/Popup/HoverCard.xaml) / [`HoverCard.cs`](../src/O-view.Tray/Popup/HoverCard.cs), merged into both the panel and the tile. They used to be declared *inside* `StatTile`, which meant only the tiles had them, the usage graph's bars kept raw WPF chrome, so the panel showed two unrelated tooltip designs depending on where the pointer landed. A bare `ToolTip = "some string"` anywhere in this codebase is that bug returning; build the card instead.
+> **Every tooltip in the app is this card.** The template and the timing live in [`HoverCard.xaml`](../src/O-view.Tray/Popup/HoverCard.xaml) / [`HoverCard.cs`](../src/O-view.Tray/Popup/HoverCard.cs), merged into the panel. They were once declared *inside* the stat tile, which meant only the tiles had them, the usage graph's bars kept raw WPF chrome, so the panel showed two unrelated tooltip designs depending on where the pointer landed. A bare `ToolTip = "some string"` anywhere in this codebase is that bug returning; build the card instead.
 >
-> Two shapes cover everything: **`Figure`** leads with the number and names it in a muted line beneath, the reading order for *what am I pointing at, and how much*, with an optional colour swatch where the card floats clear of a coloured mark and would otherwise lose its tie to it. **`Text`** carries a sentence, for caveats and explanations. A third shape should be resisted.
+> Three shapes cover everything: **`Figure`** leads with the number and names it in a muted line beneath, the reading order for *what am I pointing at, and how much*, with an optional colour swatch where the card floats clear of a coloured mark and would otherwise lose its tie to it. **`ModelFigure`** is that card for a doughnut section, with the model's chip and name above the figure. **`Text`** carries a sentence, for caveats and explanations, and carries a long model id whole where the table trims it. A fourth shape should be resisted.
 >
-> `--popup-samples` renders the graph's cards standalone as `graph-hover-cards-<theme>.png`, for the same reason `--tile-samples` does: a `ToolTip` cannot be given a parent, so it appears in no screenshot of the panel, and hover is the only way to reach one in the running app.
+> `--popup-samples` renders the graph's cards standalone as `graph-hover-cards-<theme>.png`, for the same reason `--tile-samples` renders the model-name card standalone: a `ToolTip` cannot be given a parent, so it appears in no screenshot of the panel, and hover is the only way to reach one in the running app.
 
 The card carries two lines only: a **colour swatch beside the figure**, and the **raw model id** beneath (or `N more models` for the folded bucket, so "Other" is never an unexplained slice). There is deliberately no friendly-name heading, it restated the line below it and made a card holding two facts look heavy.
 
@@ -256,11 +296,11 @@ The swatch is the load-bearing part and stays: a card floating clear of the bar 
 
 > The id line is **always** rendered. It used to be suppressed when it matched the friendly name, which is precisely the case for an **unrecognised** model, where `ModelDisplayName` returns the raw id unchanged. Dropping the heading without this would have left exactly those cards showing a number and nothing identifying it.
 
-A `ToolTip` cannot be given a parent, it throws, so it appears in no screenshot of the panel and cannot be laid out inside one. `--tile-samples` therefore renders the cards standalone to `hover-cards-<theme>.png`, with the palette written into each card's own resources so its `DynamicResource` lookups resolve with no tree above them to walk.
+A `ToolTip` cannot be given a parent, it throws, so it appears in no screenshot of the panel and cannot be laid out inside one. `--tile-samples` therefore renders the model-name card standalone to `hover-cards-<theme>.png`, with the palette written into each card's own resources so its `DynamicResource` lookups resolve with no tree above them to walk.
 
 **Where the figures live.** On hover, nowhere else. The bar is a thin, unlabelled mark and the legend carries model **names only**; pointing at a segment, or at its legend entry, reveals that model and its exact figure. Two earlier attempts are worth not repeating: figures printed beside the names in the legend wrapped it to two lines, and figures printed *inside* the segments made the bar look cluttered and forced it 6px taller to hold the text.
 
-**Hover timing.** Applied to **each** element that carries a tooltip, in `StatTile.ApplyHoverTiming`. Setting these once on the control and relying on property inheritance looks right and silently does not work, the bar segments resolved to framework values instead. That is invisible in a screenshot, which is why `--tile-samples` writes a `hover-timing.txt` reporting what actually resolves on a segment.
+**Hover timing.** Applied to **each** element that carries a tooltip, by `HoverCard.ApplyTiming`. Setting these once on the control and relying on property inheritance looks right and silently does not work, the bar segments resolved to framework values instead. That is invisible in a screenshot, which is why `--tile-samples` writes a `hover-timing.txt` reporting what actually resolves on a model name cell.
 
 | Property | Value | Measured unset | Why |
 |---|---|---|---|
@@ -289,7 +329,7 @@ A `ToolTip` cannot be given a parent, it throws, so it appears in no screenshot 
 Two consequences are load-bearing and should not be "tidied up" later:
 
 - **Never add a fourth chromatic slot.** The next hue in the validated order is yellow, which fails the all-pairs floors beside the orange slot. That is *why* a fourth model folds into "Other" rather than getting its own colour.
-- **The cap tiers at three.** Up to three models each keep a colour; four or more collapse to **two named models plus a neutral "Other"**. No grey exists that is both inside the dark lightness band and separable from the third (aqua) slot for deuteranopes, the sweep bottoms out at ΔE 3.0, because grey has no hue to separate on and sits at the same lightness. Dropping to two named models is the price of showing an honest remainder at all.
+- **The cap tiers at three.** Up to three models each keep a colour; four or more collapse to **two named models plus a neutral "Other"**. No grey exists that is both inside the dark lightness band and separable from the third (aqua) slot for deuteranopes, the sweep bottoms out at ΔE 3.0, because grey has no hue to separate on and sits at the same lightness. Dropping to two named models is the price of showing an honest remainder at all. Both consequences are about the tile surface, which is what the tiles' bars are drawn on. The Windows model face draws on the panel itself, with a table that names every model beside the ring, and has its own order: three named, then greys (*The Windows panel*, above).
 
 On the light surface two series sit below 3:1 against the tile. That is a documented **relief** case, not a dismissable warning, which is why the legend is mandatory rather than decorative and every segment carries a tooltip with exact figures. Legend text wears text tokens; the swatch beside it carries identity, never the text colour.
 
@@ -299,9 +339,11 @@ On the light surface two series sit below 3:1 against the tile. That is a docume
 
 `<synthetic>` appears in neither split. This paragraph used to say it rendered as `Local`, "real tokens, genuinely zero value, so it appears in the token split", which was never reachable: `TranscriptReader` has dropped those records since the commit that introduced the rollup store, so not one has ever been ingested (verified against a real store). Measured on real transcripts they also carry all-zero usage in every token field, so even if they were stored the breakdown would drop them as zero-measure segments. See [issue #57](https://github.com/mlengmark/O-view/issues/57).
 
-`--tile-samples <dir>` renders the tiles across 1, 2, 3, 5-model and unpriced cases, in both themes and both views. Handled before the single-instance mutex, like `--diagnose`.
+`--tile-samples <dir>` renders the Windows model face across one, two, three and four models and an unpriced and a long-named case, in both measures and both themes. It kept its name when the tiles went. Handled before the single-instance mutex, like `--diagnose`.
 
-### Usage graph
+### Usage graph (Linux)
+
+**This describes the Linux chart.** The Windows chart is the one in *The Windows panel*, above: a hairline and date at every Monday, no dotted lines at the plan's weekly reset, no rotated date labels, and a bar that fades with its age. The rule that days before install draw no bar, and the hover card per bar, hold on both.
 
 Daily token totals across the trailing 31 days, from the rollup store ([ADR-0006](adr/0006-local-rollup-store.md)). Enhanced per [issues #4 and #5](https://github.com/mlengmark/O-view/issues/4):
 
@@ -329,8 +371,8 @@ The panel carries the signal in **two independent registers**:
 
 **Live (current session window)**, the real-time divergence detector:
 
-1. **An amber banner** above the quota bars, the bars are correct but no longer the whole story, so the correction must appear before them, not after.
-2. **Relabels the value tile** from `Est. value today` to `Est. spend today` with an `incl. off-plan usage` note. The "not money charged" framing is only true for plan usage; off-plan work bills at API rates, so the label flips with the reality.
+1. **An amber banner** above the quota bars (on Windows above both blocks, with a hide control that lasts until the next off-plan spell), the bars are correct but no longer the whole story, so the correction must appear before them, not after.
+2. **Relabels the value tile** from `Est. value today` to `Est. spend today` with an `incl. off-plan usage` note. On Windows the value row of the Output and Overall tables reads `Est. spend` instead, and the model table's today column reads `Est. spend` while its 31-day column keeps `Est. value`. The "not money charged" framing is only true for plan usage; off-plan work bills at API rates, so the label flips with the reality.
 
 A notification fires once per onset (edge-triggered, re-armed when it clears). When the plan limit is reached (≥99%) the wording changes: continued work is not drawing from the window by definition rather than by inference.
 
@@ -355,9 +397,11 @@ The banner also carries a link to Claude's own usage settings, the address Claud
 
 **The model limit has three sample states** (`model-limit`, `model-limit-spend` and `model-limit-spend-unknown`), the only ones with a model bar: the bar with its section hidden because nothing was reported, the bar with a reported figure beside $92.75 of recorded credit estimate that it must ignore, and the bar with extra usage on and no `spend`.
 
+**The redesign's sample states.** `typical-overall`, `typical-models`, `typical-models-overall`, `offplan-on-overall`, `offplan-on-models`, `offplan-on-hidden`, `longest-figures` and `longest-figures-models` carry the Output/Overall, model-face and hidden-banner views, and seven models where a model face needs them; `typical-overall-folding`, `typical-compact` and the two short renders are Windows-only. Linux renders all of them, with the layout it has, so its images of the Overall and model-face states show the tiles.
+
 **The three states have offscreen renders** (`--popup-samples` → `panel-offplan-{unknown,off,on}-{light,dark}.png`). They had none before, which is how a banner asserting a charge at accounts that could not be charged survived: no fixture had an exhausted meter, so nobody ever looked at it. Same shape as issues #58 and #170.
 
-**Standing**, the `Off-plan usage` section ([GitHub issue #3](https://github.com/mlengmark/O-view/issues/3)). **It is shown only when there is off-plan usage to show, on every account and in both panels.** With nothing to show there is no heading, no `$0.00` and no gap, and the Windows panel loses the separator above it as well. Without a model limit, usage with no published price still shows the section, with an unknown figure, because unknown is not zero. Which figure it carries depends on the account:
+**Standing**, the `Off-plan usage` section ([GitHub issue #3](https://github.com/mlengmark/O-view/issues/3)). **It is shown only when there is off-plan usage to show, on every account and in both panels.** With nothing to show there is no heading, no `$0.00` and no gap, and the Windows panel draws no row and no soft line above it. Without a model limit, usage with no published price still shows the section, with an unknown figure, because unknown is not zero. Which figure it carries depends on the account:
 
 - **Without a model limit** the heading reads `Off-plan usage · last 31 days` (the day count is the chart's window), and the section shows **estimated credit spend over 31 days**, the API-rate value of usage on credit-billed models ([`CreditBilledModels`](../src/O-view.Core/Models/CreditBilledModels.cs), currently Fable, the one case verified against billing).
 - **Why not a lookback classifier:** there is no per-request billing-tier field (`service_tier` is uniformly `"standard"`, even on requests known to have billed to credits), and the plan meter's short retention makes retroactive divergence impossible. So the 31-day figure is a per-model estimate, not a per-request fact, hence the explicit "models billed as extra usage (Fable)" caption.
@@ -366,7 +410,7 @@ The banner also carries a link to Claude's own usage settings, the address Claud
 - **With a model limit** (any model-scoped weekly row in the cached block, one whose reset has passed included) usage of that model draws from its own limit, so pricing it would call plan usage off-plan. The section instead shows **what Claude reports as spent past the plan**, from the block's `spend` ([ADR-0019](adr/0019-model-limit-and-reported-spend.md)): heading `Off-plan usage` with no day count, badge `from Claude`, label `Reported spend`, no `Est.` and no coverage note, because `spend` states no period and any span written beside it would be O-view's invention. The hint says so and carries the `(reported by Claude Code, read 10:47)` stamp.
   - **The amount decides, whatever `spend.enabled` says.** A non-zero amount shows; zero hides the section however heavily the model was used. USD reads `$12.34`; any other currency shows its own code, never `$`, with the decimal places it came with (`12.30 EUR`, `1234 JPY`).
   - **With no readable amount the setting decides.** `extra_usage.is_enabled` on (that field alone, because an unreadable `spend` keeps no `enabled` of its own) shows `unknown`, since money may have moved and nobody reported how much; off or not stated hides the section.
-  - **The two figures are never added or shown together.** The banner, the value tile's relabel and the notification still read the estimate, because they answer a different question.
+  - **The two figures are never added or shown together.** The banner, the value figure's relabel and the notification still read the estimate, because they answer a different question.
 
 The two registers are independent by design: the section shows even when the current session is on-plan, and the live banner shows even before any credit spend has accrued.
 
@@ -525,61 +569,39 @@ The animated offset is snapped to whole device pixels. Both windows format text 
 
 ### When Windows animations are off
 
-`WpfMotion.AnimationsOn` reads `SystemParameters.ClientAreaAnimation` (Settings > Accessibility > Visual effects > Animation effects) each time a transition starts, so changing the setting takes effect without a restart. With it off, **every transition in this section is skipped**: each state is applied at once through the same instant paths the verification renders use, and hover fills switch instantly. `PanelMotion.Runs` is the one rule that says so. The live checks that need something mid-flight report NOT RUN on such a machine instead of failing for the machine's setting: `--motion-check` as a whole, and for `--fold-check` the two claims that need a fold in flight (the click reversing a close landing mid-fold, and the fold continuing from the height on screen), while its end-state claims still run and it can still end `RESULT: PASS`.
+`WpfMotion.AnimationsOn` reads `SystemParameters.ClientAreaAnimation` (Settings > Accessibility > Visual effects > Animation effects) each time a transition starts, so changing the setting takes effect without a restart. With it off, **every transition in this section is skipped**: each state is applied at once through the same instant paths the verification renders use, hover fills switch instantly, and the panel opens on a settled frame with the plan bars, the chart's bars and the doughnuts already at their full size. `PanelMotion.Runs` is the one rule that says so. `--still-check` proves it by forcing the setting off inside the check, so it runs wherever it is started. The live checks that need something mid-flight report NOT RUN on a machine whose setting really is off, instead of failing for the machine's setting: `--motion-check` as a whole, and for `--fold-check` the claims that need a fold or a turn in flight, while its end-state claims still run and it can still end `RESULT: PASS`.
 
-### The breakdown fold
+### Arriving
 
-The tokens-used **Breakdown** view **folds** open under the Bars / Breakdown switch, on the same
-curves as the entrance: the breakdown's height animates from where it is to full, **400 ms** on
-the decelerate curve, or to zero, **280 ms** on the accelerate curve, and its content is clipped
-to it, so the table slides out from behind the fold edge while the panel grows *upward* out of
-the docked corner. It used to appear whole, the body, the `SizeToContent` window's height and
-the re-dock all changing in one frame, three discontinuities in the one surface on screen that
-had been tuned against a trace of the platform. The panel's fold carries no chevron: the switch
-shows its state by which segment is lit.
+**Added 2026-11-08, with v1.3.0.** As the panel slides in, the figures are already the real ones; only bars and arcs move, and whichever face was left open fills in this way.
 
-The durations are `PanelMotion` figures handed to
-[`DisclosureAnimation`](../src/O-view.Tray/Popup/DisclosureAnimation.cs) by its caller. They used
-to be scaled from the entrance's by a fixed 0.83 (191 ms open, 125 ms close); the panel's fold
-and the menu's threshold list now travel different distances and have figures of their own, so
-nothing is derived from the entrance any more.
+- **The plan bars** grow from 0 to their percentage over **600 ms** on the decelerate curve, starting **120 ms** after the slide begins, a model's own weekly limit included.
+- **On the totals face each chart bar** rises from the baseline to its height over **600 ms** on the decelerate curve, bar `i` starting **120 + 10 × i ms** in, so the thirty-one overlap and the chart rises as one wave rather than one bar after another.
+- **On the model face** the doughnuts sweep and the model rows fade in as they do when the block turns to it (*The block's turn*, below), starting **120 ms** in, with row `i` at **120 + 70 × i ms**.
 
-**The rows now fade.** The fold was a pure geometric reveal with no fade, on the reasoning that
-the entrance was one, but a hard edge passing through rows at full strength read as unfinished.
-Opening, each of the six table rows fades in and rises 4 DIP into place over **300 ms**, row
-`i` (0 at the top) starting **100 + 36 × i ms** after the fold begins, so the last starts before
-the fold ends. Closing, all rows fade out together over **140 ms**, linear, so they are gone
-before the fold line reaches them. Opacity and a render transform take no part in layout, so the
-fold's measured height is unchanged.
+### The Output/Overall switch and the table's fold
 
-**The Bars / Breakdown switch** moves its highlight: one element slides from the old segment to
-the new, position and width together, **360 ms** on the decelerate curve in both directions,
-while the labels crossfade their text colour over **280 ms**. It used to jump in a frame.
+Pressing **Output** or **Overall** moves the panel to the other view instead of redrawing it, and the window stays on its docked corner while it does.
 
-**The frozen mid-fold render is a point in time.** `typical-tokens-folding` is a still taken
-partway through the fold, and it renders the state the live animation is in at a stated moment:
-the body's height from the curve at that time, and each row's opacity and offset from its own
-start and duration at that time, all read through `PanelMotion` so the still and the animation
-cannot drift apart. It is not a fraction of the way through anything.
+- **The highlight** slides from one segment to the other, position and width together, **360 ms** on the decelerate curve in both directions, from wherever it is on screen.
+- **The chart's bars** move to the other series together over **400 ms** on the decelerate curve, each from the height it has on screen. A day with a bar in only one series moves to or from nothing.
+- **The table** first fades its old rows out over **140 ms**, linear. Then its height moves to the new view's, **400 ms** on the decelerate curve growing and **280 ms** on the accelerate curve shrinking, while the new rows fade in and rise 4 DIP into place over **300 ms** each, row `i` (0 at the top) starting **100 + 36 × i ms** in, so the last starts before the fold ends. Opacity and a render transform take no part in layout, so the fold's measured height is unchanged. The fold is [`DisclosureAnimation`](../src/O-view.Tray/Popup/DisclosureAnimation.cs) with its own figures, handed to it by its caller; the window is re-docked on every frame of it, and the panel is first fitted to the display for the height it is about to have, so a short display compacts before anything is laid out at the far end.
+- **A hover fill** on the switch fades in over **140 ms** and out over **320 ms**; a press is never animated. The switch is the only thing here that reacts to the pointer, since the table's rows and pills have no hover.
 
-**Two failures here are invisible to any offscreen render**, and both were found by
-[`--fold-check`](../src/O-view.Tray/Diagnostics/SampleRenderer.cs), which drives the real panel
-and grabs the pixels the compositor actually presented:
+The fold used to be the tokens-used breakdown's, under a Bars / Breakdown switch, with the same curves and the same lessons: it appeared whole until 2026-11-06, the body, the `SizeToContent` window's height and the re-dock all changing in one frame.
 
-- **The window must never be laid out at the far end of the fold.** Applying the open state and
-  laying it out, the obvious way to measure where the fold ends, resizes a window docked by
-  its top-left, and that HWND is presented before the re-dock catches up: one frame of
-  full-height panel 72 px down, its bottom inside the taskbar. The end point is measured off
-  the breakdown alone instead, and the body is pinned at the fold's starting height before
-  any layout runs, so every size the window takes is one the fold docks it for.
-- **Dock against the content's `DesiredSize`, never the window's `ActualHeight`.** A
-  `SizeToContent` window's own size trails the layout pass that produced it, and the fold
-  changes that height sixty times a second; docking against the trailing number left a collapse
-  settled 13 px above its edge.
+**The table's hairlines keep their strength on their brush,** not on the element, because the fold fades every cell to full opacity and an element-level strength would lift the line with it.
 
-Measured over the opening fold on 2026-11-06 with the 400 ms figures, per rendered frame: the
-body steps 4.4 → 20.7 → 28.7 → 35.6 → 41.6 → … → 101 px, and the panel's bottom edge stays
-within a pixel of the docked edge (1379.5 to 1380.5 in screen pixels, 12 px clear of the taskbar) the whole way.
+**The frozen mid-fold render is a point in time.** `typical-overall-folding` is the switch caught **320 ms** after Output was pressed to Overall, with the height from the curve at that time and each row's opacity and offset from its own start and duration at that time, all read through `PanelMotion`, so the still and the animation cannot drift apart. It is not a fraction of the way through anything.
+
+**Two failures here are invisible to any offscreen render**, and both were found by [`--fold-check`](../src/O-view.Tray/Diagnostics/SampleRenderer.cs), which drives the real panel and grabs the pixels the compositor actually presented:
+
+- **The window must never be laid out at the far end of the fold.** Applying the end state and laying it out, the obvious way to measure where the fold ends, resizes a window docked by its top-left, and that HWND is presented before the re-dock catches up: one frame of full-height panel 72 px down, its bottom inside the taskbar. The end point is measured off a copy of the table that is never shown, and the body is pinned at the fold's starting height before any layout runs, so every size the window takes is one the fold docks it for.
+- **Dock against the content's `DesiredSize`, never the window's `ActualHeight`.** A `SizeToContent` window's own size trails the layout pass that produced it, and the fold changes that height sixty times a second; docking against the trailing number left a collapse settled 13 px above its edge.
+
+### Hiding the banner
+
+The banner fades over **140 ms** while its height folds closed over **280 ms** on the accelerate curve. The blocks below move up with it and the window is re-docked on every frame, through the same fold class as the table.
 
 ### The menu's threshold list, ticks and highlights
 
@@ -599,35 +621,25 @@ give the wrong answer to a quick second click. A row's hover and keyboard-focus 
 over **140 ms** and out over **320 ms**; a press is never animated, so pressed fills stay
 instant.
 
-### The stat tile flip
+### The block's turn
 
-A tile flips between its total and its per-model view with both faces in the layout, so the
-tile never changes size. The face going out fades to 0 and moves 5 DIP over **180 ms** on the
-accelerate curve; the face coming in fades to 1 and moves 5 DIP to rest over **340 ms** on the
-decelerate curve, starting **100 ms** in so the two overlap. Going to the breakdown, the total
-leaves upward and the breakdown arrives from below; going back, the reverse. Only when flipping
-to the breakdown, the model bar is revealed left to right over **520 ms**, starting at **180 ms**,
-and each legend entry fades in over **280 ms**, entry `i` starting **300 + 70 × i ms** in. The
-glyph turns half a circle over **480 ms** while its opacity moves between its resting values
-over **280 ms**; the mark is symmetric, so it looks the same at rest either way. The tile's own
-hover fill fades like the menu's.
+**Added 2026-11-08, with v1.3.0.** The local block turns over between its totals face and its model face with both faces in the layout, using the stat tile's old crossfade on the whole block (`PopupLocalBlock.Turn`). The face going out fades to 0 and moves 5 DIP over **180 ms** on the accelerate curve, up on the way to the models and down on the way back; the face coming in fades to 1 and settles from the opposite side over **340 ms** on the decelerate curve, starting **100 ms** in so the two overlap. The block's **height** moves to the new face's over **400 ms** on the decelerate curve in both directions, and the window is re-docked on every frame; the panel is fitted for the new height first, as for the table's fold. The two-arrow mark on the flip tag turns half a circle over **480 ms** on the decelerate curve, and is symmetric, so it looks the same at rest either way.
+
+- **On the model face** each doughnut fills as **one clockwise sweep** from 0 to 100 percent over **600 ms** on the decelerate curve, starting **180 ms** in on a turn and 120 ms in on an open, and its sections appear in turn as the sweep passes them rather than each drawing on its own. The sweep is a cover in the panel's colour that retreats around the ring, and the cover's resting state paints nothing, so a missed completion cannot leave a ring hidden. The model rows fade in over **280 ms** each, row `i` at **300 + 70 × i ms** on a turn (120 + 70 × i on an open); heading rows count as rows.
+- **On the way back** the chart's bars rise from the baseline as on open, **600 ms** from **180 ms** in.
+- **A press on the Output/Overall switch during a turn** lets the block keep turning and land on the new measure, with the height re-aimed at it. **A turn during the switch's fold** ends the fold, so the block lands on the face that was pressed.
+
+**The hover cue.** While the pointer is over the local block, the flip tag's fill brightens to `BarTrack` and its text to `TextPrimary` (**140 ms** in, **320 ms** out), the mark makes the turn's half circle (**480 ms**), and a faint outline appears around the block: 1 px at 35 percent of `PanelBorder`, 6 outside the block, with a 6 radius. It shows what would turn.
+
+**Hover cards** fade in over **140 ms**, with the tooltip timings above.
 
 ### A second click lands where it asked
 
-Every open starts at rest: the panel on Bars with every tile on its total, the menu with the
-threshold list closed, set at once with nothing in flight. Past that, **a click during a
-transition continues from what is on screen**. It never snaps to an end and replays. The
-breakdown fold, the threshold list and the tile flip each turn round from where they are, and a
-second click during a flip or a fold ends in the state **that click** asked for, whichever
-way the first one was going. That is a small state machine with several ways to end up wrong,
-so it is proved on the real windows rather than assumed:
+Every open shows the view the panel was left in, **settled**, with no transition in flight but the arrival fills above: the panel on its remembered measure and face, the menu with the threshold list closed, set at once. Past that, **a click during a transition continues from what is on screen**. It never snaps to an end and replays. The table's fold, the block's turn, the banner's fold, the switch's highlight and the threshold list each turn round from where they are, and a second click ends in the state **that click** asked for, whichever way the first one was going: a second press on the switch mid-fold reverses the fold from its current height, and a second turn mid-turn reverses the crossfade from its current opacity. One case runs on two clocks: a press during a fold turns the height round at once, while the rows on screen fade out over their usual 140 ms and the other view's rows take their place; and a press during that 140 brings the same rows back from where they are, because they are the rows that press asks for. That is a small state machine with several ways to end up wrong, so it is proved on the real windows rather than assumed:
 
-- [`--motion-check`](cli.md) flips a stat tile and folds the menu's threshold list to each end,
-  then clicks a second time while the first transition is still running, once reversing an
-  opening and once reversing a closing, and reads the state each rests in. Every wait is a
-  `PanelMotion` figure, so a retuned pace retunes the check.
-- `--fold-check` does the same for the breakdown fold: a click mid-opening ends closed, and a
-  click reversing a close, landing mid-fold, continues from the height on screen and ends open.
+- [`--motion-check`](cli.md) turns the block between its totals and its models and folds the menu's threshold list to each end, then clicks a second time while the first transition is still running, once reversing an opening and once reversing a closing, and reads the state each rests in. A reversal of the block lands while both faces are on show, and the check fails if either face jumps. Every wait is a `PanelMotion` figure, so a retuned pace retunes the check.
+- `--fold-check` does the same for the Output/Overall fold: a click mid-opening ends closed, and a click reversing a close, landing mid-fold, continues from the height on screen and ends open. It then turns the block over and back and reads the panel's height and its bottom edge on every frame.
+- `--view-check` closes the panel with a fold still running and reads the view back from a panel built from the settings file alone, for each of the four views, and `--still-check` reads a settled panel with animations forced off.
 
 ### Clicking the icon toggles
 

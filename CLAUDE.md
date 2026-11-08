@@ -76,7 +76,7 @@ If data is unavailable, show the neutral icon and explain in the panel. If data 
 - "Est." figures are not money charged; always prefix `Est.`
 - Partial history states its coverage: `3 of 31 days recorded`.
 - Days before install have no data, not zero data; never draw them as zero-height bars.
-- An unpriced model yields a labelled partial, never a blank tile, and never an invented rate. `<synthetic>` is not a model; `TranscriptReader` drops it at parse time, and that is the only treatment.
+- An unpriced model yields a labelled partial, never a blank figure, and never an invented rate. `<synthetic>` is not a model; `TranscriptReader` drops it at parse time, and that is the only treatment.
 - Never assert something about the user's machine that O-view has not observed. State what was checked and what was found.
 
 ### 7. Ingestion must be idempotent
@@ -100,7 +100,7 @@ Account info comes from `~/.claude.json` under `oauthAccount`. The tier is `orga
 
 Which surface wrote a transcript is decided by Cowork's own session register, through `CoworkSessionIndex`, never from the path. Sub-agent transcripts are found only because `TranscriptFileScan` walks recursively; do not narrow that scan. `<claude-data-root>` is not always `%APPDATA%\Claude`: a packaged Desktop is redirected into its package store, and `ClaudeDataRoots` is the one place that is known. Each Cowork sandbox contains a `.claude/projects` tree with a broken directory junction in it; `Directory.GetFiles` aborts on it, so always enumerate per directory, which `TranscriptFileScan` does.
 
-A Cowork session in a cloud container leaves no local record while the plan meters still move. When a user reports that the token tiles have stopped, that is the first explanation to rule in, and no wider scan fixes it.
+A Cowork session in a cloud container leaves no local record while the plan meters still move. When a user reports that the token figures have stopped, that is the first explanation to rule in, and no wider scan fixes it.
 
 ## Provider design
 

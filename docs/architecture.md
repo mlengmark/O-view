@@ -20,18 +20,25 @@ References run one way: **skins → App → Presentation → Core**. A project m
 
 `PanelSections` (`src/O-view.Presentation/Panel/PanelSections.cs`) builds one view model per section, each in its own file beside it under `src/O-view.Presentation/Panel/`:
 
-| Section | View model |
-|---|---|
-| Header, account | `PanelHeaderView` |
-| Session/weekly meters, boost chip | `PanelMeterView`, `PanelBoostChipView` |
-| Stat tiles, per-model breakdown | `PanelTileView`, `PanelTilesView`, `PanelTileSegmentView` |
-| 31-day graph, weekly-reset gridlines | `PanelGraphView`, `PanelGraphColumnView`, `PanelGraphBoundaryView` |
-| A model's own weekly limit bar | `PanelSections.ModelLimitMeters`, one `PanelMeterView` per model |
-| Off-plan banner and section | `PanelOffPlanView`, `PanelOffPlanBannerView`, `PanelOffPlanSectionView` |
-| Tokens-used bars, legend and breakdown table | `PanelTokenBarsView`, `PanelTokenBarView`, `PanelTokenBreakdownRow` |
-| The scope note beneath the tiles | `PanelSections.ScopeNote` |
+| Section | View model | Read by |
+|---|---|---|
+| Header, account | `PanelHeaderView` | both |
+| Session/weekly meters, boost chip | `PanelMeterView`, `PanelBoostChipView` | both |
+| A model's own weekly limit bar | `PanelSections.ModelLimitMeters`, one `PanelMeterView` per model | both |
+| **Your plan** block: the meters, the off-plan row that closes it, and the off-plan banner above both blocks | `PanelPlanBlockView` (`PanelSections.PlanBlock`), `PanelOffPlanRowView`, `PanelOffPlanBannerView` | Windows |
+| **On this machine**, totals face: the 31-day chart with its week marks, and the Output or Overall table | `PanelLocalTotalsView` (`PanelSections.LocalTotals`), `PanelLocalChartView`, `PanelLocalWeekMarkView`, `PanelLocalTableView`, `PanelLocalRowView` | Windows |
+| **On this machine**, model face: two doughnuts and a row for every model | `PanelModelFaceView` (`PanelSections.ModelFace`), `PanelModelDoughnutView`, `PanelModelSectionView`, `PanelModelTableView`, `PanelModelRowView` | Windows |
+| The local block's footer: the one caveat and the Output/Overall switch | `PanelLocalFooterView` (`PanelSections.LocalFooter`), `PanelMeasureOption` | Windows |
+| The view the reader left the panel in: Output or Overall, totals or models, banner hidden | `PanelViewChoice`, passed in by the head and given back; Presentation stores nothing | Windows |
+| Stat tiles, per-model breakdown | `PanelTileView`, `PanelTilesView`, `PanelTileSegmentView` | Linux |
+| 31-day graph, weekly-reset gridlines | `PanelGraphView`, `PanelGraphColumnView`, `PanelGraphBoundaryView` | Linux; Windows reads the columns only |
+| Off-plan banner and section | `PanelOffPlanView`, `PanelOffPlanBannerView`, `PanelOffPlanSectionView` | Linux |
+| Tokens-used bars, legend and breakdown table | `PanelTokenBarsView`, `PanelTokenBarView`, `PanelTokenBreakdownRow` | Linux |
+| The scope note beneath the tiles | `PanelSections.ScopeNote` | Linux |
 
-A skin only lays the view model it is given out, it computes no figure, no band and no word. Windows does this in `src/O-view.Tray/Popup/` (`PopupWindow.xaml.cs`, plus `PopupMeter.cs`, `PopupModelMeters.cs`, `PopupTiles.cs`, `PopupGraph.cs`, `PopupDivergence.cs` and `PopupWeeklyRow.cs`); Linux does it in `src/O-view.Linux/Panel/` (`PanelContent.cs`, plus `PanelGraph.cs`, `PanelOffPlan.cs`, `PanelStatTiles.cs` and `PanelTokenBars.cs`). Both files that assemble a whole panel, `PopupWindow.xaml.cs` and `PanelContent.cs`, stay under 600 lines by design, a skin that grows past that is usually a skin that has started computing content again.
+**The two heads draw different panels today.** Windows has the two-block layout, and reads the plan block, the totals face, the model face and the footer. Linux has not been given it: it keeps its earlier layout of tiles, tokens-used bars and graph, reads none of the four view models above, and draws every sample state, including the Overall and model-face ones, through that layout. Both are built from the same Presentation, so the words and figures are shared where the two panels show the same thing; the layouts are not. Bringing Linux to the new design is separate work, and nothing in the documentation says it has it.
+
+A skin only lays the view model it is given out, it computes no figure, no band and no word. Windows does this in `src/O-view.Tray/Popup/`: `PopupWindow.xaml.cs` assembles the panel, `PopupPlanBlock.cs`, `PopupMeter.cs`, `PopupModelMeters.cs`, `PopupWeeklyRow.cs` and `PopupDivergence.cs` lay out the plan block and the banner, and `PopupLocalBlock.cs` lays out the local block and its footer with `PopupGraph.cs` (the chart), `PopupTotalsTable.cs` (the Output and Overall table), `PopupModelFace.cs` and `PopupDoughnut.cs` (the model face). Linux does it in `src/O-view.Linux/Panel/` (`PanelContent.cs`, plus `PanelGraph.cs`, `PanelOffPlan.cs`, `PanelStatTiles.cs` and `PanelTokenBars.cs`). Both files that assemble a whole panel, `PopupWindow.xaml.cs` and `PanelContent.cs`, stay under 600 lines by design, a skin that grows past that is usually a skin that has started computing content again.
 
 ## The panel's height
 
@@ -43,8 +50,9 @@ smaller: the content's height if it fits, the available space if it doesn't, wit
 the same question, rather than each picking its own answer. `PanelFit.Fit` runs the whole
 sequence around it (measure, pick a density, compact and measure again, cap) through two
 callbacks each head supplies, so neither head orders those steps itself. The layout numbers
-both heads draw with (panel width, scroll bar, tile bar and graph figures) are stated once in
-`PanelMetrics` beside it.
+both heads draw with (panel width, scroll bar, the blocks' padding, the table columns, the
+doughnut and chart figures, and the strength of each line) are stated once in `PanelMetrics`
+beside it.
 
 - **Both faces measure the content, never the window.** A flyout is sized to its own content,
   so its frame is already capped by whatever the display granted before `PanelFit` is ever
@@ -69,9 +77,20 @@ exit is quicker than its entrance, every figure scales with the pace, a curve is
 0 to 1. The Windows head reads it through `WpfMotion` (`src/O-view.Tray/Popup/WpfMotion.cs`),
 which answers "are animations on?" from `SystemParameters.ClientAreaAnimation` and turns a
 `PanelMotion` curve and figure into a `KeySpline` and a `Duration`; `FlyoutAnimation`,
-`DisclosureAnimation`, `MenuWindow` and `StatTile` ask those two and decide nothing about how
-long anything takes. The Linux head reads none of it: it has no motion. What each figure is, and
+`DisclosureAnimation`, `MenuWindow`, `PopupLocalBlock`, `PopupTotalsTable`, `PopupModelFace`,
+`PopupDoughnut` and `PopupGraph` ask those two and decide nothing about how long anything takes. The Linux head reads none of it: it has no motion. What each figure is, and
 why, is in [ui-spec.md](ui-spec.md) section 4.
+
+## Where the panel's remembered view lives
+
+Which way the panel was left, Output or Overall (`PanelMeasure`), the totals or the model face (`PanelFace`), and whether the reader hid the off-plan banner, is one value that goes round a single loop and is decided nowhere else:
+
+- **`TraySettings`** (`src/O-view.Core/Models/TraySettings.cs`) keeps the three fields in `settings.json`, the two enums by name, and a file from before them opens on the defaults: Output, totals, banner shown. The enums live in Core (`PanelView.cs`) so the setting and Presentation agree on them without either referencing the other.
+- **`ISkinToShell.PanelView` and `SetPanelView`** are how a head reads it on every open and writes it when the reader presses the switch, the flip tag or the banner's hide control. There is one setter for all three parts, so a head changing one cannot lose the other two.
+- **`PanelViewChoice`** (`src/O-view.Presentation/Panel/PanelLocalFooterView.cs`) is the value Presentation takes in and gives back. Each view model's builder reads it, so the rule for what Output and Overall count, which face shows and whether the banner draws is stated once, in Presentation.
+- **The banner's flag belongs to the off-plan spell it was pressed in.** The shell clears it when a poll reads the account as no longer off-plan, so a later divergence shows the banner again; a poll that cannot tell, or fails, leaves it hidden.
+
+`--view-check` reads the view back from a panel built from the settings file alone, which is all a restart carries over.
 
 ## Where a dragged panel's place lives
 
@@ -116,7 +135,7 @@ head clamps, snaps, steps or reads the file itself ([ADR-0017](adr/0017-remember
 
 ## The two interfaces
 
-- **`ISkinToShell`**, what a skin asks of the shell: the latest snapshot, settings, cached usage, the panel's statistics, and the refresh and weekly-reset commands. `UsageEngine` implements it.
+- **`ISkinToShell`**, what a skin asks of the shell: the latest snapshot, settings, cached usage, the panel's statistics, the view the panel was left in and the setter for it, and the refresh and weekly-reset commands. `UsageEngine` implements it.
 - **`IShellToSkin`**, what the shell tells a skin: show a snapshot, show a notification, and the two "something is due" pushes (an update check, a rate-card check). Both skins implement it; `ShellHost` is what calls it, always through `IUiDispatcher`.
 
 ## UsageEngine's pieces
@@ -148,6 +167,7 @@ It proves a real left click opens the panel end to end, and that the tray menu a
 - **A source scan:** `SkinBoundaryTests` fails if either skin's source names `UsageEngine` or any of the classes it split into, a skin may reach the shell only through `ISkinToShell` and `IShellToSkin`.
 - **A dispatch test:** `ShellToSkinDispatchTests` fails if any `IShellToSkin` push reaches a skin before `IUiDispatcher` has run it, including the three pushes that already arrive on the UI thread.
 - **Golden images:** every shared sample state is rendered for both skins and compared, pixel for pixel, with `tests/golden/` (`tools/check.ps1`, and CI's `visual` job).
+- **A clipping check:** `--popup-samples` asks every settled Windows panel and every hover card whether anything crosses the panel's edge, is cut to its slot or has text that trims (`PanelEdgeCheck`), and exits 1 on any miss, which `tools/check.ps1` and CI's `visual` job fail on. The sample states include the widest figures the formatters produce and a model with a long id.
 - **The smoke test:** the real engine runs against `tests/fixtures/claude-home`, so files on disk must reach the numbers the panel shows.
 - **Shared test fakes:** `tests/O-view.TestSupport` holds the fixed and throwing providers, the in-memory position store, the capturing log and the temp directory the test projects use, so a fake is written once.
 - **`docs/feature-checklist.md`:** each feature has a test or sample state that proves it.

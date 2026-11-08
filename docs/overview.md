@@ -23,9 +23,9 @@ Left-click the icon. The panel follows the desktop's light or dark theme and ope
 |---|---|
 | ![](images/panel-typical-windows-dark.png) | ![](images/panel-typical-windows-light.png) |
 
-From the top: your account and when the figures were captured; the session and weekly bars with their reset times, and under them a `Weekly · <model>` bar for each model limit the account has; four tiles for output tokens and their estimated value, today and over 31 days, with the coverage caveat when O-view has not been installed for the whole window; the tokens-used bars with a legend per kind; the 31-day graph with a dotted line at each weekly reset; and, only while there is off-plan usage to show, the off-plan section. That section is the estimated value of credit-billed models over the chart's window, or, on an account with a model limit, the spend Claude reports, with no period and hidden at zero.
+**On Windows** the panel is two blocks flat on one surface. From the top: your account and when the figures were captured; an amber banner, only while the account is off-plan, which can be hidden; **Your plan**, the session and weekly meters at full width with their reset times, a `Weekly · <model>` meter for each model limit the account has and, only while there is off-plan usage to show, a last row for it; and **On this machine**, the 31-day chart with a hairline and date at every Monday, a table of today's and the 31 days' figures, and beneath them the one caveat about what O-view could not count and an Output | Overall switch. Output counts and prices output tokens alone; Overall counts everything billed, with a share for each kind and a total. The off-plan row is the estimated value of credit-billed models over the chart's window, or, on an account with a model limit, the spend Claude reports, with no period and hidden at zero.
 
-The Linux panel is built from the same sections and the same wording.
+**On Linux** the panel keeps the layout of earlier releases, built from the same wording: your account, the meters, four tiles for output tokens and their estimated value, the tokens-used bars, the 31-day graph with a dotted line at each weekly reset, and the off-plan section. It does not have the two-block layout, the Output | Overall switch or the model face.
 
 | Linux, dark | Linux, light |
 |---|---|
@@ -43,23 +43,29 @@ An account with a weekly limit on one model, such as Fable on Max, gets that lim
 |---|---|
 | ![](images/panel-model-limit-linux-dark.png) | ![](images/panel-model-limit-linux-light.png) |
 
-### Tiles that flip
+### Output, Overall and the model face (Windows)
 
-Click any tile and it flips to a per-model bar, with the same colour per model across the whole panel. Hovering a segment shows that model's exact figure.
+The switch under the table changes what the figures and the chart count. **Output** is the default for a fresh install; **Overall** adds the input and the cache kinds, each with its share, and a total. "By model" at the block's top right turns the whole block over to two doughnuts, today and the last 31 days, and a table with a row for every model, each in the same colour on both rings and in the table; "totals" turns it back. The panel reopens on the view it was left in, also after O-view is quit and started again.
 
-| Summary | Breakdown | Hover cards |
-|---|---|---|
-| ![](images/tiles-summary-dark.png) | ![](images/tiles-breakdown-dark.png) | ![](images/tile-hover-cards-dark.png) |
+| Overall, dark | Overall, light |
+|---|---|
+| ![](images/panel-overall-windows-dark.png) | ![](images/panel-overall-windows-light.png) |
 
-### The graph's hover cards
+| Model face, dark | Model face, light |
+|---|---|
+| ![](images/panel-models-windows-dark.png) | ![](images/panel-models-windows-light.png) |
 
-Hovering a day shows its token count and date; hovering a reset line shows the reset time, or says that the line is only a calendar reference while no reset has been reported yet.
+Linux has no switch and no model face. Its tiles flip to a per-model bar instead: click a tile and it flips, with the same colour per model across its panel.
+
+### The chart's hover cards
+
+Hovering a day shows its token count and date. On Linux, where the chart draws a dotted line at each weekly reset, hovering a line shows the reset time, or says that the line is only a calendar reference while no reset has been reported yet.
 
 ![](images/graph-hover-cards-dark.png)
 
 ### When something is off
 
-When the plan window is exhausted, or substantial local work runs against a plan meter that is not moving, an amber banner says so. What it claims about billing follows your account's extra-usage setting, as Claude Code last reported it, rather than asserting a charge. When O-view finds nothing to read it says what it checked and what it found.
+When the plan window is exhausted, or substantial local work runs against a plan meter that is not moving, an amber banner says so. On Windows it has a hide control, and hidden it stays hidden until a new off-plan spell begins. What it claims about billing follows your account's extra-usage setting, as Claude Code last reported it, rather than asserting a charge. When O-view finds nothing to read it says what it checked and what it found.
 
 | Off-plan banner, light | No usage data, dark |
 |---|---|
@@ -94,13 +100,14 @@ O-view asks its questions on its own window rather than a system box: the same m
 Still images cannot show it, so it is described here. On Windows the panel and the menu move; on Linux nothing does.
 
 - **The panel and the menu slide.** They slide out of the taskbar edge they are docked to as one piece, in 460 ms, and back in 300 ms. A click while one is moving turns it round from where it had got to.
-- **Folds.** The Bars / Breakdown switch's highlight slides between its two labels, and the breakdown table folds open in 400 ms with its rows fading in one after another, closing in 280 ms. The menu's threshold list folds open and closed the same way, in 340 ms and 240 ms.
+- **Arriving.** As the panel slides in, the plan bars grow to their percentage and the chart's bars rise from the baseline, or on the model face the doughnuts sweep and the model rows fade in. The figures are the real ones from the first frame.
+- **Folds.** The Output | Overall switch's highlight slides between its two labels, the chart's bars move to the other series, and the table folds to its new height in 400 ms growing or 280 ms shrinking, with its rows fading in one after another. Hiding the off-plan banner folds it closed in 280 ms. The menu's threshold list folds open and closed the same way, in 340 ms and 240 ms.
 - **Choosing a threshold shows it first.** The pill updates at once, the chosen dot grows in, and the list folds away about 300 ms later.
 - **Ticks and highlights.** A tick draws itself on and fades off, and the hover and focus fill on menu rows and option rows fades in and out.
-- **Stat tiles.** The total lifts out, the breakdown rises in behind it, the bar draws from left to right and the legend follows one entry at a time. The tile never changes size.
-- **Animations off.** Everything above follows Windows' setting for animation effects, read each time a transition starts. With it off, the panel and the menu appear and disappear at once, and folds and flips happen in one step.
+- **The model face.** "By model" and "totals" turn the block over: the old face fades as the new one arrives and the height moves between them. On the model face each doughnut fills as one clockwise sweep and the rows fade in one at a time. Pointing at the block brightens its tag and outlines it faintly.
+- **Animations off.** Everything above follows Windows' setting for animation effects, read each time a transition starts. With it off, the panel and the menu appear and disappear at once, and folds and turns happen in one step.
 
-Once the motion has settled the surfaces look as the images above show them. The Linux head has none of this: its panel appears and disappears at once, its tiles and breakdown switch change in one step, and its menu belongs to the desktop. [platform-status.md](platform-status.md) records which of this has been watched on a real desktop.
+Once the motion has settled the surfaces look as the images above show them. A second click during any of it turns it round from where it had got to. The Linux head has none of this: its panel appears and disappears at once, its tiles and breakdown switch change in one step, and its menu belongs to the desktop. [platform-status.md](platform-status.md) records which of this has been watched on a real desktop.
 
 ## What cannot be rendered
 
