@@ -115,7 +115,7 @@ public class PanelMeasureSwitchTests
     public void APressHandsTheChoiceBackAndARebuildShowsThatMeasure()
     {
         var state = State(Typical);
-        var kept = state.View with { BannerHidden = true, Face = PanelFace.Models };
+        var kept = state.View with { BannerHidden = true };
         var panel = Laid(state, kept);
         PanelViewChoice? chosen = null;
         panel.ViewChosen += view => chosen = view;
@@ -485,7 +485,7 @@ public class PanelMeasureSwitchTests
 
     private static Grid TableOf(Control panel) =>
         panel.GetVisualDescendants().OfType<Grid>()
-            .Single(g => g.ColumnDefinitions.Count >= 3 && g.ColumnDefinitions[1].Width.IsAbsolute);
+            .Single(g => g.RowDefinitions.Count > 0 && g.ColumnDefinitions.Count >= 3 && g.ColumnDefinitions[1].Width.IsAbsolute);
 
     private static TextBlock Cell(Grid table, int row, int column) =>
         table.Children.OfType<TextBlock>().Single(t => Grid.GetRow(t) == row && Grid.GetColumn(t) == column);

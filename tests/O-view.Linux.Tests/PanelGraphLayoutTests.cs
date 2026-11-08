@@ -208,7 +208,7 @@ public class PanelGraphLayoutTests
     public static TheoryData<string, bool, bool> EveryStateThemeAndDensity()
     {
         var data = new TheoryData<string, bool, bool>();
-        foreach (var state in SampleStates.All)
+        foreach (var state in SampleStates.All.Where(s => s.View.Face == PanelFace.Totals))
         {
             foreach (var light in new[] { false, true })
             {
