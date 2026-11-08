@@ -321,8 +321,8 @@ public static class SampleStates
 
     private static PanelStatistics NoLocalUsage() => Stats with
     {
-        TokensToday = 0, EstTodayValue = Priced(0m),
-        Tokens31Days = 0, Est31DaysValue = Priced(0m),
+        TokensToday = 0, EstTodayValue = Priced(0m), EstTodayOutputValue = Priced(0m),
+        Tokens31Days = 0, Est31DaysValue = Priced(0m), Est31DaysOutputValue = Priced(0m),
         RecordedDays = 0,
         DailySeries = [.. Series.Select(d => d with { OutputTokens = 0, BilledTokens = 0, PreInstall = true })],
         CreditTokens31Days = 0, EstCredit31DaysValue = Priced(0m),
@@ -403,6 +403,7 @@ public static class SampleStates
     private static PanelStatistics EmptyStats() => NoLocalUsage() with
     {
         EstTodayValue = Priced(null), Est31DaysValue = Priced(null), EstCredit31DaysValue = Priced(null),
+        EstTodayOutputValue = Priced(null), Est31DaysOutputValue = Priced(null),
     };
 
     private static TranscriptScopeReport CliOnlyScope() =>

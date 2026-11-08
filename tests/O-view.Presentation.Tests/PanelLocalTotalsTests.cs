@@ -188,16 +188,47 @@ public class PanelLocalTotalsTests
     }
 
     [Fact]
-    public void WeekMarksCarryTheDateOfTheColumnTheyFallIn()
+    public void WeekMarksStandOnEveryMondayWithTheDateOfItsColumn()
     {
-        var graph = PanelSections.Graph(State("typical").Stats, State("typical").Snapshot, SampleStates.Zone);
+        var s = State("typical");
+        var graph = PanelSections.Graph(s.Stats, s.Snapshot, SampleStates.Zone);
         var chart = Totals("typical", Output).Chart;
 
+        var mondays = s.Stats.DailySeries
+            .Select((d, i) => (d, i)).Where(t => t.d.Date.DayOfWeek == DayOfWeek.Monday).Select(t => t.i);
+
         Assert.NotEmpty(chart.WeekMarks);
-        Assert.All(chart.WeekMarks, m =>
-            Assert.Equal(graph.Columns[m.Boundary.Column].DateLabel, m.DateLabel));
+        Assert.Equal(mondays, chart.WeekMarks.Select(m => m.Column));
+        Assert.All(chart.WeekMarks, m => Assert.Equal(graph.Columns[m.Column].DateLabel, m.DateLabel));
         Assert.Equal("today", chart.TodayLabel);
     }
+
+    [Fact]
+    public void WeekMarksStayOnMondaysWhenThePlansWeeklyResetIsNotOne()
+    {
+        // The sample's reset is a Tuesday morning: the graph draws its lines there, this
+        // chart still draws calendar weeks.
+        var s = State("typical");
+        Assert.NotEqual(DayOfWeek.Monday, s.Snapshot.WeeklyResetAtUtcValue.Value!.Value.DayOfWeek);
+        Assert.NotEmpty(PanelSections.Graph(s.Stats, s.Snapshot, SampleStates.Zone).Boundaries);
+
+        var chart = Totals("typical", Output).Chart;
+
+        Assert.All(chart.WeekMarks, m =>
+            Assert.Equal(DayOfWeek.Monday, s.Stats.DailySeries[m.Column].Date.DayOfWeek));
+        Assert.Equal(
+            s.Stats.DailySeries.Count(d => d.Date.DayOfWeek == DayOfWeek.Monday), chart.WeekMarks.Count);
+    }
+
+    [Fact]
+    public void TheNoDataStatesReadZeroAndUnknownInTheOutputRows()
+    {
+        Assert.Equal(["$0.00", "$0.00"], OutputValue("no-local-transcripts"));
+        Assert.Equal(["unknown", "unknown"], OutputValue("no-data"));
+    }
+
+    private static IReadOnlyList<string> OutputValue(string state) =>
+        Totals(state, Output).Table.Rows.Single(r => r.RowKind == PanelLocalRowKind.Value).Cells;
 
     [Fact]
     public void TheChartKeepsItsWeekLinesWhateverTheMeasure()

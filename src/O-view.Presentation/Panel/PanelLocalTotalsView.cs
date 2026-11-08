@@ -37,8 +37,11 @@ public sealed record PanelLocalChartView(
     IReadOnlyList<PanelLocalWeekMarkView> WeekMarks,
     string TodayLabel);
 
-/// <summary>One week line and the date written beside it, <c>13 Oct</c>.</summary>
-public sealed record PanelLocalWeekMarkView(PanelGraphBoundaryView Boundary, string DateLabel);
+/// <summary>
+/// One week line, on a Monday: the column it stands at the left edge of, and the date written
+/// beside it, <c>13 Oct</c>. It carries no reset hover, the hover cards are the bars' own.
+/// </summary>
+public sealed record PanelLocalWeekMarkView(int Column, string DateLabel);
 
 /// <summary>Which of the table's row shapes a row is; each head styles them differently.</summary>
 public enum PanelLocalRowKind

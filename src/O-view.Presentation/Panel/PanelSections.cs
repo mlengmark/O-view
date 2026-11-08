@@ -590,8 +590,12 @@ public static class PanelSections
     {
         var graph = Graph(stats, snapshot, zone, view.Measure);
 
-        var weekMarks = graph.Boundaries
-            .Select(b => new PanelLocalWeekMarkView(b, graph.Columns[b.Column].DateLabel))
+        // Mondays, whatever the plan's own week is: this chart draws calendar weeks, and the
+        // graph the Linux head still reads keeps the true reset lines.
+        var weekMarks = stats.DailySeries
+            .Select((day, column) => (day, column))
+            .Where(t => t.day.Date.DayOfWeek == DayOfWeek.Monday)
+            .Select(t => new PanelLocalWeekMarkView(t.column, graph.Columns[t.column].DateLabel))
             .ToList();
 
         return new PanelLocalTotalsView(
