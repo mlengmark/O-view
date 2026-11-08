@@ -171,16 +171,17 @@ internal sealed class PopupModelFace(FrameworkElement owner, Grid doughnuts, Gri
             AddRow(view.Rows[i], i + 2);
         }
 
-        // A line at the left of every data column. Those between a pair start under the group
-        // heading, which runs across them.
+        // A line at the left of every data column, a stretch per row so that each arrives with
+        // its row. Those between a pair start under the group heading, which runs across them.
         for (var i = 0; i < DataColumns; i++)
         {
-            var firstOfPair = i % 2 == 0;
-            var line = NewLine(PanelMetrics.ColumnLineOpacity);
-            line.Width = LineDip;
-            line.HorizontalAlignment = HorizontalAlignment.Left;
-            Grid.SetRowSpan(line, firstOfPair ? rowCount : rowCount - 1);
-            Place(line, firstOfPair ? 0 : 1, 1 + i);
+            for (var row = i % 2; row < rowCount; row++)
+            {
+                var line = NewLine(PanelMetrics.ColumnLineOpacity);
+                line.Width = LineDip;
+                line.HorizontalAlignment = HorizontalAlignment.Left;
+                Place(line, row, 1 + i);
+            }
         }
     }
 
