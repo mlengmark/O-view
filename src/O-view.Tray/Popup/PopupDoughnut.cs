@@ -34,7 +34,7 @@ internal sealed class PopupDoughnut(FrameworkElement owner, bool cardOpensLeft)
 
     /// <summary>
     /// The least of a ring a section keeps once its gap is taken off, so a model with a sliver of
-    /// the window is still there to see and to point at. Under the gap, so it cannot reach its neighbour.
+    /// the window is still there to see and to point at.
     /// </summary>
     private const double MinSectionDip = 0.75;
 
@@ -99,10 +99,17 @@ internal sealed class PopupDoughnut(FrameworkElement owner, bool cardOpensLeft)
             return;
         }
 
+        // A sliver takes the least room a section can have, and the larger sections give that
+        // room up in proportion, so every section keeps its gap however small its neighbour is.
+        var least = MinSectionDip + PanelMetrics.DoughnutSectionGapDip;
+        bool IsSliver(PanelModelSectionView s) => s.Share * Circumference < least;
+        var larger = view.Sections.Where(s => !IsSliver(s)).Sum(s => s.Share * Circumference);
+        var scale = (Circumference - least * view.Sections.Count(IsSliver)) / larger;
+
         var along = 0.0;
         foreach (var section in view.Sections)
         {
-            var span = section.Share * Circumference;
+            var span = IsSliver(section) ? least : section.Share * Circumference * scale;
             var row = rows[section.Row];
             var brush = Swatch(owner, row);
 
@@ -110,7 +117,7 @@ internal sealed class PopupDoughnut(FrameworkElement owner, bool cardOpensLeft)
             var arc = NewArc(
                 view.Sections.Count == 1
                     ? WholeRing()
-                    : Arc(along, Math.Max(MinSectionDip, span - PanelMetrics.DoughnutSectionGapDip)),
+                    : Arc(along, span - PanelMetrics.DoughnutSectionGapDip),
                 brush);
             arc.ToolTip = HoverCard.ModelFigure(owner, row.Name, brush, section.Figure, section.ShareLine, section.ValueLine);
             HoverCard.ApplyTiming(arc);

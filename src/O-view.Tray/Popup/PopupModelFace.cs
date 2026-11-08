@@ -31,10 +31,10 @@ internal sealed class PopupModelFace(FrameworkElement owner, Grid doughnuts, Gri
     private const double GroupGapBelowDip = 2;
 
     /// <summary>
-    /// One size down from the totals tables' headings, as drawn: the four columns are narrow
-    /// enough that <c>EST. VALUE</c> would fill its cell to the pixel at their size.
+    /// The four data columns' headings, one size down from the totals tables' as drawn: the
+    /// columns are narrow enough that <c>EST. VALUE</c> would fill its cell to the pixel at theirs.
     /// </summary>
-    private const double ColumnHeaderFontSize = 9;
+    private const double DataHeaderFontSize = 9;
 
     /// <summary>The line's own pixel, which a cell's padding starts after.</summary>
     private const double LineDip = 1;
@@ -104,7 +104,7 @@ internal sealed class PopupModelFace(FrameworkElement owner, Grid doughnuts, Gri
         AddHeading(view.WindowGroup, PanelMetrics.TableHeaderFontSize, 0, 3, 2, GroupGapBelowDip);
         for (var i = 0; i < view.Headers.Count; i++)
         {
-            AddHeading(view.Headers[i], ColumnHeaderFontSize, 1, i, 1, HeaderGapBelowDip);
+            AddHeading(view.Headers[i], i == 0 ? PanelMetrics.TableHeaderFontSize : DataHeaderFontSize, 1, i, 1, HeaderGapBelowDip);
         }
 
         for (var i = 0; i < view.Rows.Count; i++)

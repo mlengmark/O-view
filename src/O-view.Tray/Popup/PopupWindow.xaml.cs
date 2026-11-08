@@ -479,6 +479,9 @@ public partial class PopupWindow : Window, IFlyout
     /// </summary>
     private void ChooseView(PanelViewChoice next)
     {
+        // Only the banner's own control changes this. A press arrives with options built when
+        // the block was last drawn, which can be from before the banner was hidden.
+        next = next with { BannerHidden = ViewChoice.BannerHidden };
         ViewChoice = SetViewChoice?.Invoke(next) ?? next;
         ShowLocalBlock(_localBlock.SwitchTo);
     }
