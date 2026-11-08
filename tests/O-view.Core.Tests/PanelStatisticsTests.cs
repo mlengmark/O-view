@@ -36,6 +36,10 @@ public class PanelStatisticsTests : IDisposable
             id, DateTimeOffset.Parse(date + "T10:00:00Z"), model,
             new TokenSplit(0, 0, 0, 0, 0, output), UsageModifiers.Standard)]);
 
+    private void SeedSplit(string id, string date, TokenSplit tokens, string model = "claude-opus-4-8") =>
+        _store.Ingest([new TranscriptRecord(
+            id, DateTimeOffset.Parse(date + "T10:00:00Z"), model, tokens, UsageModifiers.Standard)]);
+
     [Fact]
     public void FullyPricedWindow_CountsAreMeasured_EstimatesAreEstimated()
     {
@@ -134,6 +138,153 @@ public class PanelStatisticsTests : IDisposable
         Assert.Equal(500_000, unpriced.TokensCount.Value);
         Assert.Equal(UsageValueStatus.Unavailable, unpriced.EstUsdValue.Status);
         Assert.Null(unpriced.EstUsdValue.Value);
+    }
+
+    // ── the Output and Overall figures ──────────────────────────────────────────────
+
+    [Fact]
+    public void OutputEstimate_PricesOnlyOutput_WhereTheEstValueStillPricesEverything()
+    {
+        // Opus: $5/MTok in, $25/MTok out. 1M of each today, 1M of each again yesterday.
+        var both = new TokenSplit(1_000_000, 0, 0, 0, 0, 1_000_000);
+        SeedSplit("today", "2026-07-21", both);
+        SeedSplit("yesterday", "2026-07-20", both);
+
+        var stats = PanelStatistics.Build(_store, Now, Utc);
+
+        Assert.Equal(30.00m, stats.EstTodayValue.Value);
+        Assert.Equal(60.00m, stats.Est31DaysValue.Value);
+        Assert.Equal(UsageValueStatus.Estimated, stats.EstTodayOutputValue.Status);
+        Assert.Equal(25.00m, stats.EstTodayOutputValue.Value);
+        Assert.Equal(UsageValueStatus.Estimated, stats.Est31DaysOutputValue.Status);
+        Assert.Equal(50.00m, stats.Est31DaysOutputValue.Value);
+    }
+
+    [Fact]
+    public void OutputEstimate_OfAPricedModelWithNoOutput_IsAKnownZero()
+    {
+        SeedSplit("reads", "2026-07-21", new TokenSplit(0, 0, 0, 0, 5_000_000, 0));
+
+        var stats = PanelStatistics.Build(_store, Now, Utc);
+
+        Assert.Equal(UsageValueStatus.Estimated, stats.EstTodayOutputValue.Status);
+        Assert.Equal(0m, stats.EstTodayOutputValue.Value);
+    }
+
+    [Fact]
+    public void OutputEstimate_WithNothingPriceable_IsUnavailable_NeverZero()
+    {
+        Seed("a", "2026-07-21", 1_000_000, model: "claude-brand-new-9");
+
+        var stats = PanelStatistics.Build(_store, Now, Utc);
+
+        Assert.Equal(UsageValueStatus.Unavailable, stats.EstTodayOutputValue.Status);
+        Assert.Null(stats.EstTodayOutputValue.Value);
+        Assert.Equal(UsageValueStatus.Unavailable, stats.Est31DaysOutputValue.Status);
+        Assert.Null(stats.Est31DaysOutputValue.Value);
+    }
+
+    [Fact]
+    public void OutputEstimate_WithAnUnpricedModelBesideAPricedOne_IsThePricedSubtotal()
+    {
+        Seed("r1", "2026-07-21", 1_000_000);
+        Seed("r2", "2026-07-21", 1_000_000, model: "claude-hypothetical-9");
+
+        var stats = PanelStatistics.Build(_store, Now, Utc);
+
+        // The same rule as the full estimate: the priced half is reported, and the unpriced
+        // model is named in UnpricedModels rather than counted as zero.
+        Assert.Equal(UsageValueStatus.Estimated, stats.EstTodayOutputValue.Status);
+        Assert.Equal(25.00m, stats.EstTodayOutputValue.Value);
+        Assert.Equal(["claude-hypothetical-9"], stats.UnpricedModels);
+    }
+
+    [Fact]
+    public void ModelSlices_CarryAllTokensAndAnOutputOnlyEstimate()
+    {
+        SeedSplit("priced", "2026-07-21", new TokenSplit(2_000_000, 0, 0, 0, 3_000_000, 1_000_000));
+        SeedSplit("unpriced", "2026-07-21", new TokenSplit(0, 0, 0, 0, 500_000, 500_000), "claude-hypothetical-9");
+
+        var stats = PanelStatistics.Build(_store, Now, Utc);
+
+        var priced = stats.Models31Days.Single(m => m.Model == "claude-opus-4-8");
+        Assert.Equal(1_000_000, priced.TokensCount.Value);
+        Assert.Equal(6_000_000, priced.AllTokensCount.Value);
+        Assert.Equal(UsageValueStatus.Real, priced.AllTokensCount.Status);
+        Assert.Equal(UsageValueStatus.Estimated, priced.EstOutputUsdValue.Status);
+        Assert.Equal(25.00m, priced.EstOutputUsdValue.Value);
+        // Today's figures are unchanged: the full estimate still prices all of it.
+        // $10 input + $1.50 cache read + $25 output.
+        Assert.Equal(36.50m, priced.EstUsdValue.Value);
+
+        var unpriced = stats.Models31Days.Single(m => m.Model == "claude-hypothetical-9");
+        Assert.Equal(1_000_000, unpriced.AllTokensCount.Value);
+        Assert.Equal(UsageValueStatus.Real, unpriced.AllTokensCount.Status);
+        Assert.Equal(UsageValueStatus.Unavailable, unpriced.EstOutputUsdValue.Status);
+        Assert.Null(unpriced.EstOutputUsdValue.Value);
+    }
+
+    [Fact]
+    public void TodaysModelSlices_CarryTheNewFiguresForTodayOnly()
+    {
+        var split = new TokenSplit(1_000_000, 0, 0, 0, 0, 1_000_000);
+        SeedSplit("today", "2026-07-21", split);
+        SeedSplit("earlier", "2026-07-10", split);
+
+        var stats = PanelStatistics.Build(_store, Now, Utc);
+
+        var today = stats.ModelsToday.Single();
+        Assert.Equal(2_000_000, today.AllTokensCount.Value);
+        Assert.Equal(25.00m, today.EstOutputUsdValue.Value);
+        Assert.Equal(4_000_000, stats.Models31Days.Single().AllTokensCount.Value);
+    }
+
+    [Fact]
+    public void ADaysBilledTokens_AreEveryKindBilledOnIt_BesideItsOutput()
+    {
+        SeedSplit("a", "2026-07-21", new TokenSplit(100, 200, 300, 0, 400, 50));
+        SeedSplit("b", "2026-07-21", new TokenSplit(0, 0, 0, 0, 1_000, 10), "claude-sonnet-5");
+        SeedSplit("c", "2026-07-20", new TokenSplit(0, 0, 0, 0, 0, 7));
+
+        var series = PanelStatistics.Build(_store, Now, Utc).DailySeries;
+
+        var today = series[^1];
+        Assert.Equal(new DateOnly(2026, 7, 21), today.Date);
+        Assert.Equal(60, today.OutputTokens);
+        Assert.Equal(1_000 + 10 + 100 + 200 + 300 + 400 + 50, today.BilledTokens);
+
+        var yesterday = series[^2];
+        Assert.Equal(7, yesterday.OutputTokens);
+        Assert.Equal(7, yesterday.BilledTokens);
+    }
+
+    [Fact]
+    public void ADayWithNoUsage_HasNoBilledTokens_AndPreInstallDaysStayFlagged()
+    {
+        Seed("a", "2026-07-21", 100);
+
+        var series = PanelStatistics.Build(_store, Now, Utc).DailySeries;
+
+        Assert.All(series.Where(d => d.PreInstall), d => Assert.Equal(0, d.BilledTokens));
+        Assert.Contains(series, d => d.PreInstall);
+        Assert.Equal(100, series[^1].BilledTokens);
+    }
+
+    [Fact]
+    public void ASeriesBuiltWithoutBilledTokens_StillCompiles_AndReadsAsNone()
+    {
+        var day = new DayUsage(new DateOnly(2026, 7, 21), 42, PreInstall: false);
+
+        Assert.Equal(0, day.BilledTokens);
+        Assert.Equal(42, day.OutputTokens);
+    }
+
+    [Fact]
+    public void TheViewEnums_StartOnOutputAndTheTotalsFace()
+    {
+        // A fresh install opens on Output, totals: default(T) is what an unset setting reads as.
+        Assert.Equal(PanelMeasure.Output, default(PanelMeasure));
+        Assert.Equal(PanelFace.Totals, default(PanelFace));
     }
 
     [Fact]

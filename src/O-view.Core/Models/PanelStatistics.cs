@@ -19,7 +19,14 @@ namespace OView.Core.Models;
 /// what it holds: the field was <c>TotalTokens</c>, and a bar sized by output under a name
 /// promising a total is the mislabelling issue #210 was about, pointed at the graph.
 /// </param>
-public sealed record DayUsage(DateOnly Date, long OutputTokens, bool PreInstall);
+/// <param name="BilledTokens">
+/// Everything billed on the day, all four token kinds, for the Overall view of the graph
+/// where <paramref name="OutputTokens"/> serves the Output view. A trailing parameter with a
+/// default so a series built before this field existed keeps compiling; zero there reads as
+/// no usage, which is what such a series meant.
+/// </param>
+public sealed record DayUsage(
+    DateOnly Date, long OutputTokens, bool PreInstall, long BilledTokens = 0);
 
 /// <summary>
 /// Everything the popup's tiles and graph need, computed from the rollup store.
@@ -71,6 +78,16 @@ public sealed record PanelStatistics(
 
     /// <inheritdoc cref="EstTodayValue"/>
     public EstimatedUsd Est31DaysValue { get; init; } = EstimatedUsd.Priced(null);
+
+    /// <summary>
+    /// What only today's output tokens would have cost, the Output view's figure beside
+    /// <see cref="EstTodayValue"/>, which keeps pricing everything. Unavailable by the same
+    /// rule: nothing in the window could be priced, never a zero standing in for it.
+    /// </summary>
+    public EstimatedUsd EstTodayOutputValue { get; init; } = EstimatedUsd.Priced(null);
+
+    /// <inheritdoc cref="EstTodayOutputValue"/>
+    public EstimatedUsd Est31DaysOutputValue { get; init; } = EstimatedUsd.Priced(null);
 
     /// <inheritdoc cref="TokensTodayCount"/>
     public TokenCount CreditTokens31DaysCount { get; init; }
@@ -245,11 +262,18 @@ public sealed record PanelStatistics(
             .GroupBy(r => r.Date)
             .ToDictionary(g => g.Key, g => g.Sum(r => r.Tokens.Output));
 
+        // Everything billed, for the Overall view of the same graph. Grouped from the same
+        // rollups so the two series cannot cover different days.
+        var billedByDate = rollups
+            .GroupBy(r => r.Date)
+            .ToDictionary(g => g.Key, g => g.Sum(r => r.Tokens.Total));
+
         var series = new List<DayUsage>(windowDays);
         for (var day = windowStart; day <= today; day = day.AddDays(1))
         {
             var preInstall = firstRecorded is null || day < firstRecorded;
-            series.Add(new DayUsage(day, byDate.GetValueOrDefault(day), preInstall));
+            series.Add(new DayUsage(
+                day, byDate.GetValueOrDefault(day), preInstall, billedByDate.GetValueOrDefault(day)));
         }
 
         // Coverage is derived from the series rather than counted again in SQL (issue #142).
@@ -271,6 +295,8 @@ public sealed record PanelStatistics(
         // typed path would be.
         var tokensToday = todayRollups.Sum(r => r.Tokens.Output);
         var estToday = EstimateTotal(todayRollups);
+        var estTodayOutput = EstimateOutputTotal(todayRollups);
+        var est31Output = EstimateOutputTotal(rollups);
         var tokens31Days = rollups.Sum(r => r.Tokens.Output);
         var creditTokens31Days = creditRollups.Sum(r => r.Tokens.Output);
         var estCredit31Days = EstimateTotal(creditRollups);
@@ -304,6 +330,8 @@ public sealed record PanelStatistics(
             Composition31Days = TokenComposition.From(rollups),
             TokensTodayCount = TokenCount.Measured(tokensToday),
             EstTodayValue = EstimatedUsd.Priced(estToday),
+            EstTodayOutputValue = EstimatedUsd.Priced(estTodayOutput),
+            Est31DaysOutputValue = EstimatedUsd.Priced(est31Output),
             Tokens31DaysCount = TokenCount.Measured(tokens31Days),
             Est31DaysValue = EstimatedUsd.Priced(est31),
             CreditTokens31DaysCount = TokenCount.Measured(creditTokens31Days),
@@ -329,10 +357,13 @@ public sealed record PanelStatistics(
             {
                 var tokens = g.Sum(r => r.Tokens.Output);
                 var estUsd = EstimateTotal(g.ToList());
+                var estOutputUsd = EstimateOutputTotal(g.ToList());
                 return new ModelSlice(g.Key, ModelDisplayName.For(g.Key), tokens)
                 {
                     TokensCount = TokenCount.Measured(tokens),
                     EstUsdValue = EstimatedUsd.Priced(estUsd),
+                    AllTokensCount = TokenCount.Measured(g.Sum(r => r.Tokens.Total)),
+                    EstOutputUsdValue = EstimatedUsd.Priced(estOutputUsd),
                 };
             })
             .OrderByDescending(s => s.Tokens)
@@ -346,7 +377,20 @@ public sealed record PanelStatistics(
     /// meant one unrecognised model id voided both Est. tiles even when 99% of the tokens
     /// were priceable (CLAUDE.md rule 6 is "explain the uncertainty", not "show nothing").
     /// </summary>
-    private static decimal? EstimateTotal(IReadOnlyList<DailyRollup> rollups, out IReadOnlyList<string> unpriced)
+    private static decimal? EstimateTotal(IReadOnlyList<DailyRollup> rollups, out IReadOnlyList<string> unpriced) =>
+        SumPriced(rollups, r => CostEstimator.EstimateUsd(r.Model, r.Tokens, r.Modifiers), out unpriced);
+
+    /// <summary>
+    /// <see cref="EstimateTotal(IReadOnlyList{DailyRollup})"/> for output tokens alone. The
+    /// same null rule, so an unpriced model stays unknown in the Output view as well.
+    /// </summary>
+    private static decimal? EstimateOutputTotal(IReadOnlyList<DailyRollup> rollups) =>
+        SumPriced(rollups, r => CostEstimator.EstimateOutputUsd(r.Model, r.Tokens, r.Modifiers), out _);
+
+    private static decimal? SumPriced(
+        IReadOnlyList<DailyRollup> rollups,
+        Func<DailyRollup, decimal?> price,
+        out IReadOnlyList<string> unpriced)
     {
         decimal total = 0;
         var priced = 0;
@@ -354,7 +398,7 @@ public sealed record PanelStatistics(
 
         foreach (var r in rollups)
         {
-            if (CostEstimator.EstimateUsd(r.Model, r.Tokens, r.Modifiers) is { } usd)
+            if (price(r) is { } usd)
             {
                 total += usd;
                 priced++;

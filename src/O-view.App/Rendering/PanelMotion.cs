@@ -43,7 +43,10 @@ public static class PanelMotion
 
     // ── Token breakdown ─────────────────────────────────────────────────────────────
 
-    /// <summary>The Bars/Breakdown highlight sliding from the old segment to the new.</summary>
+    /// <summary>
+    /// A segmented switch's highlight sliding from the old segment to the new: Bars/Breakdown
+    /// today, and the Output | Overall switch at the same speed.
+    /// </summary>
     public const double SwitchHighlightBaseMs = 180;
 
     /// <summary>The switch labels' text colour crossfading.</summary>
@@ -149,6 +152,80 @@ public static class PanelMotion
     /// <summary>The glyph's opacity moving between its resting values.</summary>
     public const double TileGlyphFadeBaseMs = 140;
 
+    // ── The two-block panel ─────────────────────────────────────────────────────────
+    //
+    // Some of this motion needs no figure of its own, because it is an existing motion on a
+    // new target, and a second copy of a number is how two of them drift apart:
+    //
+    //   Output | Overall highlight   SwitchHighlightBaseMs
+    //   its table folding           FoldOpenBaseMs growing, FoldCloseBaseMs shrinking
+    //   old rows leaving            RowsCloseFadeBaseMs
+    //   new rows arriving           RowFadeBaseMs, RowRiseDip, RowFirstStartBaseMs, RowStaggerBaseMs
+    //   the block's flip            TileFaceOutBaseMs, TileFaceInBaseMs, TileFaceInDelayBaseMs,
+    //                               TileFaceTravelDip, TileGlyphTurnBaseMs
+    //   hover cue and fills         HoverFillInBaseMs, HoverFillOutBaseMs, TileGlyphTurnBaseMs
+    //
+    // What follows is only what the new layout adds.
+
+    /// <summary>A plan bar growing from nothing to its percentage as the panel arrives.</summary>
+    public const double PlanBarGrowBaseMs = 300;
+
+    /// <summary>When the plan bars start, counted from the start of the panel's slide.</summary>
+    public const double PlanBarGrowDelayBaseMs = 60;
+
+    /// <summary>One chart bar rising from the baseline to its height.</summary>
+    public const double ChartBarRiseBaseMs = 300;
+
+    /// <summary>When the first chart bar starts rising as the panel arrives, counted from the start of the slide.</summary>
+    public const double ChartBarFirstStartBaseMs = 60;
+
+    /// <summary>How much later each chart bar starts than the one to its left.</summary>
+    public const double ChartBarStaggerBaseMs = 5;
+
+    /// <summary>
+    /// When the first chart bar starts rising as the totals face comes back from the model
+    /// face, counted from the start of the flip: after the model face has begun leaving
+    /// (<see cref="TileFaceOutBaseMs"/>), so the two never show a chart over a doughnut.
+    /// </summary>
+    public const double ChartBarBackFirstStartBaseMs = 90;
+
+    /// <summary>The chart's bars moving to the other series (Output to Overall or back), all together.</summary>
+    public const double ChartSeriesSwitchBaseMs = 200;
+
+    /// <summary>
+    /// The local block's height moving to the other face's. One figure for both directions,
+    /// unlike a fold: a flip is a gesture, not a disclosure, and growing and shrinking are
+    /// the same gesture.
+    /// </summary>
+    public const double BlockFlipHeightBaseMs = 200;
+
+    /// <summary>A doughnut filling as one clockwise sweep from nothing to the whole ring.</summary>
+    public const double DoughnutSweepBaseMs = 300;
+
+    /// <summary>When the sweep starts, counted from the start of the flip.</summary>
+    public const double DoughnutSweepDelayBaseMs = 90;
+
+    /// <summary>One model row fading in on the model face.</summary>
+    public const double ModelRowFadeBaseMs = 140;
+
+    /// <summary>When the first model row starts, counted from the start of the flip.</summary>
+    public const double ModelRowFirstStartBaseMs = 150;
+
+    /// <summary>How much later each model row starts than the one above it.</summary>
+    public const double ModelRowStaggerBaseMs = 35;
+
+    /// <summary>The off-plan banner fading out when it is hidden.</summary>
+    public const double BannerFadeBaseMs = 70;
+
+    /// <summary>
+    /// The banner's height folding closed, with everything below moving up and the window
+    /// re-docking on each frame. A leave, so it takes the accelerating curve.
+    /// </summary>
+    public const double BannerFoldBaseMs = 140;
+
+    /// <summary>A hover card fading in.</summary>
+    public const double HoverCardFadeBaseMs = 70;
+
     // ── Arithmetic section 3 implies ────────────────────────────────────────────────
 
     /// <summary>
@@ -169,6 +246,21 @@ public static class PanelMotion
     /// <summary>When tile legend entry <paramref name="index"/> starts, on screen.</summary>
     public static double LegendStartMs(int index) =>
         StaggeredStartMs(TileLegendFirstStartBaseMs, TileLegendStaggerBaseMs, index);
+
+    /// <summary>
+    /// When chart bar <paramref name="index"/> (0 at the left) starts rising as the panel
+    /// arrives, on screen.
+    /// </summary>
+    public static double ChartBarStartMs(int index) =>
+        StaggeredStartMs(ChartBarFirstStartBaseMs, ChartBarStaggerBaseMs, index);
+
+    /// <summary>When chart bar <paramref name="index"/> starts rising as the totals face returns, on screen.</summary>
+    public static double ChartBarBackStartMs(int index) =>
+        StaggeredStartMs(ChartBarBackFirstStartBaseMs, ChartBarStaggerBaseMs, index);
+
+    /// <summary>When model row <paramref name="index"/> (0 at the top) starts fading in, on screen.</summary>
+    public static double ModelRowStartMs(int index) =>
+        StaggeredStartMs(ModelRowFirstStartBaseMs, ModelRowStaggerBaseMs, index);
 
     /// <summary>
     /// Whether a transition runs at all. Windows' "animate controls and elements" setting off,

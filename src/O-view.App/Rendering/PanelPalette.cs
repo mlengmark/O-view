@@ -78,6 +78,16 @@ public static class PanelPalette
         ["AccentHover"] = "#B84A27",
         ["AccentText"] = "#FFFFFF",
 
+        // The accent as ink on the panel surface itself, for the chart's "today" label.
+        // AccentText is white and would vanish on the light panel, and AccentBg is a
+        // fill, not a text colour: it reads 4.63:1 on the light panel but only 3.34:1 on
+        // the dark one. This pair is the same hue stepped for text in each theme, so the
+        // label is the colour of the bar it names and still legible on either surface.
+        // Measured against the panel:
+        //
+        //   light #A8421F : 5.76:1 · dark #F08A66 : 6.62:1
+        ["AccentInk"] = light ? "#A8421F" : "#F08A66",
+
         // Hover cards float ABOVE both the panel and the tiles, so they step away from
         // each rather than matching either, otherwise a card over a tile reads as part
         // of it. Light goes brighter than the panel, dark goes lighter than the tile.
@@ -112,6 +122,35 @@ public static class PanelPalette
         // slot deliberately below the chroma floor. Its separation IS still verified:
         // worst CVD ΔE 11.0 light / 12.2 dark against the two named slots it appears with.
         ["SeriesOther"] = "#8A8A8A",
+
+        // ── the model tail, for the model face's doughnuts and table ─────────────
+        //
+        // The three chromatic slots above go to the three largest models. Every model
+        // after them takes the next grey here, in size order, and a model past the fourth
+        // grey takes the last one again: the list is finite on purpose, since a fifth
+        // hue would need the six-check validation the note above describes.
+        //
+        // Greys, not hues, so none of them can be read as a fourth identity colour.
+        // They step TOWARDS the surface, lighter on the light panel and dimmer on the
+        // dark one, so the later a model comes in the size order the quieter it draws,
+        // and the ring's largest sections stay the loudest.
+        // Identity never rests on the grey: every row is named in the table beside the
+        // ring, and a ring section's hover card carries the model's name, the same
+        // relief the chromatic series run on.
+        //
+        // Taken from the layout study's seven-model frame, not re-derived. The model face
+        // is drawn straight on the panel, so they are measured against it:
+        //
+        //   light (PanelBg #F9F9F9) : 2.67 · 2.06 · 1.66 · 1.35
+        //   dark  (PanelBg #202020) : 3.80 · 2.84 · 2.09 · 1.62
+        //
+        // The later steps are faint by design, below the 3:1 line like the other neutral
+        // slots, and that is the relief case again: the table names every model, so the
+        // grey is never the only thing telling two sections apart.
+        ["SeriesTail1"] = light ? "#9A9A9A" : "#7A7A7A",
+        ["SeriesTail2"] = light ? "#B0B0B0" : "#666666",
+        ["SeriesTail3"] = light ? "#C4C4C4" : "#525252",
+        ["SeriesTail4"] = light ? "#D8D8D8" : "#424242",
 
         // ── token-kind ramp, for the composition bars (issue #253) ───────────────
         //

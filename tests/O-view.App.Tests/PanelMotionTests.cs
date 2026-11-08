@@ -113,6 +113,117 @@ public class PanelMotionTests
         Assert.True(PanelMotion.TileFaceInDelayBaseMs < PanelMotion.TileFaceOutBaseMs);
     }
 
+    // ── the two-block panel ─────────────────────────────────────────────────────────
+
+    [Fact]
+    public void TheNewStaggeredStartsFollowThePace()
+    {
+        Assert.Equal(
+            PanelMotion.Ms(PanelMotion.ChartBarFirstStartBaseMs + PanelMotion.ChartBarStaggerBaseMs * 7),
+            PanelMotion.ChartBarStartMs(7));
+        Assert.Equal(
+            PanelMotion.Ms(PanelMotion.ChartBarBackFirstStartBaseMs + PanelMotion.ChartBarStaggerBaseMs * 7),
+            PanelMotion.ChartBarBackStartMs(7));
+        Assert.Equal(
+            PanelMotion.Ms(PanelMotion.ModelRowFirstStartBaseMs + PanelMotion.ModelRowStaggerBaseMs * 3),
+            PanelMotion.ModelRowStartMs(3));
+    }
+
+    [Fact]
+    public void ABannerFadesBeforeItsHeightHasFinishedClosing()
+    {
+        // The words are gone before the space is, so nothing is squeezed while still legible.
+        Assert.True(PanelMotion.BannerFadeBaseMs < PanelMotion.BannerFoldBaseMs);
+    }
+
+    [Fact]
+    public void TheArrivalFillsStartAfterTheSlideHasBegunAndBeforeItEnds()
+    {
+        var slide = PanelMotion.Ms(PanelMotion.SurfaceOpenBaseMs);
+
+        Assert.True(PanelMotion.Ms(PanelMotion.PlanBarGrowDelayBaseMs) > 0);
+        Assert.True(PanelMotion.Ms(PanelMotion.PlanBarGrowDelayBaseMs) < slide);
+        Assert.True(PanelMotion.ChartBarStartMs(0) > 0);
+        Assert.True(PanelMotion.ChartBarStartMs(30) < slide);
+    }
+
+    [Fact]
+    public void ThirtyOneChartBarsOverlapRatherThanRiseOneAfterAnother()
+    {
+        // The last bar starts while the first is still rising, so the chart reads as one wave
+        // and not as thirty-one separate events.
+        var lastStart = PanelMotion.ChartBarStartMs(30) - PanelMotion.ChartBarStartMs(0);
+
+        Assert.True(lastStart < PanelMotion.Ms(PanelMotion.ChartBarRiseBaseMs));
+    }
+
+    [Fact]
+    public void EachChartBarAndModelRowStartsLaterThanThePreviousOne()
+    {
+        for (var i = 1; i < 31; i++)
+        {
+            Assert.True(PanelMotion.ChartBarStartMs(i) > PanelMotion.ChartBarStartMs(i - 1), $"bar {i}");
+            Assert.True(PanelMotion.ChartBarBackStartMs(i) > PanelMotion.ChartBarBackStartMs(i - 1), $"bar back {i}");
+        }
+
+        for (var i = 1; i < 10; i++)
+        {
+            Assert.True(PanelMotion.ModelRowStartMs(i) > PanelMotion.ModelRowStartMs(i - 1), $"model row {i}");
+        }
+    }
+
+    [Fact]
+    public void TheChartRisesBackOnlyAfterTheModelFaceHasBegunLeaving()
+    {
+        Assert.True(PanelMotion.ChartBarBackFirstStartBaseMs >= PanelMotion.TileFaceOutBaseMs);
+    }
+
+    [Fact]
+    public void TheDoughnutsSweepBeforeTheirModelRowsFadeIn()
+    {
+        // The rows name what the ring is showing; they arrive as the sweep reaches them,
+        // and the first of them does not wait for the sweep to end.
+        Assert.True(PanelMotion.DoughnutSweepDelayBaseMs < PanelMotion.ModelRowFirstStartBaseMs);
+        Assert.True(
+            PanelMotion.ModelRowFirstStartBaseMs
+            < PanelMotion.DoughnutSweepDelayBaseMs + PanelMotion.DoughnutSweepBaseMs);
+    }
+
+    [Fact]
+    public void TheModelFaceArrivesOnlyAfterTheTotalsFaceHasBegunLeaving()
+    {
+        // The flip's incoming face starts at TileFaceInDelayBaseMs, and what is on it starts
+        // no earlier, otherwise a ring sweeps over a face that is still fading out.
+        Assert.True(PanelMotion.DoughnutSweepDelayBaseMs >= PanelMotion.TileFaceInDelayBaseMs);
+        Assert.True(PanelMotion.ModelRowFirstStartBaseMs >= PanelMotion.TileFaceInDelayBaseMs);
+    }
+
+    [Fact]
+    public void TheHeightOfAFlipTakesLongerThanTheFaceLeaving()
+    {
+        // The outgoing face is gone before the block has finished changing height.
+        Assert.True(PanelMotion.TileFaceOutBaseMs < PanelMotion.BlockFlipHeightBaseMs);
+    }
+
+    [Fact]
+    public void AChartSeriesSwitchIsQuickerThanABarRisingOnArrival()
+    {
+        // Bars already on screen only change height; bars arriving come from nothing.
+        Assert.True(PanelMotion.ChartSeriesSwitchBaseMs < PanelMotion.ChartBarRiseBaseMs);
+    }
+
+    [Fact]
+    public void TheOutputOverallTableReusesTheFoldAndTheFlipReusesTheTileFaces()
+    {
+        // The rules the document gives that table and that flip: a shrink is quicker than a
+        // grow, the old rows leave before the new arrive, a face leaves quicker than it
+        // arrives. They are carried by the existing figures, so this pins that they stay so.
+        Assert.True(PanelMotion.FoldCloseBaseMs < PanelMotion.FoldOpenBaseMs);
+        Assert.True(PanelMotion.RowsCloseFadeBaseMs < PanelMotion.RowFadeBaseMs);
+        Assert.True(PanelMotion.TileFaceOutBaseMs < PanelMotion.TileFaceInBaseMs);
+        Assert.True(PanelMotion.Decelerate.ValueAt(0.25) > PanelMotion.Accelerate.ValueAt(0.25));
+    }
+
     // ── the curves ──────────────────────────────────────────────────────────────────
 
     public static TheoryData<string> CurveNames => new() { "decelerate", "accelerate" };

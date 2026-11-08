@@ -83,6 +83,35 @@ public class CoreModelsHoldNoBareNullablesTests
         Assert.Contains(typeof(DateTimeOffset), PairedValueTypes());
     }
 
+    /// <summary>
+    /// The Output and Overall figures are each declared as the paired type, so an unpriced
+    /// model reads as unavailable and not as a zero. Named here, beside the discovery that
+    /// would also catch a bare nullable, because these are the members the Output view's
+    /// "no price" case rests on.
+    /// </summary>
+    [Fact]
+    public void TheOutputAndOverallFiguresAreStatusPaired()
+    {
+        Assert.Equal(typeof(EstimatedUsd), typeof(PanelStatistics).GetProperty(nameof(PanelStatistics.EstTodayOutputValue))!.PropertyType);
+        Assert.Equal(typeof(EstimatedUsd), typeof(PanelStatistics).GetProperty(nameof(PanelStatistics.Est31DaysOutputValue))!.PropertyType);
+        Assert.Equal(typeof(TokenCount), typeof(ModelSlice).GetProperty(nameof(ModelSlice.AllTokensCount))!.PropertyType);
+        Assert.Equal(typeof(EstimatedUsd), typeof(ModelSlice).GetProperty(nameof(ModelSlice.EstOutputUsdValue))!.PropertyType);
+    }
+
+    [Fact]
+    public void AnUnsetOutputEstimate_ReadsAsUnavailable_NotAsAKnownZero()
+    {
+        // A statistics record or a remainder slice built without pricing the output must not
+        // read as "priced, and nothing was spent".
+        var slice = new ModelSlice("claude-x", "X", 10);
+        var stats = new PanelStatistics(0, 0, 0, 31, [], 0);
+
+        Assert.Equal(UsageValueStatus.Unavailable, slice.EstOutputUsdValue.Status);
+        Assert.Null(slice.EstOutputUsdValue.Value);
+        Assert.Equal(UsageValueStatus.Unavailable, stats.EstTodayOutputValue.Status);
+        Assert.Equal(UsageValueStatus.Unavailable, stats.Est31DaysOutputValue.Status);
+    }
+
     private static List<string> FindViolations()
     {
         var paired = PairedTypes();
