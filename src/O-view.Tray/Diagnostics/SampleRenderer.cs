@@ -148,9 +148,35 @@ internal static class SampleRenderer
                 "graph-hover-cards", misses);
         }
 
+        // The other two kinds of card, asked and not drawn: a picture of them would be a new golden.
+        // The long id is what the text card and the doughnut card have to hold whole.
+        foreach (var light in new[] { true, false })
+        {
+            var owner = NewPopup(light, SampleStates.All.Single(s => s.Name == "longest-figures-models"));
+            PanelTheme.Apply(owner.Resources, light);
+            const string longId = "claude-nova-7-20260101-extended-context-preview";
+            foreach (var (name, card) in new (string, ToolTip)[]
+                     {
+                         ("model-name-card", HoverCard.Text(owner, longId)),
+                         ("doughnut-card", HoverCard.ModelFigure(
+                             owner, longId, PanelTheme.Brush("TextSecondary", light), "2167.1M", "46% of tokens", "$1608.68")),
+                     })
+            {
+                PanelTheme.Apply(card.Resources, light);
+                VisualRenderer.Render(card, scale);
+                misses.AddRange(PanelEdgeCheck.Misses(card).Select(miss => $"{name} {(light ? "light" : "dark")}: {miss}"));
+                if (card.ActualWidth > PanelMetrics.PanelWidthDip)
+                {
+                    misses.Add($"{name} {(light ? "light" : "dark")}: a card {card.ActualWidth:0.#} wide is wider than the panel");
+                }
+
+                checkedPanels++;
+            }
+        }
+
         var pass = misses.Count == 0;
         System.IO.File.WriteAllText(Path.Combine(dir, "popup-edge-check.txt"),
-            $"{checkedPanels} panels and the hover cards, both themes: {misses.Count} clipped.{Environment.NewLine}" +
+            $"{checkedPanels} panels and cards, and the chart's hover card, both themes: {misses.Count} clipped.{Environment.NewLine}" +
             string.Concat(misses.Select(miss => miss + Environment.NewLine)) +
             $"{Environment.NewLine}RESULT: {(pass ? "PASS" : "FAIL")}{Environment.NewLine}");
         return pass ? 0 : 1;

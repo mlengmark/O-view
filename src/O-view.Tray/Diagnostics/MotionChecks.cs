@@ -224,7 +224,6 @@ internal static class MotionChecks
     }
 
     /// <summary>
-    /// The sequence each surface is put through    /// <summary>
     /// The sequence each surface is put through, from closed. Each entry is a click and, for the
     /// two reversals, a second click that long after the first; then the state it must rest in.
     /// </summary>
