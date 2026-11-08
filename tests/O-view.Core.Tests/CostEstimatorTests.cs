@@ -194,6 +194,55 @@ public class CostEstimatorTests
         Assert.Equal(44.55m, CostEstimator.EstimateUsd("claude-opus-5", tokens, us));
     }
 
+    // ── output only ─────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void OutputOnly_PricesTheOutputTokensAndNothingElse()
+    {
+        var tokens = new TokenSplit(1_000_000, 1_000_000, 1_000_000, 1_000_000, 1_000_000, 1_000_000);
+
+        // Opus output is $25/MTok. Everything else in the split is ignored, where the full
+        // estimate prices all six buckets.
+        Assert.Equal(25.00m, CostEstimator.EstimateOutputUsd("claude-opus-4-8", tokens));
+        Assert.True(CostEstimator.EstimateUsd("claude-opus-4-8", tokens) > 25.00m);
+    }
+
+    [Fact]
+    public void OutputOnly_OfNoOutput_IsAKnownZero_NotUnknown()
+    {
+        // A priced model that produced nothing is a real zero. Only an unpriced model is unknown.
+        Assert.Equal(0m, CostEstimator.EstimateOutputUsd("claude-opus-4-8", Input(5_000_000)));
+    }
+
+    [Fact]
+    public void OutputOnly_FollowsTheSameUnknownRulesAsTheFullEstimate()
+    {
+        var fast = new UsageModifiers(ModifierValue.Applied, ModifierValue.Standard);
+
+        Assert.Null(CostEstimator.EstimateOutputUsd("claude-brand-new-9", Output(1_000_000)));
+        Assert.Null(CostEstimator.EstimateOutputUsd("claude-sonnet-5", Output(1_000_000), fast));
+        Assert.Null(CostEstimator.EstimateOutputUsd(
+            "claude-opus-5", Output(1_000_000), UsageModifiers.From("turbo", "not_available")));
+    }
+
+    [Fact]
+    public void OutputOnly_CarriesTheModifiersTheFullEstimateCarries()
+    {
+        var fast = new UsageModifiers(ModifierValue.Applied, ModifierValue.Standard);
+        var us = new UsageModifiers(ModifierValue.Standard, ModifierValue.Applied);
+
+        Assert.Equal(50.00m, CostEstimator.EstimateOutputUsd("claude-opus-4-8", Output(1_000_000), fast));
+        Assert.Equal(27.50m, CostEstimator.EstimateOutputUsd("claude-opus-5", Output(1_000_000), us));
+    }
+
+    [Fact]
+    public void OutputOnly_OfAnOutputOnlySplit_IsTheFullEstimate()
+    {
+        Assert.Equal(
+            CostEstimator.EstimateUsd("claude-opus-4-8", Output(123_456)),
+            CostEstimator.EstimateOutputUsd("claude-opus-4-8", Output(123_456)));
+    }
+
     // ── calibration ─────────────────────────────────────────────────────────────────
 
     /// <summary>

@@ -54,6 +54,21 @@ public sealed record ModelSlice(
     /// read as a known zero.</para>
     /// </summary>
     public EstimatedUsd EstUsdValue { get; init; } = new(null, UsageValueStatus.Unavailable);
+
+    /// <summary>
+    /// Everything billed to this model, the Overall view's count where <see cref="Tokens"/>
+    /// is the Output view's. Read from the same rollups, so like <see cref="TokensCount"/> it
+    /// is <see cref="UsageValueStatus.Real"/> whether or not the model can be priced.
+    /// </summary>
+    public TokenCount AllTokensCount { get; init; } = new(null, UsageValueStatus.Unavailable);
+
+    /// <summary>
+    /// What this model's output tokens alone would have cost, the Output view's figure where
+    /// <see cref="EstUsdValue"/> is the Overall view's. Unavailable for the same reason and
+    /// by the same rule: an unpriced model stays unknown here, never a zero that would read
+    /// as a priced model that produced nothing.
+    /// </summary>
+    public EstimatedUsd EstOutputUsdValue { get; init; } = new(null, UsageValueStatus.Unavailable);
 }
 
 /// <summary>

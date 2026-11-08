@@ -59,6 +59,24 @@ public static class CostEstimator
     }
 
     /// <summary>
+    /// What only the output tokens of <paramref name="tokens"/> would have cost, for the
+    /// Output view of the panel: the same model lookup, the same modifiers and the same
+    /// unknown-fails-to-unknown rule as <see cref="EstimateUsd"/>, with the other five
+    /// buckets zeroed first. It goes through <see cref="EstimateUsd"/> rather than
+    /// multiplying the output rate itself, so a US-pinned multiplier or a fast-mode row
+    /// reaches this figure by the one route that already applies it.
+    ///
+    /// <para><see cref="EstimateUsd"/> is unchanged and still prices everything: that is
+    /// what "Est. value" has always meant, and the Overall view keeps showing it.</para>
+    /// </summary>
+    public static decimal? EstimateOutputUsd(
+        string model,
+        TokenSplit tokens,
+        UsageModifiers modifiers = default,
+        RateCard? card = null) =>
+        EstimateUsd(model, TokenSplit.Empty with { Output = tokens.Output }, modifiers, card);
+
+    /// <summary>
     /// One rate row applied to one token split. The single place the six columns are
     /// multiplied out, <see cref="RelativeError"/> has to price exactly what
     /// <see cref="EstimateUsd"/> prices, or the calibration measures the difference between
