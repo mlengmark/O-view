@@ -78,6 +78,10 @@ internal static class SampleRenderer
         // panel past the work area, and a state that fits shows nothing about capping it.
         var tallest = SampleStates.All.Single(s => s.Name == ShortState) with { View = new(PanelMeasure.Overall) };
 
+        // Off-plan with seven models on the model face: the tallest the panel gets. Its own
+        // short render, because the shared short state is the one Linux renders too.
+        var tallestModels = SampleStates.All.Single(s => s.Name == "offplan-on-models");
+
         PopupWindow NewPopup(bool light, SampleState state) => new()
         {
             ThemeOverride = light,
@@ -121,6 +125,10 @@ internal static class SampleRenderer
             SavePng(NewPopup(light, tallest).RenderToBitmap(tallest.Snapshot, tallest.Stats, tallest.Account, scale,
                     density: PanelDensity.Compact, availableHeightDip: ShortWorkAreaDip),
                 File($"{ShortState}-short", light));
+            SavePng(NewPopup(light, tallestModels).RenderToBitmap(
+                    tallestModels.Snapshot, tallestModels.Stats, tallestModels.Account, scale,
+                    density: PanelDensity.Compact, availableHeightDip: ShortWorkAreaDip),
+                File("offplan-on-models-short", light));
 
             // The chart's hover card, standalone: a ToolTip cannot be given a parent, so it
             // appears in no render of the panel.
