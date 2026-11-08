@@ -369,6 +369,85 @@ public static class TokenText
     public const string ChartTodayLabel = "today";
 
     /// <summary>
+    /// The flip tag's label for the face showing now: it names the face a press turns to, so
+    /// the totals face reads <c>by model</c> and the model face reads <c>totals</c>.
+    /// </summary>
+    public static string FlipTagLabel(PanelFace showing) => showing switch
+    {
+        PanelFace.Totals => "by model",
+        PanelFace.Models => "totals",
+        _ => throw new ArgumentOutOfRangeException(nameof(showing), showing, "Not a face."),
+    };
+
+    /// <summary>
+    /// The model face's line under the block's title. Names the unit for the reason
+    /// <see cref="LocalSubtitle"/> does: the switch alone leaves the reader to infer it.
+    /// </summary>
+    public static string ModelFaceSubtitle(PanelMeasure measure) => measure switch
+    {
+        PanelMeasure.Output => "by model · output tokens",
+        PanelMeasure.Overall => "by model · all tokens",
+        _ => throw new ArgumentOutOfRangeException(nameof(measure), measure, "Not a measure."),
+    };
+
+    /// <summary>The unit under a doughnut's total, and at the front of its sections' share lines.</summary>
+    public static string ModelUnit(PanelMeasure measure) => measure == PanelMeasure.Output ? "output" : "tokens";
+
+    /// <summary>The model table's column headings, label column first.</summary>
+    public const string ModelColumnHeader = "Model";
+
+    /// <inheritdoc cref="ModelColumnHeader"/>
+    public const string ModelTokensHeader = "Tokens";
+
+    /// <inheritdoc cref="ModelColumnHeader"/>
+    public const string ModelValueHeader = "Est. value";
+
+    /// <summary>The value cell of a model with no published rate: unknown, never blank and never $0.00 (rule 6).</summary>
+    public const string UnpricedValue = "unpriced";
+
+    /// <summary>A token cell for a count the store did not record, as <see cref="UnpricedValue"/> is for money.</summary>
+    public const string UnknownTokens = "unknown";
+
+    /// <summary>The caption under today's doughnut.</summary>
+    public const string ModelTodayCaption = "today";
+
+    /// <summary>The caption under the window's doughnut: <c>last 31 days</c>.</summary>
+    public static string ModelWindowCaption(int windowDays) => $"last {windowDays} days";
+
+    /// <summary>
+    /// A section's second hover-card line: <c>output · 37% of 31 days</c>, or
+    /// <c>output · 37% of today</c>.
+    ///
+    /// <para><b>Whole percent, floored at <c>&lt;1%</c>.</b> Unlike <see cref="TokenShare"/>'s two
+    /// decimals, a model's share of a doughnut is read against the arc beside it, where a hundredth
+    /// of a point is noise; but a model with any share must not print as <c>0%</c>, which says it
+    /// did nothing.</para>
+    /// </summary>
+    public static string ModelShareLine(PanelMeasure measure, double share, string window)
+    {
+        var percent = Math.Round(share * 100);
+        var text = share >= 1 ? "100%" : percent < 1 ? "<1%" : $"{percent.ToString("0", CultureInfo.InvariantCulture)}%";
+        return $"{ModelUnit(measure)} · {text} of {window}";
+    }
+
+    /// <summary>The window words for <see cref="ModelShareLine"/>, in the order they are asked for.</summary>
+    public static string ModelWindowWords(int windowDays) => $"{windowDays} days";
+
+    /// <summary>
+    /// The value column's heading over today's pair. It flips to spend with the tiles (F19);
+    /// the 31-day pair keeps <see cref="ModelValueHeader"/>, as <see cref="Est31DaysLabel"/> does.
+    /// </summary>
+    public static string ModelTodayValueHeader(bool offPlan) => offPlan ? "Est. spend" : ModelValueHeader;
+
+    /// <summary>
+    /// A section's last hover-card line, <c>$3.10 est. value</c>, or the word for a missing
+    /// price. <paramref name="offPlan"/> is true only for today's doughnut, where the value
+    /// reads as spend.
+    /// </summary>
+    public static string ModelValueLine(decimal? usd, bool offPlan = false) =>
+        usd is { } value ? $"{UsageFormatter.Usd(value)} est. {(offPlan ? "spend" : "value")}" : UnpricedValue;
+
+    /// <summary>
     /// The block's one standing caveat, built from the sources the scan found:
     /// <c>Claude Code transcripts only; chat, cloud and Cowork sessions not counted.</c>
     ///

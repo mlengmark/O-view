@@ -648,6 +648,138 @@ public static class PanelSections
     }
 
     /// <summary>
+    /// The local block's model face for the chosen measure: a row per model in the store, and
+    /// the two doughnuts cut from the same rows in the same order.
+    ///
+    /// <para><b>Every model is a row.</b> The tiles fold the fourth into "other" because their
+    /// bar has three colours to spend; this face has a table to list them in. Rows are ordered
+    /// by the 31-day measure, largest first, and that order is the doughnuts' order too.</para>
+    ///
+    /// <para><b>Colour follows the row, from the same order.</b> The three largest take the
+    /// three chromatic slots and each later model a grey, so a model wears one colour on both
+    /// doughnuts and in the table. It is ranked on the chosen measure, so switching Output to
+    /// Overall can re-rank models; the tiles' panel-wide order is not used, it gives up the
+    /// third chromatic slot once there are four models so the remainder has a colour to be
+    /// told apart from, and this face has no remainder.</para>
+    ///
+    /// <para>A model's value is unknown when it has no rate, and is worded as such. A model
+    /// that did nothing today but is priced in the window reads as a known zero, not as unknown.</para>
+    /// </summary>
+    public static PanelModelFaceView ModelFace(PanelStatistics stats, PanelViewChoice view)
+    {
+        var measure = view.Measure;
+        var window = stats.Models31Days.ToDictionary(s => s.Model, StringComparer.OrdinalIgnoreCase);
+        var today = stats.ModelsToday.ToDictionary(s => s.Model, StringComparer.OrdinalIgnoreCase);
+
+        // A model seen today is in the window by construction; the union guards a hand-made
+        // statistics object, where dropping a row would drop a model from the face.
+        var ids = window.Keys.Concat(today.Keys.Where(id => !window.ContainsKey(id))).ToList();
+        var ranked = ids
+            .Select(id =>
+            {
+                var inWindow = window.GetValueOrDefault(id);
+                var inToday = today.GetValueOrDefault(id);
+                return (Any: (inWindow ?? inToday)!, Window: inWindow, Today: inToday);
+            })
+            .OrderByDescending(m => ModelTokens(m.Window, measure) ?? 0)
+            .ThenByDescending(m => ModelTokens(m.Today, measure) ?? 0)
+            .ThenBy(m => m.Any.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        const int chromaticSlots = 3;
+        var rows = ranked
+            .Select((m, i) => new PanelModelRowView(
+                m.Any.DisplayName,
+                m.Any.Model,
+                i < chromaticSlots ? i : -1,
+                i < chromaticSlots ? -1 : i - chromaticSlots,
+                ModelFigure(m.Today, m.Any, measure),
+                ModelFigure(m.Window ?? m.Any, m.Any, measure)))
+            .ToList();
+
+        var todayWords = TokenText.TokenWindowToday;
+        var windowWords = TokenText.ModelWindowWords(stats.WindowDays);
+
+        return new PanelModelFaceView(
+            TokenText.ModelFaceSubtitle(measure),
+            TokenText.FlipTagLabel(PanelFace.Models),
+            Doughnut(
+                measure == PanelMeasure.Output ? stats.TokensToday : stats.CompositionToday.Total,
+                TokenText.ModelTodayCaption, todayWords, ranked.Select(m => m.Today).ToList(), rows, measure,
+                stats.IsOffPlan),
+            Doughnut(
+                measure == PanelMeasure.Output ? stats.Tokens31Days : stats.Composition31Days.Total,
+                TokenText.ModelWindowCaption(stats.WindowDays), windowWords, ranked.Select(m => m.Window).ToList(),
+                rows, measure),
+            new PanelModelTableView(
+                [TokenText.ModelColumnHeader, TokenText.ModelTokensHeader, TokenText.ModelTodayValueHeader(stats.IsOffPlan),
+                    TokenText.ModelTokensHeader, TokenText.ModelValueHeader],
+                TokenText.TokenBreakdownTodayHeader,
+                TokenText.TokenBreakdown31DaysHeader,
+                rows),
+            Math.Max(0, rows.Count - chromaticSlots),
+            TokenText.Caveat(stats));
+    }
+
+    /// <summary>
+    /// One doughnut. <paramref name="slices"/> is parallel to <paramref name="rows"/>, null where
+    /// a model has nothing in this window, which is a row without a section.
+    /// </summary>
+    private static PanelModelDoughnutView Doughnut(
+        long total, string caption, string window, IReadOnlyList<ModelSlice?> slices,
+        IReadOnlyList<PanelModelRowView> rows, PanelMeasure measure, bool offPlan = false)
+    {
+        var sum = slices.Sum(s => ModelTokens(s, measure) ?? 0);
+        var sections = new List<PanelModelSectionView>();
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var tokens = ModelTokens(slices[i], measure) ?? 0;
+            if (slices[i] is null || tokens <= 0 || sum <= 0)
+            {
+                continue;
+            }
+
+            var share = tokens / (double)sum;
+            sections.Add(new PanelModelSectionView(
+                i,
+                share,
+                UsageFormatter.Tokens(tokens),
+                TokenText.ModelShareLine(measure, share, window),
+                TokenText.ModelValueLine(ModelValue(slices[i], measure), offPlan)));
+        }
+
+        return new PanelModelDoughnutView(
+            UsageFormatter.Tokens(total), TokenText.ModelUnit(measure), caption, sections);
+    }
+
+    /// <summary>
+    /// A model's two figures in one window. <paramref name="slice"/> is null for a window the
+    /// model has no usage in; its tokens are then a real zero, and its value a known zero only
+    /// if <paramref name="priced"/> shows the model has a rate (rule 6).
+    /// </summary>
+    private static PanelModelFigureView ModelFigure(ModelSlice? slice, ModelSlice? priced, PanelMeasure measure)
+    {
+        var tokens = slice is null ? 0 : ModelTokens(slice, measure);
+        var value = slice is null
+            ? ModelValue(priced, measure) is null ? null : (decimal?)0m
+            : ModelValue(slice, measure);
+
+        return new PanelModelFigureView(
+            tokens is { } t ? UsageFormatter.Tokens(t) : TokenText.UnknownTokens,
+            value is { } v ? UsageFormatter.Usd(v) : TokenText.UnpricedValue,
+            value is not null);
+    }
+
+    /// <summary>The slice's tokens under the chosen measure, or null when the store holds no count.</summary>
+    private static long? ModelTokens(ModelSlice? slice, PanelMeasure measure) => slice is null
+        ? null
+        : measure == PanelMeasure.Output ? slice.Tokens : slice.AllTokensCount.Value;
+
+    private static decimal? ModelValue(ModelSlice? slice, PanelMeasure measure) => slice is null
+        ? null
+        : measure == PanelMeasure.Output ? slice.EstOutputUsdValue.Value : slice.EstUsdValue.Value;
+
+    /// <summary>
     /// The local block's footer: the standing scope caveat, and the switch with the current
     /// measure selected. Each segment carries the view pressing it gives.
     /// </summary>
