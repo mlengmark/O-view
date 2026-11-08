@@ -10,6 +10,7 @@ using Avalonia.Media;
 using Avalonia.Skia;
 using Avalonia.VisualTree;
 using OView.App.Rendering;
+using OView.Core.Models;
 using OView.Linux.Panel;
 using OView.Presentation.Samples;
 using OView.Presentation.Text;
@@ -149,7 +150,8 @@ public class PanelShortScreenTests
         var rendered = Panel(PanelSampleRenderer.ShortSample, light: false, PanelDensity.Normal)
             .NaturalHeightDip();
 
-        foreach (var state in SampleStates.All)
+        // The totals face it photographs. The model face stands taller with seven models.
+        foreach (var state in SampleStates.All.Where(s => s.View.Face == PanelFace.Totals))
         {
             var height = Panel(state, light: false, PanelDensity.Normal).NaturalHeightDip();
 

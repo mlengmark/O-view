@@ -42,6 +42,17 @@ public class PanelLocalBlockTests
         return data;
     }
 
+    public static TheoryData<string> EveryTotalsState()
+    {
+        var data = new TheoryData<string>();
+        foreach (var state in SampleStates.All.Where(s => s.View.Face == PanelFace.Totals))
+        {
+            data.Add(state.Name);
+        }
+
+        return data;
+    }
+
     public static TheoryData<string, bool, bool> EveryStateThemeAndDensity()
     {
         var data = new TheoryData<string, bool, bool>();
@@ -92,20 +103,23 @@ public class PanelLocalBlockTests
         var block = BlockOf(table);
         var parts = block.Children;
 
-        Assert.Equal(6 + 1, parts.Count);
-        Assert.Same(Words(panel, Totals(Typical).Title.ToUpperInvariant()), parts[0]);
-        Assert.Same(Words(panel, Totals(Typical).Subtitle), parts[1]);
-        Assert.Same(PanelGraphLayoutTests.ChartOf(panel), parts[2]);
-        Assert.Same(table, parts[4]);
-        Assert.Same(Words(block, Totals(Typical).WindowCaveat), parts[5]);
-        Assert.Same(Words(block, Footer(Typical).Caveat).GetVisualParent(), parts[6]);
+        Assert.Equal(5 + 1, parts.Count);
 
-        Assert.Equal(8 * scale, parts[2].Margin.Top, 6);
-        Assert.Equal(PanelMetrics.ChartToTableGapDip * scale, parts[3].Margin.Top, 6);
+        var words = Assert.IsType<StackPanel>(Words(panel, Totals(Typical).Title.ToUpperInvariant()).GetVisualParent());
+        Assert.Same(words, Assert.IsType<Grid>(parts[0]).Children[0]);
+        Assert.Same(Words(panel, Totals(Typical).Title.ToUpperInvariant()), words.Children[0]);
+        Assert.Same(Words(panel, Totals(Typical).Subtitle), words.Children[1]);
+        Assert.Same(PanelGraphLayoutTests.ChartOf(panel), parts[1]);
+        Assert.Same(table, parts[3]);
+        Assert.Same(Words(block, Totals(Typical).WindowCaveat), parts[4]);
+        Assert.Same(Words(block, Footer(Typical).Caveat).GetVisualParent(), parts[5]);
+
+        Assert.Equal(8 * scale, parts[1].Margin.Top, 6);
+        Assert.Equal(PanelMetrics.ChartToTableGapDip * scale, parts[2].Margin.Top, 6);
         Assert.Equal(PanelMetrics.ChartToTableGapDip * scale, table.Margin.Top, 6);
-        Assert.Equal(8 * scale, parts[6].Margin.Top, 6);
+        Assert.Equal(8 * scale, parts[5].Margin.Top, 6);
 
-        var line = Assert.IsType<Border>(parts[3]);
+        var line = Assert.IsType<Border>(parts[2]);
         Assert.Equal(1, line.Bounds.Height);
         Assert.Equal(block.Bounds.Width, line.Bounds.Width);
         Assert.Equal(PanelMetrics.SoftLineOpacity, line.Opacity);
@@ -243,9 +257,9 @@ public class PanelLocalBlockTests
 
     // ── the words ───────────────────────────────────────────────────────────────────
 
-    /// <summary>Every word and figure is the view model's, cell for cell, in every state.</summary>
+    /// <summary>Every word and figure is the view model's, cell for cell, in every state on the totals face.</summary>
     [Theory]
-    [MemberData(nameof(EveryState))]
+    [MemberData(nameof(EveryTotalsState))]
     public void TheTableShowsExactlyWhatPresentationBuilt(string state)
     {
         var table = TableOf(Laid(state, false));
@@ -296,7 +310,7 @@ public class PanelLocalBlockTests
     {
         var panel = Laid(state, false);
         var block = BlockOf(TableOf(panel));
-        var caveat = Totals(state).WindowCaveat;
+        var caveat = CaveatOf(state);
         var texts = block.GetVisualDescendants().OfType<TextBlock>();
 
         if (caveat.Length == 0)
@@ -365,11 +379,13 @@ public class PanelLocalBlockTests
         Assert.DoesNotContain(TokenText.TokenViewBreakdownLabel, words);
         Assert.DoesNotContain(TokenText.TokenScopeCaveat, words);
 
-        // TileBg now only fills the switch and the Overall table's pills, and neither is a tile.
+        // TileBg now only fills the switch, the Overall table's pills and the flip tag, and none is a tile.
         var filled = panel.GetVisualDescendants().OfType<Border>().Where(b => IsColour(b.Background, "TileBg"));
         Assert.All(filled, b => Assert.True(
-            b.GetVisualDescendants().OfType<RadioButton>().Any() || Grid.GetColumnSpan(b) == 2,
-            "something other than the switch or a pill is filled like a tile"));
+            b.GetVisualDescendants().OfType<RadioButton>().Any()
+                || Grid.GetColumnSpan(b) == 2
+                || b.GetVisualAncestors().OfType<Button>().Any(),
+            "something other than the switch, a pill or the flip tag is filled like a tile"));
     }
 
     // ── the panel's edge ────────────────────────────────────────────────────────────
@@ -395,7 +411,8 @@ public class PanelLocalBlockTests
                 left + mark.Bounds.Width <= panel.Bounds.Width - inset + 0.5,
                 $"{mark.GetType().Name} ends at {left + mark.Bounds.Width:0.#} in {state}");
 
-            if (mark is TextBlock { Opacity: > 0 } line)
+            // A model's name is the one cell allowed to trim; its row's tooltip has it whole.
+            if (mark is TextBlock { Opacity: > 0 } line && mark.GetVisualParent() is not DockPanel)
             {
                 Assert.False(line.TextLayout.TextLines.Any(l => l.HasCollapsed), $"[{line.Text}] was trimmed in {state}");
             }
@@ -446,6 +463,15 @@ public class PanelLocalBlockTests
         return PanelSections.LocalTotals(state.Stats, state.Snapshot, SampleStates.Zone, state.View);
     }
 
+    /// <summary>What qualifies the 31-day figures on the face the state shows.</summary>
+    private static string CaveatOf(string name)
+    {
+        var state = SampleStates.All.Single(s => s.Name == name);
+        return state.View.Face == PanelFace.Models
+            ? PanelSections.ModelFace(state.Stats, state.View).WindowCaveat
+            : Totals(name).WindowCaveat;
+    }
+
     private static PanelLocalFooterView Footer(string name)
     {
         var state = SampleStates.All.Single(s => s.Name == name);
@@ -458,10 +484,10 @@ public class PanelLocalBlockTests
         return state.Scope is { } scope && PanelSections.ScopeNote(state.Stats, state.Snapshot, scope) is not null;
     }
 
-    /// <summary>The table: the one grid whose data columns have pixel widths beside a star column.</summary>
+    /// <summary>The table: the one grid with rows whose data columns have pixel widths beside a star column.</summary>
     private static Grid TableOf(Control panel) =>
         panel.GetVisualDescendants().OfType<Grid>()
-            .Single(g => g.ColumnDefinitions.Count >= 3 && g.ColumnDefinitions[1].Width.IsAbsolute);
+            .Single(g => g.RowDefinitions.Count > 0 && g.ColumnDefinitions.Count >= 3 && g.ColumnDefinitions[1].Width.IsAbsolute);
 
     private static StackPanel BlockOf(Grid table) => Assert.IsType<StackPanel>(table.GetVisualParent());
 

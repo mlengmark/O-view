@@ -74,6 +74,9 @@ public sealed class PanelContent : Border
     private readonly PanelPlanBlock _planBlock;
     private readonly PanelLocalBlock _localBlock;
 
+    /// <summary>See <see cref="ScrollToFromFoot"/>: set by a press on the flip tag, spent by the scroll back.</summary>
+    private double? _tagViewTop;
+
     /// <summary>
     /// The reader pressed the banner's hide control. The banner has already gone from the panel
     /// when this is raised; keeping it hidden and re-fitting the window are the window's.
@@ -81,8 +84,8 @@ public sealed class PanelContent : Border
     public event Action? BannerHidden;
 
     /// <summary>
-    /// The reader pressed a segment of the Output | Overall switch, and this is the view it gives.
-    /// Keeping it, rebuilding for it and re-fitting the window are the window's.
+    /// The reader pressed a segment of the Output | Overall switch or the flip tag, and this is the
+    /// view it gives. Keeping it, rebuilding for it and re-fitting the window are the window's.
     /// </summary>
     public event Action<PanelViewChoice>? ViewChosen;
 
@@ -125,7 +128,11 @@ public sealed class PanelContent : Border
         _theme = theme;
         _offPlan = new PanelOffPlan(theme);
         _planBlock = new PanelPlanBlock(theme, _offPlan);
-        _localBlock = new PanelLocalBlock(theme, view => ViewChosen?.Invoke(view));
+        _localBlock = new PanelLocalBlock(theme, view =>
+        {
+            _tagViewTop = TagViewTop();
+            ViewChosen?.Invoke(view);
+        });
 
         Width = PanelWidth;
         Background = theme["PanelBg"];
@@ -264,10 +271,25 @@ public sealed class PanelContent : Border
     public double ScrollFromFoot =>
         Scrolls ? Math.Max(0, _viewport.Extent.Height - _viewport.Viewport.Height - _viewport.Offset.Y) : 0;
 
-    /// <summary>Scrolls back to <paramref name="fromFoot"/> above the foot, once the new content is laid out.</summary>
-    public void ScrollToFromFoot(double fromFoot) =>
-        _viewport.Offset = _viewport.Offset.WithY(
-            Math.Max(0, _viewport.Extent.Height - _viewport.Viewport.Height - fromFoot));
+    /// <summary>
+    /// Scrolls back to <paramref name="fromFoot"/> above the foot, once the new content is laid out.
+    /// A press on the flip tag instead puts the tag back where it stood in the view: the tag is
+    /// above the face that changes height, so the distance from the foot would carry it away.
+    /// </summary>
+    public void ScrollToFromFoot(double fromFoot)
+    {
+        var tag = _localBlock.PressedTag?.TranslatePoint(default, _root);
+        var offset = _tagViewTop is { } top && tag is { } at
+            ? at.Y - top
+            : _viewport.Extent.Height - _viewport.Viewport.Height - fromFoot;
+
+        _tagViewTop = null;
+        _viewport.Offset = _viewport.Offset.WithY(Math.Max(0, offset));
+    }
+
+    /// <summary>How far below the top of the view the flip tag stands, when it is what was just pressed.</summary>
+    private double? TagViewTop() =>
+        _localBlock.PressedTag?.TranslatePoint(default, _root)?.Y - (Scrolls ? _viewport.Offset.Y : 0);
 
     /// <inheritdoc cref="PanelLocalBlock.FocusChosenSegment"/>
     public void FocusChosenSegment() => _localBlock.FocusChosenSegment();
@@ -367,6 +389,7 @@ public sealed class PanelContent : Border
         _localBlock.AddTo(
             _root,
             PanelSections.LocalTotals(stats, snapshot, local, view),
+            view.Face == PanelFace.Models ? PanelSections.ModelFace(stats, view) : null,
             PanelSections.LocalFooter(report, view),
             PanelSections.ScopeNote(stats, snapshot, report),
             Density);

@@ -176,7 +176,7 @@ internal sealed class PanelTotalsTable(LinuxPanelTheme theme)
         Child = Figure(text, share: false),
     };
 
-    private static void Place(Grid grid, Control element, int row, int column)
+    internal static void Place(Grid grid, Control element, int row, int column)
     {
         Grid.SetRow(element, row);
         Grid.SetColumn(element, column);
