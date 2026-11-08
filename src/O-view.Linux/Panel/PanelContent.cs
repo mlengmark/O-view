@@ -27,12 +27,11 @@ namespace OView.Linux.Panel;
 /// <para>It is a plain control rather than a window so the same tree can be shown live or
 /// rendered offscreen for verification, exactly as the WPF panel does.</para>
 ///
-/// <para>This class owns the panel's frame and the two rows it draws itself, the header and
-/// a usage bar. The header is also the panel's drag handle, which is why it is the one row
-/// built once and refilled rather than rebuilt (<see cref="Header"/>). Each section below them
-/// is its own piece, named for what it draws:
-/// <see cref="PanelStatTiles"/>, <see cref="PanelTokenBars"/>, <see cref="PanelGraph"/> and
-/// <see cref="PanelOffPlan"/>.</para>
+/// <para>This class owns the panel's frame and the one row it draws itself, the header. The
+/// header is also the panel's drag handle, which is why it is the one row built once and
+/// refilled rather than rebuilt (<see cref="Header"/>). Each section below it is its own piece,
+/// named for what it draws: <see cref="PanelOffPlan"/>, <see cref="PanelPlanBlock"/>,
+/// <see cref="PanelStatTiles"/>, <see cref="PanelTokenBars"/> and <see cref="PanelGraph"/>.</para>
 ///
 /// <para>The frame can also put those sections in a scrolling viewport, so a panel the window
 /// has had to cap can still be reached to its last section, see <see cref="ScrollContent"/>,
@@ -75,6 +74,13 @@ public sealed class PanelContent : Border
     private readonly PanelTokenBars _tokenBars;
     private readonly PanelGraph _graph;
     private readonly PanelOffPlan _offPlan;
+    private readonly PanelPlanBlock _planBlock;
+
+    /// <summary>
+    /// The reader pressed the banner's hide control. The banner has already gone from the panel
+    /// when this is raised; keeping it hidden and re-fitting the window are the window's.
+    /// </summary>
+    public event Action? BannerHidden;
 
     /// <summary>
     /// The flip of every tile that has a second face, in the order the panel places them.
@@ -129,6 +135,7 @@ public sealed class PanelContent : Border
         _tokenBars = new PanelTokenBars(theme);
         _graph = new PanelGraph(theme);
         _offPlan = new PanelOffPlan(theme);
+        _planBlock = new PanelPlanBlock(theme, _offPlan);
 
         Width = PanelWidth;
         Background = theme["PanelBg"];
@@ -213,11 +220,9 @@ public sealed class PanelContent : Border
     /// screen.</para>
     ///
     /// <para><b>Why a panel with room does not simply always have one.</b> A viewport clips to
-    /// its own bounds, and this panel has a usage bar whose fill overruns the content column by
-    /// 2 DIP at 100 %, an overrun that is in 8 of the 22 verification renders as they stand.
-    /// A viewport on every display would quietly trim it, which is a change to how the panel
-    /// looks on every display that already fits, arriving inside a change about the ones that
-    /// do not. So a panel with room keeps exactly the tree it has always had.</para>
+    /// its own bounds and is a second layout path for everything inside it, so one on every
+    /// display would be a change to how the panel looks on every display that already fits. A
+    /// panel with room keeps exactly the tree it has always had.</para>
     /// </summary>
     public void ScrollContent(bool scrolls)
     {
@@ -247,6 +252,18 @@ public sealed class PanelContent : Border
             _scrollTrack.IsVisible = false;
             Child = _root;
         }
+    }
+
+    /// <summary>
+    /// Puts the frame back where a fresh open starts from, straight in the border at the natural
+    /// density, so a re-fit decides from the same place an open does. Without it a panel that had
+    /// been capped would be measured through its viewport, in the narrower column the scroll bar
+    /// leaves, and a compact one could never get back to the natural layout.
+    /// </summary>
+    public void ReturnToNaturalLayout()
+    {
+        ScrollContent(false);
+        Density = PanelDensity.Normal;
     }
 
     /// <summary>
@@ -282,7 +299,8 @@ public sealed class PanelContent : Border
         DateTimeOffset utcNow,
         BoostNotices? boostNotices = null,
         TimeZoneInfo? zone = null,
-        CachedUtilization? cachedUsage = null)
+        CachedUtilization? cachedUsage = null,
+        PanelViewChoice view = default)
     {
         _root.Children.Clear();
 
@@ -307,46 +325,41 @@ public sealed class PanelContent : Border
         // when the figures are genuinely unavailable, and worded from both reports together,
         // a missing plan file beside working transcripts is a CLI-only user, not a fault
         // (issue #170).
-        // Both off-plan registers at once: the live banner below, and the standing 31-day
-        // section at the foot of the panel, each absent when it has nothing to say. Built here
-        // rather than at each use so the two halves of one claim are read from one object.
-        var offPlan = PanelSections.OffPlan(stats, cachedUsage, utcNow, local);
+        var banner = PanelBanner.Resolve(authoritative, dataReport, scopeReport, stats.Tokens31Days);
+
+        // No settings for the weekly meter: this head does not receive them, which reads the
+        // same as not having entered a weekly reset, so the "you set this" label the Windows
+        // panel can show never appears here. Plumbing them through is a change to this head's
+        // shell.
+        var plan = PanelSections.PlanBlock(
+            PanelSections.SessionMeter(snapshot, banner, utcNow, local),
+            PanelSections.WeeklyMeter(snapshot, banner, null, boostNotices, utcNow, local),
+            PanelSections.ModelLimitMeters(cachedUsage, utcNow, local),
+            PanelSections.OffPlan(stats, cachedUsage, utcNow, local),
+            stats,
+            cachedUsage,
+            view);
 
         // What the plan meters cannot show: work running past a meter that is not moving, or
         // past the window entirely. Above the no-data banner, as on the Windows panel, this
         // one describes live work, that one describes figures that are missing, and the live
         // signal is the more urgent of the two.
-        if (offPlan.Banner is { } offPlanBanner)
+        if (plan.Banner is { } offPlanBanner)
         {
-            _offPlan.AddBannerTo(_root, offPlanBanner, Density);
+            _offPlan.AddBannerTo(_root, offPlanBanner, plan.HideBannerLabel, Density, () => BannerHidden?.Invoke());
         }
 
-        var banner = PanelBanner.Resolve(authoritative, dataReport, scopeReport, stats.Tokens31Days);
         if (banner is not null)
         {
             AddBanner(banner.Title, banner.Detail);
         }
 
-        AddBar(PanelSections.SessionMeter(snapshot, banner, utcNow, local));
-
-        // No settings: this head does not receive them, which reads the same as not having
-        // entered a weekly reset, so the "you set this" label the Windows panel can show
-        // never appears here. Plumbing them through is a change to this head's shell.
-        AddBar(PanelSections.WeeklyMeter(snapshot, banner, null, boostNotices, utcNow, local));
-
-        foreach (var modelLimit in PanelSections.ModelLimitMeters(cachedUsage, utcNow, local))
-        {
-            AddBar(modelLimit);
-        }
+        _planBlock.AddTo(_root, plan, Density);
 
         var report = scopeReport ?? TranscriptScopeReport.Inspect();
         _tiles.AddTo(_root, stats, Density);
         _tokenBars.AddTo(_root, PanelSections.TokenBars(stats, report));
         _graph.AddTo(_root, PanelSections.Graph(stats, snapshot, local), Density);
-        if (offPlan.Section is { } offPlanSection)
-        {
-            _offPlan.AddSectionTo(_root, offPlanSection);
-        }
 
         if (PanelSections.ScopeNote(stats, snapshot, report) is { } note)
         {
@@ -384,95 +397,6 @@ public sealed class PanelContent : Border
         _header.Children.Add(left);
         _header.Children.Add(right);
         _root.Children.Add(_header);
-    }
-
-    /// <summary>
-    /// A usage bar. No fill percentage draws the track alone, never a fabricated fill, and
-    /// never a zero that would read as "no usage" when the truth is "not known" (rule 6).
-    ///
-    /// <para>The reset line is the one with the action spliced in: this head's rows carry a
-    /// single line of text and a compositor may never deliver hover at all, so the step that
-    /// ends an unknown weekly reset rides on the row or never appears
-    /// (<see cref="PanelMeterView.ResetLineWithAction"/>).</para>
-    /// </summary>
-    private void AddBar(PanelMeterView meter)
-    {
-        // Clipped, so a chip too wide for the row is cut off at the row's edge. That edge is the
-        // grid's and not the cell's: a chip that long still runs under the figure on the right,
-        // which is why a row with no chip keeps its label out of the stack below.
-        var header = new Grid
-        {
-            ColumnDefinitions = new ColumnDefinitions("*,Auto"),
-            ClipToBounds = true,
-        };
-
-        var label = Text(meter.Label, 14, _theme["TextPrimary"], FontWeight.SemiBold);
-        if (meter.Chip is { } chip)
-        {
-            // Label and chip share the left cell. The chip reuses the tier badge's colour pair
-            // rather than introducing one, so it reads as the same class of object, a factual
-            // label about the account, not a warning.
-            var left = new StackPanel
-            {
-                Orientation = Orientation.Horizontal,
-                Spacing = 8,
-                VerticalAlignment = VerticalAlignment.Center,
-            };
-            left.Children.Add(label);
-            left.Children.Add(new Border
-            {
-                Background = _theme["BadgeBg"],
-                CornerRadius = new CornerRadius(4),
-                Padding = new Thickness(6, 1),
-                VerticalAlignment = VerticalAlignment.Center,
-                Child = Text(chip.Text, 11, _theme["BadgeText"]),
-            });
-            header.Children.Add(left);
-        }
-        else
-        {
-            // Straight in the cell, because a horizontal stack gives its children unlimited
-            // width. A model's name is whatever Claude Code cached, and a long one has to wrap
-            // here rather than run across the figure.
-            label.Margin = new Thickness(0, 0, 8, 0);
-            label.VerticalAlignment = VerticalAlignment.Center;
-            header.Children.Add(label);
-        }
-
-        var value = Text(meter.Value, 14, _theme["TextSecondary"]);
-        value.HorizontalAlignment = HorizontalAlignment.Right;
-        Grid.SetColumn(value, 1);
-        header.Children.Add(value);
-
-        var fill = new Border
-        {
-            // Keyed on the percentage rather than the band, because LinuxPanelTheme is where
-            // this head shares the band classification with the tray icon, the same colours,
-            // light or dark, that the ring gauge uses.
-            Background = _theme.Level(meter.Percent),
-            CornerRadius = new CornerRadius(3),
-            Height = 6,
-            HorizontalAlignment = HorizontalAlignment.Left,
-            Width = meter.FillPercent is { } pct ? PanelWidth * 0.92 * pct / 100.0 : 0,
-        };
-
-        var track = new Border
-        {
-            Background = _theme["BarTrack"],
-            CornerRadius = new CornerRadius(3),
-            Height = 6,
-            Child = fill,
-        };
-
-        var block = new StackPanel { Spacing = 4 };
-        block.Children.Add(header);
-        block.Children.Add(track);
-        if (meter.ResetLineWithAction is { Length: > 0 } resetLine)
-        {
-            block.Children.Add(Text(resetLine, 12, _theme["TextSecondary"]));
-        }
-
-        _root.Children.Add(block);
     }
 
     private void AddBanner(string title, string detail) =>

@@ -95,9 +95,22 @@ public sealed class PanelWindow : Window
     /// </summary>
     private double _placedHeightDip;
 
+    /// <summary>Fills the panel from what <see cref="ShowWith"/> was last given, at the current density and view.</summary>
+    private Action _populate = () => { };
+
+    /// <summary>The view the panel shows, set from the shell before each open.</summary>
+    public PanelViewChoice ViewChoice { get; set; }
+
+    /// <summary>
+    /// Hands a changed view back to the shell, which keeps it and answers what is now in effect.
+    /// Null keeps the change for this panel alone.
+    /// </summary>
+    public Func<PanelViewChoice, PanelViewChoice>? SetViewChoice { get; set; }
+
     public PanelWindow(LinuxPanelTheme theme, IAppLog? log = null, IPanelPositionStore? positions = null)
     {
         _content = new PanelContent(theme);
+        _content.BannerHidden += OnBannerHidden;
         _log = log;
         _positions = positions;
         _memory = positions is null ? null : new PanelPlacementMemory(positions);
@@ -212,8 +225,9 @@ public sealed class PanelWindow : Window
         BoostNotices? boostNotices = null,
         CachedUtilization? cachedUsage = null)
     {
-        _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow, boostNotices,
-            cachedUsage: cachedUsage);
+        _populate = () => _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow,
+            boostNotices, cachedUsage: cachedUsage, view: ViewChoice);
+        _populate();
         _dismissal.Opening();
 
         // Decided before Show, applied after it: the corner needs the panel's size, and
@@ -236,12 +250,31 @@ public sealed class PanelWindow : Window
             // The height rule runs first either way, so a restored place is capped and scrolls
             // exactly as a corner one does: the cap is the work area's own height and does not
             // depend on where in it the panel sits.
-            _placedHeightDip = FitToScreen(snapshot, stats, account, dataReport, scopeReport, utcNow,
-                boostNotices, cachedUsage);
-            Place(_placedHeightDip);
+            FitAndPlace();
         }
 
         Activate();
+    }
+
+    private void FitAndPlace()
+    {
+        _placedHeightDip = FitToScreen();
+        Place(_placedHeightDip);
+    }
+
+    /// <summary>
+    /// The reader hid the off-plan banner: the shell keeps that, and the panel, one card shorter,
+    /// is fitted and placed by the path an open uses, from where an open starts. A panel at the
+    /// cap therefore stays capped and scrolling, and one that now fits gives up its scroll bar.
+    /// </summary>
+    private void OnBannerHidden()
+    {
+        var hidden = ViewChoice with { BannerHidden = true };
+        ViewChoice = SetViewChoice?.Invoke(hidden) ?? hidden;
+
+        _content.ReturnToNaturalLayout();
+        _populate();
+        FitAndPlace();
     }
 
     /// <summary>
@@ -285,15 +318,7 @@ public sealed class PanelWindow : Window
     /// <para>Re-populating rebuilds the whole tree, which is why the compact step only runs
     /// when the panel actually overflows. A display with room is laid out exactly as before.</para>
     /// </summary>
-    private double FitToScreen(
-        UsageSnapshot snapshot,
-        PanelStatistics stats,
-        ClaudeAccount? account,
-        PlanHistoryReport? dataReport,
-        TranscriptScopeReport? scopeReport,
-        DateTimeOffset utcNow,
-        BoostNotices? boostNotices = null,
-        CachedUtilization? cachedUsage = null)
+    private double FitToScreen()
     {
         if (TargetScreen() is not { } screen)
         {
@@ -305,8 +330,7 @@ public sealed class PanelWindow : Window
         var outcome = PanelFit.Fit(available, _content.NaturalHeightDip, density =>
         {
             _content.Density = density;
-            _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow, boostNotices,
-                cachedUsage: cachedUsage);
+            _populate();
         });
 
         if (outcome.Density.IsCompact)

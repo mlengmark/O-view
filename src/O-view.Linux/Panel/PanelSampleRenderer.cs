@@ -72,7 +72,7 @@ public static class PanelSampleRenderer
     {
         var content = new PanelContent(new LinuxPanelTheme(light)) { Density = density };
         content.Populate(state.Snapshot, state.Stats, state.Account, state.Plan, state.Scope,
-            SampleStates.Now, state.Boost, SampleStates.Zone, state.CachedUsage);
+            SampleStates.Now, state.Boost, SampleStates.Zone, state.CachedUsage, state.View);
         return content;
     }
 
