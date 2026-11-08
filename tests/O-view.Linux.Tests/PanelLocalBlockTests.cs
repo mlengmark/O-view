@@ -98,7 +98,7 @@ public class PanelLocalBlockTests
         Assert.Same(PanelGraphLayoutTests.ChartOf(panel), parts[2]);
         Assert.Same(table, parts[4]);
         Assert.Same(Words(block, Totals(Typical).WindowCaveat), parts[5]);
-        Assert.Same(Words(block, Footer(Typical).Caveat), parts[6]);
+        Assert.Same(Words(block, Footer(Typical).Caveat).GetVisualParent(), parts[6]);
 
         Assert.Equal(8 * scale, parts[2].Margin.Top, 6);
         Assert.Equal(PanelMetrics.ChartToTableGapDip * scale, parts[3].Margin.Top, 6);
@@ -251,12 +251,16 @@ public class PanelLocalBlockTests
         var table = TableOf(Laid(state, false));
         var view = Totals(state).Table;
 
-        Assert.Equal(view.Headers.Select(h => h.ToUpperInvariant()), Enumerable.Range(0, 3).Select(c => Cell(table, 0, c).Text));
+        Assert.Equal(view.Headers.Select(h => h.ToUpperInvariant()), Enumerable.Range(0, view.Headers.Count).Select(c => Cell(table, 0, c).Text));
 
         for (var row = 0; row < view.Rows.Count; row++)
         {
-            Assert.Equal(view.Rows[row].Label, Cell(table, row + 1, 0).Text);
-            Assert.Equal(view.Rows[row].Cells, Enumerable.Range(1, 2).Select(c => Cell(table, row + 1, c).Text));
+            var cells = view.Rows[row].Cells;
+
+            Assert.Equal(view.Rows[row].Label, Words(table, view.Rows[row].Label).Text);
+            Assert.Equal(
+                cells,
+                cells.Select((_, i) => TextIn(table, row + 1, 1 + i * view.Rows[row].CellSpan)));
         }
     }
 
@@ -266,6 +270,20 @@ public class PanelLocalBlockTests
         var table = TableOf(Laid(OffPlan, false));
 
         Assert.Equal(TokenText.EstValueOutputLabel(true), Cell(table, 2, 0).Text);
+    }
+
+    /// <summary>The Overall value row says spend in its own words, and each estimate sits in its pill.</summary>
+    [Fact]
+    public void WhileOffPlanTheOverallValueRowSaysSpendInAPill()
+    {
+        var name = OffPlan + "-overall";
+        var table = TableOf(Laid(name, false));
+        var value = Totals(name).Table.Rows[^1];
+
+        Assert.Equal(TokenText.EstValueLabel(true), value.Label);
+        Assert.Equal(TokenText.EstValueLabel(true), Words(table, value.Label).Text);
+        Assert.Equal(2, value.CellSpan);
+        Assert.Equal(value.Cells, new[] { 1, 3 }.Select(c => TextIn(table, value.Label == null ? 0 : table.RowDefinitions.Count - 1, c)));
     }
 
     /// <summary>
@@ -302,6 +320,7 @@ public class PanelLocalBlockTests
         var footer = Words(Laid(Typical, light), Footer(Typical).Caveat);
 
         Assert.Equal(PanelMetrics.FooterFontSize, footer.FontSize);
+        Assert.Equal(VerticalAlignment.Center, footer.VerticalAlignment);
         Assert.Equal(Hex("TextMuted", light), Colour(footer.Foreground));
     }
 
@@ -316,18 +335,20 @@ public class PanelLocalBlockTests
         var line = Words(panel, note);
 
         Assert.Equal(block.Children.Count - 2, block.Children.IndexOf(line));
-        Assert.Same(Words(panel, Footer(NoTranscripts).Caveat), block.Children[^1]);
+        Assert.Same(Words(panel, Footer(NoTranscripts).Caveat).GetVisualParent(), block.Children[^1]);
     }
 
-    /// <summary>Until this head has the switch the figures are Output's, whatever was stored.</summary>
+    /// <summary>The figures follow the stored measure: an Overall view shows the kind rows, not Output's one row.</summary>
     [Fact]
-    public void AnOverallStateStillShowsTheOutputTable()
+    public void AnOverallStateShowsTheOverallTable()
     {
         var state = SampleStates.All.First(s => s.View.Measure == PanelMeasure.Overall);
-        var table = TableOf(Laid(state.Name, false));
+        var panel = Laid(state.Name, false);
+        var table = TableOf(panel);
 
-        Assert.Equal(TokenText.OutputTokensRowLabel, Cell(table, 1, 0).Text);
-        Assert.Equal(Totals(state.Name).Subtitle, Words(Laid(state.Name, false), Totals(state.Name).Subtitle).Text);
+        Assert.Equal(5, table.ColumnDefinitions.Count);
+        Assert.DoesNotContain(table.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == TokenText.OutputTokensRowLabel);
+        Assert.Equal(Totals(state.Name).Subtitle, Words(panel, Totals(state.Name).Subtitle).Text);
     }
 
     /// <summary>The tiles, the tokens-used bars and the chart's old heading have all left the panel.</summary>
@@ -343,7 +364,12 @@ public class PanelLocalBlockTests
         Assert.DoesNotContain(TokenText.TokenViewBarsLabel, words);
         Assert.DoesNotContain(TokenText.TokenViewBreakdownLabel, words);
         Assert.DoesNotContain(TokenText.TokenScopeCaveat, words);
-        Assert.DoesNotContain(panel.GetVisualDescendants().OfType<Border>(), b => IsColour(b.Background, "TileBg"));
+
+        // TileBg now only fills the switch and the Overall table's pills, and neither is a tile.
+        var filled = panel.GetVisualDescendants().OfType<Border>().Where(b => IsColour(b.Background, "TileBg"));
+        Assert.All(filled, b => Assert.True(
+            b.GetVisualDescendants().OfType<RadioButton>().Any() || Grid.GetColumnSpan(b) == 2,
+            "something other than the switch or a pill is filled like a tile"));
     }
 
     // ── the panel's edge ────────────────────────────────────────────────────────────
@@ -417,14 +443,13 @@ public class PanelLocalBlockTests
     private static PanelLocalTotalsView Totals(string name)
     {
         var state = SampleStates.All.Single(s => s.Name == name);
-        return PanelSections.LocalTotals(
-            state.Stats, state.Snapshot, SampleStates.Zone, state.View with { Measure = PanelMeasure.Output });
+        return PanelSections.LocalTotals(state.Stats, state.Snapshot, SampleStates.Zone, state.View);
     }
 
     private static PanelLocalFooterView Footer(string name)
     {
         var state = SampleStates.All.Single(s => s.Name == name);
-        return PanelSections.LocalFooter(state.Scope, state.View with { Measure = PanelMeasure.Output });
+        return PanelSections.LocalFooter(state.Scope, state.View);
     }
 
     private static bool HasNote(string name)
@@ -436,12 +461,18 @@ public class PanelLocalBlockTests
     /// <summary>The table: the one grid whose data columns have pixel widths beside a star column.</summary>
     private static Grid TableOf(Control panel) =>
         panel.GetVisualDescendants().OfType<Grid>()
-            .Single(g => g.ColumnDefinitions.Count == 3 && g.ColumnDefinitions[1].Width.IsAbsolute);
+            .Single(g => g.ColumnDefinitions.Count >= 3 && g.ColumnDefinitions[1].Width.IsAbsolute);
 
     private static StackPanel BlockOf(Grid table) => Assert.IsType<StackPanel>(table.GetVisualParent());
 
     private static TextBlock Cell(Grid table, int row, int column) =>
         table.Children.OfType<TextBlock>().Single(t => Grid.GetRow(t) == row && Grid.GetColumn(t) == column);
+
+    /// <summary>The words in a cell, whether they sit straight in the grid or inside a pill.</summary>
+    private static string? TextIn(Grid table, int row, int column) =>
+        table.Children.Where(c => c is not Border { Child: null } && Grid.GetRow(c) == row && Grid.GetColumn(c) == column)
+            .SelectMany(c => c is TextBlock text ? [text] : c.GetVisualDescendants().OfType<TextBlock>())
+            .Single().Text;
 
     private static double CentreOf(Grid table, int column)
     {

@@ -146,12 +146,12 @@ public class PanelShortScreenTests
     [Fact]
     public void TheStateRenderedForAShortScreenIsTheTallestOfThem()
     {
-        var rendered = Panel(PanelSampleRenderer.ShortState, light: false, PanelDensity.Normal)
+        var rendered = Panel(PanelSampleRenderer.ShortSample, light: false, PanelDensity.Normal)
             .NaturalHeightDip();
 
         foreach (var state in SampleStates.All)
         {
-            var height = Panel(state.Name, light: false, PanelDensity.Normal).NaturalHeightDip();
+            var height = Panel(state, light: false, PanelDensity.Normal).NaturalHeightDip();
 
             Assert.True(
                 height <= rendered,
@@ -464,14 +464,16 @@ public class PanelShortScreenTests
         return panel;
     }
 
-    private static PanelContent Panel(string stateName, bool light, PanelDensity density)
+    private static PanelContent Panel(string stateName, bool light, PanelDensity density) =>
+        Panel(SampleStates.All.Single(s => s.Name == stateName) with { View = default }, light, density);
+
+    private static PanelContent Panel(SampleState state, bool light, PanelDensity density)
     {
         UseRealFonts();
 
-        var state = SampleStates.All.Single(s => s.Name == stateName);
         var panel = new PanelContent(new LinuxPanelTheme(light)) { Density = density };
         panel.Populate(state.Snapshot, state.Stats, state.Account, state.Plan, state.Scope,
-            SampleStates.Now, state.Boost, SampleStates.Zone, state.CachedUsage);
+            SampleStates.Now, state.Boost, SampleStates.Zone, state.CachedUsage, state.View);
 
         return panel;
     }

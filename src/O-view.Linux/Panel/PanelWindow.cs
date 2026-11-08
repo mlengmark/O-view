@@ -111,6 +111,7 @@ public sealed class PanelWindow : Window
     {
         _content = new PanelContent(theme);
         _content.BannerHidden += OnBannerHidden;
+        _content.ViewChosen += OnViewChosen;
         _log = log;
         _positions = positions;
         _memory = positions is null ? null : new PanelPlacementMemory(positions);
@@ -275,6 +276,28 @@ public sealed class PanelWindow : Window
         _content.ReturnToNaturalLayout();
         _populate();
         FitAndPlace();
+    }
+
+    /// <summary>
+    /// The reader pressed the Output | Overall switch: the shell keeps the choice, and the panel,
+    /// a different height now, is fitted and placed by the path a hidden banner takes.
+    ///
+    /// <para>The layout is run here, before the scroll is put back, because the offset is
+    /// clamped against the content's extent and that is still the old content's until the next
+    /// pass.</para>
+    /// </summary>
+    private void OnViewChosen(PanelViewChoice next)
+    {
+        var fromFoot = _content.ScrollFromFoot;
+        ViewChoice = SetViewChoice?.Invoke(next) ?? next;
+
+        _content.ReturnToNaturalLayout();
+        _populate();
+        FitAndPlace();
+
+        UpdateLayout();
+        _content.ScrollToFromFoot(fromFoot);
+        _content.FocusChosenSegment();
     }
 
     /// <summary>

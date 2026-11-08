@@ -81,6 +81,12 @@ public sealed class PanelContent : Border
     public event Action? BannerHidden;
 
     /// <summary>
+    /// The reader pressed a segment of the Output | Overall switch, and this is the view it gives.
+    /// Keeping it, rebuilding for it and re-fitting the window are the window's.
+    /// </summary>
+    public event Action<PanelViewChoice>? ViewChosen;
+
+    /// <summary>
     /// The viewport the sections are scrolled inside, once <see cref="ScrollContent"/> has put
     /// them there. Public for the same reason <see cref="PanelTokenBars.ViewSwitch"/> is: this
     /// is the state a wheel turn and a thumb drag drive, and a test process has no windowing
@@ -119,7 +125,7 @@ public sealed class PanelContent : Border
         _theme = theme;
         _offPlan = new PanelOffPlan(theme);
         _planBlock = new PanelPlanBlock(theme, _offPlan);
-        _localBlock = new PanelLocalBlock(theme);
+        _localBlock = new PanelLocalBlock(theme, view => ViewChosen?.Invoke(view));
 
         Width = PanelWidth;
         Background = theme["PanelBg"];
@@ -251,6 +257,22 @@ public sealed class PanelContent : Border
     }
 
     /// <summary>
+    /// How far the view stands above the foot of the content, zero when nothing scrolls. Measured
+    /// from the foot because the Output | Overall switch is down there: the table above it changes
+    /// height, so the same distance from the top would carry the switch away from the pointer.
+    /// </summary>
+    public double ScrollFromFoot =>
+        Scrolls ? Math.Max(0, _viewport.Extent.Height - _viewport.Viewport.Height - _viewport.Offset.Y) : 0;
+
+    /// <summary>Scrolls back to <paramref name="fromFoot"/> above the foot, once the new content is laid out.</summary>
+    public void ScrollToFromFoot(double fromFoot) =>
+        _viewport.Offset = _viewport.Offset.WithY(
+            Math.Max(0, _viewport.Extent.Height - _viewport.Viewport.Height - fromFoot));
+
+    /// <inheritdoc cref="PanelLocalBlock.FocusChosenSegment"/>
+    public void FocusChosenSegment() => _localBlock.FocusChosenSegment();
+
+    /// <summary>
     /// The height this panel's content wants, measured against an unbounded height, the
     /// content's own answer, not the window's.
     ///
@@ -342,13 +364,10 @@ public sealed class PanelContent : Border
 
         var report = scopeReport ?? TranscriptScopeReport.Inspect();
 
-        // Output whatever is stored: this head has no switch yet, so nothing on the panel could
-        // say the figures were counting something else. The view comes through whole once it has.
-        var shown = view with { Measure = PanelMeasure.Output };
         _localBlock.AddTo(
             _root,
-            PanelSections.LocalTotals(stats, snapshot, local, shown),
-            PanelSections.LocalFooter(report, shown),
+            PanelSections.LocalTotals(stats, snapshot, local, view),
+            PanelSections.LocalFooter(report, view),
             PanelSections.ScopeNote(stats, snapshot, report),
             Density);
     }

@@ -435,7 +435,7 @@ public class PanelPlanBlockTests
         Assert.Contains("FitToScreen()", fitAndPlace, StringComparison.Ordinal);
         Assert.Contains("Place(_placedHeightDip)", fitAndPlace, StringComparison.Ordinal);
 
-        Assert.Equal(2, Regex.Matches(source, @"\bFitAndPlace\(\);").Count);
+        Assert.Equal(3, Regex.Matches(source, @"\bFitAndPlace\(\);").Count);
     }
 
     /// <summary>The view is read from the shell at every open, and given back to it, in this head's shell.</summary>
