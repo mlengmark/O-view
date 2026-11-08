@@ -21,9 +21,16 @@ namespace OView.Tray.Popup;
 /// </summary>
 internal static class PopupMeter
 {
+    /// <summary>Marks a fill, so <see cref="Arrive"/> finds the rows built in code as well as the markup's two.</summary>
+    private static readonly object FillTag = new();
+
     /// <param name="light">Whether the panel is in its light theme, which takes the darker shades.</param>
     public static void Populate(TextBlock pctText, Grid bar, Border fill, PanelMeterView meter, bool light)
     {
+        // Released first, so a panel reopened before its bars have finished is laid out at rest.
+        fill.BeginAnimation(FrameworkElement.WidthProperty, null);
+        fill.Tag = FillTag;
+
         BindingOperations.ClearBinding(fill, FrameworkElement.WidthProperty);
         pctText.Text = meter.Value;
 
@@ -43,6 +50,30 @@ internal static class PopupMeter
             ConverterParameter = p,
         });
     }
+
+    /// <summary>
+    /// Grows every meter under <paramref name="root"/> from nothing to its percentage as the panel
+    /// arrives. The width's binding stays underneath, so a bar that finishes follows its track
+    /// again; the figure beside it was real from the first frame.
+    /// </summary>
+    public static void Arrive(DependencyObject root)
+    {
+        var growMs = PanelMotion.Ms(PanelMotion.PlanBarGrowBaseMs);
+        if (!PanelMotion.Runs(WpfMotion.AnimationsOn, growMs))
+        {
+            return;
+        }
+
+        foreach (var fill in Fills(root).Where(fill => fill.Width > 0))
+        {
+            fill.BeginAnimation(FrameworkElement.WidthProperty, WpfMotion.Travel(
+                0, fill.Width, growMs, PanelMotion.Ms(PanelMotion.PlanBarGrowDelayBaseMs)));
+        }
+    }
+
+    private static IEnumerable<Border> Fills(DependencyObject root) =>
+        LogicalTreeHelper.GetChildren(root).OfType<DependencyObject>().SelectMany(child =>
+            child is Border { Tag: var tag } fill && ReferenceEquals(tag, FillTag) ? new[] { fill } : Fills(child));
 }
 
 /// <summary>Bar fill width = track ActualWidth × percent.</summary>

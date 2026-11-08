@@ -56,4 +56,19 @@ internal static class WpfMotion
             : new LinearDoubleKeyFrame(to, end));
         return animation;
     }
+
+    /// <summary>
+    /// A value travelling to where the property already rests: a bar growing, the switch's
+    /// highlight sliding, a hover fill fading. The caller assigns the end value first, and this
+    /// lets go when it finishes, so there is no held value to release, no completion to wait for
+    /// and nothing to strand if one is missed. Replaced midway, the caller reads the property for
+    /// the value on screen and starts the next one from there.
+    /// </summary>
+    public static DoubleAnimationUsingKeyFrames Travel(
+        double from, double to, double durationMs, double delayMs = 0, PanelMotion.Curve? curve = null)
+    {
+        var animation = DelayedFade(from, to, durationMs, delayMs, curve ?? PanelMotion.Decelerate);
+        animation.FillBehavior = FillBehavior.Stop;
+        return animation;
+    }
 }

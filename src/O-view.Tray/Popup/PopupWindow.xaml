@@ -96,16 +96,21 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="RadioButton">
-                            <Border x:Name="Bd" Background="Transparent" CornerRadius="3"
-                                    Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
-                                <TextBlock Text="{TemplateBinding Content}"
-                                           FontSize="{TemplateBinding FontSize}"
-                                           Foreground="{TemplateBinding Foreground}"/>
-                            </Border>
+                            <Grid>
+                                <!-- A layer, because a setter cannot fade: its opacity is driven
+                                     from code (PopupLocalBlock.UpdateHoverFill), the only place
+                                     that can ask Windows whether animations are on. -->
+                                <Border x:Name="HoverFill" Background="{DynamicResource TileHover}"
+                                        CornerRadius="3" Opacity="0" SnapsToDevicePixels="True"/>
+                                <Border x:Name="Bd" Background="Transparent" CornerRadius="3"
+                                        Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                                    <TextBlock Text="{TemplateBinding Content}"
+                                               FontSize="{TemplateBinding FontSize}"
+                                               Foreground="{TemplateBinding Foreground}"/>
+                                </Border>
+                            </Grid>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Bd" Property="Background"
-                                            Value="{DynamicResource TileHover}"/>
                                     <Setter Property="Foreground" Value="{DynamicResource TextSecondary}"/>
                                 </Trigger>
                                 <!-- Checked wins over hover: it is state, not feedback, and a

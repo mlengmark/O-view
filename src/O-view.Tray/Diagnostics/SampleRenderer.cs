@@ -47,6 +47,12 @@ internal static class SampleRenderer
     private const string ShortState = SampleStates.ShortState;
 
     /// <summary>
+    /// When the mid-fold sample is taken, after the press: far enough for the height to be well
+    /// under way and the first rows to show, before the curve has all but finished.
+    /// </summary>
+    private const double FoldingSampleMs = 320;
+
+    /// <summary>
     /// Renders the detail panel offscreen, in both themes, for every shared sample state
     /// (<see cref="SampleStates"/>), plus the views only this head has: the compact density
     /// and the chart's hover card.
@@ -100,6 +106,12 @@ internal static class SampleRenderer
                     typicalOverall.Snapshot, typicalOverall.Stats, typicalOverall.Account, scale,
                     density: PanelDensity.Compact),
                 File("typical-compact", light));
+
+            // The switch caught mid-fold, the one state of it a settled render never shows: Output
+            // pressed to Overall, with the height moving and the first rows on their way in.
+            SavePng(NewPopup(light, typical).RenderSwitchFrameToBitmap(
+                    typical.Snapshot, typical.Stats, typical.Account, scale, typicalOverall.View, FoldingSampleMs),
+                File("typical-overall-folding", light));
 
             // And the display that compacting alone cannot save: the tallest state against a
             // 712 DIP work area, where the panel is capped at the work area and its content
@@ -522,10 +534,8 @@ internal static class SampleRenderer
     /// traced: the frames that follow the click must carry on from the height it caught and not
     /// sit still or jump away from it, and the fold must end open.</para>
     ///
-    /// <para>The switch changes the table at once while it has no fold of its own, so for now
-    /// this drives the real switch and traces it, and reports every claim about a fold as not
-    /// run rather than passing them on a table that was never mid-fold
-    /// (<see cref="TableHasFold"/>).</para>
+    /// <para>It drives the real switch, so "open" is the Overall table and "closed" the Output
+    /// one, and every timing allows for the old rows leaving before the height moves.</para>
     /// </summary>
     public static void RunFoldCheck(string dir, Action shutdown)
     {
@@ -565,7 +575,10 @@ internal static class SampleRenderer
         // sample, a timer competing with the layout passes the fold itself causes drifts
         // exactly when there is something to measure, which is the one moment it must not.
         var foldOpenMs = PanelMotion.Ms(PanelMotion.FoldOpenBaseMs);
-        var lastRowEndMs = PanelMotion.RowStartMs(PanelMotion.BreakdownRowCount - 1)
+        var leaveMs = PanelMotion.Ms(PanelMotion.RowsCloseFadeBaseMs);
+
+        // The headings are row 0, so the Overall table's last row is at the count, not one before.
+        var lastRowEndMs = PanelMotion.RowStartMs(PanelMotion.BreakdownRowCount)
                            + PanelMotion.Ms(PanelMotion.RowFadeBaseMs);
         var clock = System.Diagnostics.Stopwatch.StartNew();
         var phase = Phase.WarmUp;
@@ -646,9 +659,9 @@ internal static class SampleRenderer
 
             // Each fold is given its own time and a margin, so the settled state is part of
             // every phase rather than assumed. Opening lasts until the last row has arrived.
-            var settle = phase is Phase.WarmUp or Phase.CaptureExpand or Phase.ReverseOpens or Phase.ReverseCloses
+            var settle = leaveMs + (phase is Phase.WarmUp or Phase.CaptureExpand or Phase.ReverseOpens or Phase.ReverseCloses
                 ? Math.Max(foldOpenMs, lastRowEndMs)
-                : PanelMotion.Ms(PanelMotion.FoldCloseBaseMs);
+                : PanelMotion.Ms(PanelMotion.FoldCloseBaseMs));
 
             if (clock.ElapsedMilliseconds < settle + FoldSettleMarginMs)
             {
@@ -682,12 +695,12 @@ internal static class SampleRenderer
                 case Phase.CaptureCollapse:
                     SaveFilmstrip(frames, Path.Combine(dir, "fold-collapse.png"));
                     phase = Phase.SecondClickInFold;
-                    secondClickAtMs = foldOpenMs / 2;
+                    secondClickAtMs = leaveMs + foldOpenMs / 2;
                     break;
 
                 case Phase.SecondClickInFold:
                     phase = Phase.SecondClickInRows;
-                    secondClickAtMs = (foldOpenMs + lastRowEndMs) / 2;
+                    secondClickAtMs = leaveMs + (foldOpenMs + lastRowEndMs) / 2;
                     break;
 
                 case Phase.SecondClickInRows:
@@ -700,14 +713,14 @@ internal static class SampleRenderer
                 // the fold where it began.
                 case Phase.ReverseOpens:
                     phase = Phase.ReverseCloses;
-                    secondClickAtMs = PanelMotion.Ms(PanelMotion.FoldCloseBaseMs) * ReverseClosingAt;
+                    secondClickAtMs = leaveMs + PanelMotion.Ms(PanelMotion.FoldCloseBaseMs) * ReverseClosingAt;
                     break;
 
                 default:
                     CompositionTarget.Rendering -= OnFrame;
                     var pass = ReportFoldVerdict(
                         report, settledHeights, heightBeforeClick, afterReversal ?? [], foldOpenMs);
-                    report.AppendLine($"RESULT: {(!TableHasFold ? "NOT RUN" : pass ? "PASS" : "FAIL")}");
+                    report.AppendLine($"RESULT: {(pass ? "PASS" : "FAIL")}");
                     File.WriteAllText(Path.Combine(dir, "fold-check.txt"), report.ToString());
                     shutdown();
                     return;
@@ -728,12 +741,6 @@ internal static class SampleRenderer
         WarmUp, WarmDown, CaptureExpand, CaptureCollapse, SecondClickInFold, SecondClickInRows,
         ReverseOpens, ReverseCloses,
     }
-
-    /// <summary>
-    /// Whether the switch folds the table. It changes at once until the fold exists, and a claim
-    /// about a click landing mid-fold cannot be true or false of a change with no middle.
-    /// </summary>
-    private static readonly bool TableHasFold = false;
 
     /// <summary>How long past a fold's own time <c>--fold-check</c> keeps sampling.</summary>
     private const double FoldSettleMarginMs = 200;
@@ -762,16 +769,11 @@ internal static class SampleRenderer
         List<(double Ms, double Height)> frames, double foldOpenMs)
     {
         var open = settled[Phase.ReverseOpens];
+        var closed = settled[Phase.WarmDown];
         var pass = true;
 
         void Claim(string what, bool holds, string measured, bool needsMotion = false)
         {
-            if (!TableHasFold)
-            {
-                report.AppendLine($"NOT RUN {what,-49} the switch has no fold to reach yet");
-                return;
-            }
-
             // With Windows' animation setting off nothing is ever mid-fold, so a claim about a
             // click landing in one is the machine's setting and not the fold's fault.
             if (needsMotion && !WpfMotion.AnimationsOn)
@@ -784,18 +786,18 @@ internal static class SampleRenderer
             report.AppendLine($"{(holds ? "ok  " : "FAIL")} {what,-52} {measured}");
         }
 
-        bool Closed(Phase p) => settled[p] < FoldHeightToleranceDip;
+        bool Closed(Phase p) => Math.Abs(settled[p] - closed) <= FoldHeightToleranceDip;
         string H(double height) => $"{height:0.0}";
 
         report.AppendLine();
-        Claim("an open panel has a body to fold", open > FoldHeightToleranceDip, $"open={H(open)}");
+        Claim("the two views differ in height", open > closed + FoldHeightToleranceDip, $"open={H(open)} closed={H(closed)}");
         Claim("a click mid-opening ends closed (in the fold)", Closed(Phase.SecondClickInFold),
             $"height={H(settled[Phase.SecondClickInFold])}");
         Claim("a click mid-opening ends closed (in the rows)", Closed(Phase.SecondClickInRows),
             $"height={H(settled[Phase.SecondClickInRows])}");
         Claim("the click reversing a close lands mid-fold",
-            before > FoldHeightToleranceDip && before < open - FoldHeightToleranceDip,
-            $"height={H(before)} of {H(open)}", needsMotion: true);
+            before > closed + FoldHeightToleranceDip && before < open - FoldHeightToleranceDip,
+            $"height={H(before)} between {H(closed)} and {H(open)}", needsMotion: true);
 
         // The frames after the click, on the curve the fold opens by from where it stood: the
         // first of them has moved (a fold that sits still is the one that ignored the height on

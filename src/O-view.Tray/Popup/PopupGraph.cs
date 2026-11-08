@@ -38,25 +38,132 @@ internal sealed class PopupGraph(FrameworkElement owner, Canvas host)
     /// <summary>The bars' width below which they would stop reading as bars on a very narrow panel.</summary>
     private const double MinBarWidthDip = 2;
 
+    /// <summary>One per column, a day with no bar included: it has no height, and a switch to the other measure can give it one.</summary>
+    private readonly List<Rectangle> _bars = [];
+
+    private PanelLocalChartView? _drawn;
+    private double _width;
+    private double _barArea;
+
+    /// <summary>
+    /// Draws the chart at rest. Nothing happens if it is already drawn at this size, because the
+    /// panel's fit asks for a redraw on every pass, including while the bars are moving.
+    /// </summary>
     public void Draw(PanelLocalChartView chart)
     {
+        var width = host.ActualWidth > 0 ? host.ActualWidth : PanelMetrics.ContentWidthDip;
+
+        // Measured from the canvas rather than fixed at the natural 96: a display too short for
+        // the panel gets a shorter chart (PanelDensity), and the axis band keeps its height.
+        var barArea = Math.Max(PanelMetrics.ChartAxisBandDip, host.Height - PanelMetrics.ChartAxisBandDip);
+
+        if (ReferenceEquals(chart, _drawn) && width == _width && barArea == _barArea)
+        {
+            return;
+        }
+
+        _drawn = chart;
+        _width = width;
+        _barArea = barArea;
+        _bars.Clear();
         host.Children.Clear();
         if (chart.Columns.Count == 0)
         {
             return;
         }
 
-        var width = host.ActualWidth > 0 ? host.ActualWidth : PanelMetrics.ContentWidthDip;
-
-        // Measured from the canvas rather than fixed at the natural 96: a display too short for
-        // the panel gets a shorter chart (PanelDensity), and the axis band keeps its height.
-        var barArea = Math.Max(PanelMetrics.ChartAxisBandDip, host.Height - PanelMetrics.ChartAxisBandDip);
         var slot = width / chart.Columns.Count;
 
         AddHairline(0, barArea, width, 1);
         AddBars(chart.Columns, slot, barArea);
         AddAxis(chart, slot, barArea, width);
     }
+
+    /// <summary>
+    /// The bars rise from the baseline as the panel arrives, each a few milliseconds after the
+    /// one to its left. A day with no bar neither rises nor takes a turn.
+    /// </summary>
+    public void Rise()
+    {
+        var riseMs = PanelMotion.Ms(PanelMotion.ChartBarRiseBaseMs);
+        if (!PanelMotion.Runs(WpfMotion.AnimationsOn, riseMs))
+        {
+            return;
+        }
+
+        var index = 0;
+        foreach (var bar in _bars.Where(bar => bar.Height > 0))
+        {
+            Animate(bar, 0, bar.Height, riseMs, PanelMotion.ChartBarStartMs(index++));
+        }
+    }
+
+    /// <summary>
+    /// The bars move to the other measure's heights, all together, each from the height it is at
+    /// on screen, so a second press turns them round wherever they have got to.
+    /// </summary>
+    public void MoveTo(PanelLocalChartView chart)
+    {
+        if (_bars.Count != chart.Columns.Count)
+        {
+            Draw(chart);
+            return;
+        }
+
+        var moveMs = PanelMotion.Ms(PanelMotion.ChartSeriesSwitchBaseMs);
+        var animate = PanelMotion.Runs(WpfMotion.AnimationsOn, moveMs);
+
+        _drawn = chart;
+        foreach (var (bar, column) in _bars.Zip(chart.Columns))
+        {
+            var from = bar.Height;
+            var to = TargetHeight(column);
+            PlaceBar(bar, to);
+            SetCard(bar, column);
+
+            if (animate)
+            {
+                Animate(bar, from, to, moveMs, 0);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The bars <paramref name="atMs"/> after the press, from the same curve and figure
+    /// <see cref="MoveTo"/> runs, for a verification render.
+    /// </summary>
+    public void ApplyPartialMove(PanelLocalChartView chart, double atMs)
+    {
+        var travel = PanelMotion.Decelerate.ValueAt(atMs / PanelMotion.Ms(PanelMotion.ChartSeriesSwitchBaseMs));
+
+        foreach (var (bar, column) in _bars.Zip(chart.Columns))
+        {
+            PlaceBar(bar, bar.Height + (TargetHeight(column) - bar.Height) * travel);
+        }
+    }
+
+    private double TargetHeight(PanelGraphColumnView column) =>
+        column.HasBar ? Math.Max(PanelMetrics.GraphMinBarHeightDip, (_barArea - HeadroomDip) * column.Height) : 0;
+
+    /// <summary>Bottom-aligned on the baseline, because a Canvas places a child by its top edge.</summary>
+    private void PlaceBar(Rectangle bar, double height)
+    {
+        bar.Height = height;
+        Canvas.SetTop(bar, _barArea - height);
+    }
+
+    private void Animate(Rectangle bar, double from, double to, double durationMs, double delayMs)
+    {
+        bar.BeginAnimation(FrameworkElement.HeightProperty, WpfMotion.Travel(from, to, durationMs, delayMs));
+        bar.BeginAnimation(Canvas.TopProperty, WpfMotion.Travel(_barArea - from, _barArea - to, durationMs, delayMs));
+    }
+
+    /// <summary>
+    /// Figure first, date beneath, the panel's shared hover card. A bare string here renders as
+    /// system chrome, a pale rectangle on an otherwise rounded panel.
+    /// </summary>
+    private void SetCard(Rectangle bar, PanelGraphColumnView column) =>
+        bar.ToolTip = column.HasBar ? HoverCard.Figure(owner, column.CardFigure, column.CardCaption) : null;
 
     private void AddBars(IReadOnlyList<PanelGraphColumnView> columns, double slot, double barArea)
     {
@@ -66,32 +173,22 @@ internal sealed class PopupGraph(FrameworkElement owner, Canvas host)
 
         for (var i = 0; i <= last; i++)
         {
-            var column = columns[i];
-            if (!column.HasBar)
-            {
-                continue;
-            }
-
-            var height = Math.Max(PanelMetrics.GraphMinBarHeightDip, (barArea - HeadroomDip) * column.Height);
             var age = last == 0 ? 1 : i / (double)last;
             var bar = new Rectangle
             {
                 Width = Math.Max(MinBarWidthDip, slot - 2 * PanelMetrics.ChartBarInsetDip),
-                Height = height,
                 Fill = i == last ? today : bars,
                 Opacity = PanelMetrics.ChartOldestBarOpacity
                           + (PanelMetrics.ChartNewestBarOpacity - PanelMetrics.ChartOldestBarOpacity) * age,
                 RadiusX = PanelMetrics.ChartBarRadiusDip,
                 RadiusY = PanelMetrics.ChartBarRadiusDip,
-
-                // Figure first, date beneath, the panel's shared hover card. A bare string here
-                // renders as system chrome, a pale rectangle on an otherwise rounded panel.
-                ToolTip = HoverCard.Figure(owner, column.CardFigure, column.CardCaption),
             };
             HoverCard.ApplyTiming(bar);
+            SetCard(bar, columns[i]);
+            PlaceBar(bar, TargetHeight(columns[i]));
             Canvas.SetLeft(bar, i * slot + PanelMetrics.ChartBarInsetDip);
-            Canvas.SetTop(bar, barArea - height);
             host.Children.Add(bar);
+            _bars.Add(bar);
         }
     }
 
