@@ -25,16 +25,16 @@ References run one way: **skins → App → Presentation → Core**. A project m
 | Header, account | `PanelHeaderView` | both |
 | Session/weekly meters, boost chip | `PanelMeterView`, `PanelBoostChipView` | both |
 | A model's own weekly limit bar | `PanelSections.ModelLimitMeters`, one `PanelMeterView` per model | both |
-| **Your plan** block: the meters, the off-plan row that closes it, and the off-plan banner above both blocks | `PanelPlanBlockView` (`PanelSections.PlanBlock`), `PanelOffPlanRowView`, `PanelOffPlanBannerView` | Windows |
+| **Your plan** block: the meters, the off-plan row that closes it, and the off-plan banner above both blocks | `PanelPlanBlockView` (`PanelSections.PlanBlock`), `PanelOffPlanRowView`, `PanelOffPlanBannerView` | Windows; Linux reads the banner type too, through `PanelOffPlanView` |
 | **On this machine**, totals face: the 31-day chart with its week marks, and the Output or Overall table | `PanelLocalTotalsView` (`PanelSections.LocalTotals`), `PanelLocalChartView`, `PanelLocalWeekMarkView`, `PanelLocalTableView`, `PanelLocalRowView` | Windows |
 | **On this machine**, model face: two doughnuts and a row for every model | `PanelModelFaceView` (`PanelSections.ModelFace`), `PanelModelDoughnutView`, `PanelModelSectionView`, `PanelModelTableView`, `PanelModelRowView` | Windows |
 | The local block's footer: the one caveat and the Output/Overall switch | `PanelLocalFooterView` (`PanelSections.LocalFooter`), `PanelMeasureOption` | Windows |
 | The view the reader left the panel in: Output or Overall, totals or models, banner hidden | `PanelViewChoice`, passed in by the head and given back; Presentation stores nothing | Windows |
 | Stat tiles, per-model breakdown | `PanelTileView`, `PanelTilesView`, `PanelTileSegmentView` | Linux |
 | 31-day graph, weekly-reset gridlines | `PanelGraphView`, `PanelGraphColumnView`, `PanelGraphBoundaryView` | Linux; Windows reads the columns only |
-| Off-plan banner and section | `PanelOffPlanView`, `PanelOffPlanBannerView`, `PanelOffPlanSectionView` | Linux |
+| Off-plan banner and section | `PanelOffPlanView`, `PanelOffPlanSectionView` | Linux |
 | Tokens-used bars, legend and breakdown table | `PanelTokenBarsView`, `PanelTokenBarView`, `PanelTokenBreakdownRow` | Linux |
-| The scope note beneath the tiles | `PanelSections.ScopeNote` | Linux |
+| The scope note: what the token figures cannot count | `PanelSections.ScopeNote` | both; Windows draws it under the table |
 
 **The two heads draw different panels today.** Windows has the two-block layout, and reads the plan block, the totals face, the model face and the footer. Linux has not been given it: it keeps its earlier layout of tiles, tokens-used bars and graph, reads none of the four view models above, and draws every sample state, including the Overall and model-face ones, through that layout. Both are built from the same Presentation, so the words and figures are shared where the two panels show the same thing; the layouts are not. Bringing Linux to the new design is separate work, and nothing in the documentation says it has it.
 

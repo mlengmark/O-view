@@ -107,7 +107,7 @@ Still images cannot show it, so it is described here. On Windows the panel and t
 - **The model face.** "By model" and "totals" turn the block over: the old face fades as the new one arrives and the height moves between them. On the model face each doughnut fills as one clockwise sweep and the rows fade in one at a time. Pointing at the block brightens its tag and outlines it faintly.
 - **Animations off.** Everything above follows Windows' setting for animation effects, read each time a transition starts. With it off, the panel and the menu appear and disappear at once, and folds and turns happen in one step.
 
-Once the motion has settled the surfaces look as the images above show them. A second click during any of it turns it round from where it had got to. The Linux head has none of this: its panel appears and disappears at once, its tiles and breakdown switch change in one step, and its menu belongs to the desktop. [platform-status.md](platform-status.md) records which of this has been watched on a real desktop.
+Once the motion has settled the surfaces look as the images above show them. A second click during a slide, a fold or a turn reverses it from where it had got to; a second press on the banner's hide control changes nothing. The Linux head has none of this: its panel appears and disappears at once, its tiles and breakdown switch change in one step, and its menu belongs to the desktop. [platform-status.md](platform-status.md) records which of this has been watched on a real desktop.
 
 ## What cannot be rendered
 
