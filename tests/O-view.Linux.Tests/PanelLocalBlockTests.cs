@@ -338,6 +338,19 @@ public class PanelLocalBlockTests
         Assert.Same(Words(panel, Footer(NoTranscripts).Caveat).GetVisualParent(), block.Children[^1]);
     }
 
+    /// <summary>The figures follow the stored measure: an Overall view shows the kind rows, not Output's one row.</summary>
+    [Fact]
+    public void AnOverallStateShowsTheOverallTable()
+    {
+        var state = SampleStates.All.First(s => s.View.Measure == PanelMeasure.Overall);
+        var panel = Laid(state.Name, false);
+        var table = TableOf(panel);
+
+        Assert.Equal(5, table.ColumnDefinitions.Count);
+        Assert.DoesNotContain(table.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == TokenText.OutputTokensRowLabel);
+        Assert.Equal(Totals(state.Name).Subtitle, Words(panel, Totals(state.Name).Subtitle).Text);
+    }
+
     /// <summary>The tiles, the tokens-used bars and the chart's old heading have all left the panel.</summary>
     [Theory]
     [MemberData(nameof(EveryState))]
