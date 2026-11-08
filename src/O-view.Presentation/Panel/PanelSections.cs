@@ -658,8 +658,9 @@ public static class PanelSections
     /// <para><b>Colour follows the row, from the same order.</b> The three largest take the
     /// three chromatic slots and each later model a grey, so a model wears one colour on both
     /// doughnuts and in the table. It is ranked on the chosen measure, so switching Output to
-    /// Overall can re-rank models; the tiles' panel-wide order is not used, it gives a
-    /// fourth model's slot to the remainder this face does not have.</para>
+    /// Overall can re-rank models; the tiles' panel-wide order is not used, it gives up the
+    /// third chromatic slot once there are four models so the remainder has a colour to be
+    /// told apart from, and this face has no remainder.</para>
     ///
     /// <para>A model's value is unknown when it has no rate, and is worded as such. A model
     /// that did nothing today but is priced in the window reads as a known zero, not as unknown.</para>
@@ -704,13 +705,14 @@ public static class PanelSections
             TokenText.FlipTagLabel(PanelFace.Models),
             Doughnut(
                 measure == PanelMeasure.Output ? stats.TokensToday : stats.CompositionToday.Total,
-                TokenText.ModelTodayCaption, todayWords, ranked.Select(m => m.Today).ToList(), rows, measure),
+                TokenText.ModelTodayCaption, todayWords, ranked.Select(m => m.Today).ToList(), rows, measure,
+                stats.IsOffPlan),
             Doughnut(
                 measure == PanelMeasure.Output ? stats.Tokens31Days : stats.Composition31Days.Total,
                 TokenText.ModelWindowCaption(stats.WindowDays), windowWords, ranked.Select(m => m.Window).ToList(),
                 rows, measure),
             new PanelModelTableView(
-                [TokenText.ModelColumnHeader, TokenText.ModelTokensHeader, TokenText.ModelValueHeader,
+                [TokenText.ModelColumnHeader, TokenText.ModelTokensHeader, TokenText.ModelTodayValueHeader(stats.IsOffPlan),
                     TokenText.ModelTokensHeader, TokenText.ModelValueHeader],
                 TokenText.TokenBreakdownTodayHeader,
                 TokenText.TokenBreakdown31DaysHeader,
@@ -725,7 +727,7 @@ public static class PanelSections
     /// </summary>
     private static PanelModelDoughnutView Doughnut(
         long total, string caption, string window, IReadOnlyList<ModelSlice?> slices,
-        IReadOnlyList<PanelModelRowView> rows, PanelMeasure measure)
+        IReadOnlyList<PanelModelRowView> rows, PanelMeasure measure, bool offPlan = false)
     {
         var sum = slices.Sum(s => ModelTokens(s, measure) ?? 0);
         var sections = new List<PanelModelSectionView>();
@@ -743,7 +745,7 @@ public static class PanelSections
                 share,
                 UsageFormatter.Tokens(tokens),
                 TokenText.ModelShareLine(measure, share, window),
-                TokenText.ModelValueLine(ModelValue(slices[i], measure))));
+                TokenText.ModelValueLine(ModelValue(slices[i], measure), offPlan)));
         }
 
         return new PanelModelDoughnutView(

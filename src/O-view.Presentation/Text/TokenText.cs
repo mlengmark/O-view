@@ -433,9 +433,19 @@ public static class TokenText
     /// <summary>The window words for <see cref="ModelShareLine"/>, in the order they are asked for.</summary>
     public static string ModelWindowWords(int windowDays) => $"{windowDays} days";
 
-    /// <summary>A section's last hover-card line: the estimate, or the word for a missing price.</summary>
-    public static string ModelValueLine(decimal? usd) =>
-        usd is { } value ? $"Est. {UsageFormatter.Usd(value)}" : UnpricedValue;
+    /// <summary>
+    /// The value column's heading over today's pair. It flips to spend with the tiles (F19);
+    /// the 31-day pair keeps <see cref="ModelValueHeader"/>, as <see cref="Est31DaysLabel"/> does.
+    /// </summary>
+    public static string ModelTodayValueHeader(bool offPlan) => offPlan ? "Est. spend" : ModelValueHeader;
+
+    /// <summary>
+    /// A section's last hover-card line, <c>$3.10 est. value</c>, or the word for a missing
+    /// price. <paramref name="offPlan"/> is true only for today's doughnut, where the value
+    /// reads as spend.
+    /// </summary>
+    public static string ModelValueLine(decimal? usd, bool offPlan = false) =>
+        usd is { } value ? $"{UsageFormatter.Usd(value)} est. {(offPlan ? "spend" : "value")}" : UnpricedValue;
 
     /// <summary>
     /// The block's one standing caveat, built from the sources the scan found:

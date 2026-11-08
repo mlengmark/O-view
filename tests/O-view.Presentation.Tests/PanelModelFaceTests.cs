@@ -120,7 +120,21 @@ public class PanelModelFaceTests
 
         Assert.Equal("370", section.Figure);
         Assert.Equal("output · 37% of 31 days", section.ShareLine);
-        Assert.Equal("Est. $3.10", section.ValueLine);
+        Assert.Equal("$3.10 est. value", section.ValueLine);
+    }
+
+    [Fact]
+    public void WhileOffPlanTodaysValueReadsAsSpendAndTheWindowsStaysValue()
+    {
+        var face = Face("offplan-on-models", Overall);
+
+        Assert.Equal("Est. spend", face.Table.Headers[2]);
+        Assert.Equal("Est. value", face.Table.Headers[4]);
+        Assert.All(face.Today.Sections, s => Assert.EndsWith(" est. spend", s.ValueLine));
+        Assert.All(face.Window.Sections, s => Assert.EndsWith(" est. value", s.ValueLine));
+
+        var onPlan = Face("typical-models", Overall);
+        Assert.Equal("Est. value", onPlan.Table.Headers[2]);
     }
 
     [Fact]
