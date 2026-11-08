@@ -48,18 +48,17 @@ internal static class SampleRenderer
 
     /// <summary>
     /// Renders the detail panel offscreen, in both themes, for every shared sample state
-    /// (<see cref="SampleStates"/>), plus the views only this head has: the token
-    /// explanation open and caught mid-fold, the compact density, and the graph's hover cards.
+    /// (<see cref="SampleStates"/>), plus the views only this head has: the compact density
+    /// and the chart's hover card.
     ///
     /// <para>These are the Windows golden images (<c>tools/check.ps1</c>). The clock and the
     /// time zone are pinned to <see cref="SampleStates.Now"/> and <see cref="SampleStates.Zone"/>,
     /// so the same code renders the same pixels on any machine; the Linux head renders the
     /// same states under the same names, so the two can be compared side by side.</para>
     ///
-    /// <para>The 31-day graph is why rendering is needed at all: its week gridlines sit on
-    /// the derived weekly reset, and whether they land correctly inside a day column cannot be
-    /// judged from unit tests, which cover the arithmetic, not where a line ends up on a
-    /// Canvas.</para>
+    /// <para>The 31-day chart is why rendering is needed at all: whether a week's line and its
+    /// date land correctly against a day column cannot be judged from unit tests, which cover
+    /// the arithmetic, not where a line ends up on a Canvas.</para>
     /// </summary>
     public static void RenderPopupSamples(string dir)
     {
@@ -67,7 +66,11 @@ internal static class SampleRenderer
         const double scale = 2.0;
 
         var typical = SampleStates.All.Single(s => s.Name == "typical");
-        var tallest = SampleStates.All.Single(s => s.Name == ShortState);
+        var typicalOverall = SampleStates.All.Single(s => s.Name == "typical-overall");
+
+        // Overall, for the same reason the compact sample is: the table's rows are what take the
+        // panel past the work area, and a state that fits shows nothing about capping it.
+        var tallest = SampleStates.All.Single(s => s.Name == ShortState) with { View = new(PanelMeasure.Overall) };
 
         PopupWindow NewPopup(bool light, SampleState state) => new()
         {
@@ -91,23 +94,11 @@ internal static class SampleRenderer
                     File(state.Name, light));
             }
 
-            // The token explanation with its disclosure open. It resets on every Populate, so
-            // this view exists in no other render.
-            SavePng(NewPopup(light, typical).RenderToBitmap(typical.Snapshot, typical.Stats, typical.Account, scale,
-                    expandComposition: true),
-                File("typical-tokens-explained", light));
-
-            // Caught 40% of the way through the fold's time, with the fold line inside the table
-            // and the first two rows part-faded. No frame of the opening has the line through a
-            // row at strength any more: the rows arrive behind it.
-            SavePng(NewPopup(light, typical).RenderToBitmap(typical.Snapshot, typical.Stats, typical.Account, scale,
-                    compositionRevealMs: PanelMotion.Ms(PanelMotion.FoldOpenBaseMs) * 0.4),
-                File("typical-tokens-folding", light));
-
-            // Compact density with the disclosure open: the tallest the panel can be, which is
+            // Compact density on the Overall table: the taller of the two measures, which is
             // the case the density exists for.
-            SavePng(NewPopup(light, typical).RenderToBitmap(typical.Snapshot, typical.Stats, typical.Account, scale,
-                    expandComposition: true, density: PanelDensity.Compact),
+            SavePng(NewPopup(light, typicalOverall).RenderToBitmap(
+                    typicalOverall.Snapshot, typicalOverall.Stats, typicalOverall.Account, scale,
+                    density: PanelDensity.Compact),
                 File("typical-compact", light));
 
             // And the display that compacting alone cannot save: the tallest state against a
@@ -119,7 +110,7 @@ internal static class SampleRenderer
                     density: PanelDensity.Compact, availableHeightDip: ShortWorkAreaDip),
                 File($"{ShortState}-short", light));
 
-            // The graph's hover cards, standalone: a ToolTip cannot be given a parent, so it
+            // The chart's hover card, standalone: a ToolTip cannot be given a parent, so it
             // appears in no render of the panel.
             RenderHoverCards(dir, light,
                 [.. NewPopup(light, typical).BuildSampleHoverCards(light)],
@@ -530,14 +521,18 @@ internal static class SampleRenderer
     /// That is the case that found the fold snapping to the wrong height, so it is read, not just
     /// traced: the frames that follow the click must carry on from the height it caught and not
     /// sit still or jump away from it, and the fold must end open.</para>
+    ///
+    /// <para>The switch changes the table at once while it has no fold of its own, so for now
+    /// this drives the real switch and traces it, and reports every claim about a fold as not
+    /// run rather than passing them on a table that was never mid-fold
+    /// (<see cref="TableHasFold"/>).</para>
     /// </summary>
     public static void RunFoldCheck(string dir, Action shutdown)
     {
         Directory.CreateDirectory(dir);
         var report = new System.Text.StringBuilder();
 
-        // Minimal fixture: the disclosure only appears when there is a composition to explain,
-        // and nothing else in the panel affects the fold.
+        // Minimal fixture: nothing else in the panel affects the table's height.
         var composition = new TokenComposition(1_400, 1_300_000, 11_300_000, 128_600);
         var stats = new PanelStatistics(
             TokensToday: composition.Total,
@@ -599,7 +594,7 @@ internal static class SampleRenderer
             folding = true;
             try
             {
-                popup.ToggleCompositionForVerification();
+                popup.ToggleMeasureForVerification();
             }
             finally
             {
@@ -712,7 +707,7 @@ internal static class SampleRenderer
                     CompositionTarget.Rendering -= OnFrame;
                     var pass = ReportFoldVerdict(
                         report, settledHeights, heightBeforeClick, afterReversal ?? [], foldOpenMs);
-                    report.AppendLine($"RESULT: {(pass ? "PASS" : "FAIL")}");
+                    report.AppendLine($"RESULT: {(!TableHasFold ? "NOT RUN" : pass ? "PASS" : "FAIL")}");
                     File.WriteAllText(Path.Combine(dir, "fold-check.txt"), report.ToString());
                     shutdown();
                     return;
@@ -733,6 +728,12 @@ internal static class SampleRenderer
         WarmUp, WarmDown, CaptureExpand, CaptureCollapse, SecondClickInFold, SecondClickInRows,
         ReverseOpens, ReverseCloses,
     }
+
+    /// <summary>
+    /// Whether the switch folds the table. It changes at once until the fold exists, and a claim
+    /// about a click landing mid-fold cannot be true or false of a change with no middle.
+    /// </summary>
+    private static readonly bool TableHasFold = false;
 
     /// <summary>How long past a fold's own time <c>--fold-check</c> keeps sampling.</summary>
     private const double FoldSettleMarginMs = 200;
@@ -765,6 +766,12 @@ internal static class SampleRenderer
 
         void Claim(string what, bool holds, string measured, bool needsMotion = false)
         {
+            if (!TableHasFold)
+            {
+                report.AppendLine($"NOT RUN {what,-49} the switch has no fold to reach yet");
+                return;
+            }
+
             // With Windows' animation setting off nothing is ever mid-fold, so a claim about a
             // click landing in one is the machine's setting and not the fold's fault.
             if (needsMotion && !WpfMotion.AnimationsOn)

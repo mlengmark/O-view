@@ -12,7 +12,7 @@ namespace OView.Tray.Popup;
 ///
 /// <para><b>Measured, not guessed.</b> The natural layout is applied first and laid out,
 /// because the panel's height depends on what is in it, a no-data banner, an off-plan
-/// section, an expanded explanation, and a threshold on the work area alone would be wrong
+/// section, the longer of the two tables, and a threshold on the work area alone would be wrong
 /// for most of those combinations. The extra layout pass costs nothing next to the two the
 /// flyout already runs.</para>
 ///
@@ -35,7 +35,7 @@ internal sealed class PopupFit
     private readonly Border _panelRoot;
     private readonly PopupScroll _scroll;
     private readonly Action<PanelDensity> _applyDensity;
-    private readonly Action<PanelStatistics, UsageSnapshot> _drawGraph;
+    private readonly Action _drawGraph;
 
     /// <summary>
     /// What the panel was last fit for, so a later growth or shrink (<see cref="RefitForPendingGrowth"/>)
@@ -52,7 +52,7 @@ internal sealed class PopupFit
     /// <param name="drawGraph">Redraws the chart against whatever height the fit just gave it.</param>
     public PopupFit(
         Window window, Border panelRoot, PopupScroll scroll,
-        Action<PanelDensity> applyDensity, Action<PanelStatistics, UsageSnapshot> drawGraph)
+        Action<PanelDensity> applyDensity, Action drawGraph)
     {
         _window = window;
         _panelRoot = panelRoot;
@@ -62,10 +62,10 @@ internal sealed class PopupFit
     }
 
     /// <param name="pendingGrowth">
-    /// Height the panel is about to gain or lose but has not yet, the disclosure fold, which is
-    /// measured before it plays so that the window is never laid out at the far end of it
-    /// (<see cref="PopupTokenComposition"/>). Zero everywhere else, where what is on screen and
-    /// what is being measured are the same panel.
+    /// Height the panel is about to gain or lose but has not yet, a fold that is measured before
+    /// it plays so that the window is never laid out at the far end of it (the off-plan banner's,
+    /// <see cref="PopupDivergence"/>). Zero everywhere else, where what is on screen and what is
+    /// being measured are the same panel.
     /// </param>
     public void FitToWorkArea(PanelStatistics stats, UsageSnapshot snapshot, double pendingGrowth = 0)
     {
@@ -85,7 +85,7 @@ internal sealed class PopupFit
         ApplyFit(outcome.Fit, available);
         _window.UpdateLayout();
 
-        _drawGraph(stats, snapshot);
+        _drawGraph();
     }
 
     /// <summary>
@@ -128,9 +128,8 @@ internal sealed class PopupFit
     }
 
     /// <summary>
-    /// Re-fits the panel for height the composition disclosure is about to gain or lose, if the
-    /// panel has been fit for something yet. The disclosure measures before it plays, so the
-    /// window is never laid out at the far end of the fold (<see cref="PopupTokenComposition"/>).
+    /// Re-fits the panel for height it is about to gain or lose, if it has been fit for something
+    /// yet: the off-plan banner folding away, or the switch changing the table under the chart.
     /// </summary>
     public void RefitForPendingGrowth(double pendingGrowth)
     {
