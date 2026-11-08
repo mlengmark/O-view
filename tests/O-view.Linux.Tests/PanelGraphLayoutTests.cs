@@ -191,19 +191,16 @@ public class PanelGraphLayoutTests
             chart.GetVisualChildren().Count());
     }
 
-    /// <summary>
-    /// Until this head has the switch the table under the chart states Output figures, so a stored
-    /// Overall must not put a different series over them.
-    /// </summary>
+    /// <summary>The chart follows the switch: an Overall view draws all billed tokens per day, not the Output bars.</summary>
     [Fact]
-    public void AnOverallStateStillDrawsTheOutputChart()
+    public void AnOverallStateDrawsTheOverallChart()
     {
         var state = SampleStates.All.First(s => s.View.Measure == PanelMeasure.Overall);
         var output = Tips(OutputChart(state.Name));
         var overall = Tips(PanelSections.LocalTotals(state.Stats, state.Snapshot, SampleStates.Zone, state.View).Chart);
 
         Assert.NotEqual(overall, output);
-        Assert.Equal(output, BarsOf(ChartOf(Laid(state.Name, false, PanelDensity.Normal))).Select(b => (string)ToolTip.GetTip(b)!));
+        Assert.Equal(overall, BarsOf(ChartOf(Laid(state.Name, false, PanelDensity.Normal))).Select(b => (string)ToolTip.GetTip(b)!));
     }
 
     // ── the column ──────────────────────────────────────────────────────────────────

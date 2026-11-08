@@ -32,19 +32,27 @@ internal sealed class PanelTotalsTable(LinuxPanelTheme theme)
     /// <summary>The line's own pixel, which the cell's padding starts after.</summary>
     private const double LineDip = 1;
 
+    /// <summary>A token kind's colour chip, the size the Windows panel gives it.</summary>
+    private const double ChipSizeDip = 8;
+
+    private const double ChipGapDip = 6;
+
+    private const double ChipRadiusDip = 2;
+
     private readonly LinuxPanelTheme _theme = theme;
 
     /// <summary>Tightens the rows with the rest of the panel; the columns and the type stay put.</summary>
     public Grid Build(PanelLocalTableView table, double spacingScale)
     {
         var dataColumns = table.Headers.Count - 1;
+        var columnWidth = dataColumns == 2 ? PanelMetrics.OutputColumnDip : PanelMetrics.OverallColumnDip;
         var rowCount = table.Rows.Count + 1;
 
         var grid = new Grid();
         grid.ColumnDefinitions.Add(new ColumnDefinition(1, GridUnitType.Star));
         for (var i = 0; i < dataColumns; i++)
         {
-            grid.ColumnDefinitions.Add(new ColumnDefinition(PanelMetrics.OutputColumnDip, GridUnitType.Pixel));
+            grid.ColumnDefinitions.Add(new ColumnDefinition(columnWidth, GridUnitType.Pixel));
         }
 
         for (var i = 0; i < rowCount; i++)
@@ -58,11 +66,13 @@ internal sealed class PanelTotalsTable(LinuxPanelTheme theme)
             AddRow(grid, table.Rows[i], i + 1, spacingScale);
         }
 
-        // Last, so they stand over the row lines they cross.
+        // Last, so they stand over the row lines they cross. On the value row a pill covers a pair
+        // of columns, so only the lines at the left of a pair run down to it.
+        var lastRowSpan = table.Rows.Count > 0 ? table.Rows[^1].CellSpan : 1;
         for (var i = 0; i < dataColumns; i++)
         {
             var line = ColumnLine(_theme);
-            Grid.SetRowSpan(line, rowCount);
+            Grid.SetRowSpan(line, i % lastRowSpan == 0 ? rowCount : rowCount - 1);
             Place(grid, line, 0, 1 + i);
         }
 
@@ -87,31 +97,84 @@ internal sealed class PanelTotalsTable(LinuxPanelTheme theme)
 
     private void AddRow(Grid grid, PanelLocalRowView row, int gridRow, double scale)
     {
-        var padding = RowPaddingDip * scale;
-        var above = LineDip + padding;
+        var pills = row.CellSpan > 1;
+        var above = LineDip + (pills ? PanelMetrics.PillGapAboveDip : RowPaddingDip) * scale;
+        var below = (pills ? PanelMetrics.PillGapBelowDip : RowPaddingDip) * scale;
 
         var line = SoftLine(_theme);
         line.VerticalAlignment = VerticalAlignment.Top;
         Grid.SetColumnSpan(line, grid.ColumnDefinitions.Count);
         Place(grid, line, gridRow, 0);
 
-        var label = Text(row.Label, PanelMetrics.TableLabelFontSize, _theme["TextSecondary"]);
+        var label = RowLabel(row);
         label.VerticalAlignment = VerticalAlignment.Center;
-        label.Margin = new Thickness(0, above, 0, padding);
+        label.Margin = new Thickness(0, above, 0, below);
         Place(grid, label, gridRow, 0);
 
         for (var i = 0; i < row.Cells.Count; i++)
         {
-            var figure = Text(row.Cells[i], PanelMetrics.TableFigureFontSize, _theme["TextPrimary"], FontWeight.SemiBold);
-            figure.FontFeatures = [new FontFeature { Tag = "tnum" }];
-            figure.TextAlignment = TextAlignment.Center;
-            figure.HorizontalAlignment = HorizontalAlignment.Center;
-            figure.VerticalAlignment = VerticalAlignment.Center;
-            figure.Margin = new Thickness(
-                LineDip + PanelMetrics.TableCellPadLeftDip, above, PanelMetrics.TableCellPadRightDip, padding);
-            Place(grid, figure, gridRow, 1 + i);
+            var share = !pills && row.Cells.Count == 4 && i % 2 == 1;
+            Control cell = pills ? Pill(row.Cells[i]) : Figure(row.Cells[i], share);
+            cell.HorizontalAlignment = HorizontalAlignment.Center;
+            cell.VerticalAlignment = VerticalAlignment.Center;
+            cell.Margin = new Thickness(
+                LineDip + PanelMetrics.TableCellPadLeftDip, above, PanelMetrics.TableCellPadRightDip, below);
+
+            Grid.SetColumnSpan(cell, row.CellSpan);
+            Place(grid, cell, gridRow, 1 + i * row.CellSpan);
         }
     }
+
+    private Control RowLabel(PanelLocalRowView row)
+    {
+        var total = row.RowKind == PanelLocalRowKind.Total;
+        var label = Text(
+            row.Label, PanelMetrics.TableLabelFontSize, _theme[total ? "TextPrimary" : "TextSecondary"],
+            total ? FontWeight.SemiBold : FontWeight.Normal);
+
+        if (row.Kind is not { } kind)
+        {
+            return label;
+        }
+
+        label.VerticalAlignment = VerticalAlignment.Center;
+
+        var chipped = new StackPanel { Orientation = Orientation.Horizontal };
+        chipped.Children.Add(new Border
+        {
+            Width = ChipSizeDip,
+            Height = ChipSizeDip,
+            CornerRadius = new CornerRadius(ChipRadiusDip),
+            Background = _theme[TokenBarGeometry.PaletteKey(kind)],
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, ChipGapDip, 0),
+        });
+        chipped.Children.Add(label);
+        return chipped;
+    }
+
+    private TextBlock Figure(string text, bool share)
+    {
+        var figure = Text(
+            text,
+            share ? PanelMetrics.TableShareFontSize : PanelMetrics.TableFigureFontSize,
+            _theme[share ? "TextSecondary" : "TextPrimary"],
+            share ? FontWeight.Normal : FontWeight.SemiBold);
+        figure.FontFeatures = [new FontFeature { Tag = "tnum" }];
+        figure.TextAlignment = TextAlignment.Center;
+        return figure;
+    }
+
+    /// <summary>One estimate in its pill, across the pair of columns it belongs to.</summary>
+    private Border Pill(string text) => new()
+    {
+        Background = _theme["TileBg"],
+        BorderBrush = Softened(_theme, "PanelBorder", PanelMetrics.SoftLineOpacity),
+        BorderThickness = new Thickness(PanelMetrics.PillBorderDip),
+        CornerRadius = new CornerRadius(PanelMetrics.PillRadiusDip),
+        Padding = new Thickness(PanelMetrics.PillPaddingXDip, PanelMetrics.PillPaddingYDip),
+        Child = Figure(text, share: false),
+    };
 
     private static void Place(Grid grid, Control element, int row, int column)
     {

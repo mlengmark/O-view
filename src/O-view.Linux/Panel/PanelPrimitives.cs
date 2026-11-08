@@ -46,6 +46,13 @@ internal static class PanelPrimitives
     };
 
     /// <summary>
+    /// A palette colour at part strength, on the brush: an opacity on the element would fade
+    /// whatever the element holds along with its line.
+    /// </summary>
+    internal static IBrush Softened(LinuxPanelTheme theme, string key, double strength) =>
+        new SolidColorBrush(((ISolidColorBrush)theme[key]).Color, strength);
+
+    /// <summary>
     /// A caption in capitals and letter-spaced. Spacing adds room after every letter including the
     /// last, so the first letter is indented by the same amount for the caption to sit centred in
     /// whatever holds it. A screen reader is given the words as written, which capitals would

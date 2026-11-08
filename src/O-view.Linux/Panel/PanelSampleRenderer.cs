@@ -4,6 +4,7 @@ using Avalonia.Layout;
 using Avalonia.Media.Imaging;
 using Avalonia.VisualTree;
 using OView.App.Rendering;
+using OView.Core.Models;
 using OView.Presentation.Samples;
 
 namespace OView.Linux.Panel;
@@ -31,6 +32,14 @@ public static class PanelSampleRenderer
     /// <summary>The state rendered a second time for the short display: <see cref="SampleStates.ShortState"/>.</summary>
     public const string ShortState = SampleStates.ShortState;
 
+    /// <summary>
+    /// That state as the short display is shown it: in Overall, as on the Windows panel, because
+    /// the table's rows are what take the panel past the work area and a state that fits shows
+    /// nothing about capping it.
+    /// </summary>
+    public static SampleState ShortSample =>
+        SampleStates.All.First(s => s.Name == ShortState) with { View = new(PanelMeasure.Overall) };
+
     public static void RenderAll(string directory)
     {
         Directory.CreateDirectory(directory);
@@ -48,7 +57,7 @@ public static class PanelSampleRenderer
                 written++;
             }
 
-            var shortState = SampleStates.All.First(s => s.Name == ShortState);
+            var shortState = ShortSample;
             var panel = Build(shortState, light, PanelDensity.Compact);
 
             // Exactly what the window does on that desktop: compact first, then capped at the
