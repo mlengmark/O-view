@@ -46,6 +46,9 @@ public class PanelShortScreenTests
 
     private const double PanelWidthDip = 400;
 
+    /// <summary>The tallest state that shows the totals face, for the tests that need its chart and table.</summary>
+    private const string TotalsState = "offplan-on";
+
     // ── the measurement ─────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -57,7 +60,7 @@ public class PanelShortScreenTests
     [Fact]
     public void TheNaturalHeightIsTheContentsOwnAndNotOneTheScreenHasForcedOnIt()
     {
-        var panel = Panel(PanelSampleRenderer.ShortState, light: false, PanelDensity.Normal);
+        var panel = Panel(PanelSampleRenderer.ShortSample, light: false, PanelDensity.Normal);
         var natural = panel.NaturalHeightDip();
 
         // Exactly what a compositor does on a short display: hand back a frame no taller than the screen.
@@ -130,7 +133,7 @@ public class PanelShortScreenTests
     [Fact]
     public void TheFullestPanelStillOverflowsAShortWorkAreaOnceCompacted()
     {
-        var compacted = Panel(PanelSampleRenderer.ShortState, light: false, PanelDensity.Compact)
+        var compacted = Panel(PanelSampleRenderer.ShortSample, light: false, PanelDensity.Compact)
             .NaturalHeightDip();
 
         var fit = PanelFit.Resolve(compacted, ShortWorkAreaDip);
@@ -150,8 +153,7 @@ public class PanelShortScreenTests
         var rendered = Panel(PanelSampleRenderer.ShortSample, light: false, PanelDensity.Normal)
             .NaturalHeightDip();
 
-        // The totals face it photographs. The model face stands taller with seven models.
-        foreach (var state in SampleStates.All.Where(s => s.View.Face == PanelFace.Totals))
+        foreach (var state in SampleStates.All)
         {
             var height = Panel(state, light: false, PanelDensity.Normal).NaturalHeightDip();
 
@@ -171,7 +173,7 @@ public class PanelShortScreenTests
     [Fact]
     public void APanelWithRoomNeitherScrollsNorShowsABar()
     {
-        var panel = Panel(PanelSampleRenderer.ShortState, light: false, PanelDensity.Normal);
+        var panel = Panel(PanelSampleRenderer.ShortSample, light: false, PanelDensity.Normal);
         Layout(panel);
 
         Assert.False(panel.Scrolls);
@@ -221,7 +223,7 @@ public class PanelShortScreenTests
     [Fact]
     public void TheChartFillsTheColumnTheScrollBarLeaves()
     {
-        var panel = Capped(light: false);
+        var panel = Capped(light: false, TotalsState);
         var chart = PanelGraphLayoutTests.ChartOf(panel);
         var column = panel.Viewport.Bounds.Width;
         var open = panel.Bounds.Width - 2 * (panel.BorderThickness.Left + panel.Padding.Left);
@@ -330,7 +332,7 @@ public class PanelShortScreenTests
     [InlineData(true)]
     public void AWheelTurnOnALeafInsideASectionScrollsBothWays(bool figure)
     {
-        var panel = Capped(light: false);
+        var panel = Capped(light: false, TotalsState);
         var leaf = figure ? TableFigure(panel) : TableLabel(panel);
 
         leaf.RaiseEvent(Wheel(leaf, panel, deltaY: -3));
@@ -450,11 +452,14 @@ public class PanelShortScreenTests
     /// <summary>
     /// The fullest panel as a short desktop lays it out: compacted, put in its viewport, and
     /// pinned to the work area, the same three steps the window takes, and the same ones the
-    /// verification render takes offscreen.
+    /// verification render takes offscreen. The state is the short render's unless a test needs
+    /// the totals face, which is the one with a chart and the three-column table.
     /// </summary>
-    private static PanelContent Capped(bool light)
+    private static PanelContent Capped(bool light, string? totalsState = null)
     {
-        var panel = Panel(PanelSampleRenderer.ShortState, light, PanelDensity.Compact);
+        var panel = Panel(
+            totalsState is null ? PanelSampleRenderer.ShortSample : SampleStates.All.Single(s => s.Name == totalsState),
+            light, PanelDensity.Compact);
 
         var fit =PanelFit.Resolve(panel.NaturalHeightDip(), ShortWorkAreaDip);
         Assert.True(fit.MustScroll);
@@ -465,9 +470,6 @@ public class PanelShortScreenTests
 
         return panel;
     }
-
-    private static PanelContent Panel(string stateName, bool light, PanelDensity density) =>
-        Panel(SampleStates.All.Single(s => s.Name == stateName) with { View = default }, light, density);
 
     private static PanelContent Panel(SampleState state, bool light, PanelDensity density)
     {

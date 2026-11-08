@@ -91,11 +91,10 @@ public sealed class PanelContent : Border
 
     /// <summary>
     /// The viewport the sections are scrolled inside, once <see cref="ScrollContent"/> has put
-    /// them there. Public for the same reason <see cref="PanelTokenBars.ViewSwitch"/> is: this
-    /// is the state a wheel turn and a thumb drag drive, and a test process has no windowing
-    /// subsystem to produce either gesture for real. It is also what says how much content is
-    /// out of sight, the one number that proves nothing was dropped when the window had to
-    /// cap itself.
+    /// them there. Public because this is the state a wheel turn and a thumb drag drive, and a
+    /// test process has no windowing subsystem to produce either gesture for real. It is also
+    /// what says how much content is out of sight, the one number that proves nothing was
+    /// dropped when the window had to cap itself.
     /// </summary>
     public ScrollContentPresenter Viewport => _viewport;
 
