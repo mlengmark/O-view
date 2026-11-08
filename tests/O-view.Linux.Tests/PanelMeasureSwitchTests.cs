@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Reflection;
 using System.Text.RegularExpressions;
 
@@ -96,7 +97,7 @@ public class PanelMeasureSwitchTests
     }
 
     [Fact]
-    public void EachSegmentIsReachableFromTheKeyboardAndNamed()
+    public void EachSegmentIsReachableFromTheKeyboard()
     {
         var (output, overall) = Segments(Laid(Typical, false));
 
@@ -396,17 +397,32 @@ public class PanelMeasureSwitchTests
         }
     }
 
-    /// <summary>The short render uses the taller measure, as Windows' does, so a picture of it shows a panel that scrolls.</summary>
+    /// <summary>
+    /// The short render uses the taller measure, as Windows' does, so its picture shows a panel
+    /// that scrolls.
+    ///
+    /// <para><b>The picture is read from the committed golden, not measured here,</b> because this
+    /// panel's height depends on the font: it overflows 712 where the goldens are rendered and
+    /// fits inside 712 with Ubuntu's. A panel the fit has capped is exactly as tall as the work
+    /// area, so the image's height says which it was. That Overall is the taller measure holds in
+    /// any font, so that half is measured live.</para>
+    /// </summary>
     [Fact]
-    public void TheShortSampleIsInOverallAndScrollsAtItsWorkArea()
+    public void TheShortSampleIsInOverallAndItsPictureIsCappedAtTheWorkArea()
     {
         var sample = PanelSampleRenderer.ShortSample;
-        var panel = Build(sample, sample.View, PanelDensity.Compact);
+        var overall = Build(sample, sample.View, PanelDensity.Compact).NaturalHeightDip();
+        var output = Build(sample, sample.View with { Measure = PanelMeasure.Output }, PanelDensity.Compact).NaturalHeightDip();
 
         Assert.Equal(PanelMeasure.Overall, sample.View.Measure);
         Assert.True(
-            PanelFit.Resolve(panel.NaturalHeightDip(), SampleStates.ShortWorkAreaDip).MustScroll,
-            "the short render no longer overflows its work area, so its picture proves nothing about scrolling");
+            PanelFit.Resolve(overall, output).MustScroll,
+            $"Overall measures {overall:0} against Output's {output:0}, so Overall is no longer what takes the panel past the work area");
+
+        foreach (var theme in new[] { "dark", "light" })
+        {
+            Assert.Equal(SampleStates.ShortWorkAreaDip, GoldenHeight($"panel-{sample.Name}-short-{theme}.png"));
+        }
     }
 
     // ── helpers ─────────────────────────────────────────────────────────────────────
@@ -492,6 +508,17 @@ public class PanelMeasureSwitchTests
         typeof(PanelShortScreenTests)
             .GetMethod("UseRealFonts", BindingFlags.NonPublic | BindingFlags.Static)!
             .Invoke(null, null);
+
+    /// <summary>A committed image's height, from the PNG header: four big-endian bytes at offset 20.</summary>
+    private static int GoldenHeight(string file)
+    {
+        var root = (string)typeof(PanelShortScreenTests)
+            .GetMethod("RepositoryRoot", BindingFlags.NonPublic | BindingFlags.Static)!
+            .Invoke(null, null)!;
+
+        return BinaryPrimitives.ReadInt32BigEndian(
+            File.ReadAllBytes(Path.Combine(root, "tests", "golden", "linux", file)).AsSpan(20, 4));
+    }
 
     private static string WindowSourceWithoutComments() =>
         (string)typeof(PanelShortScreenTests)
