@@ -104,19 +104,17 @@ public class PanelTokenBarsLayoutTests
     }
 
     /// <summary>
-    /// The panel the renderer draws for a short display, where the scroll bar narrows the
-    /// content after the bars have already been cut once for a wider track.
+    /// The narrower column a scroll bar leaves, arriving after the bars have already been cut
+    /// once for a wider track.
     /// </summary>
     [Fact]
     public void TheCappedRenderCutsTheBarsForTheTrackTheScrollBarLeaves()
     {
         var state = SampleStates.All.Single(s => s.Name == PanelSampleRenderer.ShortState);
         var panel = Build(state.Name, PanelDensity.Compact);
-        var fit = PanelFit.Resolve(panel.NaturalHeightDip(), SampleStates.ShortWorkAreaDip);
-        Assert.True(fit.MustScroll);
-        panel.ScrollContent(fit.MustScroll);
-        panel.Height = fit.WindowHeightDip;
+        PanelSampleRenderer.LayOut(panel);
 
+        panel.Width -= PanelMetrics.ScrollBarWidthDip + PanelMetrics.ScrollBarGapDip;
         PanelSampleRenderer.LayOut(panel, PanelSampleRenderer.CappedLayoutPasses);
 
         var view = PanelSections.TokenBars(state.Stats, state.Scope ?? TranscriptScopeReport.Inspect());
@@ -192,15 +190,26 @@ public class PanelTokenBarsLayoutTests
             .Where(g => g.ColumnDefinitions.Count > 0 && g.ColumnDefinitions.All(c => c.Width.IsAbsolute))
             .ToList();
 
-    private static PanelContent Build(string name, PanelDensity? density = null)
+    /// <summary>
+    /// The bars have left the panel, so they are built on their own here, in a frame as wide as
+    /// the panel's and with its border and padding, which is the column they used to be given.
+    /// </summary>
+    private static Border Build(string name, PanelDensity? density = null)
     {
         UseRealFonts();
 
         var state = SampleStates.All.Single(s => s.Name == name);
-        var panel = new PanelContent(new LinuxPanelTheme(false)) { Density = density ?? PanelDensity.Normal };
-        panel.Populate(state.Snapshot, state.Stats, state.Account, state.Plan, state.Scope,
-            SampleStates.Now, state.Boost, SampleStates.Zone, state.CachedUsage);
-        return panel;
+        var sections = new StackPanel();
+        new PanelTokenBars(new LinuxPanelTheme(false)).AddTo(
+            sections, PanelSections.TokenBars(state.Stats, state.Scope ?? TranscriptScopeReport.Inspect()));
+
+        return new Border
+        {
+            Width = PanelMetrics.PanelWidthDip,
+            BorderThickness = new Thickness(1),
+            Padding = new Thickness((density ?? PanelDensity.Normal).RootPadding),
+            Child = sections,
+        };
     }
 
     /// <summary>

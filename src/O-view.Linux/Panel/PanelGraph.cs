@@ -3,7 +3,6 @@ using Avalonia.Controls;
 using Avalonia.Media;
 using OView.App.Rendering;
 using OView.Presentation.Panel;
-using static OView.Linux.Panel.PanelPrimitives;
 
 namespace OView.Linux.Panel;
 
@@ -16,7 +15,7 @@ namespace OView.Linux.Panel;
 /// </summary>
 internal sealed class PanelGraph(LinuxPanelTheme theme)
 {
-    /// <summary>Room left above the tallest bar, so it does not stand against the heading.</summary>
+    /// <summary>Room left above the tallest bar, so it does not stand against the line above it.</summary>
     private const double HeadroomDip = 4;
 
     /// <summary>A week's date starts this far right of its line, so the two do not touch.</summary>
@@ -37,15 +36,17 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
     private readonly LinuxPanelTheme _theme = theme;
 
     /// <summary>
+    /// The chart, or null when there are no days to draw.
+    ///
     /// <para><b>A day with no bar draws nothing at all</b>, no zero-height stand-in, because a
     /// flat bar claims a measured day of no usage on a day that was never measured (rule 6). Its
     /// slot stays, so the week lines over it still line up.</para>
     /// </summary>
-    public void AddTo(StackPanel root, string heading, PanelLocalChartView chart, PanelDensity density)
+    public Control? Chart(PanelLocalChartView chart, PanelDensity density)
     {
         if (chart.Columns.Count == 0)
         {
-            return;
+            return null;
         }
 
         // A whole number of pixels, so the baseline hairline at its foot stays one crisp row. The
@@ -53,10 +54,7 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
         // spacing.
         var barArea = Math.Round(PanelMetrics.ChartHeightDip * density.GraphScale);
 
-        var block = new StackPanel { Spacing = 4 };
-        block.Children.Add(Text(heading, 13, _theme["TextPrimary"], FontWeight.SemiBold));
-        block.Children.Add(new ChartSurface(_theme, chart, barArea));
-        root.Children.Add(block);
+        return new ChartSurface(_theme, chart, barArea);
     }
 
     /// <summary>

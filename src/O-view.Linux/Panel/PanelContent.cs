@@ -30,8 +30,8 @@ namespace OView.Linux.Panel;
 /// <para>This class owns the panel's frame and the one row it draws itself, the header. The
 /// header is also the panel's drag handle, which is why it is the one row built once and
 /// refilled rather than rebuilt (<see cref="Header"/>). Each section below it is its own piece,
-/// named for what it draws: <see cref="PanelOffPlan"/>, <see cref="PanelPlanBlock"/>,
-/// <see cref="PanelStatTiles"/>, <see cref="PanelTokenBars"/> and <see cref="PanelGraph"/>.</para>
+/// named for what it draws: <see cref="PanelOffPlan"/>, <see cref="PanelPlanBlock"/> and
+/// <see cref="PanelLocalBlock"/>.</para>
 ///
 /// <para>The frame can also put those sections in a scrolling viewport, so a panel the window
 /// has had to cap can still be reached to its last section, see <see cref="ScrollContent"/>,
@@ -70,29 +70,15 @@ public sealed class PanelContent : Border
     private readonly Grid _scrollFrame;
     private readonly PanelScroll _scroll;
 
-    private readonly PanelStatTiles _tiles;
-    private readonly PanelTokenBars _tokenBars;
-    private readonly PanelGraph _graph;
     private readonly PanelOffPlan _offPlan;
     private readonly PanelPlanBlock _planBlock;
+    private readonly PanelLocalBlock _localBlock;
 
     /// <summary>
     /// The reader pressed the banner's hide control. The banner has already gone from the panel
     /// when this is raised; keeping it hidden and re-fitting the window are the window's.
     /// </summary>
     public event Action? BannerHidden;
-
-    /// <summary>
-    /// The flip of every tile that has a second face, in the order the panel places them.
-    ///
-    /// <para>Avalonia raises no pointer events without a windowing subsystem and CI has none,
-    /// so a test cannot click a tile. This is the state a click drives, exposed so the flip can
-    /// be asserted, the same reason <see cref="PanelDismissal"/> is its own class rather than
-    /// logic inline in an event handler, and it matters more here because no golden image shows
-    /// a tile's second face. What no test reaches either way is the three subscriptions in
-    /// the tile itself.</para>
-    /// </summary>
-    public IReadOnlyList<PanelStatTiles.TileFlip> TileFlips => _tiles.Flips;
 
     /// <summary>
     /// The viewport the sections are scrolled inside, once <see cref="ScrollContent"/> has put
@@ -131,11 +117,9 @@ public sealed class PanelContent : Border
     public PanelContent(LinuxPanelTheme theme)
     {
         _theme = theme;
-        _tiles = new PanelStatTiles(theme);
-        _tokenBars = new PanelTokenBars(theme);
-        _graph = new PanelGraph(theme);
         _offPlan = new PanelOffPlan(theme);
         _planBlock = new PanelPlanBlock(theme, _offPlan);
+        _localBlock = new PanelLocalBlock(theme);
 
         Width = PanelWidth;
         Background = theme["PanelBg"];
@@ -357,19 +341,16 @@ public sealed class PanelContent : Border
         _planBlock.AddTo(_root, plan, Density);
 
         var report = scopeReport ?? TranscriptScopeReport.Inspect();
-        _tiles.AddTo(_root, stats, Density);
-        _tokenBars.AddTo(_root, PanelSections.TokenBars(stats, report));
 
-        // Output whatever is stored, because the tiles above still state Output figures and a
-        // chart of a different measure under them would disagree with them. The view comes
-        // through whole once this head has the switch.
-        var totals = PanelSections.LocalTotals(stats, snapshot, local, view with { Measure = PanelMeasure.Output });
-        _graph.AddTo(_root, PanelText.UsageWindowHeading(stats.WindowDays), totals.Chart, Density);
-
-        if (PanelSections.ScopeNote(stats, snapshot, report) is { } note)
-        {
-            _root.Children.Add(Muted(_theme, note));
-        }
+        // Output whatever is stored: this head has no switch yet, so nothing on the panel could
+        // say the figures were counting something else. The view comes through whole once it has.
+        var shown = view with { Measure = PanelMeasure.Output };
+        _localBlock.AddTo(
+            _root,
+            PanelSections.LocalTotals(stats, snapshot, local, shown),
+            PanelSections.LocalFooter(report, shown),
+            PanelSections.ScopeNote(stats, snapshot, report),
+            Density);
     }
 
     // ── sections ────────────────────────────────────────────────────────────────────

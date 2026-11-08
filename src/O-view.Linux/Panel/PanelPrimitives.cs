@@ -1,5 +1,7 @@
 using Avalonia;
+using Avalonia.Automation;
 using Avalonia.Controls;
+using Avalonia.Layout;
 using Avalonia.Media;
 using OView.App.Rendering;
 
@@ -33,6 +35,30 @@ internal static class PanelPrimitives
         Background = theme["PanelBorder"],
         Opacity = PanelMetrics.SoftLineOpacity,
     };
+
+    /// <summary>The line at the left of a table's data column, softer again than a row line.</summary>
+    internal static Border ColumnLine(LinuxPanelTheme theme) => new()
+    {
+        Width = 1,
+        Background = theme["PanelBorder"],
+        Opacity = PanelMetrics.ColumnLineOpacity,
+        HorizontalAlignment = HorizontalAlignment.Left,
+    };
+
+    /// <summary>
+    /// A caption in capitals and letter-spaced. Spacing adds room after every letter including the
+    /// last, so the first letter is indented by the same amount for the caption to sit centred in
+    /// whatever holds it. A screen reader is given the words as written, which capitals would
+    /// otherwise have it spell out.
+    /// </summary>
+    internal static TextBlock Caption(string words, double size, IBrush brush, FontWeight weight = FontWeight.Normal)
+    {
+        var caption = Text(words.ToUpperInvariant(), size, brush, weight);
+        caption.LetterSpacing = size * PanelMetrics.LetterSpacingEm;
+        caption.Margin = new Thickness(size * PanelMetrics.LetterSpacedIndentEm, 0, 0, 0);
+        AutomationProperties.SetName(caption, words);
+        return caption;
+    }
 
     /// <summary>
     /// The amber card the no-data banner and the off-plan banner share: a semi-bold title and

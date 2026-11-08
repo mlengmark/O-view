@@ -192,8 +192,8 @@ public class PanelGraphLayoutTests
     }
 
     /// <summary>
-    /// Until this head has the switch the tiles above the chart state Output figures, so a stored
-    /// Overall must not put a different series under them.
+    /// Until this head has the switch the table under the chart states Output figures, so a stored
+    /// Overall must not put a different series over them.
     /// </summary>
     [Fact]
     public void AnOverallStateStillDrawsTheOutputChart()

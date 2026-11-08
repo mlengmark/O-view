@@ -31,6 +31,12 @@ public class PanelPlanBlockTests
 {
     private const string BannerState = "offplan-on";
 
+    /// <summary>
+    /// A work area the panel overflows even compacted and with its banner hidden, which the shared
+    /// short work area no longer does now the panel has no tiles.
+    /// </summary>
+    private const double TooShortWorkAreaDip = 480;
+
     // ── the block ───────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -381,7 +387,7 @@ public class PanelPlanBlockTests
         var state = SampleStates.All.Single(s => s.Name == BannerState);
         var panel = Build(BannerState, PanelDensity.Compact);
         panel.ScrollContent(true);
-        panel.Height = SampleStates.ShortWorkAreaDip;
+        panel.Height = TooShortWorkAreaDip;
         PanelSampleRenderer.LayOut(panel, passes: PanelSampleRenderer.CappedLayoutPasses);
 
         var hidden = state.View with { BannerHidden = true };
@@ -395,7 +401,7 @@ public class PanelPlanBlockTests
         Assert.Equal(PanelDensity.Normal, panel.Density);
 
         Populate();
-        var outcome = PanelFit.Fit(SampleStates.ShortWorkAreaDip, panel.NaturalHeightDip, density =>
+        var outcome = PanelFit.Fit(TooShortWorkAreaDip, panel.NaturalHeightDip, density =>
         {
             panel.Density = density;
             Populate();
@@ -403,7 +409,7 @@ public class PanelPlanBlockTests
 
         Assert.True(outcome.Density.IsCompact);
         Assert.True(outcome.Fit.MustScroll, "the short display no longer caps this panel, so this proves nothing");
-        Assert.Equal(SampleStates.ShortWorkAreaDip, outcome.Fit.WindowHeightDip);
+        Assert.Equal(TooShortWorkAreaDip, outcome.Fit.WindowHeightDip);
         Assert.Empty(HideControls(panel));
     }
 
