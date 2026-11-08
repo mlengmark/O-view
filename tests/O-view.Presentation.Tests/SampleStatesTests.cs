@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using OView.Presentation.Panel;
 using OView.Presentation.Samples;
+using OView.Presentation.Text;
 
 namespace OView.Presentation.Tests;
 
@@ -79,6 +80,85 @@ public class SampleStatesTests
             Assert.NotNull(meter.FillPercent);
             Assert.NotNull(meter.ResetLine);
         });
+    }
+
+    private static readonly string[] RedesignStates =
+    [
+        "typical-overall", "typical-models", "typical-models-overall", "offplan-on-overall",
+        "offplan-on-models", "offplan-on-hidden", "longest-figures",
+    ];
+
+    /// <summary>
+    /// Per-model data is on the redesign's states and nowhere else, which is what leaves every
+    /// earlier state's golden image as it was: the tiles' per-model split appears in none.
+    /// </summary>
+    [Fact]
+    public void OnlyTheRedesignStatesCarryPerModelData()
+    {
+        var withModels = SampleStates.All.Where(s => s.Stats.Models31Days.Count > 0).Select(s => s.Name);
+
+        Assert.Equal(
+            ["typical-models", "typical-models-overall", "offplan-on-models", "longest-figures"],
+            withModels);
+    }
+
+    [Fact]
+    public void TheRedesignStatesExistAndTheModelFaceOnesAskForIt()
+    {
+        var names = SampleStates.All.Select(s => s.Name).ToList();
+
+        Assert.All(RedesignStates, n => Assert.Contains(n, names));
+        Assert.Equal(
+            ["typical-models", "typical-models-overall", "offplan-on-models"],
+            SampleStates.All.Where(s => s.View.Face == OView.Core.Models.PanelFace.Models).Select(s => s.Name));
+        Assert.Equal(
+            ["offplan-on-hidden"],
+            SampleStates.All.Where(s => s.View.BannerHidden).Select(s => s.Name));
+    }
+
+    [Fact]
+    public void EveryStateEarlierThanTheRedesignOpensOnTheFreshView()
+    {
+        Assert.All(
+            SampleStates.All.Where(s => !RedesignStates.Contains(s.Name)),
+            s => Assert.Equal(default, s.View));
+    }
+
+    /// <summary>
+    /// The model rows add up to the figures above them, or the model face would contradict
+    /// the totals face it flips from.
+    /// </summary>
+    [Fact]
+    public void ModelRowsAddUpToTheWindowsTotals()
+    {
+        foreach (var s in SampleStates.All.Where(s => s.Stats.Models31Days.Count > 0))
+        {
+            Assert.Equal(s.Stats.Tokens31Days, s.Stats.Models31Days.Sum(m => m.Tokens));
+            Assert.Equal(s.Stats.TokensToday, s.Stats.ModelsToday.Sum(m => m.Tokens));
+            Assert.Equal(
+                s.Stats.Composition31Days.Total, s.Stats.Models31Days.Sum(m => m.AllTokensCount.Value));
+            Assert.Equal(
+                s.Stats.CompositionToday.Total, s.Stats.ModelsToday.Sum(m => m.AllTokensCount.Value));
+        }
+    }
+
+    [Fact]
+    public void ASevenModelStoreGetsTheStoresColourOrderAndNoMore()
+    {
+        var stats = SampleStates.All.Single(s => s.Name == "typical-models").Stats;
+
+        Assert.Equal(7, stats.Models31Days.Count);
+        Assert.Equal(["claude-opus-5", "claude-sonnet-5"], stats.ModelColourOrder);
+    }
+
+    [Fact]
+    public void TheLongestFiguresStateHoldsTheWidestFiguresThePanelIsAsked()
+    {
+        var s = SampleStates.All.Single(s => s.Name == "longest-figures");
+
+        Assert.Equal("4733.4M", UsageFormatter.Tokens(s.Stats.Composition31Days.Total));
+        Assert.Equal("$3513.67", UsageFormatter.Usd(s.Stats.Est31DaysValue.Value));
+        Assert.True(s.Stats.Models31Days.Max(m => m.Model.Length) > 40);
     }
 
     [Fact]

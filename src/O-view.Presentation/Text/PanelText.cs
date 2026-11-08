@@ -414,4 +414,16 @@ public static class PanelText
             ? $"after {TimeZoneInfo.ConvertTime(at, local):HH:mm}."
             : "on its next check.")
         + " Nothing is wrong with your connection or your install.";
+
+    /// <summary>The first block's title. Upper-casing it is the head's styling, the words are not.</summary>
+    public const string PlanBlockTitle = "Your plan";
+
+    /// <summary>The second block's title.</summary>
+    public const string LocalBlockTitle = "On this machine";
+
+    /// <summary>
+    /// The label on the off-plan banner's hide control, which is a bare mark and so needs a
+    /// name for a screen reader and for a hover.
+    /// </summary>
+    public const string HideBannerLabel = "Hide this notice";
 }

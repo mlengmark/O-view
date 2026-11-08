@@ -261,4 +261,17 @@ public static class OffPlanText
         DateTimeOffset fetchedAtUtc, DateTimeOffset utcNow, TimeZoneInfo local) =>
         "Extra usage is switched on for this account, but O-view could not read an amount "
         + $"({ReadStamp(fetchedAtUtc, utcNow, local)}). Check your billing page for the figure.";
+
+    /// <summary>
+    /// What the plan block's off-plan row says its figure is when the figure is an estimate:
+    /// <c>est. credit spend · last 31 days</c>. The day count is the window the figure covers,
+    /// as in <see cref="OffPlanHeading"/>.
+    /// </summary>
+    public static string OffPlanRowCaption(int days) => $"est. credit spend · last {days} days";
+
+    /// <summary>
+    /// The same line when the figure is Claude's own: no estimate, and no window, because the
+    /// amount states no period (<see cref="ReportedSpendHeading"/>).
+    /// </summary>
+    public const string ReportedSpendRowCaption = "reported by Claude";
 }
