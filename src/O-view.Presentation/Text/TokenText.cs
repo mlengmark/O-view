@@ -1,6 +1,7 @@
 using System.Globalization;
 using OView.Core.Models;
 using OView.Core.Pricing;
+using OView.Core.Providers.Jsonl;
 
 namespace OView.Presentation.Text;
 
@@ -331,4 +332,59 @@ public static class TokenText
 
     /// <inheritdoc cref="TokenViewBarsLabel"/>
     public const string TokenViewBreakdownLabel = "Breakdown";
+
+    /// <summary>The totals table's one row in the Output view.</summary>
+    public const string OutputTokensRowLabel = "Output tokens";
+
+    /// <summary>
+    /// The value row's label in the Output view. It flips to spend with the tiles (F19), for
+    /// the same reason <see cref="EstTodayLabel"/> does: off-plan work is billed.
+    /// </summary>
+    public static string EstValueOutputLabel(bool offPlan) =>
+        offPlan ? "Est. spend on output" : "Est. value of output";
+
+    /// <summary>The value row's label in the Overall view, flipping as <see cref="EstValueOutputLabel"/> does.</summary>
+    public static string EstValueLabel(bool offPlan) => offPlan ? "Est. spend" : "Est. value";
+
+    /// <summary>The switch's two labels: what the figures count.</summary>
+    public static string MeasureLabel(PanelMeasure measure) => measure switch
+    {
+        PanelMeasure.Output => "Output",
+        PanelMeasure.Overall => "Overall",
+        _ => throw new ArgumentOutOfRangeException(nameof(measure), measure, "Not a measure."),
+    };
+
+    /// <summary>
+    /// The local block's line under its title: the window, and the total the figures below
+    /// are about, <c>last 31 days · 24.5M output</c> or <c>last 31 days · 683.9M tokens</c>.
+    /// Output counts output only and Overall counts everything billed, so the unit is named
+    /// rather than left for the reader to infer from the switch.
+    /// </summary>
+    public static string LocalSubtitle(PanelMeasure measure, PanelStatistics stats) =>
+        measure == PanelMeasure.Output
+            ? $"last {stats.WindowDays} days · {UsageFormatter.Tokens(stats.Tokens31Days)} output"
+            : $"last {stats.WindowDays} days · {UsageFormatter.Tokens(stats.Composition31Days.Total)} tokens";
+
+    /// <summary>The chart's label on the last column.</summary>
+    public const string ChartTodayLabel = "today";
+
+    /// <summary>
+    /// The block's one standing caveat, built from the sources the scan found:
+    /// <c>Claude Code transcripts only; chat, cloud and Cowork sessions not counted.</c>
+    ///
+    /// <para><b>Cowork is listed as uncounted only when it was not found.</b> Local Cowork
+    /// sessions write the same files Claude Code does, so a machine that has them counts them,
+    /// and naming them as missing would assert something the scan contradicts.</para>
+    /// </summary>
+    public static string LocalFooter(TranscriptScopeReport? scope)
+    {
+        var present = scope?.PresentSources ?? [];
+        if (present.Count == 0)
+        {
+            return "Chat and cloud sessions not counted.";
+        }
+
+        var notCounted = present.Contains("Cowork") ? "chat and cloud" : "chat, cloud and Cowork";
+        return $"{string.Join(" and ", present)} transcripts only; {notCounted} sessions not counted.";
+    }
 }

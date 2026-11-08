@@ -3,6 +3,7 @@ using OView.Core.Models;
 using OView.Core.Providers.CachedUsage;
 using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
+using OView.Presentation.Panel;
 
 namespace OView.Presentation.Samples;
 
@@ -19,7 +20,8 @@ public sealed record SampleState(
     TranscriptScopeReport? Scope = null,
     PlanHistoryReport? Plan = null,
     CachedUtilization? CachedUsage = null,
-    BoostNotices? Boost = null);
+    BoostNotices? Boost = null,
+    PanelViewChoice View = default);
 
 /// <summary>
 /// The shared sample states both heads render into golden images (<c>tools/check.ps1</c>).
@@ -129,6 +131,8 @@ public static class SampleStates
         EstTodayValue = Priced(9.36m),
         Est31DaysValue = Priced(492.52m),
         EstCredit31DaysValue = Priced(92.75m),
+        EstTodayOutputValue = Priced(3.22m),
+        Est31DaysOutputValue = Priced(169.28m),
         CompositionToday = new TokenComposition(
             Input: 1_400, CacheCreation: 1_270_000, CacheRead: 11_300_000, Output: 128_600),
         Composition31Days = new TokenComposition(
@@ -156,6 +160,11 @@ public static class SampleStates
             EstOffPlanValue = Priced(92.75m),
         };
         var offPlanSnapshot = Live with { SessionPercentValue = UsageSnapshot.Percent(100) };
+        var extraUsageOn = new CachedUtilization(Now, null, null, null)
+        {
+            ExtraUsage = new ExtraUsageStatus(ExtraUsageState.Enabled),
+        };
+        var overall = new PanelViewChoice(PanelMeasure.Overall);
 
         return
         [
@@ -232,10 +241,44 @@ public static class SampleStates
             new("offplan-on",
                 "Plan window exhausted; extra usage switched on",
                 offPlanSnapshot, offPlanStats, Account, BothSources,
-                CachedUsage: new CachedUtilization(Now, null, null, null)
-                {
-                    ExtraUsage = new ExtraUsageStatus(ExtraUsageState.Enabled),
-                }),
+                CachedUsage: extraUsageOn),
+
+            // The redesign's views. Both heads still lay out today's panel, so these differ
+            // from their neighbours in the data they carry, which the view models read.
+            new("typical-overall",
+                "The Overall view of the totals face: all billed tokens, the kind table, Est. value",
+                Live, Stats, Account, BothSources, View: overall),
+
+            new("typical-models",
+                "Seven models in the store, with the local block turned to its model face",
+                Live, WithModels(Stats), Account, BothSources,
+                View: new PanelViewChoice(Face: PanelFace.Models)),
+
+            new("typical-models-overall",
+                "The model face counting everything billed",
+                Live, WithModels(Stats), Account, BothSources,
+                View: new PanelViewChoice(PanelMeasure.Overall, PanelFace.Models)),
+
+            new("offplan-on-overall",
+                "Off-plan with extra usage on, the Overall view: Est. spend wording and the off-plan row",
+                offPlanSnapshot, offPlanStats, Account, BothSources,
+                CachedUsage: extraUsageOn, View: overall),
+
+            new("offplan-on-models",
+                "Off-plan with seven models and the banner shown: the tallest the redesigned panel gets",
+                offPlanSnapshot, WithModels(offPlanStats), Account, BothSources,
+                CachedUsage: extraUsageOn,
+                View: new PanelViewChoice(PanelMeasure.Overall, PanelFace.Models)),
+
+            new("offplan-on-hidden",
+                "The same off-plan account after the reader hid the banner",
+                offPlanSnapshot, offPlanStats, Account, BothSources,
+                CachedUsage: extraUsageOn,
+                View: new PanelViewChoice(BannerHidden: true)),
+
+            new("longest-figures",
+                "The widest figures the panel is asked for, and a long model id, for the no-clipping check",
+                Live, LongestFigures(), Account, BothSources, View: overall),
 
             new("no-data",
                 "Nothing readable: the no-usage-data banner, which states what was checked",
@@ -261,7 +304,9 @@ public static class SampleStates
             var preInstall = offset >= recordedDays;
             // Output tokens since issue #253, so the scale is ~1% of the totals.
             long tokens = preInstall ? 0 : (long)(60_000 + 89_000 * Math.Abs(Math.Sin(offset * 0.9)));
-            series.Add(new DayUsage(Today.AddDays(-offset), tokens, preInstall));
+            // Everything billed runs about a hundred times the output, the proportion the
+            // compositions above are built from.
+            series.Add(new DayUsage(Today.AddDays(-offset), tokens, preInstall, tokens * 101));
         }
         return series;
     }
@@ -276,18 +321,89 @@ public static class SampleStates
 
     private static PanelStatistics NoLocalUsage() => Stats with
     {
-        TokensToday = 0, EstTodayValue = Priced(0m),
-        Tokens31Days = 0, Est31DaysValue = Priced(0m),
+        TokensToday = 0, EstTodayValue = Priced(0m), EstTodayOutputValue = Priced(0m),
+        Tokens31Days = 0, Est31DaysValue = Priced(0m), Est31DaysOutputValue = Priced(0m),
         RecordedDays = 0,
-        DailySeries = [.. Series.Select(d => d with { OutputTokens = 0, PreInstall = true })],
+        DailySeries = [.. Series.Select(d => d with { OutputTokens = 0, BilledTokens = 0, PreInstall = true })],
         CreditTokens31Days = 0, EstCredit31DaysValue = Priced(0m),
         CompositionToday = TokenComposition.Empty,
         Composition31Days = TokenComposition.Empty,
     };
 
+    private static string[] SevenModelIds =>
+    [
+        "claude-opus-5", "claude-sonnet-5", "claude-haiku-5", "claude-fable-5",
+        "claude-opus-4-1", "claude-sonnet-4-5", "claude-haiku-4-5",
+    ];
+
+    /// <summary>
+    /// A store with seven models, the case the model face is for: three get their own colour
+    /// and the other four are listed as rows. Per-model data lives on the states that need it
+    /// and nowhere else, so every other state reads as it always did.
+    /// </summary>
+    private static PanelStatistics WithModels(PanelStatistics stats, string[]? ids = null)
+    {
+        var models31 = SliceModels(ids ?? SevenModelIds, stats.Tokens31Days, stats.Composition31Days.Total,
+            stats.Est31DaysValue.Value, stats.Est31DaysOutputValue.Value, [3_100, 1_700, 900, 500, 300, 200, 71]);
+        var modelsToday = SliceModels(ids ?? SevenModelIds, stats.TokensToday, stats.CompositionToday.Total,
+            stats.EstTodayValue.Value, stats.EstTodayOutputValue.Value, [58, 31, 17, 9, 6, 4, 3.6m]);
+
+        return stats with
+        {
+            ModelsToday = modelsToday,
+            Models31Days = models31,
+            ModelColourOrder = ModelBreakdown.ColourOrder(models31),
+        };
+    }
+
+    /// <summary>
+    /// One window's models, the totals divided by <paramref name="weights"/> so the rows add up
+    /// to the figures above them: the first model takes the rounding remainder of the output
+    /// and billed counts.
+    /// </summary>
+    private static List<ModelSlice> SliceModels(
+        string[] ids, long output, long billed, decimal? usd, decimal? outputUsd, decimal[] weights)
+    {
+        var sum = weights.Sum();
+        var tokens = weights.Select(w => (long)Math.Round(output * w / sum)).ToArray();
+        var all = weights.Select(w => (long)Math.Round(billed * w / sum)).ToArray();
+        tokens[0] += output - tokens.Sum();
+        all[0] += billed - all.Sum();
+
+        return [.. ids.Select((id, i) => new ModelSlice(id, ModelDisplayName.For(id), tokens[i])
+        {
+            TokensCount = TokenCount.Measured(tokens[i]),
+            AllTokensCount = TokenCount.Measured(all[i]),
+            EstUsdValue = Priced(usd is { } u ? Math.Round(u * weights[i] / sum, 2) : null),
+            EstOutputUsdValue = Priced(outputUsd is { } o ? Math.Round(o * weights[i] / sum, 2) : null),
+        })];
+    }
+
+    /// <summary>
+    /// Figures at the width the panel has to hold: a 10-digit billed total, a four-figure
+    /// value, and a model id as long as the catalogue's longest. Everything else is the
+    /// typical state, so a clipped figure here is the figure's doing.
+    /// </summary>
+    private static PanelStatistics LongestFigures() => WithModels(
+        Stats with
+        {
+            TokensToday = 987_600,
+            Tokens31Days = 52_900_000,
+            EstTodayValue = Priced(71.83m),
+            Est31DaysValue = Priced(3513.67m),
+            EstTodayOutputValue = Priced(24.69m),
+            Est31DaysOutputValue = Priced(1322.50m),
+            CompositionToday = new TokenComposition(
+                Input: 11_000, CacheCreation: 9_800_000, CacheRead: 88_000_000, Output: 987_600),
+            Composition31Days = new TokenComposition(
+                Input: 500_000, CacheCreation: 480_000_000, CacheRead: 4_200_000_000, Output: 52_900_000),
+        },
+        [.. SevenModelIds.Skip(1).Prepend("claude-sonnet-4-5-20250929-extended-context-preview")]);
+
     private static PanelStatistics EmptyStats() => NoLocalUsage() with
     {
         EstTodayValue = Priced(null), Est31DaysValue = Priced(null), EstCredit31DaysValue = Priced(null),
+        EstTodayOutputValue = Priced(null), Est31DaysOutputValue = Priced(null),
     };
 
     private static TranscriptScopeReport CliOnlyScope() =>

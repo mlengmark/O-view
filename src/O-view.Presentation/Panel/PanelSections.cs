@@ -532,6 +532,133 @@ public static class PanelSections
     };
 
     /// <summary>
+    /// The plan block: the meters in the order they are drawn, the off-plan row that closes
+    /// them, and the banner above both blocks unless the reader hid it.
+    ///
+    /// <para>Built from the meters and the off-plan view the head already asks for, not from
+    /// the snapshot again, so the block cannot describe a different reading than the rest of
+    /// the panel. The row is the standing section re-shaped; it keeps that section's own
+    /// condition for appearing.</para>
+    /// </summary>
+    /// <param name="cachedUsage">
+    /// The cache <paramref name="offPlan"/> was built from, for the one thing the section
+    /// does not say: whether its figure is an estimate over a window or Claude's own amount.
+    /// </param>
+    public static PanelPlanBlockView PlanBlock(
+        PanelMeterView session,
+        PanelMeterView weekly,
+        IReadOnlyList<PanelMeterView> modelLimits,
+        PanelOffPlanView offPlan,
+        PanelStatistics stats,
+        CachedUtilization? cachedUsage,
+        PanelViewChoice view)
+    {
+        var row = offPlan.Section is { } section
+            ? new PanelOffPlanRowView(
+                OffPlanText.ReportedSpendHeading,
+                section.Badge,
+                cachedUsage is { ModelLimits.Limits.Count: > 0 }
+                    ? OffPlanText.ReportedSpendRowCaption
+                    : OffPlanText.OffPlanRowCaption(stats.WindowDays),
+                section.SpendValue,
+                section.Coverage,
+                section.Hint)
+            : null;
+
+        return new PanelPlanBlockView(
+            PanelText.PlanBlockTitle,
+            [session, weekly, .. modelLimits],
+            row,
+            view.BannerHidden ? null : offPlan.Banner,
+            PanelText.HideBannerLabel);
+    }
+
+    /// <summary>
+    /// The local block's totals face for the chosen measure. This is where Output and Overall
+    /// are decided, once:
+    /// <list type="bullet">
+    /// <item><b>Which total:</b> Output counts output tokens, Overall everything billed.</item>
+    /// <item><b>Which estimate:</b> Output prices the output alone, Overall prices everything,
+    /// which is what "Est. value" has always meant.</item>
+    /// <item><b>Which series:</b> the chart's bars follow the total.</item>
+    /// <item><b>Which wording:</b> value reads "spend" while the window is off-plan (F19).</item>
+    /// </list>
+    /// An unpriced figure reads unknown, never zero (rule 6), exactly as the tiles read it.
+    /// </summary>
+    public static PanelLocalTotalsView LocalTotals(
+        PanelStatistics stats, UsageSnapshot snapshot, TimeZoneInfo zone, PanelViewChoice view)
+    {
+        var graph = Graph(stats, snapshot, zone, view.Measure);
+
+        // Mondays, whatever the plan's own week is: this chart draws calendar weeks, and the
+        // graph the Linux head still reads keeps the true reset lines.
+        var weekMarks = stats.DailySeries
+            .Select((day, column) => (day, column))
+            .Where(t => t.day.Date.DayOfWeek == DayOfWeek.Monday)
+            .Select(t => new PanelLocalWeekMarkView(t.column, graph.Columns[t.column].DateLabel))
+            .ToList();
+
+        return new PanelLocalTotalsView(
+            PanelText.LocalBlockTitle,
+            TokenText.LocalSubtitle(view.Measure, stats),
+            new PanelLocalChartView(graph.Columns, weekMarks, TokenText.ChartTodayLabel),
+            view.Measure == PanelMeasure.Output ? OutputTable(stats) : OverallTable(stats),
+            TokenText.Caveat(stats));
+    }
+
+    private static PanelLocalTableView OutputTable(PanelStatistics stats) =>
+        new(
+            ["", TokenText.TokenBreakdownTodayHeader, TokenText.TokenBreakdown31DaysHeader],
+            [
+                new(PanelLocalRowKind.Figure, null, TokenText.OutputTokensRowLabel,
+                    [UsageFormatter.Tokens(stats.TokensToday), UsageFormatter.Tokens(stats.Tokens31Days)]),
+                new(PanelLocalRowKind.Value, null, TokenText.EstValueOutputLabel(stats.IsOffPlan),
+                    [
+                        UsageFormatter.Usd(stats.EstTodayOutputValue.Value),
+                        UsageFormatter.Usd(stats.Est31DaysOutputValue.Value),
+                    ]),
+            ]);
+
+    private static PanelLocalTableView OverallTable(PanelStatistics stats)
+    {
+        // The kind rows are the breakdown table's, so the two cannot count the same tokens
+        // differently; only its heading row is replaced, by the headings this table owns.
+        var rows = Breakdown(stats.CompositionToday, stats.Composition31Days)
+            .Where(r => r.RowKind != PanelTokenRowKind.Header)
+            .Select(r => new PanelLocalRowView(
+                r.RowKind == PanelTokenRowKind.Total ? PanelLocalRowKind.Total : PanelLocalRowKind.Figure,
+                r.Kind,
+                r.Label,
+                [r.TodayTokens, r.TodayShare, r.WindowTokens, r.WindowShare]))
+            .ToList();
+
+        rows.Add(new(PanelLocalRowKind.Value, null, TokenText.EstValueLabel(stats.IsOffPlan),
+            [UsageFormatter.Usd(stats.EstTodayValue.Value), UsageFormatter.Usd(stats.Est31DaysValue.Value)],
+            CellSpan: 2));
+
+        return new PanelLocalTableView(
+            [
+                TokenText.TokenBreakdownKindHeader,
+                TokenText.TokenBreakdownTodayHeader,
+                TokenText.TokenBreakdownShareHeader,
+                TokenText.TokenBreakdown31DaysHeader,
+                TokenText.TokenBreakdownShareHeader,
+            ],
+            rows);
+    }
+
+    /// <summary>
+    /// The local block's footer: the standing scope caveat, and the switch with the current
+    /// measure selected. Each segment carries the view pressing it gives.
+    /// </summary>
+    public static PanelLocalFooterView LocalFooter(TranscriptScopeReport? scope, PanelViewChoice view) =>
+        new(
+            TokenText.LocalFooter(scope),
+            [.. new[] { PanelMeasure.Output, PanelMeasure.Overall }.Select(measure =>
+                new PanelMeasureOption(
+                    TokenText.MeasureLabel(measure), measure == view.Measure, view with { Measure = measure }))]);
+
+    /// <summary>
     /// The 31-day graph: every column measured and dated, every gridline placed, every hover
     /// card worded (<see cref="PanelGraphView"/>).
     ///
@@ -544,8 +671,17 @@ public static class PanelSections
     /// places is taken in it: the columns are local days and so a gridline drawn over them
     /// has to be positioned in the same frame (<see cref="LocalDays"/>, issue #211).
     /// </param>
-    public static PanelGraphView Graph(PanelStatistics stats, UsageSnapshot snapshot, TimeZoneInfo zone)
+    /// <param name="measure">
+    /// What a bar counts: output tokens, or everything billed on the day. The week bands and
+    /// gridlines are the same either way, so switching the measure moves the bars and nothing
+    /// else on the chart.
+    /// </param>
+    public static PanelGraphView Graph(
+        PanelStatistics stats, UsageSnapshot snapshot, TimeZoneInfo zone,
+        PanelMeasure measure = PanelMeasure.Output)
     {
+        long Volume(DayUsage d) => measure == PanelMeasure.Output ? d.OutputTokens : d.BilledTokens;
+
         var heading = PanelText.UsageWindowHeading(stats.WindowDays);
         var series = stats.DailySeries;
         if (series.Count == 0)
@@ -557,22 +693,22 @@ public static class PanelSections
 
         // Floored at 1 so a window with nothing in it divides rather than throwing. Every
         // column is then zero-height, which is what a store with no usage should draw.
-        var peak = Math.Max(1, series.Max(d => d.OutputTokens));
+        var peak = Math.Max(1, series.Max(Volume));
         var weekPeak = series
             .Where(d => !d.PreInstall)
             .GroupBy(weeks.IndexOf)
-            .ToDictionary(g => g.Key, g => Math.Max(1, g.Max(d => d.OutputTokens)));
+            .ToDictionary(g => g.Key, g => Math.Max(1, g.Max(Volume)));
 
         var columns = new List<PanelGraphColumnView>(series.Count);
         foreach (var day in series)
         {
-            var bar = !day.PreInstall && day.OutputTokens > 0;
+            var bar = !day.PreInstall && Volume(day) > 0;
             columns.Add(new PanelGraphColumnView(
                 string.Create(CultureInfo.InvariantCulture, $"{day.Date:d MMM}"),
                 !day.PreInstall,
-                bar ? day.OutputTokens / (double)peak : 0,
-                bar ? day.OutputTokens / (double)weekPeak[weeks.IndexOf(day)] : 0,
-                bar ? TokenText.DayBarTokens(day.OutputTokens) : "",
+                bar ? Volume(day) / (double)peak : 0,
+                bar ? Volume(day) / (double)weekPeak[weeks.IndexOf(day)] : 0,
+                bar ? TokenText.DayBarTokens(Volume(day)) : "",
                 bar ? string.Create(CultureInfo.InvariantCulture, $"{day.Date:dddd d MMMM}") : ""));
         }
 
