@@ -325,9 +325,9 @@
             <Border x:Name="PlanBlock">
                 <StackPanel>
                     <local:LetterSpacedText x:Name="PlanBlockTitle" HorizontalAlignment="Left"
-                                            FontSize="{x:Static rendering:PanelMetrics.BlockTitleFontSize}"
-                                            FontWeight="SemiBold"
-                                            Foreground="{DynamicResource TextSecondary}"/>
+                                            TextElement.FontSize="{x:Static rendering:PanelMetrics.BlockTitleFontSize}"
+                                            TextElement.FontWeight="SemiBold"
+                                            TextElement.Foreground="{DynamicResource TextSecondary}"/>
 
                     <StackPanel Margin="0,4,0,0">
                         <!-- Session bar -->

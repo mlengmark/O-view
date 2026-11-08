@@ -8,7 +8,6 @@ using System.Windows.Media;
 using OView.App.Rendering;
 using OView.Presentation.Panel;
 using Brush = System.Windows.Media.Brush;
-using FontFamily = System.Windows.Media.FontFamily;
 using Size = System.Windows.Size;
 
 namespace OView.Tray.Popup;
@@ -92,18 +91,6 @@ public sealed class LetterSpacedText : FrameworkElement
         nameof(Text), typeof(string), typeof(LetterSpacedText),
         new FrameworkPropertyMetadata("", FrameworkPropertyMetadataOptions.AffectsMeasure | FrameworkPropertyMetadataOptions.AffectsRender));
 
-    public static readonly DependencyProperty FontSizeProperty =
-        TextElement.FontSizeProperty.AddOwner(typeof(LetterSpacedText));
-
-    public static readonly DependencyProperty FontWeightProperty =
-        TextElement.FontWeightProperty.AddOwner(typeof(LetterSpacedText));
-
-    public static readonly DependencyProperty FontFamilyProperty =
-        TextElement.FontFamilyProperty.AddOwner(typeof(LetterSpacedText));
-
-    public static readonly DependencyProperty ForegroundProperty =
-        TextElement.ForegroundProperty.AddOwner(typeof(LetterSpacedText));
-
     private FormattedText[] _letters = [];
 
     public string Text
@@ -112,29 +99,9 @@ public sealed class LetterSpacedText : FrameworkElement
         set => SetValue(TextProperty, value);
     }
 
-    public double FontSize
-    {
-        get => (double)GetValue(FontSizeProperty);
-        set => SetValue(FontSizeProperty, value);
-    }
+    private double FontSize => TextElement.GetFontSize(this);
 
-    public FontWeight FontWeight
-    {
-        get => (FontWeight)GetValue(FontWeightProperty);
-        set => SetValue(FontWeightProperty, value);
-    }
-
-    public FontFamily FontFamily
-    {
-        get => (FontFamily)GetValue(FontFamilyProperty);
-        set => SetValue(FontFamilyProperty, value);
-    }
-
-    public Brush Foreground
-    {
-        get => (Brush)GetValue(ForegroundProperty);
-        set => SetValue(ForegroundProperty, value);
-    }
+    private Brush Foreground => TextElement.GetForeground(this);
 
     private double Spacing => FontSize * PanelMetrics.LetterSpacingEm;
 
@@ -142,7 +109,8 @@ public sealed class LetterSpacedText : FrameworkElement
 
     protected override Size MeasureOverride(Size availableSize)
     {
-        var typeface = new Typeface(FontFamily, FontStyles.Normal, FontWeight, FontStretches.Normal);
+        var typeface = new Typeface(
+            TextElement.GetFontFamily(this), FontStyles.Normal, TextElement.GetFontWeight(this), FontStretches.Normal);
         var mode = TextOptions.GetTextFormattingMode(this);
         var pixelsPerDip = VisualTreeHelper.GetDpi(this).PixelsPerDip;
 
