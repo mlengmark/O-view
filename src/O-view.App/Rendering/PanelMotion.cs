@@ -214,6 +214,16 @@ public static class PanelMotion
     /// <summary>How much later each model row starts than the one above it.</summary>
     public const double ModelRowStaggerBaseMs = 35;
 
+    /// <summary>
+    /// When the doughnuts' sweep starts when the panel opens on the model face, counted from
+    /// the start of the slide. It starts with the plan bars, where after a flip the sweep
+    /// waits for the totals face to leave (<see cref="DoughnutSweepDelayBaseMs"/>).
+    /// </summary>
+    public const double DoughnutSweepOpenDelayBaseMs = 60;
+
+    /// <summary>When the first model row starts when the panel opens on the model face, counted from the start of the slide.</summary>
+    public const double ModelRowOpenFirstStartBaseMs = 60;
+
     /// <summary>The off-plan banner fading out when it is hidden.</summary>
     public const double BannerFadeBaseMs = 70;
 
@@ -261,6 +271,13 @@ public static class PanelMotion
     /// <summary>When model row <paramref name="index"/> (0 at the top) starts fading in, on screen.</summary>
     public static double ModelRowStartMs(int index) =>
         StaggeredStartMs(ModelRowFirstStartBaseMs, ModelRowStaggerBaseMs, index);
+
+    /// <summary>
+    /// When model row <paramref name="index"/> starts fading in when the panel opens on the
+    /// model face, on screen. The stagger and duration are the flip's; only the start moves.
+    /// </summary>
+    public static double ModelRowOpenStartMs(int index) =>
+        StaggeredStartMs(ModelRowOpenFirstStartBaseMs, ModelRowStaggerBaseMs, index);
 
     /// <summary>
     /// Whether a transition runs at all. Windows' "animate controls and elements" setting off,

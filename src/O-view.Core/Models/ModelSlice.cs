@@ -60,7 +60,7 @@ public sealed record ModelSlice(
     /// is the Output view's. Read from the same rollups, so like <see cref="TokensCount"/> it
     /// is <see cref="UsageValueStatus.Real"/> whether or not the model can be priced.
     /// </summary>
-    public TokenCount AllTokensCount { get; init; }
+    public TokenCount AllTokensCount { get; init; } = new(null, UsageValueStatus.Unavailable);
 
     /// <summary>
     /// What this model's output tokens alone would have cost, the Output view's figure where

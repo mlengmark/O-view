@@ -190,6 +190,29 @@ public class PanelMotionTests
     }
 
     [Fact]
+    public void OpeningOnTheModelFaceStartsTheSweepAndRowsWithTheSlideFills()
+    {
+        var slide = PanelMotion.Ms(PanelMotion.SurfaceOpenBaseMs);
+
+        Assert.Equal(
+            PanelMotion.Ms(PanelMotion.PlanBarGrowDelayBaseMs),
+            PanelMotion.Ms(PanelMotion.DoughnutSweepOpenDelayBaseMs));
+        Assert.Equal(
+            PanelMotion.Ms(PanelMotion.ModelRowOpenFirstStartBaseMs + PanelMotion.ModelRowStaggerBaseMs * 2),
+            PanelMotion.ModelRowOpenStartMs(2));
+        Assert.True(PanelMotion.ModelRowOpenStartMs(0) < slide);
+
+        // Opening beats flipping: nothing has to wait for a face to leave.
+        Assert.True(PanelMotion.DoughnutSweepOpenDelayBaseMs < PanelMotion.DoughnutSweepDelayBaseMs);
+        Assert.True(PanelMotion.ModelRowOpenStartMs(0) < PanelMotion.ModelRowStartMs(0));
+
+        for (var i = 1; i < 10; i++)
+        {
+            Assert.True(PanelMotion.ModelRowOpenStartMs(i) > PanelMotion.ModelRowOpenStartMs(i - 1), $"row {i}");
+        }
+    }
+
+    [Fact]
     public void TheModelFaceArrivesOnlyAfterTheTotalsFaceHasBegunLeaving()
     {
         // The flip's incoming face starts at TileFaceInDelayBaseMs, and what is on it starts

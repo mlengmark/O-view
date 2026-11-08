@@ -106,6 +106,8 @@ public class CoreModelsHoldNoBareNullablesTests
         var slice = new ModelSlice("claude-x", "X", 10);
         var stats = new PanelStatistics(0, 0, 0, 31, [], 0);
 
+        Assert.Equal(UsageValueStatus.Unavailable, slice.AllTokensCount.Status);
+        Assert.Null(slice.AllTokensCount.Value);
         Assert.Equal(UsageValueStatus.Unavailable, slice.EstOutputUsdValue.Status);
         Assert.Null(slice.EstOutputUsdValue.Value);
         Assert.Equal(UsageValueStatus.Unavailable, stats.EstTodayOutputValue.Status);

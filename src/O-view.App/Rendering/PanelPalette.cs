@@ -127,7 +127,7 @@ public static class PanelPalette
         //
         // The three chromatic slots above go to the three largest models. Every model
         // after them takes the next grey here, in size order, and a model past the fourth
-        // grey takes the last one again: the list is finite on purpose, since a fifth
+        // grey takes the last one again: the list is finite on purpose, since a fourth
         // hue would need the six-check validation the note above describes.
         //
         // Greys, not hues, so none of them can be read as a fourth identity colour.
