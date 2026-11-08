@@ -1,6 +1,6 @@
 # Platform status
 
-What has actually been seen working, on which platform, and what has not. This page exists so that the README, CLAUDE.md and the build plan can point at one record instead of each retelling it. Update it when a report lands; nothing else in the repository should restate it.
+As of v1.2.1. What has actually been seen working, on which platform, and what has not. This page exists so that the README, CLAUDE.md and the build plan can point at one record instead of each retelling it. Update it when a report lands; nothing else in the repository should restate it.
 
 The distinction it keeps is between three claims that sound alike:
 
@@ -12,11 +12,29 @@ Shipping something is not the same as having seen it work, and the app's own rul
 
 ## Windows 11
 
-In daily use on the developer's machine since v0.1.0, and the platform every release has been exercised on by hand. Every surface in the README's platform table is seen working.
+In daily use on the developer's machine since v0.1.0, and the platform every release has been exercised on by hand. Every surface in the README's platform table has been seen working except what the two subsections below list as not seen.
+
+### The model limit bar
+
+`Weekly · Fable` was checked on one real account: a Max account with a Fable limit, compared with Claude's own usage page. It is drawn on both heads, and on the Linux head it has been seen only in the rendered images the test suite compares. How the Linux panel wraps a very long model name has no test. An amount reported as spent past the plan has only ever been seen as zero; any amount above zero, and any currency other than US dollars, rests on tests and the names of the fields Claude Code writes.
+
+### The v1.2.1 motion
+
+The panel and the menu sliding, the folds, the tick and the tile flip are Windows only; Linux has none. Maximilian signed the motion off on a test build on 2026-11-06 with no notes. No agent tried the following on that build, and whether he did is not recorded:
+
+- A real mouse pointer over the tiles, rows and menu. The agents used keyboard focus and raised clicks.
+- Windows' animation setting switched off for real. The agents forced it off in a temporary build.
+- Any display scale other than 100%, so whole-pixel movement at a fractional scale has not been seen.
+- A taskbar docked at the top.
+- A panel dragged away from the taskbar, which should slide out of its own window edge, wherever that is on screen.
+- A tile flip inside the real panel, or in the light theme. The probe drove one tile in a plain window, in the dark theme only.
+- A slow machine. The per-frame figures were taken on one PC.
+
+What repeats is three command-line checks, `--menu-check`, `--fold-check` and `--motion-check`, which a person runs on a desktop; CI does not run them. `--toggle-check` and `--popup-check` have not been run on this release, because they exit without a word while an installed O-view is open. Three small jumps were measured during review and left alone, and nobody looked for them on the test build: the panel's bottom edge lifting for one frame at the end of a closing fold, a menu dismissed while its threshold list is folding open growing past its docked edge, and a step of about 6 pixels at each end of the breakdown's fold.
 
 ## Linux
 
-Supported since v0.6.0 (ADR-0012). Two hardware reports and a series of virtual-machine runs are the whole of what has been seen.
+Supported since v0.6.0 (ADR-0012). Two hardware reports and a series of virtual-machine runs are the whole of what has been seen. No report has landed since v1.2.1, so nothing in that release's Linux change has been seen on a desktop.
 
 ### Hardware reports
 
@@ -55,6 +73,9 @@ A native Xorg GNOME session was run on 2026-10-15 against an earlier build and h
 - The panel on a physical Linux desktop. Every panel observation above is from the VM.
 - The tooltip. On GNOME it cannot appear at all (the README explains why); what KDE Plasma does with it is not known, and neither hardware report mentioned it.
 - Notifications.
+- The tray icon showing real usage the first time it is drawn (v1.2.1). It waits up to 5 seconds for the first reading before it is put on the desktop, and shows the grey ring if none is ready. The fix is shown against a stand-in tray host and by CI's headless job, not on the GNOME desktop where a grey icon was reported, so whether the grey icon is gone there is not known. The cause is the best route found, not an observed one.
+- The model limit bar on a physical or virtual Linux desktop; it has been seen only in rendered images.
+- The theme switch and the single tray icon after the AppIndicator extension is toggled (v1.2.0), which are proven by tests and by CI's headless job.
 - GNOME without an AppIndicator extension, other than in containers.
 - The `.deb` package on hardware; both reports were tarball installs.
 - An explicit prefer-dark theme setting.
