@@ -36,6 +36,8 @@ Both heads follow the desktop's light or dark theme, re-read every time the pane
 - **Off-plan usage.** A section that appears only when there is off-plan usage to show. Without a model limit it is the estimated API-rate value of usage on models that bill as extra usage rather than drawing from the plan, over the chart's window. On an account with a model limit that usage draws from the limit, so the section shows instead what Claude reports as spent past the plan, labelled as reported, with no period because none is stated, and hidden while it is zero (unless extra usage is on and no amount can be read, when it says unknown). The two figures are never added. There is also a banner when the live detector sees substantial work against a flat plan meter or an exhausted window. The banner says whether your account has extra usage switched on, as Claude Code last reported it, rather than asserting a charge.
 - **No usage data.** When the figures are unknown, the panel states what O-view checked and what it found, never something about your machine it has not verified.
 
+Figures labelled **Est.** price tokens at published API rates. They are not money charged; within plan limits the marginal cost is zero. Where a model has no published rate, O-view sums what it can price and names what it left out.
+
 ### Motion
 
 On Windows the panel and the menu move; on Linux nothing does.
@@ -47,8 +49,6 @@ On Windows the panel and the menu move; on Linux nothing does.
 - **Animations off.** All of it follows Windows' setting for animation effects, read each time a transition starts. With it off, the panel and the menu appear and disappear at once, and folds and flips happen in one step.
 
 At rest the panel looks exactly as it would without motion. The Linux head has no motion: its panel appears and disappears at once, its tiles and breakdown switch change in one step, and its menu is drawn by the desktop's notification-area host. What has and has not been watched on a real desktop is in [docs/platform-status.md](docs/platform-status.md).
-
-Figures labelled **Est.** price tokens at published API rates. They are not money charged; within plan limits the marginal cost is zero. Where a model has no published rate, O-view sums what it can price and names what it left out.
 
 ### Why these totals are lower than Claude Code's own
 

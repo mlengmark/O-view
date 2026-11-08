@@ -30,7 +30,7 @@ The panel and the menu sliding, the folds, the tick and the tile flip are Window
 - A tile flip inside the real panel, or in the light theme. The probe drove one tile in a plain window, in the dark theme only.
 - A slow machine. The per-frame figures were taken on one PC.
 
-What repeats is three command-line checks, `--menu-check`, `--fold-check` and `--motion-check`, which a person runs on a desktop; CI does not run them. `--toggle-check` and `--popup-check` have not been run on this release, because they exit without a word while an installed O-view is open. Three small jumps were measured during review and left alone, and nobody looked for them on the test build: the panel's bottom edge lifting for one frame at the end of a closing fold, a menu dismissed while its threshold list is folding open growing past its docked edge, and a step of about 6 pixels at each end of the breakdown's fold.
+What repeats is three command-line checks, `--menu-check`, `--fold-check` and `--motion-check`, which a person runs on a desktop; CI does not run them. `--toggle-check` and `--popup-check` have not been run on this release, because they cannot run while an installed O-view is open. Three small jumps were measured during review and left alone, and nobody looked for them on the test build: the panel's bottom edge lifting for one frame at the end of a closing fold, a menu dismissed while its threshold list is folding open growing past its docked edge, and a step of about 6 pixels at each end of the breakdown's fold.
 
 ## Linux
 
