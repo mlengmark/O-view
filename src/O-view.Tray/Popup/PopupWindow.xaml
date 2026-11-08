@@ -18,9 +18,9 @@
                 <ResourceDictionary Source="HoverCard.xaml"/>
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- A text disclosure. A Button rather than a clickable TextBlock for the same
-                 reason StatTile is one: it keeps keyboard focus and Space/Enter activation,
-                 which a MouseLeftButtonUp handler silently does not. -->
+            <!-- A text disclosure. A Button rather than a clickable TextBlock: it keeps keyboard
+                 focus and Space/Enter activation, which a MouseLeftButtonUp handler silently
+                 does not. -->
             <Style x:Key="DisclosureButton" TargetType="Button">
                 <Setter Property="Background" Value="Transparent"/>
                 <Setter Property="BorderThickness" Value="0"/>
@@ -48,8 +48,8 @@
                 </Setter>
             </Style>
 
-            <!-- The off-plan banner's hide control. A Button for the reason StatTile is one,
-                 keyboard focus and Space/Enter. Full strength under the pointer or the keyboard,
+            <!-- The off-plan banner's hide control. A Button, for keyboard focus and
+                 Space/Enter. Full strength under the pointer or the keyboard,
                  at once rather than eased, so nothing about pressing it lags. -->
             <Style x:Key="BannerHideButton" TargetType="Button">
                 <Setter Property="Width" Value="{x:Static rendering:PanelMetrics.BannerHideSizeDip}"/>

@@ -69,15 +69,22 @@ public partial class App : System.Windows.Application
     /// a row instead of another copy (GitHub issue #52). The implementations live in
     /// <see cref="SampleRenderer"/>.
     /// </summary>
-    private static readonly (string Flag, Action<string?> Run)[] PreMutexHooks =
+    private static readonly (string Flag, Func<string?, int> Run)[] PreMutexHooks =
     [
-        ("--samples", dir => SampleRenderer.RenderSamples(dir!)),
-        ("--menu-samples", dir => SampleRenderer.RenderMenuSamples(dir!)),
-        ("--tile-samples", dir => SampleRenderer.RenderTileSamples(dir!)),
-        ("--dialog-samples", dir => SampleRenderer.RenderDialogSamples(dir!)),
+        ("--samples", Exits0(dir => SampleRenderer.RenderSamples(dir!))),
+        ("--menu-samples", Exits0(dir => SampleRenderer.RenderMenuSamples(dir!))),
+        ("--tile-samples", Exits0(dir => SampleRenderer.RenderTileSamples(dir!))),
+        ("--dialog-samples", Exits0(dir => SampleRenderer.RenderDialogSamples(dir!))),
+        // The one that can fail: a clipped panel is its exit code, which tools/check.ps1 reads.
         ("--popup-samples", dir => SampleRenderer.RenderPopupSamples(dir!)),
-        ("--diagnose", DiagnosticsClipboard.WriteToFile),
+        ("--diagnose", Exits0(DiagnosticsClipboard.WriteToFile)),
     ];
+
+    private static Func<string?, int> Exits0(Action<string?> run) => dir =>
+    {
+        run(dir);
+        return 0;
+    };
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -97,8 +104,7 @@ public partial class App : System.Windows.Application
         {
             if (args.TryGetValue(flag, out var value))
             {
-                run(value);
-                Shutdown();
+                Shutdown(run(value));
                 return;
             }
         }
@@ -111,12 +117,29 @@ public partial class App : System.Windows.Application
             return;
         }
 
-        // The tile flip and the threshold list's fold, each driven to its end and then clicked
+        // The block's flip and the threshold list's fold, each driven to its end and then clicked
         // again mid-flight, over about 14 s at the current pace. Pre-mutex like --menu-check,
         // for the same reason: it opens windows of its own.
         if (args.TryGetValue("--motion-check", out var motionCheckReport))
         {
             MotionChecks.Run(motionCheckReport ?? "motion-check.txt", Shutdown);
+            return;
+        }
+
+        // With animations forced off, the panel opens, switches, flips and closes without a
+        // transition, read in the turn of each action. Pre-mutex like the two above.
+        if (args.TryGetValue("--still-check", out var stillCheckReport))
+        {
+            MotionChecks.RunStillCheck(stillCheckReport ?? "still-check.txt", Shutdown);
+            return;
+        }
+
+        // Close and reopen on each face, then restart: the view the reader left is the view the
+        // panel opens on, through the real settings file's round trip. Pre-mutex for the same
+        // reason, and it writes its own settings file, never the user's.
+        if (args.TryGetValue("--view-check", out var viewCheckReport))
+        {
+            ViewMemoryCheck.Run(viewCheckReport ?? "view-check.txt", Shutdown);
             return;
         }
 

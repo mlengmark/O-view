@@ -65,8 +65,14 @@ internal static class SampleRenderer
     /// <para>The 31-day chart is why rendering is needed at all: whether a week's line and its
     /// date land correctly against a day column cannot be judged from unit tests, which cover
     /// the arithmetic, not where a line ends up on a Canvas.</para>
+    ///
+    /// <para>Every settled panel and every hover card is also asked whether anything in it is
+    /// clipped (<see cref="PanelEdgeCheck"/>). The answer is written to
+    /// <c>popup-edge-check.txt</c> and returned as the exit code, which is what
+    /// <c>tools/check.ps1</c> and CI's <c>visual</c> job fail on.</para>
     /// </summary>
-    public static void RenderPopupSamples(string dir)
+    /// <returns>0 when nothing is clipped, 1 when anything is.</returns>
+    public static int RenderPopupSamples(string dir)
     {
         Directory.CreateDirectory(dir);
         const double scale = 2.0;
@@ -82,33 +88,37 @@ internal static class SampleRenderer
         // short render, because the shared short state is the one Linux renders too.
         var tallestModels = SampleStates.All.Single(s => s.Name == "offplan-on-models");
 
-        PopupWindow NewPopup(bool light, SampleState state) => new()
-        {
-            ThemeOverride = light,
-            FixedNow = SampleStates.Now,
-            FixedZone = SampleStates.Zone,
-            ScopeReport = state.Scope,
-            DataReport = state.Plan,
-            CachedUsage = state.CachedUsage,
-            BoostNotices = state.Boost,
-            ViewChoice = state.View,
-        };
+        PopupWindow NewPopup(bool light, SampleState state) => NewSamplePopup(light, state);
 
         string File(string name, bool light) => Path.Combine(dir, $"panel-{name}-{(light ? "light" : "dark")}.png");
+
+        // Rendered, then asked about the tree the picture was taken of: a clipped element is in
+        // the layout whether or not the PNG makes it easy to see.
+        var misses = new List<string>();
+        var checkedPanels = 0;
+        BitmapSource Panel(string name, bool light, SampleState state, Func<PopupWindow, BitmapSource> render)
+        {
+            var popup = NewPopup(light, state);
+            var image = render(popup);
+            misses.AddRange(PanelEdgeCheck.Misses((FrameworkElement)popup.Content, popup.LocalModelTable)
+                .Select(miss => $"{name} {(light ? "light" : "dark")}: {miss}"));
+            checkedPanels++;
+            return image;
+        }
 
         foreach (var light in new[] { true, false })
         {
             foreach (var state in SampleStates.All)
             {
-                SavePng(NewPopup(light, state).RenderToBitmap(state.Snapshot, state.Stats, state.Account, scale),
+                SavePng(Panel(state.Name, light, state, p => p.RenderToBitmap(state.Snapshot, state.Stats, state.Account, scale)),
                     File(state.Name, light));
             }
 
             // Compact density on the Overall table: the taller of the two measures, which is
             // the case the density exists for.
-            SavePng(NewPopup(light, typicalOverall).RenderToBitmap(
+            SavePng(Panel("typical-compact", light, typicalOverall, p => p.RenderToBitmap(
                     typicalOverall.Snapshot, typicalOverall.Stats, typicalOverall.Account, scale,
-                    density: PanelDensity.Compact),
+                    density: PanelDensity.Compact)),
                 File("typical-compact", light));
 
             // The switch caught mid-fold, the one state of it a settled render never shows: Output
@@ -122,21 +132,67 @@ internal static class SampleRenderer
             // scrolls inside it. Compact is passed rather than left to be chosen, because it
             // is what PanelDensity.For returns for this state at this height and the picture
             // should be the one that display actually gets.
-            SavePng(NewPopup(light, tallest).RenderToBitmap(tallest.Snapshot, tallest.Stats, tallest.Account, scale,
-                    density: PanelDensity.Compact, availableHeightDip: ShortWorkAreaDip),
+            SavePng(Panel($"{ShortState}-short", light, tallest, p => p.RenderToBitmap(
+                    tallest.Snapshot, tallest.Stats, tallest.Account, scale,
+                    density: PanelDensity.Compact, availableHeightDip: ShortWorkAreaDip)),
                 File($"{ShortState}-short", light));
-            SavePng(NewPopup(light, tallestModels).RenderToBitmap(
+            SavePng(Panel("offplan-on-models-short", light, tallestModels, p => p.RenderToBitmap(
                     tallestModels.Snapshot, tallestModels.Stats, tallestModels.Account, scale,
-                    density: PanelDensity.Compact, availableHeightDip: ShortWorkAreaDip),
+                    density: PanelDensity.Compact, availableHeightDip: ShortWorkAreaDip)),
                 File("offplan-on-models-short", light));
 
             // The chart's hover card, standalone: a ToolTip cannot be given a parent, so it
             // appears in no render of the panel.
             RenderHoverCards(dir, light,
                 [.. NewPopup(light, typical).BuildSampleHoverCards(light)],
-                "graph-hover-cards");
+                "graph-hover-cards", misses);
         }
+
+        // The other two kinds of card, asked and not drawn: a picture of them would be a new golden.
+        // The long id is what the text card and the doughnut card have to hold whole.
+        foreach (var light in new[] { true, false })
+        {
+            var owner = NewPopup(light, SampleStates.All.Single(s => s.Name == "longest-figures-models"));
+            PanelTheme.Apply(owner.Resources, light);
+            const string longId = "claude-nova-7-20260101-extended-context-preview";
+            foreach (var (name, card) in new (string, ToolTip)[]
+                     {
+                         ("model-name-card", HoverCard.Text(owner, longId)),
+                         ("doughnut-card", HoverCard.ModelFigure(
+                             owner, longId, PanelTheme.Brush("TextSecondary", light), "2167.1M", "46% of tokens", "$1608.68")),
+                     })
+            {
+                PanelTheme.Apply(card.Resources, light);
+                VisualRenderer.Render(card, scale);
+                misses.AddRange(PanelEdgeCheck.Misses(card).Select(miss => $"{name} {(light ? "light" : "dark")}: {miss}"));
+                if (card.ActualWidth > PanelMetrics.PanelWidthDip)
+                {
+                    misses.Add($"{name} {(light ? "light" : "dark")}: a card {card.ActualWidth:0.#} wide is wider than the panel");
+                }
+
+                checkedPanels++;
+            }
+        }
+
+        var pass = misses.Count == 0;
+        System.IO.File.WriteAllText(Path.Combine(dir, "popup-edge-check.txt"),
+            $"{checkedPanels} panels and cards, and the chart's hover card, both themes: {misses.Count} clipped.{Environment.NewLine}" +
+            string.Concat(misses.Select(miss => miss + Environment.NewLine)) +
+            $"{Environment.NewLine}RESULT: {(pass ? "PASS" : "FAIL")}{Environment.NewLine}");
+        return pass ? 0 : 1;
     }
+
+    private static PopupWindow NewSamplePopup(bool light, SampleState state) => new()
+    {
+        ThemeOverride = light,
+        FixedNow = SampleStates.Now,
+        FixedZone = SampleStates.Zone,
+        ScopeReport = state.Scope,
+        DataReport = state.Plan,
+        CachedUsage = state.CachedUsage,
+        BoostNotices = state.Boost,
+        ViewChoice = state.View,
+    };
 
     /// <summary>
     /// Renders the tray-menu flyout in both themes, with the toggles on and off, over a
@@ -196,142 +252,87 @@ internal static class SampleRenderer
     }
 
     /// <summary>
-    /// Renders the stat tiles across the model counts that change the chart's shape,
-    /// in both themes and both views (issue #37). The cases that matter, a folded
-    /// "Other", an unpriced model, are ones a given machine's real data may never
-    /// produce, so they are constructed rather than waited for.
+    /// Renders the model face across the model counts that change its shape, in both themes and
+    /// both measures (issue #37): a name cell's hover card, and the tooltip timing that
+    /// actually resolved on a cell. The cases that matter, a single model, an unpriced model, a
+    /// name far wider than its column, are ones a given machine's real data may never produce, so
+    /// they are constructed rather than waited for.
     /// </summary>
     public static void RenderTileSamples(string dir)
     {
         Directory.CreateDirectory(dir);
+        const double scale = 2.0;
+        const string longId = "claude-nova-7-20260101-extended-context-preview";
 
-        ModelSlice S(string model, long tokens, decimal? usd) =>
-            new(model, ModelDisplayName.For(model), tokens)
+        var state = SampleStates.All.Single(s => s.Name == "typical-models");
+
+        ModelSlice S(string model, long output, decimal? usd) =>
+            new(model, ModelDisplayName.For(model), output)
             {
-                EstUsdValue = new(
-                    usd, usd is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated),
+                TokensCount = TokenCount.Measured(output),
+                AllTokensCount = TokenCount.Measured(output * 100),
+                EstUsdValue = new(usd, usd is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated),
+                EstOutputUsdValue = new(
+                    usd / 3, usd is null ? UsageValueStatus.Unavailable : UsageValueStatus.Estimated),
             };
 
-        // The 31-day window, and the tiles that draw from it. Deliberately shaped like
-        // the reported case: "today" contains ONLY Opus 5, which used to make Opus 5 the
-        // first segment there and therefore blue, while the 31-day tile ranked Opus 4.8
-        // first and painted Opus 5 orange. One colour order, derived from the window,
-        // is what stops that, so the samples share one, exactly as the panel does.
         ModelSlice[] window =
         [
-            S("claude-opus-4-8", 350_000_000, 250.00m),
-            S("claude-opus-5", 180_000_000, 120.00m),
-            S("claude-fable-5", 40_000_000, 50.00m),
-            S("claude-haiku-4-5", 5_900_000, 5.21m),
+            S("claude-opus-4-8", 3_500_000, 250.00m),
+            S("claude-opus-5", 1_800_000, 120.00m),
+            S("claude-fable-5", 400_000, 50.00m),
+            S("claude-haiku-4-5", 59_000, 5.21m),
         ];
-        var colourOrder = ModelBreakdown.ColourOrder(window);
 
         var cases = new (string Name, ModelSlice[] Slices)[]
         {
-            ("today, Opus 5 only (was blue here, orange below)", [S("claude-opus-5", 155_400_000, 91.44m)]),
-            ("31 days, all four models", window),
-            ("two of the window's models", [window[0], window[2]]),
-            ("three models, no remainder", [.. window.Take(3)]),
-            ("unpriced model present",
-                [S("claude-opus-4-8", 150_000_000, 30.00m), S("claude-brandnew-9", 4_000_000, null)]),
+            ("one-model", [window[1]]),
+            ("four-models", window),
+            ("two-models", [window[0], window[2]]),
+            ("three-models", [.. window.Take(3)]),
+            ("unpriced-model", [S("claude-opus-4-8", 1_500_000, 30.00m), S("claude-brandnew-9", 40_000, null)]),
+            ("long-name", [window[0], S(longId, 900_000, 60.00m)]),
         };
 
         foreach (var light in new[] { true, false })
         {
-            foreach (var expanded in new[] { false, true })
+            PopupWindow? last = null;
+            foreach (var measure in new[] { PanelMeasure.Output, PanelMeasure.Overall })
             {
-                var rows = new StackPanel { Margin = new Thickness(16) };
-                var pending = new List<(StatTile Tile, PanelTileView View)>();
                 foreach (var (name, slices) in cases)
                 {
-                    rows.Children.Add(new TextBlock
+                    var popup = NewSamplePopup(light, state with { View = new PanelViewChoice(measure, PanelFace.Models) });
+                    var stats = state.Stats with
                     {
-                        Text = name,
-                        FontSize = 11,
-                        Margin = new Thickness(0, 6, 0, 3),
-                        Foreground = PanelTheme.Brush("TextSecondary", light),
-                    });
+                        ModelsToday = slices,
+                        Models31Days = slices,
+                        ModelColourOrder = ModelBreakdown.ColourOrder(slices),
+                    };
 
-                    var pair = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal };
-                    var tokensTile = NewSampleTile();
-                    var valueTile = NewSampleTile();
-                    pair.Children.Add(tokensTile);
-                    pair.Children.Add(valueTile);
-                    rows.Children.Add(pair);
-
-                    // Built through PanelSections, so a sample is a picture of the shipped
-                    // tile rather than of one assembled here (issue #55).
-                    //
-                    // Carry the coverage caveat on the samples too: it has to survive into the
-                    // breakdown view, and a sample that never shows one cannot catch it going
-                    // missing (it did).
-                    pending.Add((tokensTile, PanelSections.Tile(
-                        TokenText.Tokens31DaysLabel,
-                        UsageFormatter.Tokens(slices.Sum(s => s.Tokens)),
-                        "8 of 31 days recorded",
-                        slices, BreakdownMeasure.Tokens, colourOrder)));
-                    pending.Add((valueTile, PanelSections.Tile(
-                        TokenText.Est31DaysLabel,
-                        SumSampleUsd(slices),
-                        "8 of 31 days recorded",
-                        slices, BreakdownMeasure.EstValue, colourOrder)));
+                    SavePng(popup.RenderToBitmap(state.Snapshot, stats, state.Account, scale),
+                        Path.Combine(dir,
+                            $"models-{name}-{measure.ToString().ToLowerInvariant()}-{(light ? "light" : "dark")}.png"));
+                    last = popup;
                 }
+            }
 
-                // The tiles resolve their colours through DynamicResource, so the palette
-                // has to live on a host they are parented to.
-                var host = new Border
-                {
-                    Child = rows,
-                    Background = PanelTheme.Brush("PanelBg", light),
-                };
-                PanelTheme.Apply(host.Resources, light);
+            RenderHoverCards(dir, light, [HoverCard.Text(last!, longId)]);
 
-                // Only now: the breakdown resolves its series colours through the
-                // logical tree, so a tile populated before it is parented and themed has
-                // nowhere to find them. The real panel gets this ordering for free, its
-                // tiles are declared in XAML and the theme is applied before Populate.
-                foreach (var (tile, view) in pending)
-                {
-                    tile.Populate(view);
-                    tile.SetExpanded(expanded);
-                }
-
-                if (expanded)
-                {
-                    RenderHoverCards(dir, light,
-                    [
-                        pending[6].Tile.BuildSampleTooltip(0),   // three models: named model, tokens
-                        pending[6].Tile.BuildSampleTooltip(2),   // three models: the third named model
-                        pending[7].Tile.BuildSampleTooltip(0),   // three models: named model, est. value
-                        // An UNRECOGNISED model, where the friendly name is the raw id.
-                        // Included because that is the case where dropping the card's
-                        // title could have left nothing naming the row at all.
-                        pending[8].Tile.BuildSampleTooltip(1),
-                    ]);
-                }
-
-                SavePng(
-                    VisualRenderer.Render(host),
-                    Path.Combine(dir,
-                        $"tiles-{(expanded ? "breakdown" : "summary")}-{(light ? "light" : "dark")}.png"));
-
-                // Hover timing cannot be seen in a still, and the part that can silently
-                // break is the inheritance from the control down to the segments, a
-                // segment that missed it would fall back to WPF's defaults and look
-                // identical. Report the resolved values so they are checked, not assumed.
-                if (expanded && pending.FirstOrDefault().Tile?.ResolvedHoverTiming() is { } timing)
-                {
-                    // Intended values only, no "framework default" annotations. The
-                    // unset baseline measured on the dev machine (1000 / 100 /
-                    // int.MaxValue) did not match the documented defaults, so printing
-                    // documented figures beside measured ones would assert something
-                    // unverified.
-                    File.WriteAllText(Path.Combine(dir, "hover-timing.txt"),
-                        $"resolved on a bar segment ({(light ? "light" : "dark")}):{Environment.NewLine}" +
-                        $"  InitialShowDelay : {timing.InitialShowDelay} ms (intended 400){Environment.NewLine}" +
-                        $"  BetweenShowDelay : {timing.BetweenShowDelay} ms (intended 3000){Environment.NewLine}" +
-                        $"  ShowDuration     : {timing.ShowDuration} ms (intended 20000){Environment.NewLine}");
-                }
+            // Hover timing cannot be seen in a still, and the part that can silently break is
+            // the delays reaching the cell, one that missed them would fall back to WPF's
+            // defaults and look identical. Report the resolved values so they are checked, not
+            // assumed.
+            if (last!.LocalModelTable.Children.OfType<System.Windows.Controls.DockPanel>().FirstOrDefault() is { } cell)
+            {
+                // Intended values only, no "framework default" annotations. The unset baseline
+                // measured on the dev machine (1000 / 100 / int.MaxValue) did not match the
+                // documented defaults, so printing documented figures beside measured ones would
+                // assert something unverified.
+                File.WriteAllText(Path.Combine(dir, "hover-timing.txt"),
+                    $"resolved on a model name cell ({(light ? "light" : "dark")}):{Environment.NewLine}" +
+                    $"  InitialShowDelay : {System.Windows.Controls.ToolTipService.GetInitialShowDelay(cell)} ms (intended {HoverCard.InitialDelayMs}){Environment.NewLine}" +
+                    $"  BetweenShowDelay : {System.Windows.Controls.ToolTipService.GetBetweenShowDelay(cell)} ms (intended {HoverCard.BetweenDelayMs}){Environment.NewLine}" +
+                    $"  ShowDuration     : {System.Windows.Controls.ToolTipService.GetShowDuration(cell)} ms (intended {HoverCard.DurationMs}){Environment.NewLine}");
             }
         }
     }
@@ -399,7 +400,8 @@ internal static class SampleRenderer
     /// card's own resources so its DynamicResource lookups resolve without a tree above
     /// it to walk.
     /// </summary>
-    private static void RenderHoverCards(string dir, bool light, ToolTip?[] tips, string name = "hover-cards")
+    private static void RenderHoverCards(
+        string dir, bool light, ToolTip?[] tips, string name = "hover-cards", List<string>? misses = null)
     {
         const double scale = VisualRenderer.DefaultScale;
         const double gap = 12;
@@ -414,6 +416,13 @@ internal static class SampleRenderer
 
             PanelTheme.Apply(tip.Resources, light);
             rendered.Add(VisualRenderer.Render(tip, scale));
+
+            // A card is its own edge, and it has to fit the panel it opens over.
+            misses?.AddRange(PanelEdgeCheck.Misses(tip).Select(miss => $"{name} {(light ? "light" : "dark")}: {miss}"));
+            if (tip.ActualWidth > PanelMetrics.PanelWidthDip)
+            {
+                misses?.Add($"{name} {(light ? "light" : "dark")}: a card {tip.ActualWidth:0.#} wide is wider than the panel");
+            }
         }
 
         if (rendered.Count == 0)
@@ -444,18 +453,6 @@ internal static class SampleRenderer
             VisualRenderer.ToBitmap(visual, totalWidth, totalHeight, scale),
             Path.Combine(dir, $"{name}-{(light ? "light" : "dark")}.png"));
     }
-
-    /// <summary>
-    /// One icon state: the two meters as a source reported them, with no reset times, which
-    private static StatTile NewSampleTile() =>
-        new()
-        {
-            Width = 180,
-            Margin = new Thickness(0, 0, 8, 0),
-        };
-
-    private static string SumSampleUsd(ModelSlice[] slices) =>
-        UsageFormatter.Usd(slices.Sum(s => s.EstUsdValue.Value ?? 0m));
 
     /// <summary>Renders every icon state at 100% and 150% scaling sizes for visual verification.</summary>
     public static void RenderSamples(string dir)
@@ -544,6 +541,9 @@ internal static class SampleRenderer
     ///
     /// <para>It drives the real switch, so "open" is the Overall table and "closed" the Output
     /// one, and every timing allows for the old rows leaving before the height moves.</para>
+    ///
+    /// <para>Last, the block's flip, which changes the height the same way
+    /// (<see cref="MotionChecks.CheckFlipHeight"/>).</para>
     /// </summary>
     public static void RunFoldCheck(string dir, Action shutdown)
     {
@@ -728,9 +728,15 @@ internal static class SampleRenderer
                     CompositionTarget.Rendering -= OnFrame;
                     var pass = ReportFoldVerdict(
                         report, settledHeights, heightBeforeClick, afterReversal ?? [], foldOpenMs);
-                    report.AppendLine($"RESULT: {(pass ? "PASS" : "FAIL")}");
-                    File.WriteAllText(Path.Combine(dir, "fold-check.txt"), report.ToString());
-                    shutdown();
+                    popup.Close();
+
+                    // The block's flip is the other thing that moves the panel's height.
+                    MotionChecks.CheckFlipHeight(report, flipPass =>
+                    {
+                        report.AppendLine($"RESULT: {(pass && flipPass ? "PASS" : "FAIL")}");
+                        File.WriteAllText(Path.Combine(dir, "fold-check.txt"), report.ToString());
+                        shutdown();
+                    });
                     return;
             }
 

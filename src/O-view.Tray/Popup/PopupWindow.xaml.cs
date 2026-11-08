@@ -190,6 +190,9 @@ public partial class PopupWindow : Window, IFlyout
     /// <summary>What the block's flip has put on screen, for <c>--motion-check</c>.</summary>
     internal PopupLocalBlock.FlipReadout FlipReadout => _localBlock.Readout;
 
+    /// <summary>The measure the switch is lit on, read off the control and not off <see cref="ViewChoice"/>, for <c>--view-check</c>.</summary>
+    internal PanelMeasure MeasureOnScreen => MeasureOverall.IsChecked == true ? PanelMeasure.Overall : PanelMeasure.Output;
+
     /// <summary>
     /// Closes the panel from outside, the tray icon completing a toggle. Idempotent, so
     /// a click that arrives while the panel is already closing changes nothing.
@@ -304,7 +307,7 @@ public partial class PopupWindow : Window, IFlyout
     /// user is doing, and simply fails when something is running fullscreen, the case that
     /// blocked verifying the graph's week gridlines. Rendering offscreen also reaches the
     /// states this machine's real data may never produce, exactly as
-    /// <c>--tile-samples</c> does for the tiles.</para>
+    /// <c>--tile-samples</c> does for the model face.</para>
     ///
     /// <para>The two layout passes are load-bearing and mirror the live sequence. The chart
     /// is a <c>Canvas</c>, so its <c>ActualWidth</c> is unknown until the tree has been laid

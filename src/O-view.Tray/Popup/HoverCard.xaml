@@ -7,11 +7,10 @@
          surface in the app, on its own elevated background so it reads as floating above
          what it describes rather than as part of it.
 
-         It lives in a shared dictionary rather than on one control because it was
-         previously defined inside StatTile and therefore reachable only from the tiles,
-         so the usage graph's bars kept the system chrome, and the panel had two different
-         tooltip designs depending on what you pointed at. Anything in the app that shows a
-         tooltip uses this; see HoverCard for the builders. -->
+         It lives in a shared dictionary rather than on one control so the usage graph's
+         bars, the doughnuts and the model table all carry the same card, and the panel never
+         has two tooltip designs depending on what you pointed at. Anything in the app that
+         shows a tooltip uses this; see HoverCard for the builders. -->
     <Style x:Key="PanelTooltip" TargetType="ToolTip">
         <Setter Property="Background" Value="Transparent"/>
         <Setter Property="BorderThickness" Value="0"/>
