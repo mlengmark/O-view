@@ -1,6 +1,5 @@
 using Avalonia;
 using Avalonia.Controls;
-using Avalonia.Controls.Shapes;
 using Avalonia.Media;
 using OView.App.Rendering;
 using OView.Presentation.Panel;
@@ -9,165 +8,193 @@ using static OView.Linux.Panel.PanelPrimitives;
 namespace OView.Linux.Panel;
 
 /// <summary>
-/// The 31-day graph (<see cref="PanelGraphView"/>): a bar per day shaded by its intensity
-/// within its own plan week, the weekly-reset gridlines over them, a date under every
-/// column, and a hover card on each.
+/// The 31-day chart (<see cref="PanelLocalChartView"/>): a bar per day from a baseline hairline,
+/// older days fading and today in the accent, a hairline at each week start with its date
+/// written across, <c>today</c> at the right-hand end, and a hover card on each bar.
 ///
-/// <para>Every height, intensity, date and card line arrives built; this places them.</para>
+/// <para>Every height, date and card line arrives built; this places them.</para>
 /// </summary>
 internal sealed class PanelGraph(LinuxPanelTheme theme)
 {
-    /// <summary>Height of the bar strip at the natural density. The Windows chart is 86.</summary>
-    private const double NaturalGraphHeight = 60;
+    /// <summary>Room left above the tallest bar, so it does not stand against the heading.</summary>
+    private const double HeadroomDip = 4;
 
-    /// <summary>
-    /// Column-to-column distance in the graph: a bar and its gutter. Fixed rather than the
-    /// panel's width divided by 31, because nothing has a width to divide at build time and a
-    /// chart that waited for one would rebuild on every resize. 31 columns then come to
-    /// 341 px, inside the 400 px panel at either density.
-    /// </summary>
-    private const double GraphColumnPitch = 11;
+    /// <summary>A week's date starts this far right of its line, so the two do not touch.</summary>
+    private const double WeekLabelGapDip = 3;
 
-    /// <summary>Width of one day's bar, centred in its column.</summary>
-    private const double GraphBarWidth = 9;
+    /// <summary>From the top of the axis band to the top of its text.</summary>
+    private const double AxisLabelTopDip = 2;
 
-    /// <summary>Gap between the foot of the bars and the top of the dates.</summary>
-    private const double GraphDateGap = 6;
+    /// <summary>How far in from the right edge <c>today</c> ends.</summary>
+    private const double TodayLabelInsetDip = 2;
 
-    /// <summary>
-    /// How solid the least intense day of a week is drawn; its busiest day is fully opaque.
-    ///
-    /// <para>This head carries the within-week intensity as opacity on its one series colour
-    /// rather than as a second hue, so the ramp needs no colour the shared palette does not
-    /// have, and it reads the same way in both themes, which a fixed light-to-dark ramp
-    /// does not. Floored well above nothing: the quietest day of a week is still a day with
-    /// usage, and a bar fading towards invisible would read as a day with none.</para>
-    /// </summary>
-    private const double GraphFaintestDay = 0.45;
+    /// <summary>The smallest gap a week's date may leave before <c>today</c>.</summary>
+    private const double AxisLabelClearanceDip = 6;
+
+    /// <summary>The bars' width below which they would stop reading as bars.</summary>
+    private const double MinBarWidthDip = 2;
 
     private readonly LinuxPanelTheme _theme = theme;
 
     /// <summary>
-    /// <para><b>A day with no data draws nothing at all</b>, no bar, and no zero-height
-    /// stand-in for one, because a flat bar claims a measured day of no usage on a day that
-    /// was never measured (rule 6). The column stays, so the dates and the gridlines over it
-    /// still line up; it is simply empty.</para>
-    ///
-    /// <para><b>Why a Canvas rather than the strip of bars this was.</b> A gridline sits at
-    /// its true fractional position <em>inside</em> a day column, which no stack of
-    /// fixed-width children can express. The columns are laid out at a fixed pitch instead of
-    /// against the panel's measured width, so every position here is known before layout,
-    /// Avalonia offers no arranged width to divide up at build time, and a chart that waited
-    /// for one would be redrawing itself on every resize.</para>
+    /// <para><b>A day with no bar draws nothing at all</b>, no zero-height stand-in, because a
+    /// flat bar claims a measured day of no usage on a day that was never measured (rule 6). Its
+    /// slot stays, so the week lines over it still line up.</para>
     /// </summary>
-    public void AddTo(StackPanel root, PanelGraphView graph, PanelDensity density)
+    public void AddTo(StackPanel root, string heading, PanelLocalChartView chart, PanelDensity density)
     {
-        if (graph.Columns.Count == 0)
+        if (chart.Columns.Count == 0)
         {
             return;
         }
 
-        // Scaled by the density ratio rather than given the Windows chart height: this head
-        // ships a 60 px strip, and a display with room must keep exactly that. The date band
-        // below it is NOT scaled, the labels are text, and text does not shrink with the
+        // A whole number of pixels, so the baseline hairline at its foot stays one crisp row. The
+        // axis band below it is NOT scaled: it holds text, and text does not shrink with the
         // spacing.
-        var barArea = NaturalGraphHeight * density.GraphScale;
-        var dateTop = barArea + GraphDateGap;
-        var chart = new Canvas { Width = graph.Columns.Count * GraphColumnPitch };
-
-        // A Canvas has no desired size of its own, so the dates would hang below the chart
-        // into whatever follows it unless the height counts them. Taken from the labels
-        // themselves rather than a constant: how deep a date reaches on its side is its text's
-        // width, which moves with the font the desktop hands us.
-        var dateDepth = 0.0;
-
-        for (var i = 0; i < graph.Columns.Count; i++)
-        {
-            var column = graph.Columns[i];
-            var centre = (i + 0.5) * GraphColumnPitch;
-
-            if (column.HasBar)
-            {
-                var height = Math.Max(PanelMetrics.GraphMinBarHeightDip, barArea * column.Height);
-                var bar = new Border
-                {
-                    Width = GraphBarWidth,
-                    Height = height,
-                    Background = _theme["Series1"],
-                    Opacity = GraphFaintestDay + (1 - GraphFaintestDay) * column.Intensity,
-                    CornerRadius = new CornerRadius(1),
-                };
-                ToolTip.SetTip(bar, GraphTip(column.CardFigure, column.CardCaption));
-                Canvas.SetLeft(bar, centre - GraphBarWidth / 2);
-                Canvas.SetTop(bar, barArea - height);
-                chart.Children.Add(bar);
-            }
-
-            dateDepth = Math.Max(dateDepth, AddGraphDate(chart, column, centre, dateTop));
-        }
-
-        chart.Height = dateTop + dateDepth;
-
-        // Last, so they sit above the bars: a Canvas paints in child order, and a reset line
-        // overdrawn by every bar it crosses is missing exactly where the usage is heaviest.
-        foreach (var boundary in graph.Boundaries)
-        {
-            var x = (boundary.Column + boundary.FractionOfDay) * GraphColumnPitch;
-            var line = new Line
-            {
-                StartPoint = new Point(x, 0),
-                EndPoint = new Point(x, barArea + PanelMetrics.GraphBoundaryOverhangDip),
-                Stroke = _theme["WarnText"],
-                StrokeThickness = 1,
-                StrokeDashArray = [PanelMetrics.GraphBoundaryDashOnDip, PanelMetrics.GraphBoundaryDashOffDip],
-            };
-            ToolTip.SetTip(line, GraphTip(boundary.CardFigure, boundary.CardCaption));
-            chart.Children.Add(line);
-        }
+        var barArea = Math.Round(PanelMetrics.ChartHeightDip * density.GraphScale);
 
         var block = new StackPanel { Spacing = 4 };
-        block.Children.Add(Text(graph.Heading, 13, _theme["TextPrimary"], FontWeight.SemiBold));
-        block.Children.Add(chart);
+        block.Children.Add(Text(heading, 13, _theme["TextPrimary"], FontWeight.SemiBold));
+        block.Children.Add(new ChartSurface(_theme, chart, barArea));
         root.Children.Add(block);
     }
 
     /// <summary>
-    /// One column's date, turned on its side so 31 of them fit.
+    /// The marks, placed against whatever width the panel's column turns out to be.
     ///
-    /// <para>Placed from the measured text rather than from a constant. Avalonia rotates about
-    /// the element's centre, so the label is positioned by its centre and the rotation leaves
-    /// that point where it was: the horizontal centre is the column's own, which is also the
-    /// bar's, so a date cannot drift onto its neighbour. Measuring is what makes the vertical
-    /// placement right, after a quarter turn the box's WIDTH is its height on screen.</para>
+    /// <para><b>Why the placing is in the arrange.</b> Nothing has a width to divide when the
+    /// panel is built, and the column is not one width: the compact density's padding widens it,
+    /// and the scroll bar, which arrives after the build, narrows it. A fixed 368 would cross the
+    /// panel's edge at the first of those it was too wide for. The arrange is the one moment the
+    /// true width is known, it costs no rebuild when the width moves, and it runs in the
+    /// offscreen renders as well, which lay the tree out by hand.</para>
     /// </summary>
-    /// <returns>How far below <paramref name="top"/> the label reaches.</returns>
-    private double AddGraphDate(Canvas chart, PanelGraphColumnView column, double centre, double top)
+    private sealed class ChartSurface : Avalonia.Controls.Panel
     {
-        var label = new TextBlock
+        private readonly int _columns;
+        private readonly double _barArea;
+        private readonly Border _baseline;
+        private readonly List<(Border Bar, int Column, double Height)> _bars = [];
+        private readonly List<(Border Line, TextBlock Date, int Column)> _weeks = [];
+        private readonly TextBlock _today;
+
+        public ChartSurface(LinuxPanelTheme theme, PanelLocalChartView chart, double barArea)
         {
-            Text = column.DateLabel,
-            FontSize = PanelMetrics.GraphLabelFontSize,
-            Foreground = _theme["TextMuted"],
-            Opacity = column.Recorded ? 1.0 : PanelMetrics.GraphUnrecordedLabelOpacity,
-            RenderTransform = new RotateTransform(90),
+            _columns = chart.Columns.Count;
+            _barArea = barArea;
+
+            _baseline = Hairline(theme);
+            Children.Add(_baseline);
+            AddBars(theme, chart.Columns);
+
+            // After the bars, so they sit above them: a Panel paints in child order, and a week
+            // line overdrawn by every bar it crosses is missing exactly where usage is heaviest.
+            foreach (var mark in chart.WeekMarks)
+            {
+                var line = Hairline(theme);
+                var date = AxisLabel(mark.DateLabel, theme["TextMuted"]);
+                Children.Add(line);
+                Children.Add(date);
+                _weeks.Add((line, date, mark.Column));
+            }
+
+            _today = AxisLabel(chart.TodayLabel, theme["AccentInk"]);
+            Children.Add(_today);
+        }
+
+        private void AddBars(LinuxPanelTheme theme, IReadOnlyList<PanelGraphColumnView> columns)
+        {
+            var last = columns.Count - 1;
+
+            for (var i = 0; i <= last; i++)
+            {
+                var column = columns[i];
+                if (!column.HasBar)
+                {
+                    continue;
+                }
+
+                var age = last == 0 ? 1 : i / (double)last;
+                var bar = new Border
+                {
+                    Background = i == last ? theme["AccentBg"] : theme["Series1"],
+                    Opacity = PanelMetrics.ChartOldestBarOpacity
+                              + (PanelMetrics.ChartNewestBarOpacity - PanelMetrics.ChartOldestBarOpacity) * age,
+                    CornerRadius = new CornerRadius(PanelMetrics.ChartBarRadiusDip),
+
+                    // At its true fractional place: a slot is rarely a whole number, and
+                    // rounding each bar's edges to whole pixels leaves the 31 gaps visibly uneven.
+                    UseLayoutRounding = false,
+                };
+                ToolTip.SetTip(bar, $"{column.CardFigure} · {column.CardCaption}");
+                Children.Add(bar);
+                _bars.Add((bar, i, Math.Max(PanelMetrics.GraphMinBarHeightDip, (_barArea - HeadroomDip) * column.Height)));
+            }
+        }
+
+        /// <summary>Asks for its height and no width: the column it is arranged in decides that.</summary>
+        protected override Size MeasureOverride(Size availableSize)
+        {
+            foreach (var child in Children)
+            {
+                child.Measure(Size.Infinity);
+            }
+
+            return new Size(0, _barArea + PanelMetrics.ChartAxisBandDip);
+        }
+
+        protected override Size ArrangeOverride(Size finalSize)
+        {
+            var width = finalSize.Width;
+            var slot = width / _columns;
+
+            _baseline.Arrange(new Rect(0, _barArea, width, 1));
+
+            foreach (var (bar, column, height) in _bars)
+            {
+                bar.Arrange(new Rect(
+                    column * slot + PanelMetrics.ChartBarInsetDip,
+                    _barArea - height,
+                    Math.Max(MinBarWidthDip, slot - 2 * PanelMetrics.ChartBarInsetDip),
+                    height));
+            }
+
+            var top = _barArea + AxisLabelTopDip;
+            var todayLeft = width - TodayLabelInsetDip - _today.DesiredSize.Width;
+            _today.Arrange(new Rect(new Point(todayLeft, top), _today.DesiredSize));
+
+            foreach (var (line, date, column) in _weeks)
+            {
+                var x = column * slot;
+                line.Arrange(new Rect(x, 0, 1, _barArea));
+
+                // A Monday among the last few days keeps its line and drops its date, rather
+                // than running into today or past the panel's edge. Dropped by opacity, which only
+                // repaints: IsVisible would invalidate the layout from inside this arrange.
+                var left = x + WeekLabelGapDip;
+                var fits = left + date.DesiredSize.Width <= todayLeft - AxisLabelClearanceDip;
+                date.Opacity = fits ? 1 : 0;
+                date.Arrange(fits ? new Rect(new Point(left, top), date.DesiredSize) : default);
+            }
+
+            return finalSize;
+        }
+
+        /// <summary>Layout rounding, left on, is what keeps a line at a fractional x to one crisp column.</summary>
+        private static Border Hairline(LinuxPanelTheme theme) => new()
+        {
+            Background = theme["PanelBorder"],
+
+            // A week line crosses bars, and each bar has a hover card of its own to answer.
+            IsHitTestVisible = false,
         };
 
-        label.Measure(Size.Infinity);
-        var ink = label.DesiredSize;
-        Canvas.SetLeft(label, centre - ink.Width / 2);
-        Canvas.SetTop(label, top + (ink.Width - ink.Height) / 2);
-        chart.Children.Add(label);
-
-        return ink.Width;
+        private static TextBlock AxisLabel(string text, IBrush brush) => new()
+        {
+            Text = text,
+            FontSize = PanelMetrics.ChartWeekLabelFontSize,
+            Foreground = brush,
+            IsHitTestVisible = false,
+        };
     }
-
-    /// <summary>
-    /// A graph hover card as this head can show one: a single line, figure first.
-    ///
-    /// <para>An empty figure is the Monday fallback gridline, which has no observed instant to
-    /// state (rule 6), so the caption stands alone rather than behind a separator with
-    /// nothing in front of it.</para>
-    /// </summary>
-    private static string GraphTip(string figure, string caption) =>
-        figure.Length == 0 ? caption : $"{figure} · {caption}";
 }

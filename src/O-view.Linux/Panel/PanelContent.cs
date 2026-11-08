@@ -359,7 +359,12 @@ public sealed class PanelContent : Border
         var report = scopeReport ?? TranscriptScopeReport.Inspect();
         _tiles.AddTo(_root, stats, Density);
         _tokenBars.AddTo(_root, PanelSections.TokenBars(stats, report));
-        _graph.AddTo(_root, PanelSections.Graph(stats, snapshot, local), Density);
+
+        // Output whatever is stored, because the tiles above still state Output figures and a
+        // chart of a different measure under them would disagree with them. The view comes
+        // through whole once this head has the switch.
+        var totals = PanelSections.LocalTotals(stats, snapshot, local, view with { Measure = PanelMeasure.Output });
+        _graph.AddTo(_root, PanelText.UsageWindowHeading(stats.WindowDays), totals.Chart, Density);
 
         if (PanelSections.ScopeNote(stats, snapshot, report) is { } note)
         {
