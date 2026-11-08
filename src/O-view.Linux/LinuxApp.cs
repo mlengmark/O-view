@@ -331,6 +331,11 @@ public sealed class LinuxApp : Application, IShellToSkin
                 // Carried onto the panel the row could not reach, and spent here: the reset is
                 // one request, not a standing setting.
                 ForgetPlaceOnOpen = _forgetPanelPlaceOnNextOpen,
+
+                // Read at every open, so the panel shows the view it was left in, and a notice
+                // the shell has un-hidden since then is back.
+                ViewChoice = shell.PanelView,
+                SetViewChoice = shell.SetPanelView,
             };
 
             _forgetPanelPlaceOnNextOpen = false;
