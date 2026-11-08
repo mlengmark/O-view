@@ -1,6 +1,8 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Layout;
 using Avalonia.Media.Imaging;
+using Avalonia.VisualTree;
 using OView.App.Rendering;
 using OView.Presentation.Samples;
 
@@ -75,23 +77,32 @@ public static class PanelSampleRenderer
     }
 
     /// <summary>
-    /// How many measure/arrange pairs a capped panel needs before its layout settles. The
-    /// first discovers that the content overflows and brings the scroll bar in; the second
-    /// lays the content out in the narrower column that leaves; the third re-cuts the token
-    /// bars, which size their own segments against the track they were handed.
+    /// How many measure/arrange pairs a capped panel needs from its root. The first discovers
+    /// that the content overflows and brings the scroll bar in; the second lays the content
+    /// out in the narrower column that leaves. <see cref="Settle"/> does the rest.
     ///
     /// <para>Run by hand because nothing offscreen has a layout manager to run them, the
-    /// tree never reaches a window, so an invalidation inside it is never picked up. Counted
-    /// rather than looped-until-valid for the same reason: the root stays valid while a
-    /// descendant is not.</para>
+    /// tree never reaches a window, so an invalidation inside it is never picked up.</para>
     /// </summary>
-    private const int CappedLayoutPasses = 3;
+    public const int CappedLayoutPasses = 2;
 
-    private static void Save(Control content, string path, int passes = 1)
+    /// <summary>
+    /// The most times a control can be gone back to, the same limit a window's layout manager
+    /// stops at, so a control that invalidates itself on every arrange cannot hang the render.
+    /// </summary>
+    private const int MaxSettlePasses = 10;
+
+    /// <summary>
+    /// Lays the tree out as far as a window would before it paints.
+    ///
+    /// <para>The tree must be measured before its desired size is known, and arranged at that
+    /// size before it will render anything but blank. <paramref name="passes"/> repeats that
+    /// from the root; <see cref="Settle"/> then does the part only a layout manager does.</para>
+    ///
+    /// <para>Public so a test can read the bounds this leaves, which is what a render draws.</para>
+    /// </summary>
+    public static void LayOut(Control content, int passes = 1)
     {
-        // The tree must be measured before its desired size is known, and arranged at that
-        // size before it will render anything but blank. A panel with room is done in one
-        // pass, exactly as before.
         for (var pass = 0; pass < passes; pass++)
         {
             content.InvalidateMeasure();
@@ -99,6 +110,56 @@ public static class PanelSampleRenderer
             content.InvalidateArrange();
             content.Arrange(new Rect(content.DesiredSize));
         }
+
+        Settle(content);
+    }
+
+    /// <summary>
+    /// Goes back to every control that invalidated itself during the arrange, at the
+    /// constraint and bounds it last had, until none is left.
+    ///
+    /// <para><b>Why the root's own passes cannot do this.</b> A window's layout manager queues
+    /// the control that invalidated itself and returns to that one control. Repeating the
+    /// layout from the root stops at the first valid ancestor, so a descendant's invalidation
+    /// is never reached. The token bars are the case that showed it: they size their columns
+    /// when their track gets its width, during the arrange, so every sample image drew all four
+    /// segments one pixel wide at the left of the track while the window drew them in full.</para>
+    ///
+    /// <para>A control with no previous constraint has never been laid out, because it sits
+    /// under something hidden, and the layout manager skips those too.</para>
+    /// </summary>
+    private static void Settle(Control content)
+    {
+        for (var pass = 0; pass < MaxSettlePasses; pass++)
+        {
+            var settled = false;
+            foreach (var control in content.GetVisualDescendants().OfType<Layoutable>())
+            {
+                if (!control.IsMeasureValid
+                    && LayoutInformation.GetPreviousMeasureConstraint(control) is { } constraint)
+                {
+                    control.Measure(constraint);
+                    settled = true;
+                }
+
+                if (!control.IsArrangeValid
+                    && LayoutInformation.GetPreviousArrangeBounds(control) is { } bounds)
+                {
+                    control.Arrange(bounds);
+                    settled = true;
+                }
+            }
+
+            if (!settled)
+            {
+                return;
+            }
+        }
+    }
+
+    private static void Save(Control content, string path, int passes = 1)
+    {
+        LayOut(content, passes);
 
         var pixel = new PixelSize(
             Math.Max(1, (int)Math.Ceiling(content.DesiredSize.Width)),
