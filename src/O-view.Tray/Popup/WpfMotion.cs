@@ -19,7 +19,13 @@ internal static class WpfMotion
     /// rather than cached, so switching it takes effect for the next transition without a
     /// restart.
     /// </summary>
-    public static bool AnimationsOn => SystemParameters.ClientAreaAnimation;
+    public static bool AnimationsOn => AnimationsOverride ?? SystemParameters.ClientAreaAnimation;
+
+    /// <summary>
+    /// Forces the setting for a verification run, so the animations-off path can be driven on a
+    /// machine that has them on. Null follows Windows.
+    /// </summary>
+    internal static bool? AnimationsOverride { get; set; }
 
     /// <summary>A figure in milliseconds, as WPF wants it.</summary>
     public static Duration Duration(double milliseconds) =>

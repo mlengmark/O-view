@@ -277,8 +277,13 @@ public static class SampleStates
                 View: new PanelViewChoice(BannerHidden: true)),
 
             new("longest-figures",
-                "The widest figures the panel is asked for, and a long model id, for the no-clipping check",
+                "The widest figures the panel is asked for, for the no-clipping check",
                 Live, LongestFigures(), Account, BothSources, View: overall),
+
+            new("longest-figures-models",
+                "The same figures on the model face, with a model whose name is far wider than its column",
+                Live, LongestFigures(), Account, BothSources,
+                View: new PanelViewChoice(PanelMeasure.Overall, PanelFace.Models)),
 
             new("no-data",
                 "Nothing readable: the no-usage-data banner, which states what was checked",
@@ -381,8 +386,9 @@ public static class SampleStates
 
     /// <summary>
     /// Figures at the width the panel has to hold: a 10-digit billed total, a four-figure
-    /// value, and a model id as long as the catalogue's longest. Everything else is the
-    /// typical state, so a clipped figure here is the figure's doing.
+    /// value, and an unrecognised model id, which is shown as it is and so is the longest name
+    /// a row can be given. Everything else is the typical state, so a clipped figure here is
+    /// the figure's doing.
     /// </summary>
     private static PanelStatistics LongestFigures() => WithModels(
         Stats with
@@ -398,7 +404,7 @@ public static class SampleStates
             Composition31Days = new TokenComposition(
                 Input: 500_000, CacheCreation: 480_000_000, CacheRead: 4_200_000_000, Output: 52_900_000),
         },
-        [.. SevenModelIds.Skip(1).Prepend("claude-sonnet-4-5-20250929-extended-context-preview")]);
+        [.. SevenModelIds.Skip(1).Prepend("claude-nova-7-20260101-extended-context-preview")]);
 
     private static PanelStatistics EmptyStats() => NoLocalUsage() with
     {

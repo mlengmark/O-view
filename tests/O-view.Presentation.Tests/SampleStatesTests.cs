@@ -85,7 +85,7 @@ public class SampleStatesTests
     private static readonly string[] RedesignStates =
     [
         "typical-overall", "typical-models", "typical-models-overall", "offplan-on-overall",
-        "offplan-on-models", "offplan-on-hidden", "longest-figures",
+        "offplan-on-models", "offplan-on-hidden", "longest-figures", "longest-figures-models",
     ];
 
     /// <summary>
@@ -98,7 +98,7 @@ public class SampleStatesTests
         var withModels = SampleStates.All.Where(s => s.Stats.Models31Days.Count > 0).Select(s => s.Name);
 
         Assert.Equal(
-            ["typical-models", "typical-models-overall", "offplan-on-models", "longest-figures"],
+            ["typical-models", "typical-models-overall", "offplan-on-models", "longest-figures", "longest-figures-models"],
             withModels);
     }
 
@@ -109,7 +109,7 @@ public class SampleStatesTests
 
         Assert.All(RedesignStates, n => Assert.Contains(n, names));
         Assert.Equal(
-            ["typical-models", "typical-models-overall", "offplan-on-models"],
+            ["typical-models", "typical-models-overall", "offplan-on-models", "longest-figures-models"],
             SampleStates.All.Where(s => s.View.Face == OView.Core.Models.PanelFace.Models).Select(s => s.Name));
         Assert.Equal(
             ["offplan-on-hidden"],
@@ -159,6 +159,15 @@ public class SampleStatesTests
         Assert.Equal("4733.4M", UsageFormatter.Tokens(s.Stats.Composition31Days.Total));
         Assert.Equal("$3513.67", UsageFormatter.Usd(s.Stats.Est31DaysValue.Value));
         Assert.True(s.Stats.Models31Days.Max(m => m.Model.Length) > 40);
+    }
+
+    [Fact]
+    public void TheLongestFiguresModelFaceHasAModelWhoseDisplayedNameIsLong()
+    {
+        var s = SampleStates.All.Single(s => s.Name == "longest-figures-models");
+
+        Assert.Equal(OView.Core.Models.PanelFace.Models, s.View.Face);
+        Assert.True(s.Stats.Models31Days.Max(m => m.DisplayName.Length) > 40);
     }
 
     [Fact]

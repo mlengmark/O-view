@@ -12,10 +12,8 @@ namespace OView.Tray.Popup;
 /// Builders and timing for the app's hover cards, so every tooltip in the panel is the
 /// same object with the same delays.
 ///
-/// <para>The card template used to live inside <see cref="StatTile"/>, which meant only the
-/// tiles had it: the usage graph's bars fell back to raw WPF chrome, and the panel showed
-/// two unrelated tooltip designs depending on where the pointer landed. The template moved
-/// to <c>HoverCard.xaml</c> and the construction moved here.</para>
+/// <para>The card template is in <c>HoverCard.xaml</c> and the construction is here, so a mark
+/// anywhere in the panel gets the same card and none falls back to raw WPF chrome.</para>
 ///
 /// <para>The two shapes are deliberate and cover everything the panel needs. <see
 /// cref="Figure"/>, and <see cref="ModelFigure"/> for a doughnut section, leads with the number and names it underneath, the reading order for
@@ -28,7 +26,7 @@ internal static class HoverCard
     // Timing is applied per element, never inherited. Setting it once on a container looks
     // right and silently does not work, the children resolve framework values instead,
     // which is invisible in a screenshot. --tile-samples reports what actually resolves on
-    // a bar segment for exactly this reason.
+    // a model's name cell for exactly this reason.
 
     /// <summary>
     /// 400 ms, the Windows convention, and a real change: the unset value measured on this

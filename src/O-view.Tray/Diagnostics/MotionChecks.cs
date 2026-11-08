@@ -1,20 +1,20 @@
 using System.IO;
 using System.Text;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 using OView.App.Rendering;
 using OView.Core.Models;
 using OView.Presentation.Panel;
 using OView.Presentation.Samples;
 using OView.Tray.Popup;
-using Border = System.Windows.Controls.Border;
 
 namespace OView.Tray.Diagnostics;
 
 /// <summary>
-/// <c>--motion-check</c>: turns the panel's local block over, flips a stat tile and folds the
-/// menu's threshold list on real windows, each to its end, and then clicks a second time while
-/// the first transition is still running.
+/// <c>--motion-check</c>: turns the panel's local block over and folds the menu's threshold
+/// list on real windows, each to its end, and then clicks a second time while the first
+/// transition is still running.
 ///
 /// <para>What a still cannot show, and a single click cannot catch, is a transition that does
 /// not finish or finishes in the wrong place. This app has shipped a missed completion once
@@ -51,7 +51,7 @@ internal static class MotionChecks
     /// </summary>
     private const double ReverseClosingAt = 0.75;
 
-    /// <summary>The half turn the tile's glyph and the list's chevron make between their rests.</summary>
+    /// <summary>The half turn the list's chevron makes between its rests.</summary>
     private const double OpenTurnDegrees = 180;
 
     private const double TurnToleranceDegrees = 0.5;
@@ -158,8 +158,7 @@ internal static class MotionChecks
 
         try
         {
-            Add(BlockSurface(windows));
-            Add(TileSurface(windows));
+            Add(BlockSurface(windows, out _));
             // The menu opens only when its turn comes, and is given its own entrance to finish
             // before the list is touched: a fold started under an arriving surface is two
             // transitions, and this check is about one.
@@ -181,11 +180,20 @@ internal static class MotionChecks
             return;
         }
 
+        Drive(queue, Finish);
+    }
+
+    /// <summary>
+    /// Runs the steps in order, each after its own delay, on one-shot timers at
+    /// <see cref="DispatcherPriority.Send"/>. A step that throws ends the run with the exception.
+    /// </summary>
+    internal static void Drive(Queue<(double DelayMs, Action Do)> queue, Action<Exception?> finished)
+    {
         void Next()
         {
             if (queue.Count == 0)
             {
-                Finish(null);
+                finished(null);
                 return;
             }
 
@@ -203,7 +211,7 @@ internal static class MotionChecks
                 }
                 catch (Exception ex)
                 {
-                    Finish(ex);
+                    finished(ex);
                     return;
                 }
 
@@ -216,6 +224,7 @@ internal static class MotionChecks
     }
 
     /// <summary>
+    /// The sequence each surface is put through    /// <summary>
     /// The sequence each surface is put through, from closed. Each entry is a click and, for the
     /// two reversals, a second click that long after the first; then the state it must rest in.
     /// </summary>
@@ -232,10 +241,10 @@ internal static class MotionChecks
     /// The local block's flip on a real panel, from the totals face. Both reversals land while the
     /// two faces are on screen together, which is what "reverses the crossfade" is a claim about.
     /// </summary>
-    private static Surface BlockSurface(List<Window> windows)
+    private static Surface BlockSurface(List<Window> windows, out PopupWindow panel)
     {
         var state = SampleStates.All.Single(s => s.Name == "offplan-on-models");
-        var panel = new PopupWindow
+        panel = new PopupWindow
         {
             PinForVerification = true,
             ThemeOverride = false,
@@ -249,6 +258,7 @@ internal static class MotionChecks
         };
         panel.ShowNearTrayIcon(state.Snapshot, state.Stats, state.Account);
         windows.Add(panel);
+        var shown = panel;
 
         // Half way through the only time both faces show: after the new one starts, before the
         // old one has gone.
@@ -259,11 +269,11 @@ internal static class MotionChecks
                      + PanelMotion.Ms(PanelMotion.ChartBarRiseBaseMs);
 
         return new Surface(
-            "block", panel.ClickFlipForVerification, () => panel.FlipReadout.Flipping,
-            open => BlockMiss(panel.FlipReadout, open),
+            "block", shown.ClickFlipForVerification, () => shown.FlipReadout.Flipping,
+            open => BlockMiss(shown.FlipReadout, open),
             OpenMs: bothShowingMs / ReverseOpeningAt, CloseMs: bothShowingMs / ReverseClosingAt,
             SettleMs: SettleBudget * flipMs,
-            Opacities: () => [panel.FlipReadout.TotalsOpacity, panel.FlipReadout.ModelsOpacity]);
+            Opacities: () => [shown.FlipReadout.TotalsOpacity, shown.FlipReadout.ModelsOpacity]);
     }
 
     private static string? ContinuationMiss(double[] before, double[] after) =>
@@ -305,61 +315,6 @@ internal static class MotionChecks
         return r.Clipped ? "the faces are still clipped" : null;
     }
 
-    private static Surface TileSurface(List<Window> windows)
-    {
-        ModelSlice Slice(string model, long tokens) => new(model, ModelDisplayName.For(model), tokens);
-
-        ModelSlice[] slices =
-        [
-            Slice("claude-opus-4-8", 350_000_000),
-            Slice("claude-opus-5", 180_000_000),
-            Slice("claude-fable-5", 40_000_000),
-        ];
-        var view = PanelSections.Tile(
-            "Tokens", "570M", "", slices, BreakdownMeasure.Tokens, ModelBreakdown.ColourOrder(slices));
-
-        // Themed before it is populated, as the sample renders do: the breakdown resolves its
-        // colours through the tree.
-        var tile = new StatTile { Width = 180 };
-        var host = new Border
-        {
-            Child = tile,
-            Padding = new Thickness(16),
-            Background = PanelTheme.Brush("PanelBg", false),
-        };
-        PanelTheme.Apply(host.Resources, false);
-
-        var window = new Window
-        {
-            Content = host,
-            WindowStyle = WindowStyle.None,
-            ResizeMode = ResizeMode.NoResize,
-            SizeToContent = SizeToContent.WidthAndHeight,
-            ShowInTaskbar = false,
-            ShowActivated = false,
-            Topmost = true,
-            Left = 40,
-            Top = 40,
-        };
-        tile.Populate(view);
-        window.Show();
-        window.UpdateLayout();
-        windows.Add(window);
-
-        // The face going out, the face coming in behind it, the bar and legend drawing in, and
-        // the glyph turning: the flip is over when the last of them is.
-        var arrivesMs = PanelMotion.Ms(PanelMotion.TileFaceInDelayBaseMs + PanelMotion.TileFaceInBaseMs);
-        var barMs = PanelMotion.Ms(PanelMotion.TileModelBarDelayBaseMs + PanelMotion.TileModelBarBaseMs);
-        var legendMs = PanelMotion.LegendStartMs(view.Segments.Count - 1) + PanelMotion.Ms(PanelMotion.TileLegendFadeBaseMs);
-        var turnMs = PanelMotion.Ms(PanelMotion.TileGlyphTurnBaseMs);
-        var flipMs = Math.Max(Math.Max(arrivesMs, turnMs), Math.Max(barMs, legendMs));
-
-        return new Surface(
-            "tile", tile.ClickForVerification, () => tile.Readout.Flipping,
-            open => TileMiss(tile.Readout, open),
-            OpenMs: arrivesMs, CloseMs: arrivesMs, SettleMs: SettleBudget * flipMs);
-    }
-
     private static Surface ListSurface(MenuWindow menu)
     {
         var openMs = PanelMotion.Ms(PanelMotion.ThresholdOpenBaseMs);
@@ -372,39 +327,159 @@ internal static class MotionChecks
             OpenMs: openMs, CloseMs: closeMs, SettleMs: SettleBudget * Math.Max(Math.Max(openMs, closeMs), rowsMs));
     }
 
-    private static string? TileMiss(StatTile.FlipReadout r, bool open)
+    /// <summary>How far a height or an edge can differ and still be the same one, in DIP.</summary>
+    private const double EdgeToleranceDip = 1.5;
+
+    /// <summary>
+    /// The block's flip changes the panel's height, and the window has to follow with its bottom
+    /// edge on the corner it is docked to: a window resized before it is re-docked shows one wrong
+    /// frame, and one that settles a few pixels off stays there. Read at rest after each turn, and
+    /// on every rendered frame in between, with the claims added to the fold check's report.
+    /// </summary>
+    internal static void CheckFlipHeight(StringBuilder report, Action<bool> done)
     {
-        if (r.Flipping)
+        var windows = new List<Window>();
+        var surface = BlockSurface(windows, out var panel);
+        double totalsHeight = 0, bottom = 0, modelsHeight = 0, modelsBottom = 0, drift = 0;
+        var flipMs = surface.SettleMs;
+
+        double Bottom() => panel.Top + panel.ActualHeight;
+
+        // Per frame, not on a timer, for the reason --fold-check samples that way.
+        void OnFrame(object? sender, EventArgs e)
         {
-            return "a flip is still running";
+            if (panel.FlipReadout.Flipping)
+            {
+                drift = Math.Max(drift, Math.Abs(Bottom() - bottom));
+            }
         }
 
-        if (r.Expanded != open)
+        var queue = new Queue<(double DelayMs, Action Do)>();
+        queue.Enqueue((EdgeSettleMs, () =>
         {
-            return $"the tile is asking for the {(r.Expanded ? "breakdown" : "total")}";
+            totalsHeight = panel.ActualHeight;
+            bottom = Bottom();
+            CompositionTarget.Rendering += OnFrame;
+            panel.ClickFlipForVerification();
+        }));
+        queue.Enqueue((flipMs, () =>
+        {
+            modelsHeight = panel.ActualHeight;
+            modelsBottom = Bottom();
+            panel.ClickFlipForVerification();
+        }));
+        queue.Enqueue((flipMs, () => { }));
+
+        Drive(queue, error =>
+        {
+            CompositionTarget.Rendering -= OnFrame;
+            var pass = error is null;
+            report.AppendLine();
+            report.AppendLine(error is null ? "The block's flip, from the totals face to the models and back:" : $"threw: {error}");
+
+            void Claim(string what, bool holds, string measured)
+            {
+                pass &= holds;
+                report.AppendLine($"{(holds ? "ok  " : "FAIL")} {what,-52} {measured}");
+            }
+
+            if (error is null)
+            {
+                var back = panel.ActualHeight;
+                Claim("the two faces differ in height", Math.Abs(modelsHeight - totalsHeight) > EdgeToleranceDip,
+                    $"totals={totalsHeight:0.0} models={modelsHeight:0.0}");
+                Claim("the bottom edge stays on its corner after the flip", Math.Abs(modelsBottom - bottom) <= EdgeToleranceDip,
+                    $"bottom {bottom:0.0} became {modelsBottom:0.0}");
+                Claim("the bottom edge never leaves it during a flip", drift <= EdgeToleranceDip, $"furthest {drift:0.0}");
+                Claim("the flip back returns to the same height", Math.Abs(back - totalsHeight) <= EdgeToleranceDip,
+                    $"height {back:0.0} against {totalsHeight:0.0}");
+                Claim("and to the same bottom edge", Math.Abs(Bottom() - bottom) <= EdgeToleranceDip,
+                    $"bottom {Bottom():0.0} against {bottom:0.0}");
+            }
+
+            foreach (var window in windows)
+            {
+                window.Close();
+            }
+
+            done(pass);
+        });
+    }
+
+    /// <summary>How long a panel is given to place itself before its first height is read.</summary>
+    private const double EdgeSettleMs = 300;
+
+    /// <summary>
+    /// <c>--still-check</c>: with Windows' animations forced off, the panel opens, switches, flips
+    /// and closes without a transition. Every reading is taken in the turn of the action, since
+    /// with nothing animated the first frame is the last, and the panel is not pinned, because a
+    /// pinned one is reset to rest and would prove nothing.
+    /// </summary>
+    public static void RunStillCheck(string path, Action shutdown)
+    {
+        var report = new StringBuilder();
+        var failures = 0;
+
+        void Claim(string what, bool holds, string measured)
+        {
+            failures += holds ? 0 : 1;
+            report.AppendLine($"{(holds ? "ok  " : "FAIL")} {what,-52} {measured}");
         }
 
-        var (shown, shownOpacity, gone) = open
-            ? (r.Breakdown, r.BreakdownOpacity, r.Summary)
-            : (r.Summary, r.SummaryOpacity, r.Breakdown);
-
-        // Only the visible face's opacity is read: a hidden one is reset to full on settling.
-        if (shown != Visibility.Visible || shownOpacity < 1)
+        var state = SampleStates.All.Single(s => s.Name == "offplan-on-models");
+        WpfMotion.AnimationsOverride = false;
+        try
         {
-            return $"the {(open ? "breakdown" : "total")} is {shown} at opacity {shownOpacity:0.00}";
+            foreach (var face in new[] { PanelFace.Totals, PanelFace.Models })
+            {
+                var panel = new PopupWindow
+                {
+                    ThemeOverride = false,
+                    FixedNow = SampleStates.Now,
+                    FixedZone = SampleStates.Zone,
+                    ScopeReport = state.Scope,
+                    DataReport = state.Plan,
+                    CachedUsage = state.CachedUsage,
+                    BoostNotices = state.Boost,
+                    ViewChoice = state.View with { Face = face },
+                };
+                panel.ShowNearTrayIcon(state.Snapshot, state.Stats, state.Account);
+
+                var r = panel.FlipReadout;
+                var shift = (panel.Content as FrameworkElement)?.RenderTransform as System.Windows.Media.TranslateTransform;
+                report.AppendLine($"{face} face");
+                Claim("opens at full opacity", panel.Opacity == 1, $"opacity={panel.Opacity:0.00}");
+                Claim("opens at rest, not sliding in", shift is null || (shift.Y == 0 && !shift.HasAnimatedProperties),
+                    $"offset={shift?.Y ?? 0:0.0}");
+                Claim("shows its face settled", !r.Flipping && !r.HeightPinned && !r.Clipped && r.ShowingModels == (face == PanelFace.Models),
+                    $"flipping={r.Flipping} pinned={r.HeightPinned} clipped={r.Clipped}");
+
+                panel.ToggleMeasureForVerification();
+                panel.ClickFlipForVerification();
+                r = panel.FlipReadout;
+                Claim("a press on the switch and the tag leaves nothing running",
+                    !r.Flipping && !r.HeightPinned && !r.Clipped && r.ShowingModels != (face == PanelFace.Models),
+                    $"flipping={r.Flipping} pinned={r.HeightPinned} clipped={r.Clipped} models={r.ShowingModels}");
+
+                panel.DismissNow();
+                Claim("closes at once", !panel.IsVisible, $"visible={panel.IsVisible}");
+                panel.Close();
+                report.AppendLine();
+            }
+        }
+        catch (Exception ex)
+        {
+            failures++;
+            report.AppendLine($"threw: {ex}");
+        }
+        finally
+        {
+            WpfMotion.AnimationsOverride = null;
         }
 
-        if (gone != Visibility.Hidden)
-        {
-            return $"the {(open ? "total" : "breakdown")} is still {gone}";
-        }
-
-        if (r.BarClipped)
-        {
-            return "the bar is still clipped";
-        }
-
-        return TurnMiss(r.GlyphAngle, open, "glyph");
+        report.AppendLine($"RESULT: {(failures == 0 ? "PASS" : "FAIL")}");
+        File.WriteAllText(path, report.ToString());
+        shutdown();
     }
 
     /// <summary>
