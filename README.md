@@ -8,7 +8,7 @@ A system tray app for Windows 11 and Linux that shows how much of your Claude us
 |---|---|
 | ![The detail panel on Windows, dark theme](docs/images/panel-typical-windows-dark.png) | ![The detail panel on Windows, light theme](docs/images/panel-typical-windows-light.png) |
 | ![The detail panel on Windows with a Weekly · Fable bar, dark theme](docs/images/panel-model-limit-windows-dark.png) | ![The detail panel on Linux with a Weekly · Fable bar, dark theme](docs/images/panel-model-limit-linux-dark.png) |
-| ![The tray menu](docs/images/menu-windows-dark.png) | ![A stat tile flipped to its per-model breakdown](docs/images/tiles-breakdown-dark.png) |
+| ![The tray menu](docs/images/menu-windows-dark.png) | ![The Windows panel turned to its model face](docs/images/panel-models-windows-dark.png) |
 
 Every surface, on both platforms and in both themes: [docs/overview.md](docs/overview.md).
 
@@ -18,7 +18,7 @@ Every surface, on both platforms and in both themes: [docs/overview.md](docs/ove
 |---|---|
 | Tray icon | A ring gauge filled in proportion to your 5-hour usage, with the brand "eye" at its centre and no digits. Green below 50%, amber from 50%, red from 70%. A grey, unfilled ring means O-view has no authoritative data, which is not the same as 0%. |
 | Tooltip | The exact numbers: `5h: 47% · resets 16:32 · 7d: 61%`. When the data is stale it says so (`as of 14:05`); on fallback data it says `local estimate`; with nothing to read it says `no usage data`. |
-| Detail panel | Left-click the icon. Your account, the session and weekly bars with their reset times, a bar for a model's own weekly limit where your account has one, four stat tiles you can flip to a per-model breakdown, a tokens-used section, a 31-day graph, and an off-plan section while there is off-plan usage. |
+| Detail panel | Left-click the icon. On Windows, two blocks: **Your plan**, the session and weekly bars with their reset times, a bar for a model's own weekly limit where your account has one, and an off-plan row while there is off-plan usage; and **On this machine**, a 31-day chart over a table you can switch between Output and Overall, which turns over to a doughnut and a table for every model. On Linux, the earlier layout: four stat tiles you can flip to a per-model breakdown, a tokens-used section, a 31-day graph and an off-plan section. |
 | Menu | Right-click the icon. Reset panel position, Run at startup, Update automatically, Notify at 70/80/90%, Weekly reset, Copy diagnostics, Check for updates, Exit. On Windows it is a flyout docked to the taskbar corner, matching the panel. |
 
 A notification fires once per session window when usage crosses the threshold you chose. The default is 70%, the point at which the gauge turns red, so the colour and the notification agree out of the box.
@@ -30,10 +30,9 @@ Both heads follow the desktop's light or dark theme, re-read every time the pane
 - **Account header.** Your display name, email and plan tier, read from Claude Code's own config file.
 - **Session and weekly bars.** The percentage used and a reset time for each. The weekly reset is the exact instant Claude Code reports, stored once and projected forward. The 5-hour reset is the instant Claude Code reports while it reports one; otherwise it is derived by watching the percentage fall, so before the first drop the panel says the time is unknown rather than guessing, and a drop seen across a gap in sampling is shown with a `~`.
 - **A model's own limit.** An account with a weekly limit on one model, such as Fable on Max, gets `Weekly · Fable` as its own bar under Weekly, with its percentage and reset time. Claude Code's cache is its only source, so it shows whichever source supplied the two bars above, and a figure whose reset has passed reads unknown rather than stale. An account with no such limit sees no bar.
-- **Four stat tiles.** Output tokens and their estimated value, today and over 31 days. The tiles headline output alone, because output is the only billed quantity that tracks work done; the rest is prompt re-sends against the cache. Click any tile to flip it to a per-model bar with the same colour per model across the whole panel. A window O-view has not been installed for the whole of says so: `12 of 31 days recorded`.
-- **Tokens used.** Two bars split by token kind, today and over 31 days, with a hover card per segment and a breakdown table behind a switch. This is everything billed, where the tiles are output only.
-- **Usage graph.** A bar per day for the last 31 days, with dotted gridlines at each weekly reset. Days before O-view's first recorded day are drawn empty, never as zero, because no data and no usage are different claims.
-- **Off-plan usage.** A section that appears only when there is off-plan usage to show. Without a model limit it is the estimated API-rate value of usage on models that bill as extra usage rather than drawing from the plan, over the chart's window. On an account with a model limit that usage draws from the limit, so the section shows instead what Claude reports as spent past the plan, labelled as reported, with no period because none is stated, and hidden while it is zero (unless extra usage is on and no amount can be read, when it says unknown). The two figures are never added. There is also a banner when the live detector sees substantial work against a flat plan meter or an exhausted window. The banner says whether your account has extra usage switched on, as Claude Code last reported it, rather than asserting a charge.
+- **Your plan and On this machine (Windows).** The panel is two blocks on one flat surface. The plan block is the meters above and, while there is off-plan usage, one row for it. The local block opens on a chart of the last 31 days with a hairline and date at every Monday, over a table of today's and the 31 days' figures. The switch beneath chooses what they count. **Output**, the default, counts output tokens and prices only them, because output is the only billed quantity that tracks work done. **Overall** counts everything billed, with a share for each token kind, a total and an estimated value, and the chart follows; the rest is prompt re-sends against the cache. "By model" turns the block over to two doughnuts, today and the last 31 days, and a table with a row for every model, each in the same colour on both rings and in the table. The panel reopens on the view you left it in, also after a restart. A window O-view has not been installed for the whole of says so: `12 of 31 days recorded`. Days before O-view's first recorded day are drawn empty in the chart, never as zero, because no data and no usage are different claims.
+- **Four stat tiles, tokens used and the usage graph (Linux).** Output tokens and their estimated value, today and over 31 days, as four tiles that flip to a per-model bar with the same colour per model across the whole panel; two bars split by token kind with a breakdown table behind a switch, which is everything billed where the tiles are output only; and a bar per day for the last 31 days with dotted gridlines at each weekly reset. The Linux panel has not been given the two-block layout.
+- **Off-plan usage.** A section that appears only when there is off-plan usage to show. Without a model limit it is the estimated API-rate value of usage on models that bill as extra usage rather than drawing from the plan, over the chart's window. On an account with a model limit that usage draws from the limit, so the section shows instead what Claude reports as spent past the plan, labelled as reported, with no period because none is stated, and hidden while it is zero (unless extra usage is on and no amount can be read, when it says unknown). The two figures are never added. There is also a banner when the live detector sees substantial work against a flat plan meter or an exhausted window. The banner says whether your account has extra usage switched on, as Claude Code last reported it, rather than asserting a charge. On Windows the banner can be hidden, and stays hidden until a new off-plan spell begins.
 - **No usage data.** When the figures are unknown, the panel states what O-view checked and what it found, never something about your machine it has not verified.
 
 Figures labelled **Est.** price tokens at published API rates. They are not money charged; within plan limits the marginal cost is zero. Where a model has no published rate, O-view sums what it can price and names what it left out.
@@ -43,10 +42,11 @@ Figures labelled **Est.** price tokens at published API rates. They are not mone
 On Windows the panel and the menu move; on Linux nothing does.
 
 - **Opening and closing.** The panel and the menu slide out of the taskbar edge they are docked to as one piece, in 460 ms, and slide back in 300 ms. A click while one is moving turns it round from where it had got to rather than jumping to an end.
-- **Folds.** The Bars / Breakdown switch's highlight slides, and the breakdown table folds open with its rows fading in one after another. The menu's threshold list folds the same way, and choosing a threshold shows the choice first and folds the list away a moment later.
+- **Arriving.** As the panel slides in, the plan bars grow and the chart's bars rise, or on the model face the doughnuts sweep and the model rows fade in. Every figure is the real one from the first frame.
+- **Folds.** The Output / Overall switch's highlight slides, the chart's bars move to the other series and the table folds to its new height with its rows fading in one after another. The off-plan banner folds away when hidden. The menu's threshold list folds the same way, and choosing a threshold shows the choice first and folds the list away a moment later.
 - **Ticks and highlights.** A tick in the menu draws itself on and fades off, and the hover and focus fill on rows fades in and out.
-- **Stat tiles.** Clicking a tile crossfades its total into its breakdown, with the bar drawing from left to right and the legend following one entry at a time. The tile never changes size.
-- **Animations off.** All of it follows Windows' setting for animation effects, read each time a transition starts. With it off, the panel and the menu appear and disappear at once, and folds and flips happen in one step.
+- **The model face.** "By model" and "totals" turn the local block over, crossfading its two faces while its height moves between them; on the model face each doughnut fills as one clockwise sweep and the rows follow one at a time.
+- **Animations off.** All of it follows Windows' setting for animation effects, read each time a transition starts. With it off, the panel and the menu appear and disappear at once, and folds and turns happen in one step.
 
 At rest the panel looks exactly as it would without motion. The Linux head has no motion: its panel appears and disappears at once, its tiles and breakdown switch change in one step, and its menu is drawn by the desktop's notification-area host. What has and has not been watched on a real desktop is in [docs/platform-status.md](docs/platform-status.md).
 
@@ -56,7 +56,7 @@ Claude Code writes one line to a transcript per content block, and every line re
 
 ### What O-view cannot see
 
-Everything here is read from this machine, which is the same scope Claude Code states for its own usage summary. Work that runs elsewhere writes no local transcript and is absent from the tiles while still drawing on the plan window: cloud and remote agents, other machines, and claude.ai itself. Sub-agents run locally and are counted.
+Everything here is read from this machine, which is the same scope Claude Code states for its own usage summary. Work that runs elsewhere writes no local transcript and is absent from the token figures while still drawing on the plan window: cloud and remote agents, other machines, and claude.ai itself. Sub-agents run locally and are counted.
 
 ## Platform support
 
@@ -75,8 +75,9 @@ Supported does not mean identical. The table below says what each platform does;
 | Tray icon | Yes | Yes, where the desktop has a notification-area host. GNOME ships none by default; see below. It is put on the desktop once its first reading is drawn, waiting at most 5 seconds, then shown even if that reading is not ready; not yet watched on a real GNOME desktop |
 | Tooltip | Yes | Not on GNOME. The exact figures are in the panel instead |
 | Detail panel | Docked flyout at the taskbar corner | A window in the work area's corner, not docked to the icon |
+| Panel layout | Two blocks, with an Output / Overall switch and a model face | Four tiles, tokens-used bars and a 31-day graph |
 | A model's own limit bar | Yes | Yes |
-| Motion | Panel and menu slide, folds and flips animate, following Windows' animation setting | None |
+| Motion | Panel and menu slide, folds, turns and arrivals animate, following Windows' animation setting | None |
 | Right-click menu | All rows | Show usage, Reset panel position (X11 and XWayland only), Run at startup, Resume usage refresh when needed, Exit. Diagnostics and updates have command-line equivalents |
 | Notifications | Balloon tip | Freedesktop notifications |
 | Run at startup | Registry `Run` key, from the menu | XDG autostart file, from the menu or `o-view --startup-on` |
@@ -112,7 +113,7 @@ O-view reads files Claude's own apps already keep and never writes to them. Thre
 
 The composite takes any live reading over a stale one, and a stale authoritative percentage over an estimate with none. Between the two primaries it takes whichever carries more meters, and among equals the one captured most recently. A snapshot is used whole; two sources are never merged field by field. A model's weekly limit and the reported spend are not part of a snapshot: they are read from Claude Code's cached block directly, so they appear whichever snapshot was chosen. When it is running on transcript data alone the panel says **local estimate**.
 
-The plan bars cover all your Claude usage. The token tiles cover only usage that leaves a transcript on this machine, so a Desktop-only user sees a non-zero session percentage beside zero tokens.
+The plan bars cover all your Claude usage. The token figures cover only usage that leaves a transcript on this machine, so a Desktop-only user sees a non-zero session percentage beside zero tokens.
 
 ### One thing O-view runs
 

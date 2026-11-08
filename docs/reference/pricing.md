@@ -100,7 +100,7 @@ The rates have been wrong twice, in two different ways, and each way defeats the
 catches the other.
 
 **A date, as data.** `ModelCatalog.AsOf` is a `DateOnly`, not a comment. Past 90 days the Est.
-tiles carry `rates: bundled, as of <date>`. Move it only when every row has actually been
+figures carry `rates: bundled, as of <date>`. Move it only when every row has actually been
 re-checked, in the same commit as any correction, a date advanced on its own says the table was
 verified when it was not.
 
