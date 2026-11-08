@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using OView.App.Rendering;
 using Brush = System.Windows.Media.Brush;
 using Orientation = System.Windows.Controls.Orientation;
 using ToolTip = System.Windows.Controls.ToolTip;
@@ -187,10 +188,24 @@ internal static class HoverCard
             Foreground = (Brush)owner.FindResource("TextMuted"),
         };
 
-    private static ToolTip Card(FrameworkElement owner, object content) =>
-        new()
+    private static ToolTip Card(FrameworkElement owner, object content)
+    {
+        var card = new ToolTip
         {
             Content = content,
             Style = (Style)owner.FindResource("PanelTooltip"),
         };
+        card.Opened += (_, _) => FadeIn(card);
+        return card;
+    }
+
+    /// <summary>The card eases in; the resting opacity stays 1, so a missed tick cannot leave it faded.</summary>
+    private static void FadeIn(ToolTip card)
+    {
+        var ms = PanelMotion.Ms(PanelMotion.HoverCardFadeBaseMs);
+        if (PanelMotion.Runs(WpfMotion.AnimationsOn, ms))
+        {
+            card.BeginAnimation(UIElement.OpacityProperty, WpfMotion.Travel(0, 1, ms));
+        }
+    }
 }

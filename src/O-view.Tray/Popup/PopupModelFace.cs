@@ -47,6 +47,18 @@ internal sealed class PopupModelFace(FrameworkElement owner, Grid doughnuts, Gri
     private PanelModelFaceView? _view;
     private double _scale = 1;
 
+    /// <summary>The scale the rows on screen were built at, for <see cref="ReleaseRows"/>.</summary>
+    private double _builtScale = 1;
+
+    /// <summary>What is in the table, by grid row: the cells that fade in together, heading rows included.</summary>
+    private List<List<UIElement>> _rows = [];
+
+    /// <summary>
+    /// True while a flip is moving the rows on screen: a re-fit during it runs the density passes,
+    /// and rebuilding the table then would snap the rows' fades to their ends.
+    /// </summary>
+    public bool HoldRows { get; set; }
+
     public void Start()
     {
         doughnuts.ColumnDefinitions.Add(new ColumnDefinition());
@@ -73,7 +85,51 @@ internal sealed class PopupModelFace(FrameworkElement owner, Grid doughnuts, Gri
         _scale = spacingScale;
         doughnuts.Margin = new Thickness(0, DoughnutsGapAboveDip * spacingScale, 0, 0);
         table.Margin = new Thickness(0, PanelMetrics.DoughnutsToTableGapDip * spacingScale, 0, 0);
-        Build();
+
+        if (!HoldRows)
+        {
+            Build();
+        }
+    }
+
+    /// <summary>The flip has ended: the rows catch up with a density that changed while they were moving.</summary>
+    public void ReleaseRows()
+    {
+        HoldRows = false;
+
+        if (_builtScale != _scale)
+        {
+            Build();
+        }
+    }
+
+    /// <summary>
+    /// The face fills in: the doughnuts sweep and the rows fade in from the top. A heading row
+    /// counts as a row, as the document's <c>i</c> does.
+    /// </summary>
+    /// <param name="sweepDelayMs">When the sweep starts.</param>
+    /// <param name="rowStartMs">When row <c>i</c> starts fading in.</param>
+    /// <returns>When the last of it ends, in milliseconds.</returns>
+    public double FillIn(double sweepDelayMs, Func<int, double> rowStartMs)
+    {
+        var sweepMs = PanelMotion.Ms(PanelMotion.DoughnutSweepBaseMs);
+        var rowMs = PanelMotion.Ms(PanelMotion.ModelRowFadeBaseMs);
+        if (!PanelMotion.Runs(WpfMotion.AnimationsOn, sweepMs))
+        {
+            return 0;
+        }
+
+        _today.Sweep(sweepDelayMs);
+        _window.Sweep(sweepDelayMs);
+
+        for (var i = 0; i < _rows.Count; i++)
+        {
+            // Travel: the resting opacity is 1, so nothing is stranded if a completion is missed.
+            var fade = WpfMotion.Travel(0, 1, rowMs, rowStartMs(i));
+            _rows[i].ForEach(cell => cell.BeginAnimation(UIElement.OpacityProperty, fade));
+        }
+
+        return Math.Max(sweepDelayMs + sweepMs, rowStartMs(_rows.Count - 1) + rowMs);
     }
 
     private void Build()
@@ -83,6 +139,7 @@ internal sealed class PopupModelFace(FrameworkElement owner, Grid doughnuts, Gri
             return;
         }
 
+        _builtScale = _scale;
         table.Children.Clear();
         table.RowDefinitions.Clear();
         table.ColumnDefinitions.Clear();
@@ -95,9 +152,11 @@ internal sealed class PopupModelFace(FrameworkElement owner, Grid doughnuts, Gri
         }
 
         var rowCount = view.Rows.Count + 2;
+        _rows = new List<List<UIElement>>(rowCount);
         for (var i = 0; i < rowCount; i++)
         {
             table.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            _rows.Add([]);
         }
 
         AddHeading(view.TodayGroup, PanelMetrics.TableHeaderFontSize, 0, 1, 2, GroupGapBelowDip);
@@ -222,6 +281,7 @@ internal sealed class PopupModelFace(FrameworkElement owner, Grid doughnuts, Gri
         Grid.SetRow(element, row);
         Grid.SetColumn(element, column);
         table.Children.Add(element);
+        _rows[row].Add(element);
     }
 
     private Brush Palette(string key) => (Brush)owner.FindResource(key);

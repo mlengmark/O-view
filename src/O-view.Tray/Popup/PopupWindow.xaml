@@ -95,15 +95,21 @@
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <Border x:Name="Pill" Background="{DynamicResource TileBg}" CornerRadius="4" Padding="6,1">
-                                <StackPanel Orientation="Horizontal">
+                            <Grid>
+                                <Border x:Name="Pill" Background="{DynamicResource TileBg}" CornerRadius="4"/>
+                                <!-- A layer, because a setter cannot fade: the block's hover cue
+                                     drives its opacity from code, for the reason the switch's is. -->
+                                <Border x:Name="HoverFill" Background="{DynamicResource BarTrack}"
+                                        CornerRadius="4" Opacity="0"/>
+                                <StackPanel Orientation="Horizontal" Margin="6,1">
                                     <ContentPresenter VerticalAlignment="Center"/>
-                                    <Path Data="M0,2.5 L8,2.5 M5.6,0.4 L8,2.5 L5.6,4.6 M8,7.5 L0,7.5 M2.4,5.4 L0,7.5 L2.4,9.6"
+                                    <Path x:Name="Mark"
+                                          Data="M0,2.5 L8,2.5 M5.6,0.4 L8,2.5 L5.6,4.6 M8,7.5 L0,7.5 M2.4,5.4 L0,7.5 L2.4,9.6"
                                           Stroke="{DynamicResource TextMuted}" StrokeThickness="1.3"
                                           StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round"
                                           Opacity="0.8" Margin="5,0,0,0" VerticalAlignment="Center"/>
                                 </StackPanel>
-                            </Border>
+                            </Grid>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsKeyboardFocused" Value="True">
                                     <Setter TargetName="Pill" Property="Background" Value="{DynamicResource TilePressed}"/>
@@ -475,7 +481,12 @@
 
             <!-- On this machine: the chart, the table and the footer, flat on the panel. The
                  block's own space follows the density, so it is set from PopupLocalBlock. -->
-            <Border x:Name="LocalBlock">
+            <Grid>
+            <!-- The hover cue's outline: the extent of what a press turns over. Over the block, so
+                 it adds no height, and its strength is on the brush (PopupLocalBlock). -->
+            <Border x:Name="LocalBlockCue" Margin="-6" BorderThickness="1" CornerRadius="6"
+                    Opacity="0" IsHitTestVisible="False"/>
+            <Border x:Name="LocalBlock" Background="Transparent">
                 <StackPanel>
                     <Grid>
                         <StackPanel>
@@ -490,7 +501,10 @@
                         <Button x:Name="FaceFlipTag" Style="{StaticResource FlipTagButton}"/>
                     </Grid>
 
-                    <StackPanel x:Name="LocalTotalsFace">
+                    <!-- One cell, so the two faces crossfade in the same place; the block's height
+                         is pinned on it while they turn over (PopupLocalBlock). -->
+                    <Grid x:Name="LocalFaces">
+                    <StackPanel x:Name="LocalTotalsFace" VerticalAlignment="Top">
                         <!-- Drawn in code, against its laid-out width and the density's height. -->
                         <Canvas x:Name="GraphHost" HorizontalAlignment="Stretch"/>
 
@@ -504,10 +518,11 @@
 
                     <!-- The other face of the block: the two doughnuts and a row per model, built
                          in code from the view model, as the totals table is. -->
-                    <StackPanel x:Name="LocalModelFace" Visibility="Collapsed">
+                    <StackPanel x:Name="LocalModelFace" VerticalAlignment="Top" Visibility="Collapsed">
                         <Grid x:Name="LocalDoughnuts"/>
                         <Grid x:Name="LocalModelTable"/>
                     </StackPanel>
+                    </Grid>
 
                     <!-- What qualifies the window's figures, partial history or an unpriced model,
                          flush right so it ends beneath the 31-day figures it is about (rule 6). -->
@@ -561,6 +576,7 @@
                     </Grid>
                 </StackPanel>
             </Border>
+            </Grid>
 
         </StackPanel>
     </Border>

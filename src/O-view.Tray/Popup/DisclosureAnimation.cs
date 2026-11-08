@@ -54,9 +54,11 @@ internal sealed record DisclosureRowMotion(
 /// </param>
 /// <param name="rowMotion">How the rows given to <see cref="SetRows"/> move.</param>
 /// <param name="reposition">Re-docks the host, called on every frame the height changes.</param>
+/// <param name="collapseCurve">The curve of a shrink; null is <see cref="PanelMotion.Accelerate"/>.</param>
 internal sealed class DisclosureAnimation(
     Window host, FrameworkElement body, RotateTransform? chevron,
-    double expandMs, double collapseMs, DisclosureRowMotion rowMotion, Action reposition)
+    double expandMs, double collapseMs, DisclosureRowMotion rowMotion, Action reposition,
+    PanelMotion.Curve? collapseCurve = null)
 {
     /// <summary>Rotation of the chevron in each state. 180° turns the arrow to point back up.</summary>
     private const double ExpandedAngle = 180;
@@ -89,6 +91,9 @@ internal sealed class DisclosureAnimation(
 
     /// <summary>Whether the height is on its way somewhere, as distinct from rows still arriving after it.</summary>
     public bool IsMoving => _running;
+
+    /// <summary>Runs when the height comes to rest, for the owner's clip: left on, it moves the text under it.</summary>
+    public Action? Settled { get; init; }
 
     /// <summary>Names the rows to fade, top first. <see cref="Apply"/> gives them their resting state.</summary>
     public void SetRows(IEnumerable<IReadOnlyList<UIElement>> rows)
@@ -248,7 +253,7 @@ internal sealed class DisclosureAnimation(
 
         var durationMs = growing ? expandMs : collapseMs;
         var duration = WpfMotion.Duration(durationMs);
-        var spline = WpfMotion.Spline(growing ? PanelMotion.Decelerate : PanelMotion.Accelerate);
+        var spline = WpfMotion.Spline(growing ? PanelMotion.Decelerate : collapseCurve ?? PanelMotion.Accelerate);
 
         // Visible throughout, in both directions: collapsed content has no height to animate,
         // so a fold that closes has to stay on screen until it has finished closing.
@@ -316,6 +321,7 @@ internal sealed class DisclosureAnimation(
         // the height this fold happened to end on.
         Stop();
         Settle(expanded);
+        Settled?.Invoke();
 
         // Not the rows on the way open: the last of them finishes after the fold does, and their
         // animations end by holding the resting values. Closed, the next open needs them waiting

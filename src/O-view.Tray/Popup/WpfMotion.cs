@@ -1,6 +1,8 @@
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Media.Animation;
 using OView.App.Rendering;
+using Color = System.Windows.Media.Color;
 
 namespace OView.Tray.Popup;
 
@@ -69,6 +71,40 @@ internal static class WpfMotion
     {
         var animation = DelayedFade(from, to, durationMs, delayMs, curve ?? PanelMotion.Decelerate);
         animation.FillBehavior = FillBehavior.Stop;
+        return animation;
+    }
+
+    /// <summary>The same for a colour: the caller assigns the end colour first, and this lets go.</summary>
+    public static ColorAnimationUsingKeyFrames TravelColor(Color from, Color to, double durationMs, PanelMotion.Curve curve)
+    {
+        var animation = new ColorAnimationUsingKeyFrames { Duration = Duration(durationMs), FillBehavior = FillBehavior.Stop };
+        animation.KeyFrames.Add(new DiscreteColorKeyFrame(from, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+        animation.KeyFrames.Add(new SplineColorKeyFrame(
+            to, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(durationMs)), Spline(curve)));
+        return animation;
+    }
+
+    /// <summary>
+    /// A face's travel on whole device pixels, a frame at a time. Display-mode text carried at a
+    /// fractional offset shimmers, and the slow end of the curve is where that has time to show.
+    /// </summary>
+    public static DoubleAnimationUsingKeyFrames PixelTravel(
+        Visual visual, double from, double to, double durationMs, double delayMs, PanelMotion.Curve curve)
+    {
+        const double frameMs = 16;
+        var scale = VisualTreeHelper.GetDpi(visual).DpiScaleY;
+        var animation = new DoubleAnimationUsingKeyFrames { Duration = Duration(delayMs + durationMs) };
+        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(from, KeyTime.FromTimeSpan(TimeSpan.Zero)));
+
+        for (var at = 0.0; at < durationMs; at += frameMs)
+        {
+            var here = from + (to - from) * curve.ValueAt(at / durationMs);
+            animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(
+                Math.Round(here * scale) / scale, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(delayMs + at))));
+        }
+
+        animation.KeyFrames.Add(new DiscreteDoubleKeyFrame(
+            to, KeyTime.FromTimeSpan(TimeSpan.FromMilliseconds(delayMs + durationMs))));
         return animation;
     }
 }

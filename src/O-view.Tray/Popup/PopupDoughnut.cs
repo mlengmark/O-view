@@ -9,6 +9,7 @@ using Brush = System.Windows.Media.Brush;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Path = System.Windows.Shapes.Path;
 using Point = System.Windows.Point;
+using Shape = System.Windows.Shapes.Shape;
 using Size = System.Windows.Size;
 
 namespace OView.Tray.Popup;
@@ -41,9 +42,20 @@ internal sealed class PopupDoughnut(FrameworkElement owner, bool cardOpensLeft)
     /// <summary>The greys <c>PanelPalette</c> states; a model past the last takes it again.</summary>
     private const int TailGreys = 4;
 
+    /// <summary>The sweep's cover: a little wider than the ring, so it leaves no fringe either side.</summary>
+    private const double CoverStrokeDip = PanelMetrics.DoughnutStrokeDip + 2;
+
+    /// <summary>
+    /// How much longer than the ring the cover's dash and gap are, so the dash meets no edge of
+    /// the path: a pattern exactly one ring long would draw a sliver at the join.
+    /// </summary>
+    private const double CoverDashScale = 1.05;
+
     private static readonly double Circumference = 2 * Math.PI * Radius;
 
     private readonly Canvas _ring = new() { Width = SizeDip, Height = SizeDip };
+
+    private bool _hasSections;
 
     private readonly TextBlock _total = CentreLine(PanelMetrics.DoughnutCentreTotalFontSize, FontWeights.SemiBold);
 
@@ -80,6 +92,39 @@ internal sealed class PopupDoughnut(FrameworkElement owner, bool cardOpensLeft)
         return doughnut;
     }
 
+    /// <summary>
+    /// The ring fills as one clockwise sweep from the top: a cover in the panel's colour draws
+    /// over the sections and retreats along the ring, so each section appears as the sweep passes
+    /// it rather than drawing on its own.
+    ///
+    /// <para>The dash runs from where the sweep has reached to the top, and the offset is all that
+    /// moves. Its resting offset is all gap, so the cover paints nothing once the sweep lets go,
+    /// and a missed completion can leave nothing hiding the ring.</para>
+    /// </summary>
+    public void Sweep(double delayMs)
+    {
+        var sweepMs = PanelMotion.Ms(PanelMotion.DoughnutSweepBaseMs);
+        if (!_hasSections || !PanelMotion.Runs(WpfMotion.AnimationsOn, sweepMs))
+        {
+            return;
+        }
+
+        var dash = Circumference * CoverDashScale / CoverStrokeDip;
+        var cover = new Path
+        {
+            Data = WholeRingFromTop(),
+            Stroke = Palette("PanelBg"),
+            StrokeThickness = CoverStrokeDip,
+            StrokeDashArray = [dash, dash],
+            StrokeDashOffset = 2 * dash - Circumference / CoverStrokeDip,
+            IsHitTestVisible = false,
+        };
+
+        _ring.Children.Add(cover);
+        cover.BeginAnimation(Shape.StrokeDashOffsetProperty, WpfMotion.Travel(
+            2 * dash, cover.StrokeDashOffset, sweepMs, delayMs));
+    }
+
     public void Populate(PanelModelDoughnutView view, IReadOnlyList<PanelModelRowView> rows)
     {
         _total.Text = view.Total;
@@ -91,6 +136,7 @@ internal sealed class PopupDoughnut(FrameworkElement owner, bool cardOpensLeft)
         TextElement.SetForeground(_caption, Palette("TextMuted"));
 
         _ring.Children.Clear();
+        _hasSections = view.Sections.Count > 0;
 
         // A window with no usage has no sections, and an empty ring holds its place in the row.
         if (view.Sections.Count == 0)
@@ -138,6 +184,19 @@ internal sealed class PopupDoughnut(FrameworkElement owner, bool cardOpensLeft)
         new() { Data = geometry, Stroke = brush, StrokeThickness = PanelMetrics.DoughnutStrokeDip };
 
     private static EllipseGeometry WholeRing() => new(new Point(Centre, Centre), Radius, Radius);
+
+    /// <summary>The ring as one figure from the top, clockwise, so a dash along it starts where the sweep does.</summary>
+    private static PathGeometry WholeRingFromTop()
+    {
+        var figure = new PathFigure { StartPoint = PointAt(0) };
+        foreach (var along in new[] { Circumference / 2, Circumference })
+        {
+            figure.Segments.Add(new ArcSegment(
+                PointAt(along), new Size(Radius, Radius), 0, isLargeArc: false, SweepDirection.Clockwise, isStroked: true));
+        }
+
+        return new PathGeometry([figure]);
+    }
 
     /// <summary>An arc of the ring, both ends measured along it from the top, clockwise.</summary>
     private static PathGeometry Arc(double startDip, double lengthDip)

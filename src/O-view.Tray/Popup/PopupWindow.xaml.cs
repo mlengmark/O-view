@@ -129,7 +129,7 @@ public partial class PopupWindow : Window, IFlyout
         _modelMeters = new PopupModelMeters(this, ModelLimitMeters);
         _localBlock = new PopupLocalBlock(
             this, LocalBlock, LocalBlockTitle, LocalBlockSubtitle,
-            FaceFlipTag, LocalTotalsFace, GraphHost, LocalChartLine, LocalTotalsTable,
+            FaceFlipTag, LocalBlockCue, LocalFaces, LocalTotalsFace, GraphHost, LocalChartLine, LocalTotalsTable,
             LocalModelFace, new PopupModelFace(this, LocalDoughnuts, LocalModelTable),
             LocalWindowCaveat, TokenScopeNote, LocalFooter, LocalFooterCaveat,
             MeasureOutput, MeasureOverall, MeasureHighlight, ChooseView,
@@ -183,6 +183,12 @@ public partial class PopupWindow : Window, IFlyout
     /// sees whatever a reader's press does.
     /// </summary>
     internal void ToggleMeasureForVerification() => _localBlock.ToggleMeasureForVerification();
+
+    /// <summary>Presses the flip tag from outside, for <c>--motion-check</c>.</summary>
+    internal void ClickFlipForVerification() => _localBlock.ClickFlipForVerification();
+
+    /// <summary>What the block's flip has put on screen, for <c>--motion-check</c>.</summary>
+    internal PopupLocalBlock.FlipReadout FlipReadout => _localBlock.Readout;
 
     /// <summary>
     /// Closes the panel from outside, the tray icon completing a toggle. Idempotent, so
