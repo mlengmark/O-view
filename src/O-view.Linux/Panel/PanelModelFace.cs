@@ -108,12 +108,11 @@ internal sealed class PanelModelFace(LinuxPanelTheme theme)
     private void AddHeading(Grid grid, string text, double fontSize, int row, int column, int span, double gapBelow)
     {
         var heading = Caption(text, fontSize, theme["TextMuted"]);
-        var data = column > 0;
 
-        heading.HorizontalAlignment = data ? HorizontalAlignment.Center : HorizontalAlignment.Left;
-        heading.Margin = new Thickness(
-            heading.Margin.Left + (data ? LineDip + PanelMetrics.TableCellPadLeftDip : 0), 0,
-            data ? PanelMetrics.TableCellPadRightDip : 0, gapBelow);
+        // The whole column, without the cell padding a figure keeps: the wider Linux font needs
+        // it, and the padding is equal on both sides, so the centre does not move.
+        heading.HorizontalAlignment = column > 0 ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        heading.Margin = new Thickness(heading.Margin.Left, 0, 0, gapBelow);
         Grid.SetColumnSpan(heading, span);
         PanelTotalsTable.Place(grid, heading, row, column);
     }

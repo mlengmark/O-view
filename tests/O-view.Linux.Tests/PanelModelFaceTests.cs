@@ -43,7 +43,7 @@ public class PanelModelFaceTests
 
     private const string StillCapped = "offplan-on";
 
-    private const double CappedHeight = 400;
+    private const double CappedHeight = 300;
 
     public static TheoryData<string> ModelStates() => [Typical, Overall, OffPlan, Longest];
 
@@ -538,6 +538,20 @@ public class PanelModelFaceTests
     }
 
     // ── a capped panel ──────────────────────────────────────────────────────────────
+
+    /// <summary>A heading has its whole column, so no state wraps one even in the wider Linux font.</summary>
+    [Theory]
+    [MemberData(nameof(ModelStates))]
+    public void EveryDataHeadingHasItsWholeColumnAndOneLine(string state)
+    {
+        var table = TableOf(Laid(state, false));
+
+        foreach (var heading in table.Children.OfType<TextBlock>().Where(t => Grid.GetRow(t) < 2 && Grid.GetColumn(t) > 0))
+        {
+            Assert.Equal(0, heading.Margin.Right);
+            Assert.Single(heading.TextLayout.TextLines);
+        }
+    }
 
     /// <summary>
     /// The tag is above the face that changes height, so a press must not move it: anchored to
