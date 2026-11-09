@@ -14,11 +14,11 @@ mixed together throughout, and they are not equally binding:
 
 | | Binds where | Lives in |
 |---|---|---|
-| **The shared contract**: *what* a surface says and when. Icon geometry and colour bands, the tooltip's wording and its degraded forms, panel copy, the reset-line phrasing, the countdown format, tile labels, which states are "unknown" rather than zero | **Both heads.** A user should not be told a different thing on a different OS | `O-view.Presentation` for the wording and view models (`PanelText`, `PanelSections` and the rest), `O-view.App` for the geometry and palette (`TrayIconGeometry`, `PanelPalette`, `PanelMetrics`). Changing the wording means changing it in one place, and exact-string tests pin it |
+| **The shared contract**: *what* a surface says and when. Icon geometry and colour bands, the tooltip's wording and its degraded forms, panel copy, the reset-line phrasing, the countdown format, the panel's labels, which states are "unknown" rather than zero | **Both heads.** A user should not be told a different thing on a different OS | `O-view.Presentation` for the wording and view models (`PanelText`, `PanelSections` and the rest), `O-view.App` for the geometry and palette (`TrayIconGeometry`, `PanelPalette`, `PanelMetrics`). Changing the wording means changing it in one place, and exact-string tests pin it |
 | **Windows presentation**: *where* a surface appears and how it moves. Docked placement, `PopupPositioner`, work-area insets, the slide in and out, foreground/`AttachThreadInput` handling, `Shell_NotifyIcon` behaviour, Segoe glyph avoidance | **The Windows head only** | `O-view.Tray` |
 
 Read every section below as Windows presentation unless it is describing content. Where Linux
-**cannot** meet a section, it is noted inline rather than left to be inferred, the five real divergences are the tooltip (§1), the panel's placement (§2), the panel's layout (§2, from *The Windows panel* on), the menu (§3) and motion (§4).
+**cannot** meet a section, it is noted inline rather than left to be inferred, the four real divergences are the tooltip (§1), the panel's placement (§2), the menu (§3) and motion (§4). The panel's layout is not one of them: both heads draw the two blocks described in §2.
 
 The Linux head's own constraints are [ADR-0013](adr/0013-linux-ui-toolkit.md) and the [tray
 spike](findings/linux-tray-spike.md). Nothing in this document has been verified on Linux
@@ -214,9 +214,9 @@ O-view runs that command itself on its own cadence (`ClaudeCliRefresher`, issue 
 
 Percentages come from Claude Desktop's plan history or Claude Code's cached figures, whichever carries more meters most recently. On JSONL fallback they are estimates and must be labelled as such.
 
-### The Windows panel: two flat blocks
+### The panel: two flat blocks
 
-**Added 2026-11-08, with v1.3.0. Windows only: the Linux panel keeps the layout described in the sections after this one, and nothing here is built, or has been seen, on Linux.** The wording and the figures come from the same Presentation view models on both heads, so what a figure says is the shared contract. Where it sits and how it is drawn is the Windows head's.
+**Added 2026-11-08 for Windows; the Linux head draws it too.** The wording and the figures come from the same Presentation view models on both heads, so what a figure says is the shared contract, and where it sits is the same on both. How it is drawn is each head's, and the paragraphs below are written in Windows' terms (WPF elements, the fades and folds); *The Linux head* at the end of this section says where Linux differs. The Linux layout is built and tested. Nobody has yet seen it on a Linux desktop.
 
 Below the header, two blocks sit directly on the panel's surface, the full 368 wide (the 400 panel less 16 of padding each side), **with no fill**: **Your plan** and **On this machine**. Each has 10 of vertical padding and no side padding, and one soft hairline lies between them. Nothing on the panel is grey except the controls named below. The measurements are stated once in `PanelMetrics` and the colours are `PanelPalette` keys, so a number here is a figure to read there, not a second copy to keep in step.
 
@@ -229,7 +229,7 @@ Below the header, two blocks sit directly on the panel's surface, the full 368 w
 
 **On this machine, the totals face.** In order:
 
-1. **The chart,** 96 tall plus a 16 axis band, the full width, in no box. Bars sit 1.2 in from each slot edge with a 1.5 radius, drawn up from a baseline hairline; older bars fade a little, 0.55 at the left rising to 1 at today, and today's bar is `AccentBg`. A hairline stands at every Monday with its date written across it just to the right (`13 Oct`, `20 Oct`), and `today` is right-aligned at the end in `AccentInk`. There are no rotated day labels. Days before install draw **no bar** at all, never a zero-height one (CLAUDE.md rule 6). The week lines are the calendar's Mondays and carry no reset time: they replace the dotted lines at the plan's weekly reset that the Linux chart still draws. The hover card per bar is the existing one.
+1. **The chart,** 96 tall plus a 16 axis band, the full width, in no box. Bars sit 1.2 in from each slot edge with a 1.5 radius, drawn up from a baseline hairline; older bars fade a little, 0.55 at the left rising to 1 at today, and today's bar is `AccentBg`. A hairline stands at every Monday with its date written across it just to the right (`13 Oct`, `20 Oct`), and `today` is right-aligned at the end in `AccentInk`. There are no rotated day labels. Days before install draw **no bar** at all, never a zero-height one (CLAUDE.md rule 6). The week lines are the calendar's Mondays and carry no reset time: they replace the dotted lines at the plan's weekly reset that both charts used to draw. The hover card per bar is the existing one.
 2. **A soft line,** then **the table.** Output and Overall differ in their rows, never in their grammar. Column headings are 10 px uppercase, letter-spaced, `TextMuted` and centred; row labels are 12 px `TextSecondary`; figures are 12 px semibold with tabular digits, **centred** in their column; a soft line runs between every row and a 35 percent line stands at the left of every data column.
    - **Output** (the default for a fresh install) has the columns `label | Today | 31 days` and the rows `Output tokens` and `Est. value of output`.
    - **Overall** has `Kind | Today | Share | 31 days | Share`: a row each for output, input, cache write and cache read with its chip from the token-kind ramp, a bold `Total`, then `Est. value`, each figure in a **pill** (`TileBg` fill, a 1 px soft border, radius 10) centred across the pair of columns it belongs to. Shares are 11 px `TextSecondary`.
@@ -249,56 +249,52 @@ Below the header, two blocks sit directly on the panel's surface, the full 368 w
 
 **The view is remembered.** Output or Overall, totals or models, and the hidden banner are saved with the other settings, restored on every open and after a restart, and a fresh install opens on Output and the totals. This replaces the earlier rule that a tile's flipped view was transient and every open started on the summary. The words and the rule are in Presentation (`PanelViewChoice`); where it is stored is in [architecture.md](architecture.md).
 
-**Nothing is clipped.** Every sample state, in both themes and in the compact and short renders, and every hover card, is asked whether anything crosses the panel's edge, is cut to its slot by the layout, or has text that trims. `--popup-samples` writes the answer to `popup-edge-check.txt` and exits 1 on a miss, which fails `tools/check.ps1` and CI's `visual` job. The sample states include the widest figures the formatters produce (`longest-figures`) and the model face with a 47-character id (`longest-figures-models`). The one exemption is a model name in the model table's name column, and only while its full id is in a tooltip.
+**Nothing is clipped.** Every sample state, in both themes and in the compact and short renders, and every hover card, is asked whether anything crosses the panel's edge, is cut to its slot by the layout, or has text that trims. `--popup-samples` writes the answer to `popup-edge-check.txt` and exits 1 on a miss, which fails `tools/check.ps1` and CI's `visual` job. The Linux head asks the same in its tests (`PanelClippingTests`). The sample states include the widest figures the formatters produce (`longest-figures`) and the model face with a 47-character id (`longest-figures-models`). The one exemption is a model name in the model table's name column, and only while its full id is in a tooltip.
 
 **Height.** Measured from the dark golden renders: the Output totals face is 588 tall, the Overall face 689, the model face 726, and a Pro account off-plan with the banner showing is 704 on Output, 805 on Overall and 842 on the model face, the tallest the panel gets. The cap and the scrolling are the ones above: on the 712 work area the off-plan Overall state, and the off-plan model face, compact first and then scroll, and each has a short render (`offplan-on-short`, `offplan-on-models-short`) that the clipping check also reads. Compact density applies `PanelDensity`'s steps to the chart's height, the blocks' gaps and the table rows, and leaves the columns and the type alone: `typical-compact` is the Overall face and measures 600, against 689 at normal density.
 
-### Statistics tiles (Linux)
+**The Linux head.** It reads the same view models in the same order, with the same measurements from `PanelMetrics` and the same colours from `PanelPalette`, and differs as follows:
 
-**This section and *Usage graph* describe the layout the Linux panel still has.** On Windows the four figures are the Output table's two columns, the per-model flip is the model face and the chart is the one above, and the tiles are gone. The figures' definitions, the local-day rule, the rule that `Est.` is not money, the coverage caveat, the hover card and rule 6 hold on both heads.
+- **No motion.** The panel appears and disappears at once, the Output | Overall switch and the flip tag change the block in a single step, the banner goes when its control is pressed, and the bars and arcs are drawn complete. Section 4 is Windows only for this reason.
+- **Width.** The panel's 1 px border is drawn inside the 400, so the content column is 366 wide at the natural density and beside the scroll bar, and 378 at the compact density, as measured when the chart was fitted to it. The Windows figures above are the Windows head's.
+- **The chart has no reset lines.** It has the Monday hairlines and dates, `today`, and no bar for a day before install. A bar's hover text is plain text, the figure and its caption on one line, and a model's name in the table carries its full id the same way. A doughnut section's hover card is the shared card with the model's chip and name, and the 31-day ring's opens to the left.
+- **Keyboard and pointer.** Each segment of the switch can take keyboard focus. The banner's `×` answers a pointer press only.
+- **The short renders.** The panel is photographed short on the model face only, `offplan-on-models-short`, which is the tallest state that shows it; there is no `offplan-on-short` on Linux. `typical-compact` is drawn on both heads.
+- **The view is remembered the same way**, through the shell, so a Linux restart opens on the Output or Overall, totals or models, and hidden banner the reader left.
 
-2 × 2 grid:
+### What the local figures mean
 
-| Tile | Definition |
+The local figures are the Output and Overall tables' columns, the model face's rows and the chart's bars (*The panel: two flat blocks*, above). Four tiles used to carry them, with a flip to a per-model bar behind each, and the tokens-used bars and the dotted-line graph sat beneath; neither head draws any of that now, and the sections that described it are gone from this document. What the figures are, and the rules that keep them honest, hold on both heads.
+
+| Figure | Definition |
 |---|---|
 | Tokens today | Summed from rollup store, the reader's local day |
 | Est. value today | Tokens priced at public API rates |
 | Tokens · 31 days | Rollup store, trailing 31 local days |
 | Est. value · 31 days | As above, priced |
 
-> **Every day-shaped figure is a local day** ([issue #211](https://github.com/mlengmark/O-view/issues/211)), these tiles, the per-model and cache breakdowns behind them, each bar in the 31-day graph, and the `N of 31 days recorded` caveat. Users mean local days, and one of those straddles two UTC ones, so the bucket is computed from each request's timestamp at query time rather than read from the `utc_date` it was stored under. Nothing about ingestion changes: storing a local date would bake one machine's offset into the row.
->
+> **Every day-shaped figure is a local day** ([issue #211](https://github.com/mlengmark/O-view/issues/211)), the two columns of the table, the model face, each bar in the 31-day chart, and the `N of 31 days recorded` caveat. Users mean local days, and one of those straddles two UTC ones, so the bucket is computed from each request's timestamp at query time rather than read from the `utc_date` it was stored under. Nothing about ingestion changes: storing a local date would bake one machine's offset into the row.
 > They were UTC days until v0.6.x, and for one release they said so, `Tokens today (UTC)` ([issue #210](https://github.com/mlengmark/O-view/issues/210)), the honest stopgap while this was built. The qualifier is off again, because a label that no longer matches its figure is the same rule-6 failure in the opposite direction.
 >
-> **A local day is 23 or 25 hours twice a year.** Boundaries come from the timezone (`LocalDays`), never from 24-hour steps, and the graph's gridlines are placed in the same frame as its columns, or they drift against the bars they annotate from the transition onwards.
+> **A local day is 23 or 25 hours twice a year.** Boundaries come from the timezone (`LocalDays`), never from 24-hour steps, and the chart's Monday lines are placed in the same frame as its columns, or they drift against the bars they mark from the transition onwards.
 >
 > **The plan meters are not days and keep their own clocks.** The five-hour window rolls from first use; the weekly reset is a fixed instant Claude reports (ADR-0014). Neither learns about local dates.
 
-> **"Spend" means estimated API-equivalent value, not money charged.** Within plan limits the marginal cost is £0. These tiles answer "what would this have cost on the API" and **must be labelled `Est.`**, presenting them as actual spend would be a fabricated number.
+> **"Spend" means estimated API-equivalent value, not money charged.** Within plan limits the marginal cost is £0. These figures answer "what would this have cost on the API" and **must be labelled `Est.`**, presenting them as actual spend would be a fabricated number.
 
-Any tile whose window exceeds recorded history shows coverage: `3 of 31 days recorded`.
+Any figure whose window exceeds recorded history shows coverage: `3 of 31 days recorded`.
 
-#### Per-model breakdown (Linux; Windows has the model face, above) ([GitHub issue #37](https://github.com/mlengmark/O-view/issues/37))
+#### Hover cards
 
-Every tile is clickable and flips in place between its total and a **stacked bar split by model**. Clicking again flips back, as often as you like.
+**The hover card is styled, not system chrome (Windows).** A default WPF tooltip is a pale rectangle with a hard border and nothing to do with the rest of the app, so the template is replaced outright: the panel's rounded 6px card, its palette, its type. It sits on its own `TooltipBg` / `TooltipBorder` step, brighter than the panel in light and lighter than it in dark, so it reads as floating *above* the panel rather than as part of it, with a soft drop shadow for the same reason.
 
-**The hover card is styled, not system chrome.** A default WPF tooltip is a pale rectangle with a hard border and nothing to do with the rest of the app, so the template is replaced outright: the panel's rounded 6px card, its palette, its type. It sits on its own `TooltipBg` / `TooltipBorder` step, brighter than the panel in light, lighter than the tile in dark, so it reads as floating *above* the tile rather than as part of it, with a soft drop shadow for the same reason.
-
-> **Every tooltip in the app is this card.** The template and the timing live in [`HoverCard.xaml`](../src/O-view.Tray/Popup/HoverCard.xaml) / [`HoverCard.cs`](../src/O-view.Tray/Popup/HoverCard.cs), merged into the panel. They were once declared *inside* the stat tile, which meant only the tiles had them, the usage graph's bars kept raw WPF chrome, so the panel showed two unrelated tooltip designs depending on where the pointer landed. A bare `ToolTip = "some string"` anywhere in this codebase is that bug returning; build the card instead.
+> **Every tooltip in the Windows panel is this card.** The template and the timing live in [`HoverCard.xaml`](../src/O-view.Tray/Popup/HoverCard.xaml) / [`HoverCard.cs`](../src/O-view.Tray/Popup/HoverCard.cs), merged into the panel. They were once declared *inside* a stat tile, which meant only the tiles had them, the usage graph's bars kept raw WPF chrome, so the panel showed two unrelated tooltip designs depending on where the pointer landed. A bare `ToolTip = "some string"` anywhere in this codebase is that bug returning; build the card instead.
 >
 > Three shapes cover everything: **`Figure`** leads with the number and names it in a muted line beneath, the reading order for *what am I pointing at, and how much*, with an optional colour swatch where the card floats clear of a coloured mark and would otherwise lose its tie to it. **`ModelFigure`** is that card for a doughnut section, with the model's chip and name above the figure. **`Text`** carries a sentence, for caveats and explanations, and carries a long model id whole where the table trims it. A fourth shape should be resisted.
 >
 > `--popup-samples` renders the graph's cards standalone as `graph-hover-cards-<theme>.png`, for the same reason `--tile-samples` renders the model-name card standalone: a `ToolTip` cannot be given a parent, so it appears in no screenshot of the panel, and hover is the only way to reach one in the running app.
 
-The card carries two lines only: a **colour swatch beside the figure**, and the **raw model id** beneath (or `N more models` for the folded bucket, so "Other" is never an unexplained slice). There is deliberately no friendly-name heading, it restated the line below it and made a card holding two facts look heavy.
-
-The swatch is the load-bearing part and stays: a card floating clear of the bar otherwise loses its connection to the exact colour being pointed at.
-
-> The id line is **always** rendered. It used to be suppressed when it matched the friendly name, which is precisely the case for an **unrecognised** model, where `ModelDisplayName` returns the raw id unchanged. Dropping the heading without this would have left exactly those cards showing a number and nothing identifying it.
-
-A `ToolTip` cannot be given a parent, it throws, so it appears in no screenshot of the panel and cannot be laid out inside one. `--tile-samples` therefore renders the model-name card standalone to `hover-cards-<theme>.png`, with the palette written into each card's own resources so its `DynamicResource` lookups resolve with no tree above them to walk.
-
-**Where the figures live.** On hover, nowhere else. The bar is a thin, unlabelled mark and the legend carries model **names only**; pointing at a segment, or at its legend entry, reveals that model and its exact figure. Two earlier attempts are worth not repeating: figures printed beside the names in the legend wrapped it to two lines, and figures printed *inside* the segments made the bar look cluttered and forced it 6px taller to hold the text.
+**On Linux** a doughnut section's card is the shared shape, built in `PanelDoughnut` with the model's chip and name above the figure. A bar's hover text and a model's full id are plain tooltip strings, not the card.
 
 **Hover timing.** Applied to **each** element that carries a tooltip, by `HoverCard.ApplyTiming`. Setting these once on the control and relying on property inheritance looks right and silently does not work, the bar segments resolved to framework values instead. That is invisible in a screenshot, which is why `--tile-samples` writes a `hover-timing.txt` reporting what actually resolves on a model name cell.
 
@@ -308,60 +304,17 @@ A `ToolTip` cannot be given a parent, it throws, so it appears in no screenshot 
 | `BetweenShowDelay` | **3000 ms** | 100 ms | The one that matters most here. Within this window of the last tooltip, the next shows with **no** delay, so sliding along the segments reads as one continuous reveal instead of re-waiting per colour. |
 | `ShowDuration` | **20 s** | `int.MaxValue` | Set for **determinism, not extension**, note the measured baseline was effectively unlimited, so this is a deliberate cap, though the documented WPF default is 5 s. 20 s far outlasts reading a two-field tooltip, so WCAG 1.4.13 (Content on Hover or Focus) holds in practice while the behaviour is the same on a machine whose default really is 5 s. |
 
-**Not tunable:** WPF dismisses a tooltip the instant the pointer leaves the element, and that grace period is not exposed. For this bar that is the wanted behaviour anyway, leaving the bar should dismiss, and the case that actually needed smoothing was moving *between* segments, which `BetweenShowDelay` covers.
+**Not tunable:** WPF dismisses a tooltip the instant the pointer leaves the element, and that grace period is not exposed. Leaving a bar or a section should dismiss its card anyway, and the case that actually needed smoothing was moving *between* them, which `BetweenShowDelay` covers.
 
-- **No I/O on click.** The rollup store's ledger is already at `(UTC date × model)` grain, so the split was being discarded at the last step, not missing. It arrives on the `PanelStatistics` the panel opened with, and the flip is a re-render.
-- **The tile never changes size.** Both views live in one `Grid` and the inactive one is `Hidden`, not `Collapsed`, and the breakdown is built during `Populate`, not on first click, because a `Hidden` element only reserves the space its *content* needs. Built lazily, the tile visibly grew the first time it was opened.
-- **The label is dropped in the breakdown view**, as the issue allows, to buy room; the total stays, so the tile still answers its own question.
-- **Affordance:** a faint chart glyph, brightening on hover, plus a hover/pressed fill. A tile with nothing to break down is disabled and shows no glyph, an affordance that leads nowhere is worse than none.
-
-**Colour follows the model, never its rank.** One slot order is computed for the whole panel, [`ModelBreakdown.ColourOrder`](../src/O-view.Core/Models/ModelBreakdown.cs), ranked by tokens over the 31-day window because that is the superset every tile draws from, and all four tiles colour by it. A model therefore wears the same colour everywhere, including on the value tiles where the *ordering* differs.
-
-> This was got wrong first time round. Colour was assigned by a segment's position within its own tile, so Opus 5 came out **blue** on the "today" tile (where it was the only model, hence first) and **orange** on the 31-day tile (where Opus 4.8 outranked it), the same model in two colours on one panel, which makes the tiles unreadable against each other. The fold into "Other" is driven by the same shared order, so a model that is "Other" on one tile is "Other" on all of them.
-
-**Colour is validated, not chosen.** The palette is the data-viz categorical order, re-checked against the *tile* surfaces with the six-check validator on the **all-pairs** list (segment order follows the data, so any two colours can end up adjacent):
-
-| | Light `#EFEFEF` | Dark `#2B2B2B` |
-|---|---|---|
-| CVD separation (target ≥ 8) | **9.2** | **9.4** |
-| Normal-vision floor (≥ 15) | **17.3** | **16.5** |
-
-Two consequences are load-bearing and should not be "tidied up" later:
-
-- **Never add a fourth chromatic slot.** The next hue in the validated order is yellow, which fails the all-pairs floors beside the orange slot. That is *why* a fourth model folds into "Other" rather than getting its own colour.
-- **The cap tiers at three.** Up to three models each keep a colour; four or more collapse to **two named models plus a neutral "Other"**. No grey exists that is both inside the dark lightness band and separable from the third (aqua) slot for deuteranopes, the sweep bottoms out at ΔE 3.0, because grey has no hue to separate on and sits at the same lightness. Dropping to two named models is the price of showing an honest remainder at all. Both consequences are about the tile surface, which is what the tiles' bars are drawn on. The Windows model face draws on the panel itself, with a table that names every model beside the ring, and has its own order: three named, then greys (*The Windows panel*, above).
-
-On the light surface two series sit below 3:1 against the tile. That is a documented **relief** case, not a dismissable warning, which is why the legend is mandatory rather than decorative and every segment carries a tooltip with exact figures. Legend text wears text tokens; the swatch beside it carries identity, never the text colour.
-
-> **Known limitation:** per-model figures are reachable by hover only, so they are not available to keyboard or touch. This is a deliberate trade for a clean bar, taken twice over after printed figures were tried in the legend and then in the segments. What is *not* behind the pointer: the legend names every model, the tile's total shows in both views, and every rule-6 caveat, coverage, unpriced, is rendered text. Only the per-model split needs a pointer.
-
-**Rule 6 in the breakdown.** An unpriced model has an *unknown* value, not a zero, so it cannot be placed on the value chart, it is excluded and the tile says `excl. N unpriced`, with the tooltip naming them. A folded "Other" that contains any unpriced model reports its own value as unknown rather than quietly summing the priced remainder. An unrecognised model id renders **as-is**, inferring a friendly name from the pattern would be a fabricated fact.
-
-`<synthetic>` appears in neither split. This paragraph used to say it rendered as `Local`, "real tokens, genuinely zero value, so it appears in the token split", which was never reachable: `TranscriptReader` has dropped those records since the commit that introduced the rollup store, so not one has ever been ingested (verified against a real store). Measured on real transcripts they also carry all-zero usage in every token field, so even if they were stored the breakdown would drop them as zero-measure segments. See [issue #57](https://github.com/mlengmark/O-view/issues/57).
+`<synthetic>` records appear in no figure: `TranscriptReader` drops them before the rollup store ever sees one, and measured on real transcripts they carry all-zero usage ([issue #57](https://github.com/mlengmark/O-view/issues/57)).
 
 `--tile-samples <dir>` renders the Windows model face across one, two, three and four models and an unpriced and a long-named case, in both measures and both themes. It kept its name when the tiles went. Handled before the single-instance mutex, like `--diagnose`.
 
-### Usage graph (Linux)
+### Usage graph
 
-**This describes the Linux chart.** The Windows chart is the one in *The Windows panel*, above: a hairline and date at every Monday, no dotted lines at the plan's weekly reset, no rotated date labels, and a bar that fades with its age. The rule that days before install draw no bar, and the hover card per bar, hold on both.
+**Both heads draw the chart described in *The panel: two flat blocks*, above:** a bar per day for the trailing 31 days, a hairline and date at every Monday, `today` at the right-hand end, no bar at all for a day before install, and a hover card per bar. The daily totals come from the rollup store ([ADR-0006](adr/0006-local-rollup-store.md)).
 
-Daily token totals across the trailing 31 days, from the rollup store ([ADR-0006](adr/0006-local-rollup-store.md)). Enhanced per [issues #4 and #5](https://github.com/mlengmark/O-view/issues/4):
-
-- **One bar per day**, height by absolute daily tokens.
-- **Colour: light → dark blue by intensity within each week** (issue #5), each week is its own gradient scale, so the busiest day of a week is darkest. The absolute weekly token limit is unknown, so this is *relative* intensity, not a fraction of a limit.
-- **Dotted vertical gridlines at the weekly limit reset**, giving weekly context, with the reset time on hover. They are drawn **last, so they sit above the bars**, and wear the panel's note colour (`WarnText`, the same amber as the coverage and caveat lines). Both were corrections: a Canvas paints in child order, so lines added first were overdrawn by every bar they crossed and survived only in the gaps, a reset line vanishing exactly where usage is heaviest is missing the moment it exists to mark. The amber follows from the same reasoning: this is an annotation *over* the data, not another axis decoration, and one pixel of muted grey on blue was not carrying that.
-
-> **These follow the plan's own week, not the calendar's.** They were originally drawn at Monday boundaries for a stated reason: the plan's true weekly reset was not derivable, so Mon–Sun was an honest visual reference rather than a claim about the plan. [ADR-0011](adr/0011-weekly-reset-derivation.md) removed that constraint, so the gridlines, and the colour bands, which use the same boundaries so the two can never disagree, now sit on the real reset. Past boundaries are **derived** by stepping the cadence back from the predicted next reset, not looked up, because the log only holds resets O-view was running for while the graph covers 31 days.
->
-> A reset happens at a time of day, not at midnight, so a gridline sits at its **true fractional position inside the day column** it falls in. Snapping it to the nearest column edge would assert a midnight boundary the data does not have. Until a reset has been observed the line falls back to Monday midnight and says so on hover, the honest blank, not a silent substitution. The two are visibly distinguishable, which is the point: a Monday line lands exactly on a column edge, a plan line lands inside one.
->
-> A day that *contains* a boundary belongs to neither band, its tokens split across two weeks and the rollups are daily, so the split is not recoverable. It is shaded with whichever band holds the majority of the day. That approximation affects colour only, never a stated figure.
-
-`--popup-samples <dir>` renders the whole panel offscreen in both themes, across the states that change what it asserts about the weekly window (derived boundaries vs. awaiting the first reset). Handled before the single-instance mutex, like `--menu-samples`. It exists because the alternative, opening the real panel, needs the mutex and a free display, and **silently fails when anything is running fullscreen**, which is exactly when the gridlines needed checking.
-- **Vertical date labels under every column** (issue #4), small but legible, and **centred on their own bar** ([issue #31](https://github.com/mlengmark/O-view/issues/31)). Bar and label are placed from a single column-centre anchor rather than each carrying its own offset. A rotated `TextBlock` renders one line height to the *left* of its `Canvas.Left` (a `RenderTransform` doesn't move the layout box), so the anchor is derived from `RotateTransform.TransformBounds`, measured, not a constant, since line height moves with font, DPI and OS text scaling. The former constant left labels 2.3 px adrift, a fifth of a column at 31 days.
-- **Hover card** per bar, exact token count, with the full date beneath, and one per gridline giving the reset time. Both use the panel's shared card (see *Per-model breakdown* above), not system chrome.
-
-Days before install are **blank columns** (no bar) with their date still labelled, with the date axis, an empty column reads as "no data" on its own, so the earlier "before O-view install" caption was **removed to save space** (issue #4). They are never rendered as zero-height bars, which would misread as idle days.
+The earlier chart is gone from both: it drew no Monday lines but dotted ones at the plan's weekly reset with a hover card each, rotated date labels under every column, and a light-to-dark blue banding within each week. The plan's weekly reset is now stated only by the Weekly meter's reset line, which is exact and never `~`; the chart claims nothing about it. Days before install are blank slots, never zero-height bars, which would misread as idle days (CLAUDE.md rule 6).
 
 ### Off-plan usage (was: Credits)
 
@@ -371,8 +324,8 @@ The panel carries the signal in **two independent registers**:
 
 **Live (current session window)**, the real-time divergence detector:
 
-1. **An amber banner** above the quota bars (on Windows above both blocks, with a hide control that lasts until the next off-plan spell), the bars are correct but no longer the whole story, so the correction must appear before them, not after.
-2. **Relabels the value tile** from `Est. value today` to `Est. spend today` with an `incl. off-plan usage` note. On Windows the value row of the tables reads `Est. spend on output` in Output and `Est. spend` in Overall instead, and the model table's today column reads `Est. spend` while its 31-day column keeps `Est. value`. The "not money charged" framing is only true for plan usage; off-plan work bills at API rates, so the label flips with the reality.
+1. **An amber banner** above both blocks, with a hide control that lasts until the next off-plan spell, the bars are correct but no longer the whole story, so the correction must appear before them, not after.
+2. **Relabels the value figure** from value to spend: the value row of the totals table reads `Est. spend on output` in Output and `Est. spend` in Overall, and the model table's today column reads `Est. spend` while its 31-day column keeps `Est. value`. The "not money charged" framing is only true for plan usage; off-plan work bills at API rates, so the label flips with the reality.
 
 A notification fires once per onset (edge-triggered, re-armed when it clears). When the plan limit is reached (≥99%) the wording changes: continued work is not drawing from the window by definition rather than by inference.
 
@@ -391,13 +344,13 @@ The diverging heading (`This session's usage is not drawing from your plan`) is 
 Two rules on the wording:
 
 - **Relayed, never asserted in O-view's own voice.** It is another application's cache, refreshed only when `/usage` runs, so it can be days old while looking current. Every claim carries `(reported by Claude Code, read 09:07)`, gaining a date once the reading is not from the reader's own today. Same treatment as the boost chip's hover card, for the same reason (rule 6).
-- **The Est. figure is withheld from the balloon where nothing can be billed.** It is the API-rate *value* of the work, and the panel labels it as such in a tile and a hover; a three-line notification cannot, and `Est. $92.75 so far this window` beside `extra usage is switched off` contradicts itself. The panel still shows it in full.
+- **The Est. figure is withheld from the balloon where nothing can be billed.** It is the API-rate *value* of the work, and the panel labels it as such in the table and a hover; a three-line notification cannot, and `Est. $92.75 so far this window` beside `extra usage is switched off` contradicts itself. The panel still shows it in full.
 
 The banner also carries a link to Claude's own usage settings, the address Claude Code itself uses for that screen, not a plausible-looking guess. Every wording above ends by sending the reader there for the figure O-view will not state, so the instruction is the thing you click.
 
 **The model limit has three sample states** (`model-limit`, `model-limit-spend` and `model-limit-spend-unknown`), the only ones with a model bar: the bar with its section hidden because nothing was reported, the bar with a reported figure beside $92.75 of recorded credit estimate that it must ignore, and the bar with extra usage on and no `spend`.
 
-**The redesign's sample states.** `typical-overall`, `typical-models`, `typical-models-overall`, `offplan-on-overall`, `offplan-on-models`, `offplan-on-hidden`, `longest-figures` and `longest-figures-models` carry the Output/Overall, model-face and hidden-banner views, and seven models where a model face needs them; `typical-overall-folding`, `typical-compact` and the two short renders are Windows-only. Linux renders all of them, with the layout it has, so its images of the Overall and model-face states show the tiles.
+**The redesign's sample states.** `typical-overall`, `typical-models`, `typical-models-overall`, `offplan-on-overall`, `offplan-on-models`, `offplan-on-hidden`, `longest-figures` and `longest-figures-models` carry the Output/Overall, model-face and hidden-banner views, and seven models where a model face needs them; `typical-overall-folding` is Windows-only, because Linux has no fold, and `offplan-on-short` is Windows-only too. Both heads draw `typical-compact` and `offplan-on-models-short`, and every other state.
 
 **The three states have offscreen renders** (`--popup-samples` → `panel-offplan-{unknown,off,on}-{light,dark}.png`). They had none before, which is how a banner asserting a charge at accounts that could not be charged survived: no fixture had an exhausted meter, so nobody ever looked at it. Same shape as issues #58 and #170.
 
@@ -405,7 +358,7 @@ The banner also carries a link to Claude's own usage settings, the address Claud
 
 - **Without a model limit** the heading reads `Off-plan usage · last 31 days` (the day count is the chart's window), and the section shows **estimated credit spend over 31 days**, the API-rate value of usage on credit-billed models ([`CreditBilledModels`](../src/O-view.Core/Models/CreditBilledModels.cs), currently Fable, the one case verified against billing).
 - **Why not a lookback classifier:** there is no per-request billing-tier field (`service_tier` is uniformly `"standard"`, even on requests known to have billed to credits), and the plan meter's short retention makes retroactive divergence impossible. So the 31-day figure is a per-model estimate, not a per-request fact, hence the explicit "models billed as extra usage (Fable)" caption.
-- Carries the same coverage caveat as the other 31-day tiles (`N of 31 days recorded`) and, since [issue #32](https://github.com/mlengmark/O-view/issues/32), a **two-clause** caption: published API rates, balance unreadable, check billing for exact. The mechanics that used to be spelled out here (deduplicated locally; an upper bound, as bundles discount up to 30%) were cut for space, they described *how* the estimate is built, whereas the two clauses kept are the ones that stop the figure being read as money charged, which is what rule 6 actually requires.
+- Carries the same coverage caveat as the other 31-day figures (`N of 31 days recorded`) and, since [issue #32](https://github.com/mlengmark/O-view/issues/32), a **two-clause** caption: published API rates, balance unreadable, check billing for exact. The mechanics that used to be spelled out here (deduplicated locally; an upper bound, as bundles discount up to 30%) were cut for space, they described *how* the estimate is built, whereas the two clauses kept are the ones that stop the figure being read as money charged, which is what rule 6 actually requires.
 
 - **With a model limit** (any model-scoped weekly row in the cached block, one whose reset has passed included) usage of that model draws from its own limit, so pricing it would call plan usage off-plan. The section instead shows **what Claude reports as spent past the plan**, from the block's `spend` ([ADR-0019](adr/0019-model-limit-and-reported-spend.md)): heading `Off-plan usage` with no day count, badge `from Claude`, label `Reported spend`, no `Est.` and no coverage note, because `spend` states no period and any span written beside it would be O-view's invention. The hint says so and carries the `(reported by Claude Code, read 10:47)` stamp.
   - **The amount decides, whatever `spend.enabled` says.** A non-zero amount shows; zero hides the section however heavily the model was used. USD reads `$12.34`; any other currency shows its own code, never `$`, with the decimal places it came with (`12.30 EUR`, `1234 JPY`).
@@ -510,7 +463,7 @@ Measured on a 2560×1440 display, taskbar bottom-docked at `y=1392`, **before th
 > Quick Settings flyout*: they exist to make O-view's surfaces move like the shell's.
 > Copying that curve onto a window in a Linux desktop's corner would imitate nothing; it would
 > just be an animation borrowed from another platform's shell. The Linux panel opens, closes,
-> flips its tiles and folds its breakdown without any of the motion described here, and the
+> turns its block between totals and models and changes between Output and Overall without any of the motion described here, and the
 > Linux menu is drawn by the desktop, so O-view cannot animate it at all. Nothing in this
 > section is built for Linux.
 

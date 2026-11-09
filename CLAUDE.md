@@ -140,7 +140,7 @@ O-view.slnx
 │   │                           (PanelFit, PanelMetrics, PanelMotion, PanelPlacementMemory, TrayIconGeometry,
 │   │                            PanelPalette).
 │   ├── O-view.Tray/            The Windows head: WPF, NotifyIcon, the registry, the updater.
-│   └── O-view.Linux/           The Linux head: Avalonia, SNI over D-Bus, notifications, XDG autostart.
+│   └── O-view.Linux/           The Linux head: Avalonia, the panel's layout, SNI over D-Bus, notifications, XDG autostart.
 ├── tests/
 │   ├── O-view.Core.Tests/, O-view.Presentation.Tests/, O-view.App.Tests/, O-view.Linux.Tests/
 │   ├── O-view.TestSupport/     Fakes and temp directories shared by the test projects.
