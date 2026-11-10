@@ -55,17 +55,17 @@ The switch under the table changes what the figures and the chart count. **Outpu
 |---|---|
 | ![](images/panel-models-windows-dark.png) | ![](images/panel-models-windows-light.png) |
 
-Linux has the same switch, the same "by model" tag and the same model face, and the same view is remembered. The images above are Windows renders. On Linux the block changes in a single step, with no fold and no turn.
+Linux has the same switch, the same "by model" tag and the same model face, and the same view is remembered. The images above are Windows renders. On Linux the block turns and folds the same way.
 
 ### The chart's hover cards
 
-Hovering a day shows its token count and date. The chart has no line at the plan's weekly reset: its lines are the calendar's Mondays and carry no hover text. On Linux the text on a bar is plain, the count and the date on one line, and the image below is a Windows render.
+Hovering a day shows its token count and date. The chart has no line at the plan's weekly reset: its lines are the calendar's Mondays and carry no hover text. On Linux the bar's hover card has the same shape, the figure with its date beneath, and the image below is a Windows render.
 
 ![](images/graph-hover-cards-dark.png)
 
 ### When something is off
 
-When the plan window is exhausted, or substantial local work runs against a plan meter that is not moving, an amber banner says so. It has a hide control, and hidden it stays hidden until a new off-plan spell begins. What it claims about billing follows your account's extra-usage setting, as Claude Code last reported it, rather than asserting a charge. When O-view finds nothing to read it says what it checked and what it found.
+When the plan window is exhausted, or substantial local work runs against a plan meter that is not moving, an amber banner says so. It has a hide control, which a pointer press, Enter or Space works (on Linux Tab reaches it too), and hidden it stays hidden until a new off-plan spell begins. What it claims about billing follows your account's extra-usage setting, as Claude Code last reported it, rather than asserting a charge. When O-view finds nothing to read it says what it checked and what it found.
 
 | Off-plan banner, light | No usage data, dark |
 |---|---|
@@ -85,7 +85,7 @@ Right-click the icon. On Windows it is a flyout docked to the taskbar corner, on
 |---|---|
 | ![](images/menu-windows-dark.png) | ![](images/menu-threshold-open-windows-light.png) |
 
-On Linux the menu belongs to the desktop's notification-area host and is drawn in its style; its rows are Show usage, Reset panel position, Run at startup, Resume usage refresh when needed, and Exit.
+On Linux the menu belongs to the desktop's notification-area host and is drawn in its style; its rows are Show usage, Reset panel position (X11 and XWayland only), Run at startup, Notify at, Weekly reset, Resume usage refresh when needed, Copy diagnostics, and Exit. Notify at and Weekly reset offer the choices the Windows rows do, and Weekly reset opens a small window for the day and time. Updates have no row on Linux: they notify only.
 
 ## Dialogs
 
@@ -95,9 +95,11 @@ O-view asks its questions on its own window rather than a system box: the same m
 |---|---|
 | ![](images/dialog-update-dark.png) | ![](images/dialog-weekly-reset-light.png) |
 
+The images are Windows renders. Linux has the weekly reset dialog too, opened from its menu's Weekly reset row, with the same words and the same rules for what it accepts; it keeps the desktop's own window frame and is not modal.
+
 ## Motion
 
-Still images cannot show it, so it is described here. On Windows the panel and the menu move; on Linux nothing does.
+Still images cannot show it, so it is described here. On Windows the panel and the menu move. On Linux the panel moves the same way and the menu does not, because the desktop draws it.
 
 - **The panel and the menu slide.** They slide out of the taskbar edge they are docked to as one piece, in 460 ms, and back in 300 ms. A click while one is moving turns it round from where it had got to.
 - **Arriving.** As the panel slides in, the plan bars grow to their percentage and the chart's bars rise from the baseline, or on the model face the doughnuts sweep and the model rows fade in. The figures are the real ones from the first frame.
@@ -105,9 +107,9 @@ Still images cannot show it, so it is described here. On Windows the panel and t
 - **Choosing a threshold shows it first.** The pill updates at once, the chosen dot grows in, and the list folds away about 300 ms later.
 - **Ticks and highlights.** A tick draws itself on and fades off, and the hover and focus fill on menu rows and option rows fades in and out.
 - **The model face.** "By model" and "totals" turn the block over: the old face fades as the new one arrives and the height moves between them. On the model face each doughnut fills as one clockwise sweep and the rows fade in one at a time. Pointing at the block brightens its tag and outlines it faintly.
-- **Animations off.** Everything above follows Windows' setting for animation effects, read each time a transition starts. With it off, the panel and the menu appear and disappear at once, and folds and turns happen in one step.
+- **Animations off.** Everything above follows the desktop's setting for animation effects, read each time a transition starts: Windows' own, or on Linux the one the desktop publishes through the XDG portal. With it off, the panel and the menu appear and disappear at once, and folds and turns happen in one step.
 
-Once the motion has settled the surfaces look as the images above show them. A second click during a slide, a fold or a turn reverses it from where it had got to; a second press on the banner's hide control changes nothing. The Linux head has none of this: its panel appears and disappears at once, its block and its Output | Overall switch change in one step, and its menu belongs to the desktop. [platform-status.md](platform-status.md) records which of this has been watched on a real desktop.
+Once the motion has settled the surfaces look as the images above show them. A second click during a slide, a fold or a turn reverses it from where it had got to; a second press on the banner's hide control changes nothing. On Linux the panel's content slides while its window stays where it was put, and a desktop that cannot make that window see-through shows the panel at once instead; the menu belongs to the desktop and does not move. [platform-status.md](platform-status.md) records which of this has been watched on a real desktop.
 
 ## What cannot be rendered
 
