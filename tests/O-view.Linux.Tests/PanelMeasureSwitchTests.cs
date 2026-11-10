@@ -138,7 +138,7 @@ public class PanelMeasureSwitchTests
         Assert.Equal(overallView.Table.Rows[0].Cells[0], TextIn(table, 1, 1));
         Assert.Equal(
             Tips(overallView.Chart),
-            PanelGraphLayoutTests.BarsOf(PanelGraphLayoutTests.ChartOf(panel)).Select(b => (string)ToolTip.GetTip(b)!));
+            PanelGraphLayoutTests.BarsOf(PanelGraphLayoutTests.ChartOf(panel)).Select(PanelGraphLayoutTests.CardWords));
         Assert.False(output.IsChecked);
         Assert.True(overall.IsChecked);
         Assert.Equal(Hex("BarTrack", false), Colour(overall.Background));
