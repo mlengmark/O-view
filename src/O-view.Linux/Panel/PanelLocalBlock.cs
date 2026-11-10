@@ -742,7 +742,13 @@ internal sealed class PanelLocalBlock(LinuxPanelTheme theme, Action<PanelViewCho
         }
     }
 
-    /// <summary>The highlight <paramref name="travel"/> of the way from where it started to the lit segment; at 1, the segment's own fill.</summary>
+    /// <summary>
+    /// The highlight <paramref name="travel"/> of the way from where it started to the lit segment;
+    /// at 1, the segment's own fill. The segment's own background is never changed: while the
+    /// highlight moves, the fill its template draws is covered by a local value, and at rest that is
+    /// cleared, so the resting fill never depends on the template following a change (CI's Ubuntu
+    /// run saw the template keep a transparent fill after the segment's own was set back).
+    /// </summary>
     private void ShowSlide(double travel)
     {
         if (_highlight is not { } fill || _chosen is not { } lit)
@@ -752,7 +758,18 @@ internal sealed class PanelLocalBlock(LinuxPanelTheme theme, Action<PanelViewCho
 
         var moving = travel < 1;
         fill.IsVisible = moving;
-        lit.Background = moving ? Brushes.Transparent : _theme["BarTrack"];
+        lit.ApplyTemplate();
+        if (lit.GetVisualChildren().FirstOrDefault() is Border face)
+        {
+            if (moving)
+            {
+                face.Background = Brushes.Transparent;
+            }
+            else
+            {
+                face.ClearValue(Border.BackgroundProperty);
+            }
+        }
 
         if (moving)
         {

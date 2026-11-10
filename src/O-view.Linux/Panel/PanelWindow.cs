@@ -1031,16 +1031,27 @@ public sealed class PanelWindow : Window
     /// </summary>
     private void KeepDockedEdge()
     {
-        if (!_fromBottom || _drag.InFlight || !IsVisible || _dockedBottomPx is not { } bottom)
-        {
-            return;
-        }
-
-        var top = DockedTop(bottom, _content.Bounds.Height, RenderScaling);
-        if (top != Position.Y)
+        if (DockedTopFor(_fromBottom, _drag.InFlight, IsVisible, _dockedBottomPx, _content.Bounds.Height, RenderScaling, Position.Y)
+            is { } top)
         {
             Position = new PixelPoint(Position.X, top);
         }
+    }
+
+    /// <summary>
+    /// The top <see cref="KeepDockedEdge"/> asks for, or null when it asks nothing: a panel at the
+    /// top, a drag, a hidden panel, no placement yet, or a panel already where its edge puts it.
+    /// </summary>
+    public static int? DockedTopFor(
+        bool fromBottom, bool dragging, bool visible, int? bottomPx, double heightDip, double scaling, int currentTop)
+    {
+        if (!fromBottom || dragging || !visible || bottomPx is not { } bottom)
+        {
+            return null;
+        }
+
+        var top = DockedTop(bottom, heightDip, scaling);
+        return top == currentTop ? null : top;
     }
 
     /// <summary>Where the top of a panel <paramref name="heightDip"/> tall goes to put its lower edge at <paramref name="bottomPx"/>.</summary>

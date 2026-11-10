@@ -158,11 +158,13 @@ public class PanelFoldMotionTests
 
         Assert.True(fill.IsVisible);
         Assert.Equal(startX + (overall.Bounds.X - startX) * travel, fill.Margin.Left, 0.5);
-        Assert.Equal(Colors.Transparent, Colour(overall.Background));
+        Assert.Equal(Colors.Transparent, Colour(Fill(overall).Background));
 
         rig.Rest();
         Assert.False(Highlight(rig.Panel).IsVisible);
-        Assert.Equal(Color.Parse(PanelPalette.Get("BarTrack", false)), Colour(Segments(rig.Panel).Overall.Background));
+        var lit = Segments(rig.Panel).Overall;
+        Assert.Equal(Color.Parse(PanelPalette.Get("BarTrack", false)), Colour(lit.Background));
+        Assert.Equal(Colour(lit.Background), Colour(Fill(lit).Background));
     }
 
     // ── the turn ────────────────────────────────────────────────────────────────────
@@ -237,8 +239,10 @@ public class PanelFoldMotionTests
     // ── the window ──────────────────────────────────────────────────────────────────
 
     /// <summary>
-    /// Mid-fold, the place the window asks for keeps a panel at the bottom on its docked edge:
-    /// its top moves by exactly what the height has, so the lower edge does not.
+    /// Mid-fold, the place the window asks for keeps a panel at the bottom on its docked edge. Each
+    /// frame the window is moved to what it asked, as a window manager that honours it would, and
+    /// the next frame is asked from there: on every frame where the height moved, it asks for a new
+    /// top, and that top puts the lower edge exactly on the edge.
     /// </summary>
     [Theory]
     [InlineData(1.0)]
@@ -247,22 +251,47 @@ public class PanelFoldMotionTests
     public void MidFoldThePanelsLowerEdgeStaysOnTheDockedEdge(double scaling)
     {
         var rig = new Rig(default);
-        var restHeight = rig.Panel.Bounds.Height;
         const int bottom = 1032;
-        var restTop = PanelWindow.DockedTop(bottom, restHeight, scaling);
+        var top = bottom - (int)Math.Round(rig.Panel.Bounds.Height * scaling);
+        Assert.Null(PanelWindow.DockedTopFor(true, false, true, bottom, rig.Panel.Bounds.Height, scaling, top));
 
         rig.Press(PanelMeasure.Overall);
-        rig.FrameAt(LeaveMs);
+        var asked = 0;
 
-        foreach (var at in new[] { LeaveMs + 60, LeaveMs + 200, LeaveMs + 320 })
+        for (var at = 16.0; at <= LeaveMs + PanelMotion.Ms(PanelMotion.FoldOpenBaseMs) + 16; at += 16)
         {
+            var before = top;
             rig.FrameAt(at);
             var height = rig.Panel.Bounds.Height;
-            var top = PanelWindow.DockedTop(bottom, height, scaling);
 
-            Assert.NotEqual(restTop, top);
+            if (PanelWindow.DockedTopFor(true, false, true, bottom, height, scaling, top) is { } requested)
+            {
+                top = requested;
+                asked++;
+            }
+
             Assert.Equal(bottom, top + (int)Math.Round(height * scaling));
+            Assert.True(top != before || (int)Math.Round(height * scaling) == bottom - before);
         }
+
+        Assert.True(asked > 5, $"the window asked for a new top on only {asked} frames of the fold");
+    }
+
+    /// <summary>A panel at the top, a drag, a hidden panel and one never placed ask for nothing, mid-fold too.</summary>
+    [Fact]
+    public void ThePanelAsksNothingWhereItsTopIsNotItsToMove()
+    {
+        var rig = new Rig(default);
+        rig.Press(PanelMeasure.Overall);
+        rig.FrameAt(LeaveMs);
+        rig.FrameAt(LeaveMs + 100);
+        var height = rig.Panel.Bounds.Height;
+
+        Assert.NotNull(PanelWindow.DockedTopFor(true, false, true, 1032, height, 1, 0));
+        Assert.Null(PanelWindow.DockedTopFor(fromBottom: false, false, true, 1032, height, 1, 0));
+        Assert.Null(PanelWindow.DockedTopFor(true, dragging: true, true, 1032, height, 1, 0));
+        Assert.Null(PanelWindow.DockedTopFor(true, false, visible: false, 1032, height, 1, 0));
+        Assert.Null(PanelWindow.DockedTopFor(true, false, true, bottomPx: null, height, 1, 0));
     }
 
     /// <summary>
@@ -277,7 +306,7 @@ public class PanelFoldMotionTests
 
         Assert.Contains("Motion = new LinuxMotion(() => animationsOn?.Invoke() ?? true)", source, StringComparison.Ordinal);
         Assert.Contains("e.Property == BoundsProperty", source, StringComparison.Ordinal);
-        Assert.Contains("DockedTop(bottom, _content.Bounds.Height, RenderScaling)", source, StringComparison.Ordinal);
+        Assert.Contains("DockedTopFor(_fromBottom, _drag.InFlight, IsVisible, _dockedBottomPx, _content.Bounds.Height, RenderScaling, Position.Y)", source, StringComparison.Ordinal);
         Assert.Contains("place => Position = Docked(place)", source, StringComparison.Ordinal);
         Assert.Contains("_requestedPosition = Docked(new PixelPoint(left, top), panelHeightDip, scaling)", source, StringComparison.Ordinal);
         Assert.Contains("_requestedPosition = Docked(ToPixels(place, scaling), scaling: scaling)", source, StringComparison.Ordinal);
@@ -359,6 +388,9 @@ public class PanelFoldMotionTests
 
     private static Border Highlight(Control panel) =>
         Segments(panel).Output.GetVisualParent()!.GetVisualParent()!.GetVisualChildren().OfType<Border>().Single();
+
+    /// <summary>The fill a segment's template draws, which is what is on screen.</summary>
+    private static Border Fill(RadioButton segment) => Assert.IsType<Border>(segment.GetVisualChildren().Single());
 
     private static Color Colour(IBrush? brush) => Assert.IsAssignableFrom<ISolidColorBrush>(brush).Color;
 
