@@ -375,6 +375,9 @@ public sealed class PanelWindow : Window
     {
         _slide.Set(OutOfView());
         Slide(0, PanelMotion.Ms(PanelMotion.SurfaceOpenBaseMs), PanelMotion.Decelerate);
+
+        // The bars and arcs count from the start of the slide, and run in a solid window too.
+        _content.Arrive();
     }
 
     /// <summary>
