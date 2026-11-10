@@ -14,6 +14,7 @@ using OView.Core.Providers.Jsonl;
 using OView.Core.Providers.PlanHistory;
 using OView.App.Pricing;
 using OView.App.Updates;
+using OView.Linux.Dialogs;
 using OView.Linux.Notifications;
 using OView.Linux.Updates;
 using OView.Linux.Panel;
@@ -101,6 +102,15 @@ public sealed class LinuxApp : Application, IShellToSkin
 
     /// <summary>The notification setting as the shell holds it, read on every render like the resume row.</summary>
     private Func<(bool On, int Percent)>? _notifySetting;
+
+    /// <summary>The weekly-reset row, whose label carries the entry in effect.</summary>
+    private NativeMenuItem? _weeklyResetItem;
+
+    /// <summary>The entered weekly reset as the shell holds it, read on every render like the resume row.</summary>
+    private Func<ManualWeeklyReset?>? _weeklyResetSetting;
+
+    /// <summary>The weekly-reset dialog while one is open, so the row brings it forward rather than opening a second.</summary>
+    private WeeklyResetDialog? _weeklyResetDialog;
     private TrayIcon? _tray;
     private PanelWindow? _panel;
     private CancellationTokenSource? _hostWatch;
@@ -268,6 +278,52 @@ public sealed class LinuxApp : Application, IShellToSkin
         // Outside Render, whose catch keeps a bad frame from killing the app: a failure to
         // publish is not a bad frame, and swallowing it would leave no icon and no reason.
         _firstReading?.ReadingArrived();
+
+        // Rides the snapshot, as on Windows, because a poll is when the conflict is found.
+        if (_shell is { } shell)
+        {
+            NotifyWeeklyResetConflict(shell);
+        }
+    }
+
+    /// <summary>
+    /// Tells the user once when the reset Claude reported disproves the one they entered (issue
+    /// #186). The shell has already set the entry aside for the reported one, so this explains a
+    /// change that has happened; silence would leave them believing the time they typed.
+    ///
+    /// <para>Once per conflicting observation, not once per poll: a warning that came back every
+    /// poll is one people learn to dismiss. Same words and the same rule as the Windows head.</para>
+    /// </summary>
+    private void NotifyWeeklyResetConflict(ISkinToShell shell)
+    {
+        try
+        {
+            if (WeeklyResetConflictNotice(shell) is { } notice)
+            {
+                _log?.Write("weekly reset conflict noticed");
+                _ = _notifier.ShowAsync(notice.Title, notice.Body);
+            }
+        }
+        catch (Exception ex)
+        {
+            // A settings write that fails here must not take the snapshot's caller with it.
+            _log?.Write($"weekly reset conflict notice FAILED {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// The notice for a conflict the user has not been told about, marked told, or null. Its own
+    /// method so the rule is assertable without a notification service.
+    /// </summary>
+    private static (string Title, string Body)? WeeklyResetConflictNotice(ISkinToShell shell)
+    {
+        if (shell.WeeklyResetConflict is not { } conflict || !shell.IsWeeklyResetConflictUnseen(conflict))
+        {
+            return null;
+        }
+
+        shell.MarkWeeklyResetConflictNoticed(conflict);
+        return (NoticeText.WeeklyResetConflictTitle, PanelText.WeeklyResetConflict(conflict, TimeZoneInfo.Local));
     }
 
     /// <summary>
@@ -503,6 +559,7 @@ public sealed class LinuxApp : Application, IShellToSkin
             // user could open the menu.
             SyncResumeItem();
             SyncNotifyItems();
+            SyncWeeklyResetItem();
 
             _log?.Write(
                 $"icon rendered session={Describe(snapshot.SessionPercentValue)} "
@@ -601,6 +658,16 @@ public sealed class LinuxApp : Application, IShellToSkin
 
         var notify = BuildNotifyMenu(shell);
 
+        // Starts on "derived" and is corrected by the first render, before the menu is published:
+        // building it must not read the shell, for the reason given at _usageRefreshBlocked.
+        var weeklyReset = new NativeMenuItem(WeeklyResetRowHeader(null));
+
+        // Marshalled like every other row: the dialog is a window, and building one on the bus
+        // thread is the SIGSEGV of issue #143.
+        weeklyReset.Click += BusCallback.For(_dispatcher, () => EditWeeklyReset(shell), _log);
+        _weeklyResetItem = weeklyReset;
+        _weeklyResetSetting = () => shell.Settings.WeeklyReset;
+
         var diagnostics = new NativeMenuItem(MenuText.CopyDiagnosticsRow);
 
         // Marshalled like every other row: the bundle reads the store through the shell, and the
@@ -651,8 +718,80 @@ public sealed class LinuxApp : Application, IShellToSkin
 
         // In the Windows flyout's order: the settings, then the resume row, then the actions.
         return reset is null
-            ? [showUsage, startup, notify, resume, diagnostics, exit]
-            : [showUsage, reset, startup, notify, resume, diagnostics, exit];
+            ? [showUsage, startup, notify, weeklyReset, resume, diagnostics, exit]
+            : [showUsage, reset, startup, notify, weeklyReset, resume, diagnostics, exit];
+    }
+
+    /// <summary>
+    /// The weekly-reset row's label: the row's words, then the entry in effect or "derived",
+    /// both from Presentation. The Windows row sets the value in a column of its own; a row the
+    /// desktop draws has one label, so the gap stands in for that column.
+    /// </summary>
+    private static string WeeklyResetRowHeader(ManualWeeklyReset? entry) =>
+        MenuText.WeeklyResetRow + "  " + (entry is { } set
+            ? MenuText.WeeklyResetValue(set.DayText, set.TimeText)
+            : MenuText.WeeklyResetDerived);
+
+    private void SyncWeeklyResetItem()
+    {
+        if (_weeklyResetSetting is not null)
+        {
+            SyncWeeklyResetItem(_weeklyResetSetting());
+        }
+    }
+
+    private void SyncWeeklyResetItem(ManualWeeklyReset? entry)
+    {
+        if (_weeklyResetItem is not null)
+        {
+            _weeklyResetItem.Header = WeeklyResetRowHeader(entry);
+        }
+    }
+
+    /// <summary>
+    /// Opens the weekly-reset dialog on the entry in effect, or brings forward the one already
+    /// open: two dialogs editing one setting could each save over the other.
+    /// </summary>
+    private void EditWeeklyReset(ISkinToShell shell)
+    {
+        try
+        {
+            if (_weeklyResetDialog is { } open)
+            {
+                open.Activate();
+                return;
+            }
+
+            var dialog = new WeeklyResetDialog(
+                new WeeklyResetForm(shell.Settings.WeeklyReset),
+                new LinuxPanelTheme(_theme.IsPanelLight()));
+            dialog.Chosen += choice => ApplyWeeklyReset(shell, choice.Entry);
+            dialog.Closed += (_, _) => _weeklyResetDialog = null;
+
+            _weeklyResetDialog = dialog;
+            dialog.Show();
+            _log?.Write("weekly reset dialog opened");
+        }
+        catch (Exception ex)
+        {
+            // A dialog that fails to open must not take the tray icon down with it.
+            _log?.Write($"weekly reset dialog FAILED {ex.GetType().Name}: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Saves an entry, or clears it with null, through the shell, labels the row with what the
+    /// shell <i>returned</i> rather than what was asked (a settings write can fail, rule 6), and
+    /// polls once so the panel and the chart's week lines move with it, as the Windows head does.
+    /// The shell decides everything else, including that a reset Claude reported outranks the
+    /// entry.
+    /// </summary>
+    private void ApplyWeeklyReset(ISkinToShell shell, ManualWeeklyReset? entry)
+    {
+        var actual = shell.SetWeeklyReset(entry);
+        SyncWeeklyResetItem(actual);
+        _log?.Write($"weekly reset -> {(actual is null ? "derived" : $"{actual.DayText} {actual.TimeText}")}");
+        shell.Refresh();
     }
 
     /// <summary>
