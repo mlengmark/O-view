@@ -20,8 +20,8 @@ namespace OView.Linux.Tests.Runtime;
 ///
 /// <para><b>What an empty menu does.</b> Fails. A menu with no rows answers <c>GetLayout</c>
 /// instantly, which is the one way a timing test can pass while the thing it is about is
-/// broken, so the rows the head builds, "Show usage", "Reset panel position", "Run at
-/// startup" and "Exit O-view", have to be in what came back, in that order.</para>
+/// broken, so the rows the head builds, "Show usage" through "Exit O-view" and the threshold
+/// submenu's choices, have to be in what came back, in that order.</para>
 ///
 /// <para><b>Clicking a row is not in this.</b> "Exit O-view" ends the app, and the rest of the
 /// menu's rows open a window, change this machine's autostart entry or touch the usage cache.
@@ -52,9 +52,21 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
     /// which is the session the row exists in. The head leaves it out where no place can be
     /// remembered, a native Wayland session, so this is the list for a session that can, and
     /// the absence is asserted in-process instead, where either session can be arranged.</para>
+    ///
+    /// <para>"Notify at" opens a submenu, whose rows are <see cref="TheThresholdChoices"/>.</para>
     /// </summary>
     private static readonly string[] TheRowsTheHeadBuilds =
-        ["Show usage", "Reset panel position", "Run at startup", "Exit O-view"];
+    [
+        "Show usage", "Reset panel position", "Run at startup", "Notify at", "Copy diagnostics",
+        "Exit O-view",
+    ];
+
+    /// <summary>
+    /// The "Notify at" submenu as a desktop reads it: the Windows flyout's three percentages,
+    /// then the way to switch the notification off. The row for a hand-edited threshold is
+    /// hidden on a fresh settings file, which this job starts with, so it is not expected.
+    /// </summary>
+    private static readonly string[] TheThresholdChoices = ["70%", "80%", "90%", "Off"];
 
     /// <summary>
     /// How long the menu has, for all three round trips together. The bound this test exists to
@@ -138,6 +150,15 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
             TheRowsTheHeadBuilds,
             menu.Rows
                 .Where(row => row is { Depth: 0, Visible: true, Kind: not "separator" })
+                .Select(row => row.Label));
+
+        // The submenu's rows are the only depth-1 rows the head builds, so they are read the
+        // same way, and in order: a desktop that never saw them would show "Notify at" opening
+        // onto nothing.
+        Assert.Equal(
+            TheThresholdChoices,
+            menu.Rows
+                .Where(row => row is { Depth: 1, Visible: true, Kind: not "separator" })
                 .Select(row => row.Label));
 
         // The budget is enforced by the client, which times each call against it; this says the
@@ -235,6 +256,8 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
                 "\"Show usage\" is not in the menu at all",
                 "\"Reset panel position\" is not in the menu at all",
                 "\"Run at startup\" is not in the menu at all",
+                "\"Notify at\" is not in the menu at all",
+                "\"Copy diagnostics\" is not in the menu at all",
                 "\"Exit O-view\" is not in the menu at all",
             },
             menu.RowsMissing(TheRowsTheHeadBuilds));
