@@ -24,8 +24,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.1.5" />
-    <PackageReference Include="Avalonia.Desktop" Version="12.1.5" />
+    <PackageReference Include="Avalonia" Version="12.1.6" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.6" />
     <!-- Both already arrive transitively through Avalonia; referenced explicitly because
          this project uses them directly, and pinned to Avalonia's own versions so the
          restore cannot resolve a downgrade.
