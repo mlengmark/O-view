@@ -55,6 +55,38 @@ public class MenuTextTests
         Assert.Equal("100%", MenuText.ThresholdPercent(100));
     }
 
+    /// <summary>
+    /// The Linux submenu is built from <see cref="MenuText.ThresholdChoices"/>, and the Windows
+    /// flyout's option rows carry their percentages as XAML tags, so the two heads' offers are
+    /// compared here, where both can be read: a fourth offer added to one head alone would
+    /// otherwise reach only half the users, with every test green.
+    /// </summary>
+    [Fact]
+    public void BothHeadsOfferTheSameThresholds()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, "O-view.slnx")))
+        {
+            directory = directory.Parent;
+        }
+
+        Assert.NotNull(directory);
+        var flyout = File.ReadAllText(
+            Path.Combine(directory!.FullName, "src", "O-view.Tray", "Popup", "MenuWindow.xaml"));
+
+        var windows = System.Text.RegularExpressions.Regex
+            .Matches(flyout, "x:Name=\"Threshold(\\d+)\"[^>]*?Tag=\"(\\d+)\"")
+            .Select(m => int.Parse(m.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture));
+
+        Assert.Equal([70, 80, 90], MenuText.ThresholdChoices);
+        Assert.Equal(MenuText.ThresholdChoices, windows);
+    }
+
+    /// <summary>The Linux threshold submenu's way to switch the notification off.</summary>
+    [Fact]
+    public void TheOffChoiceSaysOff() =>
+        Assert.Equal("Off", MenuText.NotifyOffChoice);
+
     // ── the two values beside a row ─────────────────────────────────────────────────
 
     [Fact]

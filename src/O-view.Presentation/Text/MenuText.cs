@@ -9,9 +9,8 @@ namespace OView.Presentation.Text;
 ///
 /// <para>Both heads draw this menu, with entirely different machinery, a WPF flyout of
 /// templated Buttons, a DBusMenu the desktop renders, which is the shape in which two
-/// surfaces drift. The Linux menu carries three of these rows and once had its own copy of
-/// two of them, so "Exit O-view" existed twice and nothing would have failed if one of them
-/// had become "Quit". The resume row is the exception that proves the rule: it already read
+/// surfaces drift. The Linux menu once had its own copy of two of these rows, so "Exit
+/// O-view" existed twice and nothing would have failed if one of them had become "Quit". The resume row is the exception that proves the rule: it already read
 /// <see cref="PanelText.UsageRefreshBlockedRow"/> on both heads.</para>
 /// </summary>
 public static class MenuText
@@ -59,6 +58,21 @@ public static class MenuText
     /// </summary>
     public static string ThresholdPercent(int percent) =>
         string.Create(CultureInfo.InvariantCulture, $"{percent}%");
+
+    /// <summary>
+    /// The percentages the threshold row offers, in the order it lists them. The Windows
+    /// flyout's option rows carry the same three as their tags, and the Linux submenu is built
+    /// from this list, so a fourth offer added on one head and not the other fails
+    /// <c>MenuTextTests</c> rather than reaching only half the users.
+    /// </summary>
+    public static IReadOnlyList<int> ThresholdChoices { get; } = [70, 80, 90];
+
+    /// <summary>
+    /// The Linux threshold submenu's last choice. On Windows the row's own tick switches the
+    /// notification off; a desktop-rendered submenu cannot carry a tick on the row that opens
+    /// it, so off is offered beside the percentages instead.
+    /// </summary>
+    public const string NotifyOffChoice = "Off";
 
     /// <summary>Issue #186. The ellipsis says a dialog follows.</summary>
     public const string WeeklyResetRow = "Weekly reset…";

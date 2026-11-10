@@ -1,9 +1,12 @@
+using System.Reflection;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input.Platform;
 using Avalonia.Media.Imaging;
 using Avalonia.Threading;
 using OView.App;
+using OView.App.Diagnostics;
 using OView.Core.Models;
 using OView.App.Platform;
 using OView.Core.Providers.CachedUsage;
@@ -84,6 +87,20 @@ public sealed class LinuxApp : Application, IShellToSkin
 
     /// <summary>Why refreshing is blocked, or null. Read on every render to keep the row honest.</summary>
     private Func<string?>? _usageRefreshBlocked;
+
+    /// <summary>The threshold submenu's offered percentages, re-ticked after a choice and on every render.</summary>
+    private (int Percent, NativeMenuItem Item)[] _thresholdItems = [];
+
+    /// <summary>
+    /// A threshold none of the offers names, a hand-edited settings.json, shown as it is and
+    /// hidden otherwise. Ticking none of the three would leave the setting in effect unsaid.
+    /// </summary>
+    private NativeMenuItem? _unofferedThresholdItem;
+
+    private NativeMenuItem? _notifyOffItem;
+
+    /// <summary>The notification setting as the shell holds it, read on every render like the resume row.</summary>
+    private Func<(bool On, int Percent)>? _notifySetting;
     private TrayIcon? _tray;
     private PanelWindow? _panel;
     private CancellationTokenSource? _hostWatch;
@@ -485,6 +502,7 @@ public sealed class LinuxApp : Application, IShellToSkin
             // visibility rides the render instead, which happens every poll, more often than a
             // user could open the menu.
             SyncResumeItem();
+            SyncNotifyItems();
 
             _log?.Write(
                 $"icon rendered session={Describe(snapshot.SessionPercentValue)} "
@@ -581,6 +599,14 @@ public sealed class LinuxApp : Application, IShellToSkin
             _log?.Write($"run at startup -> {actual} ({XdgAutostartRegistration.DefaultDirectory})");
         }, _log);
 
+        var notify = BuildNotifyMenu(shell);
+
+        var diagnostics = new NativeMenuItem(MenuText.CopyDiagnosticsRow);
+
+        // Marshalled like every other row: the bundle reads the store through the shell, and the
+        // clipboard belongs to the toolkit, which is the SIGSEGV of issue #143 off the UI thread.
+        diagnostics.Click += BusCallback.For(_dispatcher, () => _ = CopyDiagnosticsAsync(shell), _log);
+
         var exit = new NativeMenuItem(MenuText.ExitRow);
 
         // The third. Shutdown() tears down the dispatcher, so calling it from the bus thread
@@ -623,9 +649,173 @@ public sealed class LinuxApp : Application, IShellToSkin
 
         _startupItem = startup;
 
+        // In the Windows flyout's order: the settings, then the resume row, then the actions.
         return reset is null
-            ? [showUsage, startup, resume, exit]
-            : [showUsage, reset, startup, resume, exit];
+            ? [showUsage, startup, notify, resume, diagnostics, exit]
+            : [showUsage, reset, startup, notify, resume, diagnostics, exit];
+    }
+
+    /// <summary>
+    /// The "Notify at" row: a submenu of the percentages the Windows flyout offers, the one in
+    /// effect ticked, and "Off" last.
+    ///
+    /// <para>A submenu rather than the Windows row's tick and pill, because a desktop-rendered
+    /// menu has neither: the row that opens a submenu cannot also carry a tick. So the radio
+    /// group holds both settings, and choosing a percentage switches the notification back on,
+    /// which is what someone choosing one from a list headed "Notify at" is asking for.</para>
+    ///
+    /// <para>Like the rest of <see cref="BuildMenu"/>, this never dereferences the shell while
+    /// building; the ticks start clear and the first render sets them, before the icon, and so
+    /// the menu, is published.</para>
+    /// </summary>
+    private NativeMenuItem BuildNotifyMenu(ISkinToShell shell)
+    {
+        var submenu = new NativeMenu();
+
+        _unofferedThresholdItem = new NativeMenuItem { ToggleType = MenuItemToggleType.Radio, IsVisible = false };
+
+        // Re-applies the value it shows: choosing it from a list that is off still means "on, at this".
+        _unofferedThresholdItem.Click += BusCallback.For(
+            _dispatcher, () => ChooseThreshold(shell, shell.Settings.ThresholdPercent), _log);
+        submenu.Items.Add(_unofferedThresholdItem);
+
+        _thresholdItems = [.. MenuText.ThresholdChoices.Select(percent =>
+        {
+            var item = new NativeMenuItem(MenuText.ThresholdPercent(percent)) { ToggleType = MenuItemToggleType.Radio };
+            item.Click += BusCallback.For(_dispatcher, () => ChooseThreshold(shell, percent), _log);
+            submenu.Items.Add(item);
+            return (percent, item);
+        })];
+
+        _notifyOffItem = new NativeMenuItem(MenuText.NotifyOffChoice) { ToggleType = MenuItemToggleType.Radio };
+        _notifyOffItem.Click += BusCallback.For(_dispatcher, () =>
+        {
+            var on = shell.SetNotifyOnThreshold(false);
+            SyncNotifyItems(on, shell.Settings.ThresholdPercent);
+            _log?.Write($"notify on threshold -> {on}");
+        }, _log);
+        submenu.Items.Add(_notifyOffItem);
+
+        // A closure, not a read, for the reason _usageRefreshBlocked is one.
+        _notifySetting = () => (shell.Settings.NotifyOnThreshold, shell.Settings.ThresholdPercent);
+
+        return new NativeMenuItem(MenuText.NotifyPrefix) { Menu = submenu };
+    }
+
+    /// <summary>
+    /// Applies a chosen percentage and switches the notification on, then ticks what the shell
+    /// <i>returned</i>, never what was asked: a settings write can fail, and a tick claiming a
+    /// value that was never saved would be the menu asserting something untrue (rule 6).
+    ///
+    /// <para>The percentage goes first so that switching on, which re-arms the watcher, arms it
+    /// at the new threshold rather than the old one.</para>
+    /// </summary>
+    private void ChooseThreshold(ISkinToShell shell, int percent)
+    {
+        var actual = shell.SetThresholdPercent(percent);
+        var on = shell.SetNotifyOnThreshold(true);
+        SyncNotifyItems(on, actual);
+        _log?.Write($"notify on threshold -> {on}, threshold -> {actual}");
+    }
+
+    private void SyncNotifyItems()
+    {
+        if (_notifySetting is not null)
+        {
+            var (on, percent) = _notifySetting();
+            SyncNotifyItems(on, percent);
+        }
+    }
+
+    /// <summary>
+    /// Ticks exactly one choice: the percentage in effect while the notification is on, "Off"
+    /// while it is not. A hand-edited threshold none of the offers names gets its own row,
+    /// worded the way the Windows pill shows it, rather than being snapped to the nearest offer.
+    /// </summary>
+    private void SyncNotifyItems(bool on, int percent)
+    {
+        foreach (var (choice, item) in _thresholdItems)
+        {
+            item.IsChecked = on && choice == percent;
+        }
+
+        var unoffered = on && !MenuText.ThresholdChoices.Contains(percent);
+        if (_unofferedThresholdItem is { } row)
+        {
+            row.Header = MenuText.ThresholdPercent(percent);
+            row.IsVisible = unoffered;
+            row.IsChecked = unoffered;
+        }
+
+        if (_notifyOffItem is not null)
+        {
+            _notifyOffItem.IsChecked = !on;
+        }
+    }
+
+    /// <summary>
+    /// The "Copy diagnostics" row: the same bundle the Windows row copies, from the shared
+    /// builder, with what only this head can say about the machine.
+    ///
+    /// <para><b>No window is opened for it.</b> The clipboard is the one the toolkit's X11
+    /// platform registers for the whole application, which owns the selection through a hidden
+    /// window of its own; a window's <c>Clipboard</c> property hands back that same object. The
+    /// head is X11 only, under XWayland on a Wayland session, so this is the clipboard on every
+    /// desktop it runs on.</para>
+    ///
+    /// <para>The tray host is asked again here rather than taken from startup, because "my icon
+    /// is missing" is the report this most often goes with, and is awaited rather than waited
+    /// on: blocking the UI thread on a D-Bus round trip deadlocks the app (issue #124).</para>
+    /// </summary>
+    private async Task CopyDiagnosticsAsync(ISkinToShell shell)
+    {
+        try
+        {
+            var environment = new DiagnosticsEnvironment(
+                Version: ReleaseFeed.VersionOf(typeof(LinuxApp).Assembly),
+                InstallKind: Program.DetectInstallKind().ToString(),
+                Desktop: Program.DesktopEnvironment(),
+                SessionType: Program.SessionType(),
+                TrayHost: (await SniHostProbe.CheckAsync()).ToString());
+
+            if (ApplicationClipboard() is not { } clipboard)
+            {
+                throw new InvalidOperationException("the toolkit registered no clipboard");
+            }
+
+            await clipboard.SetTextAsync(DiagnosticsBundle.Build(environment, shell.InspectStore()));
+            _log?.Write("diagnostics copied");
+            await _notifier.ShowAsync(NoticeText.DiagnosticsCopiedTitle, NoticeText.DiagnosticsCopiedBody);
+        }
+        catch (Exception ex)
+        {
+            // Whatever failed, the user asked for something and is told it did not happen; a
+            // monitoring tool must not die on a support request.
+            _log?.Write($"diagnostics copy FAILED {ex.GetType().Name}: {ex.Message}");
+            await _notifier.ShowAsync(NoticeText.DiagnosticsCopyFailedTitle, NoticeText.DiagnosticsCopyFailedBody);
+        }
+    }
+
+    /// <summary>
+    /// The clipboard the toolkit registers for the whole application, or null where none is
+    /// registered (no platform started, as in a unit test).
+    ///
+    /// <para><b>Through reflection, deliberately.</b> The toolkit's only public way to the
+    /// clipboard is a window's <c>Clipboard</c> property, and that property only asks this same
+    /// registry; the registry itself is left out of the reference assemblies the build compiles
+    /// against, though the assembly that ships has it. The alternative was opening a window
+    /// just to copy. <c>LinuxHeadWiringTests</c> fails if a toolkit update takes either member
+    /// away, so that arrives as a red build rather than a row that only ever says it failed.</para>
+    /// </summary>
+    internal static IClipboard? ApplicationClipboard()
+    {
+        var registry = typeof(AvaloniaLocator)
+            .GetProperty("Current", BindingFlags.Public | BindingFlags.Static)?
+            .GetValue(null);
+
+        return registry?.GetType()
+            .GetMethod("GetService", BindingFlags.Public | BindingFlags.Instance, [typeof(Type)])?
+            .Invoke(registry, [typeof(IClipboard)]) as IClipboard;
     }
 
     /// <summary>

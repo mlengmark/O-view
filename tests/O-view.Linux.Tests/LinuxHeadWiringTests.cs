@@ -154,7 +154,7 @@ public class LinuxHeadWiringTests
     [Fact]
     public void EveryMenuItemsClickHandlerIsMarshalledOntoTheUiThread()
     {
-        var items = Menu().Items.OfType<NativeMenuItem>().ToArray();
+        var items = Clickable(Menu()).ToArray();
         Assert.NotEmpty(items);
 
         foreach (var item in items)
@@ -163,6 +163,30 @@ public class LinuxHeadWiringTests
 
             Assert.NotEmpty(handlers);
             Assert.All(handlers, h => Assert.Equal(typeof(BusCallback), h.Method.DeclaringType));
+        }
+    }
+
+    /// <summary>
+    /// Every row a click can reach, a submenu's rows included. The row that opens a submenu is
+    /// not one: the desktop opens the submenu and raises nothing on it, so a handler there would
+    /// be dead code, and its absence is asserted rather than skipped.
+    /// </summary>
+    private static IEnumerable<NativeMenuItem> Clickable(NativeMenu menu)
+    {
+        foreach (var item in menu.Items.OfType<NativeMenuItem>())
+        {
+            if (item.Menu is { } submenu)
+            {
+                Assert.Empty(ClickHandlersOf(item));
+                foreach (var child in Clickable(submenu))
+                {
+                    yield return child;
+                }
+            }
+            else
+            {
+                yield return item;
+            }
         }
     }
 
@@ -357,13 +381,164 @@ public class LinuxHeadWiringTests
                 MenuText.ResetPanelPositionRow,
 
                 MenuText.RunAtStartupRow,
+                MenuText.NotifyPrefix,
 
-                // Between the two it has something to say about and the one that ends the app,
-                // and hidden until the refresh has blocked itself, so a person sees four rows.
+                // Between the settings and the actions, as on Windows, and hidden until the
+                // refresh has blocked itself, so a person sees six rows.
                 PanelText.UsageRefreshBlockedRow,
+                MenuText.CopyDiagnosticsRow,
                 MenuText.ExitRow,
             ],
             headers);
+    }
+
+    /// <summary>
+    /// The threshold submenu offers what the Windows flyout offers, in its order and in
+    /// Presentation's words, then "Off". The row ahead of them is the hand-edited threshold's,
+    /// hidden until there is one.
+    /// </summary>
+    [Fact]
+    public void TheNotifyRowOffersTheWindowsChoicesThenOff()
+    {
+        var submenu = NotifySubmenu(Menu());
+
+        Assert.Equal(
+            [.. MenuText.ThresholdChoices.Select(MenuText.ThresholdPercent), MenuText.NotifyOffChoice],
+            submenu.Skip(1).Select(i => i.Header ?? ""));
+
+        Assert.False(submenu[0].IsVisible);
+        Assert.All(submenu, i => Assert.Equal(MenuItemToggleType.Radio, i.ToggleType));
+    }
+
+    /// <summary>
+    /// Choosing a percentage asks the shell for it and switches the notification on; "Off"
+    /// switches it off; and the tick follows what the shell <i>returned</i>. The recording shell
+    /// refuses to switch on once, as a settings file that cannot be written would, and the tick
+    /// then stays on "Off" rather than on the percentage that was asked for.
+    ///
+    /// <para>The work is run directly rather than through the dispatcher, which the sweep above
+    /// already holds every row to: what is under test here is what the row asks and ticks.</para>
+    /// </summary>
+    [Fact]
+    public void ChoosingAThresholdGoesThroughTheShellAndTicksWhatItReturns()
+    {
+        // Claimed before the first touch: ticking a row is a property write on the toolkit's
+        // objects (see AvaloniaDispatcherTestSupport).
+        AvaloniaDispatcherTestSupport.ClaimUiThreadForThisThread();
+
+        var shell = RecordingShell.Create();
+        var submenu = NotifySubmenu(MenuWith(shell));
+        // Past the first row, the hand-edited threshold's, which carries the last value it showed.
+        NativeMenuItem Choice(string header) => submenu.Skip(1).Single(i => i.Header == header);
+        NativeMenuItem[] ticked() => [.. submenu.Where(i => i.IsChecked)];
+
+        RunWork(Choice(MenuText.ThresholdPercent(80)));
+        Assert.Equal(["SetThresholdPercent(80)", "SetNotifyOnThreshold(True)"], shell.Calls);
+        Assert.Equal([Choice(MenuText.ThresholdPercent(80))], ticked());
+
+        RunWork(Choice(MenuText.NotifyOffChoice));
+        Assert.Equal("SetNotifyOnThreshold(False)", shell.Calls[^1]);
+        Assert.Equal([Choice(MenuText.NotifyOffChoice)], ticked());
+
+        shell.RefuseToSwitchOn = true;
+        RunWork(Choice(MenuText.ThresholdPercent(90)));
+        Assert.Equal([Choice(MenuText.NotifyOffChoice)], ticked());
+    }
+
+    /// <summary>
+    /// A threshold none of the offers names, from a hand-edited settings.json, is shown as it is
+    /// and ticked, rather than snapped to the nearest offer or left unsaid.
+    /// </summary>
+    [Fact]
+    public void AnUnofferedThresholdIsShownAsItIs()
+    {
+        AvaloniaDispatcherTestSupport.ClaimUiThreadForThisThread();
+
+        var shell = RecordingShell.Create();
+        var submenu = NotifySubmenu(MenuWith(shell));
+
+        RunWork(submenu[1]);   // any choice, then the shell is told the file says 75
+        shell.Threshold = 75;
+        typeof(LinuxApp).GetMethod("SyncNotifyItems", BindingFlags.Instance | BindingFlags.NonPublic, [])!
+            .Invoke(Head, []);
+
+        Assert.True(submenu[0].IsVisible);
+        Assert.Equal(MenuText.ThresholdPercent(75), submenu[0].Header);
+        Assert.Equal([submenu[0]], submenu.Where(i => i.IsChecked));
+    }
+
+    /// <summary>
+    /// The clipboard "Copy diagnostics" writes to is reached through two members the toolkit
+    /// leaves out of its reference assemblies. If an update removes either, this fails, rather
+    /// than every copy on every desktop quietly reporting that it could not be done. With no
+    /// platform started there is no clipboard, and that is null, not an exception.
+    /// </summary>
+    [Fact]
+    public void TheApplicationClipboardIsReachedThroughMembersTheToolkitStillShips()
+    {
+        var current = typeof(Avalonia.AvaloniaLocator).GetProperty("Current", BindingFlags.Public | BindingFlags.Static);
+        Assert.NotNull(current);
+        Assert.NotNull(current!.GetValue(null)?.GetType()
+            .GetMethod("GetService", BindingFlags.Public | BindingFlags.Instance, [typeof(Type)]));
+
+        Assert.Null(typeof(LinuxApp)
+            .GetMethod("ApplicationClipboard", BindingFlags.Static | BindingFlags.NonPublic)!
+            .Invoke(null, []));
+    }
+
+    private static NativeMenuItem[] NotifySubmenu(NativeMenu menu) =>
+        [.. Assert.Single(menu.Items.OfType<NativeMenuItem>(), i => i.Header == MenuText.NotifyPrefix)
+            .Menu!.Items.OfType<NativeMenuItem>()];
+
+    private static NativeMenu MenuWith(RecordingShell shell) =>
+        (NativeMenu)typeof(LinuxApp)
+            .GetMethod("BuildMenu", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .Invoke(Head, [shell, ClientPlacement.From("x11", null, ":0")])!;
+
+    private static void RunWork(NativeMenuItem item)
+    {
+        var callback = Assert.IsType<BusCallback>(Assert.Single(ClickHandlersOf(item)).Target);
+        var work = (Action)callback.GetType()
+            .GetFields(BindingFlags.Instance | BindingFlags.NonPublic)
+            .Single(f => f.FieldType == typeof(Action))
+            .GetValue(callback)!;
+        work();
+    }
+
+    /// <summary>
+    /// A shell that records the two notification setters and answers them the way the engine
+    /// does, returning what it now holds. Everything else throws: the rows under test must not
+    /// need it.
+    /// </summary>
+    public class RecordingShell : DispatchProxy
+    {
+        public List<string> Calls { get; } = [];
+        public bool On { get; set; } = true;
+        public int Threshold { get; set; } = 70;
+        public bool RefuseToSwitchOn { get; set; }
+
+        public static RecordingShell Create() =>
+            (RecordingShell)(object)Create<ISkinToShell, RecordingShell>();
+
+        protected override object? Invoke(MethodInfo? method, object?[]? args)
+        {
+            switch (method!.Name)
+            {
+                case nameof(ISkinToShell.SetThresholdPercent):
+                    Calls.Add($"SetThresholdPercent({args![0]})");
+                    return Threshold = (int)args[0]!;
+
+                case nameof(ISkinToShell.SetNotifyOnThreshold):
+                    Calls.Add($"SetNotifyOnThreshold({args![0]})");
+                    return On = (bool)args[0]! && !RefuseToSwitchOn;
+
+                case "get_" + nameof(ISkinToShell.Settings):
+                    return new TraySettings(NotifyOnThreshold: On, ThresholdPercent: Threshold);
+
+                default:
+                    throw new NotSupportedException(method.Name);
+            }
+        }
     }
 
     /// <summary>
@@ -386,7 +561,10 @@ public class LinuxHeadWiringTests
 
         Assert.DoesNotContain(MenuText.ResetPanelPositionRow, headers);
         Assert.Equal(
-            [MenuText.ShowUsageRow, MenuText.RunAtStartupRow, PanelText.UsageRefreshBlockedRow, MenuText.ExitRow],
+            [
+                MenuText.ShowUsageRow, MenuText.RunAtStartupRow, MenuText.NotifyPrefix,
+                PanelText.UsageRefreshBlockedRow, MenuText.CopyDiagnosticsRow, MenuText.ExitRow,
+            ],
             headers);
     }
 
