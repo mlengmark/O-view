@@ -141,6 +141,27 @@ public class PanelGraphLayoutTests
         Assert.Equal(PlacementMode.Pointer, ToolTip.GetPlacement(bars[0]));
         Assert.Equal(PlacementMode.Left, ToolTip.GetPlacement(bars[^1]));
     }
+    /// <summary>
+    /// No bar's card is measured while the panel is built, only once the chart is arranged. On
+    /// Ubuntu, a card measured that early made the panel's own table figures measure wider, and
+    /// the longest ones wrapped in their cells.
+    /// </summary>
+    [Fact]
+    public void NoBarsCardIsMeasuredUntilTheChartIsArranged()
+    {
+        UseRealFonts();
+        var state = SampleStates.All.Single(s => s.Name == Typical);
+        var panel = new PanelContent(new LinuxPanelTheme(false)) { Density = PanelDensity.Normal };
+        panel.Populate(state.Snapshot, state.Stats, state.Account, state.Plan, state.Scope,
+            SampleStates.Now, state.Boost, SampleStates.Zone, state.CachedUsage, state.View);
+
+        Assert.All(BarsOf(ChartOf(panel)), bar => Assert.False(CardOf(bar).IsMeasureValid));
+
+        PanelSampleRenderer.LayOut(panel);
+
+        Assert.All(BarsOf(ChartOf(panel)), bar => Assert.True(CardOf(bar).IsMeasureValid));
+    }
+
     /// <summary>A day before install has no bar and no zero-height stand-in for one (F15).</summary>
     [Fact]
     public void ADayWithoutABarDrawsNothingAtAll()
