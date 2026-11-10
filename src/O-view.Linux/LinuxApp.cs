@@ -38,6 +38,15 @@ public sealed class LinuxApp : Application, IShellToSkin
 {
     private readonly FreedesktopNotifier _notifier = new();
     private readonly IThemeSource _theme = new PortalThemeSource();
+
+    /// <summary>
+    /// Whether the desktop wants the panel to animate, one per app because it is a fact about the
+    /// desktop, asked by each panel at the start of every motion.
+    /// </summary>
+    private readonly PortalAnimationSetting _animations = new();
+
+    /// <summary>The last animation setting written to the log, so a line is written only when it changes.</summary>
+    private string? _animationsLogged;
     private readonly IStartupRegistration _startup = new XdgAutostartRegistration();
 
     /// <summary>
@@ -201,6 +210,10 @@ public sealed class LinuxApp : Application, IShellToSkin
         // where dragging does nothing says in one line that it was meant to.
         _log?.Write($"remembered panel position: {(_placement.Allowed ? "available" : "unavailable")}"
                     + $", {_placement.Reason}");
+
+        // Off the UI thread, and answered long before anyone clicks: the first panel then moves,
+        // or does not, as the desktop says.
+        _animations.Start();
 
         _tray = new TrayIcon
         {
@@ -378,11 +391,14 @@ public sealed class LinuxApp : Application, IShellToSkin
     /// </summary>
     private void OnTrayClicked(ISkinToShell shell)
     {
-        switch (_toggle.Clicked(_panel?.IsVisible == true, DateTimeOffset.UtcNow))
+        // Whether the panel is open or arriving, not whether its window is mapped: a panel on its
+        // way out is still on screen, and a click then is a click on a closed panel, which brings
+        // it back from where it is.
+        switch (_toggle.Clicked(_panel?.IsOpen == true, DateTimeOffset.UtcNow))
         {
             case TrayClickOutcome.Close:
-                _panel!.Hide();
-                _log?.Write("panel hidden (tray click)");
+                // Logged by the panel once it has gone, as "panel hidden (tray click)".
+                _panel!.Leave("tray click");
                 break;
 
             case TrayClickOutcome.AlreadyClosed:
@@ -392,6 +408,15 @@ public sealed class LinuxApp : Application, IShellToSkin
                 break;
 
             default:
+                // A panel still leaving turns round where it is rather than being rebuilt and
+                // replayed from the edge.
+                if (_panel?.ComeBack() == true)
+                {
+                    _toggle.Opened();
+                    _log?.Write("panel turned back while leaving (tray click)");
+                    break;
+                }
+
                 ShowPanel(shell);
                 break;
         }
@@ -436,7 +461,8 @@ public sealed class LinuxApp : Application, IShellToSkin
             _panel = new PanelWindow(
                 new LinuxPanelTheme(_theme.IsPanelLight()),
                 _log,
-                PanelWindow.StoreFor(_placement, _panelPositions))
+                PanelWindow.StoreFor(_placement, _panelPositions),
+                () => _animations.AnimationsEnabled)
             {
                 // Carried onto the panel the row could not reach, and spent here: the reset is
                 // one request, not a standing setting.
@@ -453,7 +479,9 @@ public sealed class LinuxApp : Application, IShellToSkin
             // Attached after the window's own handler, so by the time this runs the panel has
             // already decided whether the focus loss hides it, and only a close it made is kept.
             var panel = _panel;
-            panel.Deactivated += (_, _) => _toggle.Deactivated(panel.IsVisible, DateTimeOffset.UtcNow);
+            // IsOpen rather than IsVisible: a focus loss starts the panel leaving, and a leaving
+            // panel is still mapped for the length of the leave.
+            panel.Deactivated += (_, _) => _toggle.Deactivated(panel.IsOpen, DateTimeOffset.UtcNow);
 
             // Before the show, which may deliver a deactivation of its own on some desktops.
             _toggle.Opened();
@@ -481,6 +509,15 @@ public sealed class LinuxApp : Application, IShellToSkin
             // display that still opens, so "panel opened" alone cannot tell the #143 defect
             // from a healthy click, and the runtime click test has nothing to fail on.
             _log?.Write($"panel opened uiThread={(Dispatcher.UIThread.CheckAccess() ? "true" : "false")}");
+
+            // Whether it moved, and what the desktop said: a report of a panel that "just appears"
+            // has to say whether it was told to.
+            var animations = _animations.Describe();
+            if (animations != _animationsLogged)
+            {
+                _animationsLogged = animations;
+                _log?.Write($"panel motion: animations {animations}");
+            }
         }
         catch (Exception ex)
         {

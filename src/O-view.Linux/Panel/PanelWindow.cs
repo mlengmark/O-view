@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Platform;
 using Avalonia.Threading;
 using OView.App;
@@ -98,6 +99,31 @@ public sealed class PanelWindow : Window
     /// <summary>Fills the panel from what <see cref="ShowWith"/> was last given, at the current density and view.</summary>
     private Action _populate = () => { };
 
+    /// <summary>Everything that moves in this panel moves through this, on one frame timer.</summary>
+    private readonly LinuxMotion _motion;
+
+    /// <summary>
+    /// How far the content sits from rest, in DIP, along the docked edge's axis: what the panel's
+    /// appearing and leaving move. Zero is rest, and at rest the content carries no transform at
+    /// all, so a panel that has arrived draws exactly as one that never moved.
+    /// </summary>
+    private readonly MotionValue _slide;
+
+    /// <summary>The transform <see cref="_slide"/> drives, made once and reused.</summary>
+    private readonly TranslateTransform _offset = new();
+
+    /// <summary>
+    /// Whether the panel sits at the bottom of the work area, so its content rises into view and
+    /// sinks out of it; false drops it from the top. Decided by each placement.
+    /// </summary>
+    private bool _fromBottom = true;
+
+    /// <summary>
+    /// Whether the panel is open or on its way in. False while it leaves, so a tray click during
+    /// the leave reads as a click on a closed panel, and brings it back (<see cref="ComeBack"/>).
+    /// </summary>
+    public bool IsOpen { get; private set; }
+
     /// <summary>The view the panel shows, set from the shell before each open.</summary>
     public PanelViewChoice ViewChoice { get; set; }
 
@@ -107,9 +133,18 @@ public sealed class PanelWindow : Window
     /// </summary>
     public Func<PanelViewChoice, PanelViewChoice>? SetViewChoice { get; set; }
 
-    public PanelWindow(LinuxPanelTheme theme, IAppLog? log = null, IPanelPositionStore? positions = null)
+    /// <param name="animationsOn">
+    /// Whether the desktop wants animations, asked at the start of every motion. Null is on.
+    /// </param>
+    public PanelWindow(
+        LinuxPanelTheme theme,
+        IAppLog? log = null,
+        IPanelPositionStore? positions = null,
+        Func<bool>? animationsOn = null)
     {
         _content = new PanelContent(theme);
+        _motion = new LinuxMotion(animationsOn ?? (() => true));
+        _slide = _motion.Value(0, ShowOffset);
         _content.BannerHidden += OnBannerHidden;
         _content.ViewChosen += OnViewChosen;
         _log = log;
@@ -230,6 +265,12 @@ public sealed class PanelWindow : Window
             boostNotices, cachedUsage: cachedUsage, view: ViewChoice);
         _populate();
         _dismissal.Opening();
+        IsOpen = true;
+
+        // Out of view before the first frame, so the panel is never seen at rest and then made
+        // to arrive. How far out depends on the height and the corner, which the placement below
+        // decides, so for now it is simply far enough to be past either edge.
+        _slide.Set(_motion.AnimationsOn ? OutOfViewBeforePlacementDip : 0);
 
         // Decided before Show, applied after it: the corner needs the panel's size, and
         // SizeToContent does not produce one until the window has been laid out. Choosing
@@ -254,7 +295,116 @@ public sealed class PanelWindow : Window
             FitAndPlace();
         }
 
+        Arrive();
         Activate();
+    }
+
+    /// <summary>
+    /// Far enough to put the content past either edge of any panel before its height is known.
+    /// Only ever on screen inside a window that clips it, and only until the placement.
+    /// </summary>
+    private const double OutOfViewBeforePlacementDip = 100_000;
+
+    /// <summary>
+    /// The content moves in from the docked edge to rest, with the Windows panel's figure and
+    /// curve. The window itself stays where it was put: a native Wayland compositor refuses a
+    /// client that moves its own window, so it is the content that travels, and the window's
+    /// edge is the edge it emerges from, exactly as on Windows.
+    /// </summary>
+    private void Arrive()
+    {
+        if (_slide.Current != 0)
+        {
+            _slide.Set(OutOfView());
+        }
+
+        _slide.To(0, PanelMotion.Ms(PanelMotion.SurfaceOpenBaseMs), PanelMotion.Decelerate);
+    }
+
+    /// <summary>
+    /// Puts the panel away: the content leaves through the docked edge, and the window is hidden
+    /// once it has gone. A leave that interrupts an arrival leaves from wherever the content has
+    /// got to. With the desktop's animations off the window is hidden at once.
+    ///
+    /// <para>The log line is written when the window is actually hidden, not when the leave
+    /// begins, so a leave a click turned back never claims a hide that did not happen.</para>
+    /// </summary>
+    public void Leave(string how)
+    {
+        if (!IsOpen)
+        {
+            return;   // already leaving, or already gone
+        }
+
+        IsOpen = false;
+        _slide.To(OutOfView(), PanelMotion.Ms(PanelMotion.SurfaceCloseBaseMs), PanelMotion.Accelerate, () =>
+        {
+            Hide();
+            _log?.Write($"panel hidden ({how})");
+        });
+    }
+
+    /// <summary>
+    /// Turns a leaving panel round: the content comes back from wherever it is, and the panel is
+    /// open again, focus and click-away included. Answers false when there is no leave to turn
+    /// round, a panel that is open, or one already hidden, which a fresh open handles instead.
+    ///
+    /// <para>The panel keeps what it was showing. It left a moment ago, and rebuilding it would be
+    /// the snap and replay this exists to avoid.</para>
+    /// </summary>
+    public bool ComeBack()
+    {
+        if (IsOpen || !_slide.InFlight)
+        {
+            return false;
+        }
+
+        IsOpen = true;
+        _dismissal.Opening();
+        _slide.To(0, PanelMotion.Ms(PanelMotion.SurfaceOpenBaseMs), PanelMotion.Decelerate);
+        Activate();
+        return true;
+    }
+
+    /// <summary>
+    /// Where the content waits to arrive and goes to leave: one full height past the docked edge,
+    /// below for a panel at the bottom of the work area and above for one at the top. The height
+    /// is the fit's, for the reason <see cref="FitToScreen"/> gives for never reading the
+    /// window's own.
+    /// </summary>
+    private double OutOfView()
+    {
+        var travel = _placedHeightDip > 0 ? _placedHeightDip : _content.NaturalHeightDip();
+        return _fromBottom ? travel : -travel;
+    }
+
+    /// <summary>
+    /// Whether a panel put somewhere by hand counts as docked at the bottom, so its content rises
+    /// in and sinks out: its middle is in the lower half of the work area. The corner rule needs
+    /// no such test, it names its corner; a dragged place is anywhere, and the nearer edge is the
+    /// one it reads as coming from.
+    /// </summary>
+    public static bool SitsLow(double topDip, double heightDip, DipBox workArea) =>
+        topDip + heightDip / 2 >= workArea.Y + workArea.Height / 2;
+
+    /// <summary>
+    /// Puts the content <paramref name="offsetDip"/> from rest, rounded to whole device pixels so
+    /// text carried along does not shimmer as the curve's long tail creeps to rest. At rest the
+    /// transform is taken off altogether.
+    /// </summary>
+    private void ShowOffset(double offsetDip)
+    {
+        var scale = RenderScaling > 0 ? RenderScaling : 1.0;
+        var snapped = Math.Round(offsetDip * scale) / scale;
+
+        if (snapped == 0)
+        {
+            _content.RenderTransform = null;
+            return;
+        }
+
+        _offset.Y = snapped;
+        _content.RenderTransform = _offset;
     }
 
     private void FitAndPlace()
@@ -301,7 +451,8 @@ public sealed class PanelWindow : Window
     }
 
     /// <summary>
-    /// Hides the panel and says which gesture did it.
+    /// Hides the panel and says which gesture did it, once its content has left
+    /// (<see cref="Leave"/>).
     ///
     /// <para>Hidden rather than closed, as the Windows panel is: the window survives to be shown
     /// again. What that leaves behind, one hidden window, still the application's, is what
@@ -311,11 +462,7 @@ public sealed class PanelWindow : Window
     /// <para>Logged because a dismissal is otherwise invisible: nothing else in a report
     /// distinguishes a panel the user put away from one that never came up.</para>
     /// </summary>
-    private void Dismiss(string how)
-    {
-        Hide();
-        _log?.Write($"panel hidden ({how})");
-    }
+    private void Dismiss(string how) => Leave(how);
 
     /// <summary>
     /// Makes the panel fit this screen, and answers how tall it now is in DIP.
@@ -438,6 +585,7 @@ public sealed class PanelWindow : Window
         }
 
         RequestPosition(place, scaling);
+        _fromBottom = SitsLow(place.TopDip, panelHeightDip, ToDipBox(screen.WorkingArea, scaling));
         _log?.Write(
             $"panel placement: where it was left, {place.LeftDip:0},{place.TopDip:0} dip on "
             + $"\"{screen.DisplayName}\" (panel {widthDip:0}x{panelHeightDip:0} dip, scale {scaling:0.##})");
@@ -515,6 +663,7 @@ public sealed class PanelWindow : Window
 
         _requestedPosition = new PixelPoint(left, top);
         Position = _requestedPosition.Value;
+        _fromBottom = corner != FlyoutCorner.TopRight;
 
         _log?.Write(
             $"panel placement: {corner} at {left},{top} on \"{screen.DisplayName}\" "
