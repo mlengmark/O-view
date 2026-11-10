@@ -132,6 +132,7 @@ public sealed class PanelContent : Border
             _tagViewTop = TagViewTop();
             ViewChosen?.Invoke(view);
         });
+        _localBlock.Use(PanelLocalBlock.Still());
 
         Width = PanelWidth;
         Background = theme["PanelBg"];
@@ -290,6 +291,18 @@ public sealed class PanelContent : Border
     private double? TagViewTop() =>
         _localBlock.PressedTag?.TranslatePoint(default, _root)?.Y - (Scrolls ? _viewport.Offset.Y : 0);
 
+    /// <summary>
+    /// What moves the local block: its turn, its fold and the switch's highlight. Left unset, nothing
+    /// moves and every change lands at once, which is what the verification renders need.
+    /// </summary>
+    public LinuxMotion Motion
+    {
+        set => _localBlock.Use(value);
+    }
+
+    /// <inheritdoc cref="PanelLocalBlock.Settle"/>
+    public void SettleMotion() => _localBlock.Settle();
+
     /// <inheritdoc cref="PanelLocalBlock.FocusChosenSegment"/>
     public void FocusChosenSegment() => _localBlock.FocusChosenSegment();
 
@@ -308,11 +321,16 @@ public sealed class PanelContent : Border
     /// <para>The measure is left invalidated afterwards so the next layout pass measures the
     /// tree against the constraint it is actually being laid out in, rather than keeping this
     /// unbounded answer.</para>
+    ///
+    /// <para>Measured at rest: mid-fold the window is fitted for the height the fold ends at.</para>
     /// </summary>
     public double NaturalHeightDip()
     {
-        Measure(Size.Infinity);
-        var wanted = DesiredSize.Height;
+        var wanted = _localBlock.AtRest(() =>
+        {
+            Measure(Size.Infinity);
+            return DesiredSize.Height;
+        });
         InvalidateMeasure();
         return wanted;
     }

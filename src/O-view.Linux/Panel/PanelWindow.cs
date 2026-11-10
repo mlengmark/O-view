@@ -151,7 +151,11 @@ public sealed class PanelWindow : Window
         IPanelPositionStore? positions = null,
         Func<bool>? animationsOn = null)
     {
-        _content = new PanelContent(theme);
+        _content = new PanelContent(theme)
+        {
+            // Inside the window, so only the desktop's setting decides, not a see-through window.
+            Motion = new LinuxMotion(() => animationsOn?.Invoke() ?? true),
+        };
         // Only a see-through window can show the card moving, see SeeThrough.
         _motion = new LinuxMotion(() => _seeThrough && (animationsOn?.Invoke() ?? true));
         _panelBackground = theme["PanelBg"];
@@ -163,7 +167,7 @@ public sealed class PanelWindow : Window
         _memory = positions is null ? null : new PanelPlacementMemory(positions);
 
         _settling = new PanelMoveSettling(
-            () => Position, place => Position = place, line => _log?.Write(line));
+            () => Position, place => Position = Docked(place), line => _log?.Write(line));
 
         _settle = new DispatcherTimer { Interval = PanelDrag.SettleGrace };
         _settle.Tick += (_, _) => GraceElapsed();
@@ -183,6 +187,16 @@ public sealed class PanelWindow : Window
         // Asked for, not assumed: the window is see-through only where the desktop composites,
         // and SeeThrough reads what was granted once the window exists.
         TransparencyLevelHint = [WindowTransparencyLevel.Transparent];
+
+        // The content's motions change the panel's height, and a panel at the bottom keeps its
+        // lower edge where it was placed, as the Windows panel re-docks on every frame of a fold.
+        _content.PropertyChanged += (_, e) =>
+        {
+            if (e.Property == BoundsProperty)
+            {
+                KeepDockedEdge();
+            }
+        };
 
         // Says whether the corner actually took. A window manager is free to ignore a
         // position request and a native Wayland compositor always will, so the difference
@@ -276,6 +290,10 @@ public sealed class PanelWindow : Window
         BoostNotices? boostNotices = null,
         CachedUtilization? cachedUsage = null)
     {
+        // Every open shows the view at rest, whatever a closed panel was in the middle of.
+        _content.SettleMotion();
+        _dockedBottomPx = null;
+
         _populate = () => _content.Populate(snapshot, stats, account, dataReport, scopeReport, utcNow,
             boostNotices, cachedUsage: cachedUsage, view: ViewChoice);
         _populate();
@@ -720,7 +738,7 @@ public sealed class PanelWindow : Window
             (int)Math.Round(size.Width * scaling),
             (int)Math.Round(size.Height * scaling));
 
-        _requestedPosition = new PixelPoint(left, top);
+        _requestedPosition = Docked(new PixelPoint(left, top), panelHeightDip, scaling);
         Position = _requestedPosition.Value;
         _fromBottom = corner != FlyoutCorner.TopRight;
 
@@ -794,6 +812,7 @@ public sealed class PanelWindow : Window
         // A place still waiting on an answer is about to be the wrong one: the panel is being
         // taken somewhere else, and the next drop decides where it belongs.
         _settling.Abandon();
+        _dockedBottomPx = null;
 
         _drag.Began();
         BeginMoveDrag(press);
@@ -988,9 +1007,45 @@ public sealed class PanelWindow : Window
     /// </summary>
     private void RequestPosition(PanelPlacementMemory.Resolved place, double scaling)
     {
-        _requestedPosition = ToPixels(place, scaling);
+        _requestedPosition = Docked(ToPixels(place, scaling), scaling: scaling);
         Position = _requestedPosition.Value;
     }
+
+    /// <summary>
+    /// The lower edge of a panel at the bottom of the work area, in device pixels: where the last
+    /// placement put it. Null until one has, and from the start of a drag until the drop is placed.
+    /// </summary>
+    private int? _dockedBottomPx;
+
+    /// <summary>Records <paramref name="at"/> as the panel's place, and so where its lower edge is, and answers it.</summary>
+    private PixelPoint Docked(PixelPoint at, double? heightDip = null, double? scaling = null)
+    {
+        _dockedBottomPx = at.Y + (int)Math.Round((heightDip ?? _placedHeightDip) * (scaling ?? RenderScaling));
+        return at;
+    }
+
+    /// <summary>
+    /// Re-places a panel at the bottom as its height changes, so its lower edge stays put while a
+    /// motion inside it grows or shrinks it. Not during a drag, which the window manager is
+    /// running, nor a panel at the top, whose top-left already stays put. At rest it asks nothing.
+    /// </summary>
+    private void KeepDockedEdge()
+    {
+        if (!_fromBottom || _drag.InFlight || !IsVisible || _dockedBottomPx is not { } bottom)
+        {
+            return;
+        }
+
+        var top = DockedTop(bottom, _content.Bounds.Height, RenderScaling);
+        if (top != Position.Y)
+        {
+            Position = new PixelPoint(Position.X, top);
+        }
+    }
+
+    /// <summary>Where the top of a panel <paramref name="heightDip"/> tall goes to put its lower edge at <paramref name="bottomPx"/>.</summary>
+    public static int DockedTop(int bottomPx, double heightDip, double scaling) =>
+        bottomPx - (int)Math.Round(heightDip * scaling);
 
     private static PixelPoint ToPixels(PanelPlacementMemory.Resolved place, double scaling) => new(
         (int)Math.Round(place.LeftDip * scaling),
