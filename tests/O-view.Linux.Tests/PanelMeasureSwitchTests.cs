@@ -46,7 +46,8 @@ public class PanelMeasureSwitchTests
     {
         var panel = Laid(Typical, light);
         var (output, overall) = Segments(panel);
-        var strip = Assert.IsType<Border>(output.GetVisualParent()!.GetVisualParent());
+        // The first border round the segments: between them stands only the layer the highlight slides on.
+        var strip = output.GetVisualAncestors().OfType<Border>().First();
         var footer = PanelSections.LocalFooter(State(Typical).Scope, State(Typical).View);
 
         Assert.Equal(footer.Options[0].Label, Word(output).Text);
