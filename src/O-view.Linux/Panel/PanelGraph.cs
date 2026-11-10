@@ -72,7 +72,7 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
         private readonly int _columns;
         private readonly double _barArea;
         private readonly Border _baseline;
-        private readonly List<(Border Bar, int Column, double Height)> _bars = [];
+        private readonly List<(Border Bar, double CardWidth, int Column, double Height)> _bars = [];
         private readonly List<(Border Line, TextBlock Date, int Column)> _weeks = [];
         private readonly TextBlock _today;
 
@@ -102,6 +102,7 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
 
         private void AddBars(LinuxPanelTheme theme, IReadOnlyList<PanelGraphColumnView> columns)
         {
+            var cards = new PanelHoverCard(theme);
             var last = columns.Count - 1;
 
             for (var i = 0; i <= last; i++)
@@ -124,9 +125,11 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
                     // rounding each bar's edges to whole pixels leaves the 31 gaps visibly uneven.
                     UseLayoutRounding = false,
                 };
-                ToolTip.SetTip(bar, $"{column.CardFigure} · {column.CardCaption}");
+                var card = cards.Figure(column.CardFigure, column.CardCaption);
+                card.Measure(Size.Infinity);
+                ToolTip.SetTip(bar, card);
                 Children.Add(bar);
-                _bars.Add((bar, i, Math.Max(PanelMetrics.GraphMinBarHeightDip, (_barArea - HeadroomDip) * column.Height)));
+                _bars.Add((bar, card.DesiredSize.Width, i, Math.Max(PanelMetrics.GraphMinBarHeightDip, (_barArea - HeadroomDip) * column.Height)));
             }
         }
 
@@ -148,13 +151,20 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
 
             _baseline.Arrange(new Rect(0, _barArea, width, 1));
 
-            foreach (var (bar, column, height) in _bars)
+            foreach (var (bar, cardWidth, column, height) in _bars)
             {
-                bar.Arrange(new Rect(
+                var box = new Rect(
                     column * slot + PanelMetrics.ChartBarInsetDip,
                     _barArea - height,
                     Math.Max(MinBarWidthDip, slot - 2 * PanelMetrics.ChartBarInsetDip),
-                    height));
+                    height);
+                bar.Arrange(box);
+
+                // At the pointer while the card has room right of the bar, otherwise beside the bar
+                // on its left: the chart spans the panel, so a late day's card would run past its
+                // edge. Only the side is set here, which needs no layout pass.
+                var fitsRight = box.Right + ToolTip.GetHorizontalOffset(bar) + cardWidth <= width;
+                ToolTip.SetPlacement(bar, fitsRight ? PlacementMode.Pointer : PlacementMode.Left);
             }
 
             var top = _barArea + AxisLabelTopDip;

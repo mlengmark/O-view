@@ -318,12 +318,38 @@ public class PanelModelFaceTests
         foreach (var i in trimmed)
         {
             Assert.Equal(TextTrimming.CharacterEllipsis, NameOf(table, i + 2).TextTrimming);
-            Assert.Equal(rows[i].Id, ToolTip.GetTip(CellPanel(table, i + 2)));
+            Assert.Equal(rows[i].Id, IdCardWords(CellPanel(table, i + 2)));
         }
 
         foreach (var figure in table.Children.OfType<TextBlock>().Where(t => Grid.GetColumn(t) > 0))
         {
             Assert.False(figure.TextLayout.TextLines.Any(l => l.HasCollapsed), $"[{figure.Text}] was trimmed");
+        }
+    }
+
+    /// <summary>
+    /// Every name, trimmed or not, has the panel's shared card with the model's full id in it,
+    /// wrapping rather than trimming so the id is whole.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void EveryNameCarriesItsFullIdInTheSharedCard(bool light)
+    {
+        var table = TableOf(Laid(Longest, light));
+        var rows = Face(Longest).Table.Rows;
+
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var card = Assert.IsType<Border>(ToolTip.GetTip(CellPanel(table, i + 2)));
+            var id = Assert.Single(card.GetLogicalDescendants().OfType<TextBlock>());
+
+            Assert.Equal(Hex("TooltipBg", light), Colour(card.Background));
+            Assert.Equal(Hex("TooltipBorder", light), Colour(card.BorderBrush));
+            Assert.Equal(rows[i].Id, id.Text);
+            Assert.Equal(TextWrapping.Wrap, id.TextWrapping);
+            Assert.Equal(TextTrimming.None, id.TextTrimming);
+            Assert.Equal(Hex("TextSecondary", light), Colour(id.Foreground));
         }
     }
 
@@ -664,6 +690,9 @@ public class PanelModelFaceTests
     private static ArcSegment ArcOf(Path arc) => Assert.IsType<ArcSegment>(Assert.Single(Figure(arc).Segments!));
 
     private static Border CardOf(Path arc) => Assert.IsType<Border>(ToolTip.GetTip(arc));
+
+    private static string? IdCardWords(DockPanel cell) =>
+        Assert.Single(Assert.IsType<Border>(ToolTip.GetTip(cell)).GetLogicalDescendants().OfType<TextBlock>()).Text;
 
     private static Size Measured(Path arc)
     {

@@ -41,6 +41,8 @@ internal sealed class PanelModelFace(LinuxPanelTheme theme)
 
     private readonly PanelDoughnut _doughnut = new(theme);
 
+    private readonly PanelHoverCard _cards = new(theme);
+
     /// <summary>Tightens the gaps and the rows with the rest of the panel; the rings and the type stay put.</summary>
     public void AddTo(StackPanel block, PanelModelFaceView view, double spacingScale)
     {
@@ -145,12 +147,12 @@ internal sealed class PanelModelFace(LinuxPanelTheme theme)
     }
 
     /// <summary>
-    /// The chip and the name. The one cell that may trim, with the full id a hover away: the
-    /// transparent fill is what lets the pointer find the cell beyond the end of a short name.
+    /// The chip and the name. The one cell that may trim, with the full id in the panel's hover
+    /// card: the transparent fill is what lets the pointer find the cell beyond the end of a short name.
     /// </summary>
     private DockPanel NameCell(PanelModelRowView row)
     {
-        var chip = PanelDoughnut.Chip(_doughnut.Swatch(row));
+        var chip = PanelHoverCard.Chip(_doughnut.Swatch(row));
         DockPanel.SetDock(chip, Dock.Left);
 
         var name = Text(row.Name, PanelMetrics.ModelTokensFontSize, theme["TextSecondary"]);
@@ -159,7 +161,7 @@ internal sealed class PanelModelFace(LinuxPanelTheme theme)
         name.VerticalAlignment = VerticalAlignment.Center;
 
         var cell = new DockPanel { Background = Brushes.Transparent };
-        ToolTip.SetTip(cell, row.Id);
+        ToolTip.SetTip(cell, _cards.Text(row.Id));
         cell.Children.Add(chip);
         cell.Children.Add(name);
         return cell;

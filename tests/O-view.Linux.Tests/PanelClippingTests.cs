@@ -29,13 +29,13 @@ namespace OView.Linux.Tests;
 /// figures and the widest model id.</para>
 ///
 /// <para>One exemption, a column rather than a state: a model's name in the model table trims
-/// when its id is longer than the column, and only while the full id is in a tooltip, as on
+/// when its id is longer than the column, and only while the full id is in its hover card, as on
 /// Windows.</para>
 ///
-/// <para><b>The doughnuts' hover cards are not in these trees.</b> They are popups, which a tree
-/// with no window cannot place, so what is pinned here is the side they open to and the room
-/// that side has; where they land in pixels is measured in a real window, which is a check this
-/// project's test run has no desktop for.</para>
+/// <para><b>The hover cards are not in these trees.</b> They are popups, which a tree with no
+/// window cannot place, so what is pinned here is the side each opens to and the room that side
+/// has; where they land in pixels is measured in a real window, which is a check this project's
+/// test run has no desktop for.</para>
 /// </summary>
 public class PanelClippingTests
 {
@@ -107,6 +107,53 @@ public class PanelClippingTests
     }
 
     // ── the check can fail ──────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Every mark's hover card, the chart's bars, the doughnuts' sections and the model names,
+    /// ends inside the panel on the side it opens to, wherever on the mark the pointer rests.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(EveryRender))]
+    public void EveryHoverCardEndsInsideThePanel(string render, bool light)
+    {
+        var panel = Laid(render, light);
+
+        NoneOf(CardsPastTheEdge(panel));
+    }
+
+    /// <summary>
+    /// And with a bar on all 31 days, which no sample state has: the bars in the middle of the
+    /// chart are the ones with the least room either side.
+    /// </summary>
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void EveryCardOfAFullMonthsChartEndsInsideThePanel(bool light, bool compact)
+    {
+        var panel = PanelGraphLayoutTests.Laid(
+            PanelGraphLayoutTests.EveryDayRecorded(), light, compact ? PanelDensity.Compact : PanelDensity.Normal);
+
+        Assert.Equal(31, PanelGraphLayoutTests.BarsOf(PanelGraphLayoutTests.ChartOf(panel)).Count);
+        NoneOf(CardsPastTheEdge(panel));
+    }
+
+    /// <summary>
+    /// The card check is not vacuous: the chart's last card, made to follow the pointer, runs past
+    /// the panel's side and is reported.
+    /// </summary>
+    [Fact]
+    public void ALateDaysCardOpeningRightIsReported()
+    {
+        var panel = Laid("typical", false);
+        NoneOf(CardsPastTheEdge(panel));
+
+        var last = PanelGraphLayoutTests.BarsOf(PanelGraphLayoutTests.ChartOf(panel))[^1];
+        ToolTip.SetPlacement(last, PlacementMode.Pointer);
+
+        Assert.Contains(CardsPastTheEdge(panel), miss => miss.Contains("past the panel", StringComparison.Ordinal));
+    }
 
     /// <summary>
     /// The edge check is not vacuous: an element pushed past the panel's side is reported, so
@@ -326,9 +373,9 @@ public class PanelClippingTests
 
             if (byDesign && (trims || Wanted(text) is not null))
             {
-                if (ToolTip.GetTip(cell!) is null)
+                if (!HoldsItWhole(ToolTip.GetTip(cell!)))
                 {
-                    misses.Add($"{Describe(text)} trims with no tooltip behind it");
+                    misses.Add($"{Describe(text)} trims with no tooltip behind it carrying its whole id");
                 }
 
                 continue;
@@ -352,6 +399,53 @@ public class PanelClippingTests
 
         return misses;
     }
+
+    /// <summary>
+    /// Every hover card that would end past the panel. A card at the pointer starts at worst from
+    /// its mark's far corner; one opening left ends at the mark's left edge, centred on it. In a
+    /// scroller only the sides are the edge, as for the marks themselves.
+    /// </summary>
+    private static List<string> CardsPastTheEdge(PanelContent panel)
+    {
+        var misses = new List<string>();
+        Walk(panel, mark =>
+        {
+            if (ToolTip.GetTip(mark) is not Border card || mark.TranslatePoint(default, panel) is not { } origin)
+            {
+                return;
+            }
+
+            card.Measure(Size.Infinity);
+            var (width, height) = (card.DesiredSize.Width, card.DesiredSize.Height);
+            var box = new Rect(origin, mark.Bounds.Size);
+            var sidesOnly = mark.GetVisualAncestors().Any(a => a is ScrollContentPresenter);
+
+            var (left, top) = ToolTip.GetPlacement(mark) switch
+            {
+                PlacementMode.Pointer => (box.Right + ToolTip.GetHorizontalOffset(mark), box.Bottom + ToolTip.GetVerticalOffset(mark)),
+                PlacementMode.Left => (box.Left - width, box.Center.Y - height / 2),
+                _ => (double.NaN, double.NaN),
+            };
+
+            if (double.IsNaN(left))
+            {
+                misses.Add($"{Describe(mark)}'s card opens {ToolTip.GetPlacement(mark)}, which this check does not place");
+            }
+            else if (left < -ToleranceDip || left + width > panel.Bounds.Width + ToleranceDip
+                     || (!sidesOnly && (top < -ToleranceDip || top + height > panel.Bounds.Height + ToleranceDip)))
+            {
+                misses.Add($"{Describe(mark)} at x {box.X:0.#}, y {box.Y:0.#} has a card past the panel: "
+                           + $"x {left:0.#}..{left + width:0.#}, y {top:0.#}..{top + height:0.#} in {panel.Bounds.Width:0.#} x {panel.Bounds.Height:0.#}");
+            }
+        });
+
+        return misses;
+    }
+
+    /// <summary>A hover card whose words wrap rather than trim, so whatever it carries is whole.</summary>
+    private static bool HoldsItWhole(object? tip) =>
+        tip is Border { Child: TextBlock { Text.Length: > 0, TextWrapping: TextWrapping.Wrap } words }
+        && words.TextTrimming == TextTrimming.None;
 
     /// <summary>How the text falls short of its slot, or null when it fits.</summary>
     private static string? Wanted(TextBlock text)
