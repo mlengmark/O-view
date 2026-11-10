@@ -44,14 +44,14 @@ internal sealed class PanelModelFace(LinuxPanelTheme theme)
     private readonly PanelHoverCard _cards = new(theme);
 
     /// <summary>The doughnuts last built, which <see cref="Sweep"/> fills in.</summary>
-    private PanelDoughnut.Doughnut[] _shown = [];
+    private PanelDoughnut.Ring[] _shown = [];
 
     /// <summary>Both doughnuts last built sweep in together, after <paramref name="delayMs"/>.</summary>
     public void Sweep(LinuxMotion motion, double delayMs)
     {
-        foreach (var doughnut in _shown)
+        foreach (var ring in _shown)
         {
-            _doughnut.Sweep(doughnut, motion, delayMs);
+            _doughnut.Sweep(ring, motion, delayMs);
         }
     }
 
@@ -60,10 +60,10 @@ internal sealed class PanelModelFace(LinuxPanelTheme theme)
     {
         var rows = view.Table.Rows;
 
-        var today = _doughnut.Build(view.Today, rows, cardOpensLeft: false);
-        var window = _doughnut.Build(view.Window, rows, cardOpensLeft: true);
+        var today = _doughnut.Build(view.Today, rows, cardOpensLeft: false, out var todayRing);
+        var window = _doughnut.Build(view.Window, rows, cardOpensLeft: true, out var windowRing);
         Grid.SetColumn(window, 2);
-        _shown = [today, window];
+        _shown = [todayRing, windowRing];
 
         var doughnuts = new Grid
         {

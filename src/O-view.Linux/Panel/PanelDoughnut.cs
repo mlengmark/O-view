@@ -48,7 +48,9 @@ internal sealed class PanelDoughnut(LinuxPanelTheme theme)
     /// <param name="view">The ring's total, caption and sections.</param>
     /// <param name="rows">The table's rows, which say each section's name and colour.</param>
     /// <param name="cardOpensLeft">True for the doughnut on the right, whose cards would otherwise cross the panel's edge.</param>
-    public Doughnut Build(PanelModelDoughnutView view, IReadOnlyList<PanelModelRowView> rows, bool cardOpensLeft)
+    /// <param name="swept">The ring, for <see cref="Sweep"/> to fill in.</param>
+    public StackPanel Build(
+        PanelModelDoughnutView view, IReadOnlyList<PanelModelRowView> rows, bool cardOpensLeft, out Ring swept)
     {
         var ring = new Canvas { Width = SizeDip, Height = SizeDip };
         foreach (var arc in Sections(view, rows, cardOpensLeft))
@@ -69,20 +71,15 @@ internal sealed class PanelDoughnut(LinuxPanelTheme theme)
         caption.HorizontalAlignment = HorizontalAlignment.Center;
         caption.Margin = new Thickness(caption.Margin.Left, CaptionGapDip, 0, 0);
 
-        var doughnut = new Doughnut(ring, view.Sections.Count > 0) { HorizontalAlignment = HorizontalAlignment.Center };
+        var doughnut = new StackPanel { HorizontalAlignment = HorizontalAlignment.Center };
         doughnut.Children.Add(layers);
         doughnut.Children.Add(caption);
+        swept = new Ring(ring, view.Sections.Count > 0);
         return doughnut;
     }
 
-    /// <summary>A built doughnut, holding on to its ring so the ring can be swept in.</summary>
-    internal sealed class Doughnut(Canvas ring, bool hasSections) : StackPanel
-    {
-        public Canvas Ring { get; } = ring;
-
-        /// <summary>False for an empty ring, which has nothing to sweep in.</summary>
-        public bool HasSections { get; } = hasSections;
-    }
+    /// <summary>A built doughnut's ring, and whether it has sections: an empty ring has nothing to sweep in.</summary>
+    internal sealed record Ring(Canvas Canvas, bool HasSections);
 
     /// <summary>
     /// The ring fills as one clockwise sweep from the top, after <paramref name="delayMs"/>. A cover
@@ -90,9 +87,9 @@ internal sealed class PanelDoughnut(LinuxPanelTheme theme)
     /// each section appears as the sweep passes it. The cover takes no pointer, so every section's
     /// card answers throughout, and it is gone once the sweep lands.
     /// </summary>
-    public void Sweep(Doughnut doughnut, LinuxMotion motion, double delayMs)
+    public void Sweep(Ring ring, LinuxMotion motion, double delayMs)
     {
-        if (!doughnut.HasSections)
+        if (!ring.HasSections)
         {
             return;
         }
@@ -105,11 +102,11 @@ internal sealed class PanelDoughnut(LinuxPanelTheme theme)
             StrokeThickness = CoverStrokeDip,
             IsHitTestVisible = false,
         };
-        doughnut.Ring.Children.Add(cover);
+        ring.Canvas.Children.Add(cover);
 
         motion.Value(0, reached => cover.Data = CoverAt(reached))
             .To(1, PanelMotion.Ms(PanelMotion.DoughnutSweepBaseMs), PanelMotion.Decelerate,
-                () => doughnut.Ring.Children.Remove(cover), delayMs);
+                () => ring.Canvas.Children.Remove(cover), delayMs);
     }
 
     /// <summary>The sweep's cover: a little wider than the ring, so it leaves no fringe either side.</summary>
