@@ -72,7 +72,7 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
         private readonly int _columns;
         private readonly double _barArea;
         private readonly Border _baseline;
-        private readonly List<(Border Bar, double CardWidth, int Column, double Height)> _bars = [];
+        private readonly List<(Border Bar, Border Card, int Column, double Height)> _bars = [];
         private readonly List<(Border Line, TextBlock Date, int Column)> _weeks = [];
         private readonly TextBlock _today;
 
@@ -126,10 +126,9 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
                     UseLayoutRounding = false,
                 };
                 var card = cards.Figure(column.CardFigure, column.CardCaption);
-                card.Measure(Size.Infinity);
                 ToolTip.SetTip(bar, card);
                 Children.Add(bar);
-                _bars.Add((bar, card.DesiredSize.Width, i, Math.Max(PanelMetrics.GraphMinBarHeightDip, (_barArea - HeadroomDip) * column.Height)));
+                _bars.Add((bar, card, i, Math.Max(PanelMetrics.GraphMinBarHeightDip, (_barArea - HeadroomDip) * column.Height)));
             }
         }
 
@@ -151,7 +150,7 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
 
             _baseline.Arrange(new Rect(0, _barArea, width, 1));
 
-            foreach (var (bar, cardWidth, column, height) in _bars)
+            foreach (var (bar, card, column, height) in _bars)
             {
                 var box = new Rect(
                     column * slot + PanelMetrics.ChartBarInsetDip,
@@ -163,7 +162,7 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
                 // At the pointer while the card has room right of the bar, otherwise beside the bar
                 // on its left: the chart spans the panel, so a late day's card would run past its
                 // edge. Only the side is set here, which needs no layout pass.
-                var fitsRight = box.Right + ToolTip.GetHorizontalOffset(bar) + cardWidth <= width;
+                var fitsRight = box.Right + ToolTip.GetHorizontalOffset(bar) + CardWidth(card) <= width;
                 ToolTip.SetPlacement(bar, fitsRight ? PlacementMode.Pointer : PlacementMode.Left);
             }
 
@@ -188,6 +187,19 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
             return finalSize;
         }
 
+        /// <summary>
+        /// A card's natural width, measured on its own the first time the chart is arranged, once
+        /// the panel's own text has been measured, and never while the panel is being built.
+        /// </summary>
+        private static double CardWidth(Border card)
+        {
+            if (!card.IsMeasureValid)
+            {
+                card.Measure(Size.Infinity);
+            }
+
+            return card.DesiredSize.Width;
+        }
         /// <summary>Layout rounding, left on, is what keeps a line at a fractional x to one crisp column.</summary>
         private static Border Hairline(LinuxPanelTheme theme) => new()
         {
