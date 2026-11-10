@@ -269,6 +269,32 @@ public class LinuxMotionTests
     }
 
     /// <summary>
+    /// Nothing outside the card is drawn while it moves: the window asks to be see-through, the
+    /// motion runs only where the desktop granted that, and a solid window is the panel as it
+    /// always was, at rest from its first frame. A solid window that let the card move would show
+    /// an empty box the size of the panel for the whole arrival and the whole leave.
+    /// </summary>
+    [Fact]
+    public void TheCardMovesOnlyInASeeThroughWindow()
+    {
+        var window = WithoutComments(Source("Panel", "PanelWindow.cs"));
+
+        Assert.Contains("TransparencyLevelHint = [WindowTransparencyLevel.Transparent];", window, StringComparison.Ordinal);
+        Assert.Contains("new LinuxMotion(() => _seeThrough && (animationsOn?.Invoke() ?? true))", window, StringComparison.Ordinal);
+
+        var seeThrough = Body(window, "SeeThrough");
+        Assert.Contains("_seeThrough = ActualTransparencyLevel == WindowTransparencyLevel.Transparent;", seeThrough, StringComparison.Ordinal);
+        Assert.Contains("Background = _seeThrough ? Brushes.Transparent : _panelBackground;", seeThrough, StringComparison.Ordinal);
+
+        // Read after the window exists and before the card is set moving.
+        var show = Body(window, "ShowWith");
+        var shown = show.IndexOf("Show();", StringComparison.Ordinal);
+        Assert.True(shown >= 0 && shown < show.IndexOf("SeeThrough();", StringComparison.Ordinal)
+                    && show.IndexOf("SeeThrough();", StringComparison.Ordinal) < show.IndexOf("Arrive();", StringComparison.Ordinal),
+            "the window's transparency is not read between the show and the arrival");
+    }
+
+    /// <summary>
     /// F56 at the tray icon: a click asks whether the panel is open or arriving, not whether its
     /// window is mapped, closes through the leave, and turns a leaving panel round rather than
     /// building a new one. The focus loss reaches the toggle the same way.

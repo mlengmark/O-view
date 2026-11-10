@@ -124,6 +124,15 @@ public sealed class PanelWindow : Window
     /// </summary>
     public bool IsOpen { get; private set; }
 
+    /// <summary>The panel's own colour, which the card always paints and the window paints only where it cannot be see-through.</summary>
+    private readonly IBrush? _panelBackground;
+
+    /// <summary>
+    /// Whether the desktop granted a see-through window, read after each show. False until then,
+    /// and false for good on a desktop that does not composite.
+    /// </summary>
+    private bool _seeThrough;
+
     /// <summary>The view the panel shows, set from the shell before each open.</summary>
     public PanelViewChoice ViewChoice { get; set; }
 
@@ -143,7 +152,9 @@ public sealed class PanelWindow : Window
         Func<bool>? animationsOn = null)
     {
         _content = new PanelContent(theme);
-        _motion = new LinuxMotion(animationsOn ?? (() => true));
+        // Only a see-through window can show the card moving, see SeeThrough.
+        _motion = new LinuxMotion(() => _seeThrough && (animationsOn?.Invoke() ?? true));
+        _panelBackground = theme["PanelBg"];
         _slide = _motion.Value(0, ShowOffset);
         _content.BannerHidden += OnBannerHidden;
         _content.ViewChosen += OnViewChosen;
@@ -167,7 +178,11 @@ public sealed class PanelWindow : Window
         // screen geometry to compute a corner from. Manual with no position set lands at
         // (0,0), which is worse than either.
         WindowStartupLocation = WindowStartupLocation.CenterScreen;
-        Background = theme["PanelBg"];
+        Background = _panelBackground;
+
+        // Asked for, not assumed: the window is see-through only where the desktop composites,
+        // and SeeThrough reads what was granted once the window exists.
+        TransparencyLevelHint = [WindowTransparencyLevel.Transparent];
 
         // Says whether the corner actually took. A window manager is free to ignore a
         // position request and a native Wayland compositor always will, so the difference
@@ -269,8 +284,10 @@ public sealed class PanelWindow : Window
 
         // Out of view before the first frame, so the panel is never seen at rest and then made
         // to arrive. How far out depends on the height and the corner, which the placement below
-        // decides, so for now it is simply far enough to be past either edge.
-        _slide.Set(_motion.AnimationsOn ? OutOfViewBeforePlacementDip : 0);
+        // decides, so for now it is simply far enough to be past either edge. Whether it moves at
+        // all is only known once the window exists; a panel that will not is put at rest in the
+        // same dispatcher job, before any frame is drawn.
+        _slide.Set(OutOfViewBeforePlacementDip);
 
         // Decided before Show, applied after it: the corner needs the panel's size, and
         // SizeToContent does not produce one until the window has been laid out. Choosing
@@ -282,6 +299,7 @@ public sealed class PanelWindow : Window
             : WindowStartupLocation.CenterScreen;
 
         Show();
+        SeeThrough();
 
         if (placeable)
         {
@@ -306,18 +324,35 @@ public sealed class PanelWindow : Window
     private const double OutOfViewBeforePlacementDip = 100_000;
 
     /// <summary>
-    /// The content moves in from the docked edge to rest, with the Windows panel's figure and
-    /// curve. The window itself stays where it was put: a native Wayland compositor refuses a
-    /// client that moves its own window, so it is the content that travels, and the window's
-    /// edge is the edge it emerges from, exactly as on Windows.
+    /// Makes the window see-through where the desktop granted it, so that while the card moves
+    /// nothing is drawn outside it, and answers nothing: a desktop that did not grant it gets the
+    /// solid window it always had and a panel that does not move.
+    ///
+    /// <para><b>Why moving needs this.</b> The card is what travels, the window stays put (a native
+    /// Wayland compositor refuses a client that moves its own window). A solid window would be on
+    /// screen at full size from the first frame, an empty box the card fills from below, and stay
+    /// as an empty box for the length of a leave. A see-through one shows only the card, emerging
+    /// from the window's edge as the Windows card does from its own.</para>
+    ///
+    /// <para>At rest the card covers the whole window in the same colour, so the two cases draw
+    /// the same pixels. Logged, because "the panel just appears" has two causes, the desktop's
+    /// setting and a desktop that does not composite, and a report has to say which.</para>
+    /// </summary>
+    private void SeeThrough()
+    {
+        _seeThrough = ActualTransparencyLevel == WindowTransparencyLevel.Transparent;
+        Background = _seeThrough ? Brushes.Transparent : _panelBackground;
+        _log?.Write($"panel window: {(_seeThrough ? "see-through, the card moves" : $"solid ({ActualTransparencyLevel}), the card does not move")}");
+    }
+
+    /// <summary>
+    /// The card moves in from the docked edge to rest, with the Windows panel's figure and curve.
+    /// It runs only in a see-through window (<see cref="SeeThrough"/>) with the desktop's
+    /// animations on; otherwise the card is simply at rest.
     /// </summary>
     private void Arrive()
     {
-        if (_slide.Current != 0)
-        {
-            _slide.Set(OutOfView());
-        }
-
+        _slide.Set(OutOfView());
         _slide.To(0, PanelMotion.Ms(PanelMotion.SurfaceOpenBaseMs), PanelMotion.Decelerate);
     }
 
