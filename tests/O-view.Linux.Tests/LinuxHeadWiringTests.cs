@@ -383,8 +383,12 @@ public class LinuxHeadWiringTests
                 MenuText.RunAtStartupRow,
                 MenuText.NotifyPrefix,
 
+                // Below the threshold, as on Windows, carrying what is in effect beside its
+                // words: "derived" until the first render reads an entry from the shell.
+                $"{MenuText.WeeklyResetRow}  {MenuText.WeeklyResetDerived}",
+
                 // Between the settings and the actions, as on Windows, and hidden until the
-                // refresh has blocked itself, so a person sees six rows.
+                // refresh has blocked itself, so a person sees seven rows.
                 PanelText.UsageRefreshBlockedRow,
                 MenuText.CopyDiagnosticsRow,
                 MenuText.ExitRow,
@@ -563,6 +567,7 @@ public class LinuxHeadWiringTests
         Assert.Equal(
             [
                 MenuText.ShowUsageRow, MenuText.RunAtStartupRow, MenuText.NotifyPrefix,
+                $"{MenuText.WeeklyResetRow}  {MenuText.WeeklyResetDerived}",
                 PanelText.UsageRefreshBlockedRow, MenuText.CopyDiagnosticsRow, MenuText.ExitRow,
             ],
             headers);

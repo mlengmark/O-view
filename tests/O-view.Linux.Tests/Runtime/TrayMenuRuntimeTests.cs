@@ -54,11 +54,14 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
     /// the absence is asserted in-process instead, where either session can be arranged.</para>
     ///
     /// <para>"Notify at" opens a submenu, whose rows are <see cref="TheThresholdChoices"/>.</para>
+    ///
+    /// <para>"Weekly reset…" carries what is in effect beside its words, and this job starts on a
+    /// fresh settings file, so what is in effect is the derived reset.</para>
     /// </summary>
     private static readonly string[] TheRowsTheHeadBuilds =
     [
-        "Show usage", "Reset panel position", "Run at startup", "Notify at", "Copy diagnostics",
-        "Exit O-view",
+        "Show usage", "Reset panel position", "Run at startup", "Notify at", "Weekly reset…  derived",
+        "Copy diagnostics", "Exit O-view",
     ];
 
     /// <summary>
@@ -257,6 +260,7 @@ public class TrayMenuRuntimeTests(ITestOutputHelper output)
                 "\"Reset panel position\" is not in the menu at all",
                 "\"Run at startup\" is not in the menu at all",
                 "\"Notify at\" is not in the menu at all",
+                "\"Weekly reset…  derived\" is not in the menu at all",
                 "\"Copy diagnostics\" is not in the menu at all",
                 "\"Exit O-view\" is not in the menu at all",
             },
