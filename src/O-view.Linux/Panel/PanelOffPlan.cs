@@ -44,21 +44,35 @@ internal sealed class PanelOffPlan(LinuxPanelTheme theme)
     /// with no way to follow it. The label still introduces it, because the sentence above
     /// ends by sending the reader somewhere and the address alone does not say where.</para>
     ///
-    /// <para>Hiding takes the card out at once, with no fold: this head adds no motion. Keeping
-    /// it hidden is the caller's, through <paramref name="onHidden"/>.</para>
+    /// <para>Hiding fades the card and folds it away with the Windows figures, the gap above it
+    /// going with it, then takes it out; with the desktop's animations off it goes at once. Keeping
+    /// it hidden is the caller's, through <paramref name="onHidden"/>, once the fold has landed.</para>
     /// </summary>
     public void AddBannerTo(
-        StackPanel root, PanelOffPlanBannerView banner, string hideLabel, PanelDensity density, Action onHidden)
+        StackPanel root, PanelOffPlanBannerView banner, string hideLabel, PanelDensity density,
+        LinuxMotion motion, Action onHidden)
     {
         var hide = HideControl(hideLabel);
         var card = HideableWarnCard(
             _theme, NaturalTilePadding * density.SpacingScale, hide,
             banner.Title, banner.Detail, $"{banner.LinkLabel}: {banner.LinkUrl}");
 
+        // Already asked for, and nothing here brings the banner back, so a second press during the
+        // fold has nothing to reverse: it ends where the first was heading.
+        var hiding = false;
         void Hide()
         {
-            root.Children.Remove(card);
-            onHidden();
+            if (hiding)
+            {
+                return;
+            }
+
+            hiding = true;
+            Fold(root, card, motion, () =>
+            {
+                root.Children.Remove(card);
+                onHidden();
+            });
         }
 
         hide.PointerPressed += (_, e) =>
@@ -86,6 +100,31 @@ internal sealed class PanelOffPlan(LinuxPanelTheme theme)
         };
 
         root.Children.Add(card);
+    }
+
+    /// <summary>A straight line: the banner fades out linearly, as on Windows.</summary>
+    private static readonly PanelMotion.Curve Linear = new(1.0 / 3, 1.0 / 3, 2.0 / 3, 2.0 / 3);
+
+    /// <summary>
+    /// The card fades ahead of its height, and the height folds to nothing on the leaving curve.
+    /// The bottom margin gives back the panel's spacing as it goes, so taking the folded card out
+    /// at the end moves nothing. Clipped while it folds, or the text would spill below it.
+    /// </summary>
+    private static void Fold(StackPanel root, Border card, LinuxMotion motion, Action folded)
+    {
+        var from = card.Bounds.Height;
+        var rest = card.Margin;
+        var gone = rest.Top + rest.Bottom + root.Spacing;
+        card.ClipToBounds = true;
+
+        motion.Value(1, opacity => card.Opacity = opacity)
+            .To(0, PanelMotion.Ms(PanelMotion.BannerFadeBaseMs), Linear);
+        motion.Value(0, travel =>
+            {
+                card.Height = from * (1 - travel);
+                card.Margin = new Thickness(rest.Left, rest.Top, rest.Right, rest.Bottom - gone * travel);
+            })
+            .To(1, PanelMotion.Ms(PanelMotion.BannerFoldBaseMs), PanelMotion.Accelerate, folded);
     }
 
     /// <summary>

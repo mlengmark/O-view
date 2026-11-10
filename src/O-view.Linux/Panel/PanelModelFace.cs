@@ -43,20 +43,34 @@ internal sealed class PanelModelFace(LinuxPanelTheme theme)
 
     private readonly PanelHoverCard _cards = new(theme);
 
+    /// <summary>The doughnuts last built, which <see cref="Sweep"/> fills in.</summary>
+    private PanelDoughnut.Ring[] _shown = [];
+
+    /// <summary>Both doughnuts last built sweep in together, after <paramref name="delayMs"/>.</summary>
+    public void Sweep(LinuxMotion motion, double delayMs)
+    {
+        foreach (var ring in _shown)
+        {
+            _doughnut.Sweep(ring, motion, delayMs);
+        }
+    }
+
     /// <summary>Tightens the gaps and the rows with the rest of the panel; the rings and the type stay put.</summary>
     public void AddTo(StackPanel block, PanelModelFaceView view, double spacingScale)
     {
         var rows = view.Table.Rows;
 
-        var window = _doughnut.Build(view.Window, rows, cardOpensLeft: true);
+        var today = _doughnut.Build(view.Today, rows, cardOpensLeft: false, out var todayRing);
+        var window = _doughnut.Build(view.Window, rows, cardOpensLeft: true, out var windowRing);
         Grid.SetColumn(window, 2);
+        _shown = [todayRing, windowRing];
 
         var doughnuts = new Grid
         {
             ColumnDefinitions = new ColumnDefinitions($"*,{DoughnutColumnGapDip},*"),
             Margin = new Thickness(0, DoughnutsGapAboveDip * spacingScale, 0, 0),
         };
-        doughnuts.Children.Add(_doughnut.Build(view.Today, rows, cardOpensLeft: false));
+        doughnuts.Children.Add(today);
         doughnuts.Children.Add(window);
         block.Children.Add(doughnuts);
 

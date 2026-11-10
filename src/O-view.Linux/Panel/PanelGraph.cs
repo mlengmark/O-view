@@ -35,6 +35,15 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
 
     private readonly LinuxPanelTheme _theme = theme;
 
+    /// <summary>What moves the bars. Until the block hands one over, a motion that never runs.</summary>
+    private LinuxMotion _motion = new(() => false, () => TimeSpan.Zero, _ => { });
+
+    /// <summary>The chart last built, which <see cref="Rise"/> moves and the next build's bars move on from.</summary>
+    private ChartSurface? _shown;
+
+    /// <summary>Moves the bars on <paramref name="motion"/> from the next build on.</summary>
+    public void Use(LinuxMotion motion) => _motion = motion;
+
     /// <summary>
     /// The chart, or null when there are no days to draw.
     ///
@@ -42,8 +51,15 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
     /// flat bar claims a measured day of no usage on a day that was never measured (rule 6). Its
     /// slot stays, so the week lines over it still line up.</para>
     /// </summary>
-    public Control? Chart(PanelLocalChartView chart, PanelDensity density)
+    /// <param name="moveFromShown">
+    /// True for the other measure's figures: every bar moves together from the height the last
+    /// chart's has on screen, so a second press turns them round where they are. False draws the
+    /// bars at rest, as any other rebuild of the panel must.
+    /// </param>
+    public Control? Chart(PanelLocalChartView chart, PanelDensity density, bool moveFromShown = false)
     {
+        var previous = _shown;
+        _shown = null;
         if (chart.Columns.Count == 0)
         {
             return null;
@@ -54,8 +70,20 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
         // spacing.
         var barArea = Math.Round(PanelMetrics.ChartHeightDip * density.GraphScale);
 
-        return new ChartSurface(_theme, chart, barArea);
+        _shown = new ChartSurface(_theme, chart, barArea, _motion);
+        if (moveFromShown && previous is not null && previous.Columns == chart.Columns.Count)
+        {
+            _shown.MoveFrom(previous);
+        }
+
+        return _shown;
     }
+
+    /// <summary>
+    /// The last chart's bars rise from the baseline, each <paramref name="startMs"/> of its turn
+    /// after the start, counting only the days that have a bar, as the Windows chart does.
+    /// </summary>
+    public void Rise(Func<int, double> startMs) => _shown?.Rise(startMs);
 
     /// <summary>
     /// The marks, placed against whatever width the panel's column turns out to be.
@@ -72,14 +100,18 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
         private readonly int _columns;
         private readonly double _barArea;
         private readonly Border _baseline;
-        private readonly List<(Border Bar, Border Card, int Column, double Height)> _bars = [];
+
+        /// <summary>Each bar, its card and column, and its height: at rest its target, mid-motion where it is.</summary>
+        private readonly List<(Border Bar, Border Card, int Column, MotionValue Height)> _bars = [];
         private readonly List<(Border Line, TextBlock Date, int Column)> _weeks = [];
         private readonly TextBlock _today;
+        private readonly LinuxMotion _motion;
 
-        public ChartSurface(LinuxPanelTheme theme, PanelLocalChartView chart, double barArea)
+        public ChartSurface(LinuxPanelTheme theme, PanelLocalChartView chart, double barArea, LinuxMotion motion)
         {
             _columns = chart.Columns.Count;
             _barArea = barArea;
+            _motion = motion;
 
             _baseline = Hairline(theme);
             Children.Add(_baseline);
@@ -128,7 +160,43 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
                 var card = cards.Figure(column.CardFigure, column.CardCaption);
                 ToolTip.SetTip(bar, card);
                 Children.Add(bar);
-                _bars.Add((bar, card, i, Math.Max(PanelMetrics.GraphMinBarHeightDip, (_barArea - HeadroomDip) * column.Height)));
+                var height = Math.Max(PanelMetrics.GraphMinBarHeightDip, (_barArea - HeadroomDip) * column.Height);
+                _bars.Add((bar, card, i, _motion.Value(height, _ => InvalidateArrange())));
+            }
+        }
+
+        /// <summary>How many days the chart spans, bars or not.</summary>
+        public int Columns => _columns;
+
+        /// <summary>Each day's bar height on screen now, null for a day with no bar.</summary>
+        private double? HeightAt(int column) =>
+            _bars.FirstOrDefault(b => b.Column == column) is { Bar: not null } found ? found.Height.Current : null;
+
+        /// <summary>
+        /// Every bar moves together from where <paramref name="previous"/>'s is on screen to its own
+        /// height. A day that had no bar there grows from the baseline, as it does on Windows.
+        /// </summary>
+        public void MoveFrom(ChartSurface previous)
+        {
+            var moveMs = PanelMotion.Ms(PanelMotion.ChartSeriesSwitchBaseMs);
+            foreach (var (_, _, column, height) in _bars)
+            {
+                var target = height.Target;
+                height.Set(previous.HeightAt(column) ?? 0);
+                height.To(target, moveMs, PanelMotion.Decelerate);
+            }
+        }
+
+        /// <inheritdoc cref="PanelGraph.Rise"/>
+        public void Rise(Func<int, double> startMs)
+        {
+            var riseMs = PanelMotion.Ms(PanelMotion.ChartBarRiseBaseMs);
+            var index = 0;
+            foreach (var (_, _, _, height) in _bars)
+            {
+                var target = height.Target;
+                height.Set(0);
+                height.To(target, riseMs, PanelMotion.Decelerate, delayMs: startMs(index++));
             }
         }
 
@@ -150,8 +218,9 @@ internal sealed class PanelGraph(LinuxPanelTheme theme)
 
             _baseline.Arrange(new Rect(0, _barArea, width, 1));
 
-            foreach (var (bar, card, column, height) in _bars)
+            foreach (var (bar, card, column, motion) in _bars)
             {
+                var height = motion.Current;
                 var box = new Rect(
                     column * slot + PanelMetrics.ChartBarInsetDip,
                     _barArea - height,

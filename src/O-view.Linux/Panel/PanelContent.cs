@@ -297,8 +297,18 @@ public sealed class PanelContent : Border
     /// </summary>
     public LinuxMotion Motion
     {
-        set => _localBlock.Use(value);
+        set
+        {
+            _motion = value;
+            _localBlock.Use(value);
+        }
     }
+
+    /// <summary>What folds the banner away; the same motion as the local block's.</summary>
+    private LinuxMotion _motion = PanelLocalBlock.Still();
+
+    /// <inheritdoc cref="PanelLocalBlock.Arrive"/>
+    public void Arrive() => _localBlock.Arrive();
 
     /// <inheritdoc cref="PanelLocalBlock.Settle"/>
     public void SettleMotion() => _localBlock.Settle();
@@ -391,7 +401,7 @@ public sealed class PanelContent : Border
         // signal is the more urgent of the two.
         if (plan.Banner is { } offPlanBanner)
         {
-            _offPlan.AddBannerTo(_root, offPlanBanner, plan.HideBannerLabel, Density, () => BannerHidden?.Invoke());
+            _offPlan.AddBannerTo(_root, offPlanBanner, plan.HideBannerLabel, Density, _motion, () => BannerHidden?.Invoke());
         }
 
         if (banner is not null)

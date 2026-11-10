@@ -125,7 +125,7 @@ internal sealed class PanelLocalBlock(LinuxPanelTheme theme, Action<PanelViewCho
         }
         else
         {
-            AddTotalsFace(built, totals, density, moving);
+            AddTotalsFace(built, totals, density, moving, folding);
         }
 
         _face[face] = built;
@@ -174,13 +174,14 @@ internal sealed class PanelLocalBlock(LinuxPanelTheme theme, Action<PanelViewCho
         Move(face, lit, turning, folding, reversing, slideFrom, tableFrom, facesFrom, facesWidth);
     }
 
-    private void AddTotalsFace(StackPanel block, PanelLocalTotalsView totals, PanelDensity density, bool moving)
+    /// <param name="switching">The other measure on the same face, whose bars move on from the old ones.</param>
+    private void AddTotalsFace(StackPanel block, PanelLocalTotalsView totals, PanelDensity density, bool moving, bool switching)
     {
         var scale = density.SpacingScale;
         var bodyGap = BodyGapDip * scale;
         var tableGap = PanelMetrics.ChartToTableGapDip * scale;
 
-        var chart = _graph.Chart(totals.Chart, density);
+        var chart = _graph.Chart(totals.Chart, density, moveFromShown: switching);
         if (chart is not null)
         {
             chart.Margin = new Thickness(0, bodyGap, 0, 0);
@@ -476,6 +477,7 @@ internal sealed class PanelLocalBlock(LinuxPanelTheme theme, Action<PanelViewCho
     public void Use(LinuxMotion motion)
     {
         _motion = motion;
+        _graph.Use(motion);
         _slide = motion.Value(1, ShowSlide);
         _outFade = motion.Value(1, ShowOutgoing);
         _inFade = motion.Value(1, ShowIncoming);
@@ -499,6 +501,23 @@ internal sealed class PanelLocalBlock(LinuxPanelTheme theme, Action<PanelViewCho
         _face[0] = _face[1] = null;
         _faceParts[0] = _faceParts[1] = [];
         _shownFace = _shownLit = null;
+    }
+
+    /// <summary>
+    /// The face's half of what plays as the panel arrives, counted from the start of its slide: the
+    /// chart's bars rise, or on the model face the doughnuts sweep in. Called only by an open, so a
+    /// rebuild for anything else, a hidden banner or a refresh, replays nothing.
+    /// </summary>
+    public void Arrive()
+    {
+        if (_shownFace == 1)
+        {
+            _modelFace.Sweep(_motion, PanelMotion.Ms(PanelMotion.DoughnutSweepOpenDelayBaseMs));
+        }
+        else
+        {
+            _graph.Rise(PanelMotion.ChartBarStartMs);
+        }
     }
 
     /// <summary>
@@ -565,7 +584,17 @@ internal sealed class PanelLocalBlock(LinuxPanelTheme theme, Action<PanelViewCho
 
         if (turning)
         {
+            // Only a face that had fully left fills in again; one a press caught leaving comes back as it is.
+            var fresh = !_faceOpacity[face].InFlight && _faceOpacity[face].Current == 0;
             Turn(face, facesFrom, facesWidth);
+            if (fresh && face == 1)
+            {
+                _modelFace.Sweep(_motion, PanelMotion.Ms(PanelMotion.DoughnutSweepDelayBaseMs));
+            }
+            else if (fresh)
+            {
+                _graph.Rise(PanelMotion.ChartBarBackStartMs);
+            }
         }
         else if (_facesPinned && _face[face] is { } coming)
         {
