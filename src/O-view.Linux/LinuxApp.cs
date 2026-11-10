@@ -113,6 +113,9 @@ public sealed class LinuxApp : Application, IShellToSkin
     private WeeklyResetDialog? _weeklyResetDialog;
     private TrayIcon? _tray;
     private PanelWindow? _panel;
+
+    /// <summary>Remembers the close a focus loss caused, which outlives the panel that closed.</summary>
+    private readonly TrayToggle _toggle = new();
     private CancellationTokenSource? _hostWatch;
 
     /// <summary>What keeps the icon off the bus until there is a reading to put in it.</summary>
@@ -206,7 +209,7 @@ public sealed class LinuxApp : Application, IShellToSkin
             IsVisible = true,
             Menu = BuildMenu(host.Shell, _placement),
         };
-        _tray.Clicked += OpenPanelHandler(host.Shell);
+        _tray.Clicked += TrayClickHandler(host.Shell);
 
         // Says a newer version exists; never downloads or runs anything (ADR-0009 as
         // amended). Without this the shell says it is time to check and nothing listens, which
@@ -347,9 +350,10 @@ public sealed class LinuxApp : Application, IShellToSkin
     public void RateCheckDue() => _ = _rates?.CheckAsync(ModelCatalog.Bundled);
 
     /// <summary>
-    /// The one way into the panel, marshalled onto the UI thread (issue #143). Both the tray
-    /// icon's click and the menu's first row are built from this, so there is a single
-    /// marshalling, a single panel path and a single log line behind either gesture.
+    /// The one way into the panel, marshalled onto the UI thread (issue #143). The menu's first
+    /// row is built from this, and the tray icon's click reaches the same <see cref="ShowPanel"/>
+    /// through <see cref="TrayClickHandler"/>, so there is a single panel path and a single log
+    /// line behind either gesture.
     ///
     /// <para>Its own method so the wiring is assertable without a session bus: the returned
     /// delegate's <c>Method.DeclaringType</c> is <see cref="BusCallback"/>, and a test can
@@ -359,6 +363,39 @@ public sealed class LinuxApp : Application, IShellToSkin
     /// </summary>
     internal EventHandler OpenPanelHandler(ISkinToShell shell) =>
         BusCallback.For(_dispatcher, () => ShowPanel(shell), _log);
+
+    /// <summary>
+    /// The tray icon's click, marshalled the same way: a toggle, where the menu's row only ever
+    /// opens. A row that reads "Show usage" must never put the usage away, and while the host's
+    /// menu is open the panel can still be on screen.
+    /// </summary>
+    internal EventHandler TrayClickHandler(ISkinToShell shell) =>
+        BusCallback.For(_dispatcher, () => OnTrayClicked(shell), _log);
+
+    /// <summary>
+    /// Opens the panel, or puts it away, as <see cref="TrayToggle"/> decides. UI thread only, for
+    /// the reason <see cref="ShowPanel"/> gives.
+    /// </summary>
+    private void OnTrayClicked(ISkinToShell shell)
+    {
+        switch (_toggle.Clicked(_panel?.IsVisible == true, DateTimeOffset.UtcNow))
+        {
+            case TrayClickOutcome.Close:
+                _panel!.Hide();
+                _log?.Write("panel hidden (tray click)");
+                break;
+
+            case TrayClickOutcome.AlreadyClosed:
+                // Logged, because otherwise a click that rightly did nothing reads in a report as
+                // a click that never arrived.
+                _log?.Write("tray click closed the panel (it had just lost the focus to the click)");
+                break;
+
+            default:
+                ShowPanel(shell);
+                break;
+        }
+    }
 
     /// <summary>
     /// Opens the detail panel, rebuilt for the current theme so a desktop switched between
@@ -412,6 +449,14 @@ public sealed class LinuxApp : Application, IShellToSkin
             };
 
             _forgetPanelPlaceOnNextOpen = false;
+
+            // Attached after the window's own handler, so by the time this runs the panel has
+            // already decided whether the focus loss hides it, and only a close it made is kept.
+            var panel = _panel;
+            panel.Deactivated += (_, _) => _toggle.Deactivated(panel.IsVisible, DateTimeOffset.UtcNow);
+
+            // Before the show, which may deliver a deactivation of its own on some desktops.
+            _toggle.Opened();
 
             // Both reports are inspected on open, not cached, so the banners describe the
             // machine as it is now rather than as it was at startup.
@@ -611,9 +656,10 @@ public sealed class LinuxApp : Application, IShellToSkin
         // which nothing on screen suggests (issue #315). A row reaches the panel on every SNI
         // host whatever that host does with clicks.
         //
-        // Deliberately the tray click's own handler rather than a second call to ShowPanel: one
-        // marshalling, one panel path, one "panel opened" line in the log, so a row that opens
-        // the panel differently from a click is not a state this file can get into.
+        // Deliberately the open handler a tray click runs when it opens, rather than a second call
+        // to ShowPanel: one panel path, one "panel opened" line in the log, so a row that opens
+        // the panel differently from a click is not a state this file can get into. Not the
+        // click's toggle, though: this row only ever opens (see TrayClickHandler).
         var showUsage = new NativeMenuItem(MenuText.ShowUsageRow);
         showUsage.Click += OpenPanelHandler(shell);
 

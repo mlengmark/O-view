@@ -28,6 +28,10 @@ internal sealed class PanelOffPlan(LinuxPanelTheme theme)
 
     private const double HideMarkStrokeDip = 1.44;
 
+    /// <summary>The keyboard focus ring around the hide control, and the rounding of its square.</summary>
+    private const double HideFocusRingDip = 1;
+    private const double HideFocusCornerDip = 3;
+
     private readonly LinuxPanelTheme _theme = theme;
 
     /// <summary>
@@ -51,6 +55,12 @@ internal sealed class PanelOffPlan(LinuxPanelTheme theme)
             _theme, NaturalTilePadding * density.SpacingScale, hide,
             banner.Title, banner.Detail, $"{banner.LinkLabel}: {banner.LinkUrl}");
 
+        void Hide()
+        {
+            root.Children.Remove(card);
+            onHidden();
+        }
+
         hide.PointerPressed += (_, e) =>
         {
             if (!e.GetCurrentPoint(hide).Properties.IsLeftButtonPressed)
@@ -59,8 +69,20 @@ internal sealed class PanelOffPlan(LinuxPanelTheme theme)
             }
 
             e.Handled = true;
-            root.Children.Remove(card);
-            onHidden();
+            Hide();
+        };
+
+        // The keys a button answers, so the control is not mouse-only: the Windows banner's hide
+        // is a button and takes both.
+        hide.KeyDown += (_, e) =>
+        {
+            if (e.Key is not (Key.Enter or Key.Space))
+            {
+                return;
+            }
+
+            e.Handled = true;
+            Hide();
         };
 
         root.Children.Add(card);
@@ -96,7 +118,28 @@ internal sealed class PanelOffPlan(LinuxPanelTheme theme)
             VerticalAlignment = VerticalAlignment.Top,
             Margin = new Thickness(0, 7, 8, 0),
             Cursor = Application.Current is null ? null : new Cursor(StandardCursorType.Hand),
+            CornerRadius = new CornerRadius(HideFocusCornerDip),
+            Focusable = true,
+            IsTabStop = true,
             Child = mark,
+        };
+
+        // A ring while the keyboard holds it, because this head registers no theme to draw a
+        // focus adorner, and a control Tab lands on invisibly cannot be found. Not on a pointer
+        // press, which hides the banner in the same gesture. The mark is centred, so the border's
+        // width does not move it.
+        hide.GotFocus += (_, e) =>
+        {
+            if (e.NavigationMethod is NavigationMethod.Tab or NavigationMethod.Directional)
+            {
+                hide.BorderBrush = _theme["WarnText"];
+                hide.BorderThickness = new Thickness(HideFocusRingDip);
+            }
+        };
+        hide.LostFocus += (_, _) =>
+        {
+            hide.BorderBrush = null;
+            hide.BorderThickness = default;
         };
 
         AutomationProperties.SetName(hide, label);

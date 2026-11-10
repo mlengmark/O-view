@@ -144,7 +144,7 @@ public class LinuxHeadWiringTests
     {
         // The shell argument is only dereferenced when the work runs, and nothing here runs
         // it, so no store is opened and no path on this machine is touched.
-        Assert.Equal(typeof(BusCallback), OpenPanelHandler().Method.DeclaringType);
+        Assert.Equal(typeof(BusCallback), TrayClickHandler().Method.DeclaringType);
     }
 
     /// <summary>
@@ -191,14 +191,16 @@ public class LinuxHeadWiringTests
     }
 
     /// <summary>
-    /// The row that opens the panel does it through the <i>same</i> handler the icon's click
-    /// does (issue #315), rather than through a second call to the same private method.
+    /// The row that opens the panel does it through the open handler the icon's click runs
+    /// whenever it opens (issue #315), rather than through a second call to the same private
+    /// method. The icon's click is not that handler itself, only routed to it: the click is a
+    /// toggle, and a row reading "Show usage" must only ever open.
     ///
-    /// <para>Asserted as the work the two <see cref="BusCallback"/>s wrap, which is the only
-    /// part a copy would differ in: both delegates declare <c>BusCallback</c> whatever they
-    /// were built from, so the sweep above would be just as green if the row opened a panel of
-    /// its own, with its own marshalling to get wrong, and its own "panel opened" line to
-    /// mislead whoever read the log after the next report.</para>
+    /// <para>Asserted as the work the <see cref="BusCallback"/>s wrap, which is the only part a
+    /// copy would differ in: every such delegate declares <c>BusCallback</c> whatever it was
+    /// built from, so the sweep above would be just as green if the row opened a panel of its
+    /// own, with its own marshalling to get wrong, and its own "panel opened" line to mislead
+    /// whoever read the log after the next report.</para>
     /// </summary>
     [Fact]
     public void TheRowThatOpensThePanelRunsTheIconClicksOwnHandler()
@@ -209,12 +211,19 @@ public class LinuxHeadWiringTests
         Assert.Equal(
             WorkBehind(OpenPanelHandler()),
             WorkBehind(Assert.Single(ClickHandlersOf(row))));
+
+        Assert.NotEqual(WorkBehind(OpenPanelHandler()), WorkBehind(TrayClickHandler()));
     }
 
-    /// <summary>The handler the head attaches to the tray icon, built with no shell (see above).</summary>
-    private static EventHandler OpenPanelHandler() =>
+    /// <summary>The handler the head attaches to the menu's Show usage row, built with no shell (see above).</summary>
+    private static EventHandler OpenPanelHandler() => Handler("OpenPanelHandler");
+
+    /// <summary>The handler the head attaches to the tray icon's click, built with no shell (see above).</summary>
+    private static EventHandler TrayClickHandler() => Handler("TrayClickHandler");
+
+    private static EventHandler Handler(string name) =>
         (EventHandler)typeof(LinuxApp)
-            .GetMethod("OpenPanelHandler", BindingFlags.Instance | BindingFlags.NonPublic)!
+            .GetMethod(name, BindingFlags.Instance | BindingFlags.NonPublic)!
             .Invoke(Head, [null])!;
 
     /// <summary>

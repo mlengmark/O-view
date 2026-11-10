@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using OView.Linux.Panel;
 using OView.Presentation.Text;
 using Tmds.DBus.Protocol;
 using Xunit.Abstractions;
@@ -50,6 +51,11 @@ namespace OView.Linux.Tests.Runtime;
 /// coming up (issue #312). One click could never see it: the first open has nothing to close.
 /// <see cref="ASecondOpenAfterADismissalShowsThePanelAgainInsteadOfEndingTheApp"/> is the pair of
 /// opens, with the dismissal in between.</para>
+///
+/// <para><b>And the icon as a toggle.</b> A click while the panel is open closes it, including the
+/// click whose own press has just taken the focus and with it the panel;
+/// <see cref="ASecondClickClosesThePanelAndAClickAfterItHasClosedOpensItAgain"/> drives both over
+/// the bus.</para>
 ///
 /// <para>Runs only in the <c>linux-runtime</c> job, which provides the display
 /// (<c>xvfb-run</c>), the bus (<c>dbus-run-session</c>) and <c>OVIEW_LINUX_RUNTIME=1</c>.
@@ -138,6 +144,30 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     /// precedes the new window, so this is a settling period, not a measurement.
     /// </summary>
     private static readonly TimeSpan TheShutdownWouldHaveLanded = TimeSpan.FromSeconds(2);
+
+    /// <summary>The line <c>LinuxApp</c> writes when a tray click put an open panel away.</summary>
+    private const string ClosedByTheClickLogLine = "panel hidden (tray click)";
+
+    /// <summary>
+    /// The line <c>LinuxApp</c> writes when a tray click found the panel just closed by the focus
+    /// the click itself took, and so did nothing.
+    /// </summary>
+    private const string ClosedByTheFocusLossLogLine = "tray click closed the panel";
+
+    /// <summary>
+    /// Comfortably past the window in which a click counts as the close half of the toggle, so the
+    /// next click is a deliberate one.
+    /// </summary>
+    private static readonly TimeSpan PastTheToggleGrace = TrayToggle.Grace + TimeSpan.FromMilliseconds(600);
+
+    /// <summary>
+    /// How long a click that should leave the panel closed is watched for a reopen. A reopen is a
+    /// <c>panel opened</c> line, written within a frame or two of the click on this runner.
+    /// </summary>
+    private static readonly TimeSpan NoReopen = TimeSpan.FromSeconds(2);
+
+    /// <summary>Names the toggle test's app folder, its saved log and its notes.</summary>
+    private const string TheToggle = "ASecondClickClosesThePanel";
 
     /// <summary>How long Exit O-view has to end the process once the row has been clicked.</summary>
     private static readonly TimeSpan ExitPatience = TimeSpan.FromSeconds(10);
@@ -300,6 +330,11 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
 
         var dismissed = await DismissThePanelAsync(app);
 
+        // A person clicking again, not the click whose own press took the focus: one landing
+        // within the toggle's grace of the dismissal is rightly taken as its close half, and this
+        // test is about a reopen.
+        await Task.Delay(PastTheToggleGrace);
+
         await app.WaitForAsync(
             Activate(area, item), Patience, "the item to answer the second left click");
 
@@ -333,6 +368,99 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     }
 
     /// <summary>
+    /// The icon as a toggle, over the real bus: a click while the panel is open closes it, a later
+    /// click opens it again, and a click arriving straight after the focus has left the panel
+    /// leaves it closed rather than bringing it back.
+    ///
+    /// <para><b>The last half is the case the 400 ms exists for.</b> On a desktop, pressing the icon
+    /// takes the focus from the panel, which hides itself, and only then does the click arrive.
+    /// Here the focus is taken by hand and the click sent at once after it. Which of the two the
+    /// app sees first is the desktop's business, and both orders must end with the panel closed:
+    /// the focus first, and the click finds it just closed; the click first, and it finds it open
+    /// and closes it. So the assertion is the outcome, no new <c>panel opened</c> line, and the
+    /// order that happened is written beside the app's log for a reader.</para>
+    ///
+    /// <para>The display has no window manager, so the panel is never activated by itself and a
+    /// click while it is open is the only thing that closes it in the first half.</para>
+    /// </summary>
+    [Fact]
+    public async Task ASecondClickClosesThePanelAndAClickAfterItHasClosedOpensItAgain()
+    {
+        if (!InRuntimeJob) return;
+
+        await using var host = await StandInTrayHost.StartAsync();
+        await using var app = await LinuxAppProcess.StartAsync(output, TheToggle);
+
+        await app.WaitForLogAsync(LinuxAppProcess.IconRenderedLogLine, Patience);
+
+        var item = await app.WaitForAsync(
+            host.WaitForItemAsync(Patience), Patience, "the icon to reach the notification area");
+
+        using var area = new DBusConnection(SessionBusAddress());
+        await area.ConnectAsync();
+
+        async Task OpensAsync(int occurrence, string what)
+        {
+            await app.WaitForAsync(Activate(area, item), Patience, $"the item to answer {what}");
+            await app.WaitForAsync(
+                WaitForLogLineAsync(app, PanelOpenedLogLine, occurrence, PanelPatience),
+                PanelPatience + Grace,
+                $"the panel to open on {what}");
+        }
+
+        await OpensAsync(occurrence: 1, "the first click");
+
+        // The panel is up: the second click puts it away, and does not build another.
+        await app.WaitForAsync(Activate(area, item), Patience, "the item to answer the second click");
+        await app.WaitForAsync(
+            WaitForLogLineAsync(app, ClosedByTheClickLogLine, occurrence: 1, PanelPatience),
+            PanelPatience + Grace,
+            "the second click to close the open panel");
+        await AssertNoReopenAsync(app, opensSoFar: 1, "the second click, which closed the panel");
+
+        // A deliberate click after it closed opens it as before.
+        await Task.Delay(PastTheToggleGrace);
+        await OpensAsync(occurrence: 2, "a click after the panel had been closed");
+
+        // The press-then-click order: the focus leaves the panel, and the click follows at once.
+        var how = await DismissWithTheFocusAsync();
+        await app.WaitForAsync(
+            Activate(area, item), Patience, "the item to answer the click straight after the focus left");
+        await AssertNoReopenAsync(app, opensSoFar: 2, "a click straight after the focus left the panel");
+
+        var lines = LogLines(app);
+        var order =
+            lines.Any(l => l.Contains(ClosedByTheFocusLossLogLine, StringComparison.Ordinal))
+                ? "the focus loss hid the panel first and the click found it just closed"
+            : lines.Count(l => l.Contains(ClosedByTheClickLogLine, StringComparison.Ordinal)) > 1
+                ? "the click found the panel still open and closed it itself (the focus loss came "
+                  + "later, or never hid it)"
+                : "neither the toggle's line nor a second tray-click close was written";
+        SaveToArtifacts(TheToggle, $"{how}; then a click: {order}.");
+
+        // And once the grace is over, the next click is a new one.
+        await Task.Delay(PastTheToggleGrace);
+        await OpensAsync(occurrence: 3, "a click after the focus had closed the panel");
+
+        Assert.False(app.HasExited, "o-view exited while its tray icon was being clicked open and closed");
+    }
+
+    /// <summary>
+    /// Waits <see cref="NoReopen"/> and fails if the panel opened again in that time, the icon
+    /// behaving as a switch that only opens.
+    /// </summary>
+    private static async Task AssertNoReopenAsync(LinuxAppProcess app, int opensSoFar, string after)
+    {
+        await Task.Delay(NoReopen);
+
+        var opens = LogLines(app).Count(l => l.Contains(PanelOpenedLogLine, StringComparison.Ordinal));
+        Assert.True(
+            opens == opensSoFar,
+            $"the panel opened again after {after}: {opens} \"{PanelOpenedLogLine}\" lines where "
+            + $"{opensSoFar} were expected, so the click reopened it instead of closing it.");
+    }
+
+    /// <summary>
     /// Puts the panel away the way a click on the desktop does, and says whether it took.
     ///
     /// <para><b>Best effort, deliberately.</b> A dismissal that does not take leaves the panel on
@@ -351,12 +479,13 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
                 DismissalPatience + Grace,
                 "the panel to hide once the focus had gone");
 
-            SaveToArtifacts($"the panel was dismissed, {how}, and the app wrote: {hidden}");
+            SaveToArtifacts(TheSecondOpen, $"the panel was dismissed, {how}, and the app wrote: {hidden}");
             return true;
         }
         catch (Exception ex)
         {
             SaveToArtifacts(
+                TheSecondOpen,
                 $"the panel was NOT dismissed, {how}, and no \"{PanelHiddenLogLine}\" line arrived "
                 + $"within {DismissalPatience.TotalSeconds:0} s ({ex.GetType().Name}: {ex.Message})."
                 + $"{Environment.NewLine}The second open below therefore closes a panel that is still "
@@ -476,7 +605,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
     ///
     /// <para>Does nothing outside the job, which does not set the variable.</para>
     /// </summary>
-    private void SaveToArtifacts(string what)
+    private void SaveToArtifacts(string test, string what)
     {
         output.WriteLine(what);
 
@@ -488,7 +617,7 @@ public class TrayClickRuntimeTests(ITestOutputHelper output)
         try
         {
             Directory.CreateDirectory(directory);
-            File.WriteAllText(Path.Combine(directory, $"{TheSecondOpen}.dismissal.txt"), what);
+            File.WriteAllText(Path.Combine(directory, $"{test}.dismissal.txt"), what);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
                                        or ArgumentException or NotSupportedException)
