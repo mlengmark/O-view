@@ -37,24 +37,9 @@ internal sealed class PanelDoughnut(LinuxPanelTheme theme)
     /// <summary>The greys <see cref="PanelPalette"/> states; a model past the last takes it again.</summary>
     private const int TailGreys = 4;
 
-    /// <summary>
-    /// How wide a card's words may run: narrow enough that the widest card, a long model id, still
-    /// ends inside the panel from either doughnut.
-    /// </summary>
-    internal const double CardMaxWidthDip = 190;
-
     private static readonly double Circumference = 2 * Math.PI * Radius;
 
-    /// <summary>A model's colour chip, the size the Windows panel gives it, with the gap before its name.</summary>
-    internal static Border Chip(IBrush colour) => new()
-    {
-        Width = 8,
-        Height = 8,
-        CornerRadius = new CornerRadius(2),
-        Background = colour,
-        VerticalAlignment = VerticalAlignment.Center,
-        Margin = new Thickness(0, 0, 6, 0),
-    };
+    private readonly PanelHoverCard _cards = new(theme);
 
     /// <summary>The colour a table row wears: the same on its chip, its sections and its card.</summary>
     public IBrush Swatch(PanelModelRowView row) =>
@@ -117,7 +102,7 @@ internal sealed class PanelDoughnut(LinuxPanelTheme theme)
                 view.Sections.Count == 1 ? WholeRing() : Arc(along, span - PanelMetrics.DoughnutSectionGapDip),
                 Swatch(row));
 
-            ToolTip.SetTip(arc, Card(row, section));
+            ToolTip.SetTip(arc, _cards.ModelFigure(row.Name, Swatch(row), section.Figure, section.ShareLine, section.ValueLine));
             if (cardOpensLeft)
             {
                 ToolTip.SetPlacement(arc, PlacementMode.Left);
@@ -126,56 +111,6 @@ internal sealed class PanelDoughnut(LinuxPanelTheme theme)
             yield return arc;
             along += span;
         }
-    }
-
-    /// <summary>
-    /// A section's card: the Windows panel's, with the model's chip and name above the figure,
-    /// because a ring says which model only by colour. The name wraps rather than trims, so a raw
-    /// id is whole here. Its surface is its own because this head has no theme to draw a tooltip's.
-    /// </summary>
-    private Border Card(PanelModelRowView row, PanelModelSectionView section)
-    {
-        var chip = Chip(Swatch(row));
-        chip.VerticalAlignment = VerticalAlignment.Top;
-        chip.Margin = new Thickness(0, 3, chip.Margin.Right, 0);
-        DockPanel.SetDock(chip, Dock.Left);
-
-        var heading = new DockPanel();
-        heading.Children.Add(chip);
-        heading.Children.Add(Text(row.Name, 11, theme["TextSecondary"]));
-
-        var figure = Text(section.Figure, 15, theme["TextPrimary"], FontWeight.SemiBold);
-        figure.Margin = new Thickness(0, 2, 0, 0);
-
-        var caption = Text($"{section.ShareLine}\n{section.ValueLine}", 10, theme["TextMuted"]);
-        caption.Margin = new Thickness(0, 3, 0, 0);
-
-        var content = new StackPanel { MaxWidth = CardMaxWidthDip };
-        content.Children.Add(heading);
-        content.Children.Add(figure);
-        content.Children.Add(caption);
-
-        var card = new Border
-        {
-            Background = theme["TooltipBg"],
-            BorderBrush = theme["TooltipBorder"],
-            BorderThickness = new Thickness(1),
-            CornerRadius = new CornerRadius(6),
-            Padding = new Thickness(9, 7),
-            Child = content,
-        };
-
-        // With no theme the popup window behind the card is opaque white, which would show at the
-        // rounded corners. The card always sits over the panel, so the panel's colour hides them.
-        card.AttachedToVisualTree += (_, _) =>
-        {
-            if (TopLevel.GetTopLevel(card) is { } popup)
-            {
-                popup.Background = theme["PanelBg"];
-            }
-        };
-
-        return card;
     }
 
     private TextBlock CentreLine(string text, double size, string brush, FontWeight weight)

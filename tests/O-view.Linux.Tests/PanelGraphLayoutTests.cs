@@ -2,6 +2,7 @@ using System.Reflection;
 
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.LogicalTree;
 using Avalonia.Media;
 using Avalonia.VisualTree;
 using OView.App.Rendering;
@@ -81,8 +82,84 @@ public class PanelGraphLayoutTests
                 bar.Opacity,
                 6);
             Assert.Equal(Hex(index == last ? "AccentBg" : "Series1", light), Colour(bar.Background));
-            Assert.Equal($"{column.CardFigure} · {column.CardCaption}", ToolTip.GetTip(bar));
+            Assert.Equal($"{column.CardFigure} · {column.CardCaption}", CardWords(bar));
         }
+    }
+
+    /// <summary>
+    /// A bar's card is the panel's shared card in the Windows bar card's shape: the figure, large,
+    /// with the caption Presentation built for it muted beneath.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ABarsCardIsTheSharedCardWithTheFigureOverItsCaption(bool light)
+    {
+        var columns = OutputChart(Typical).Columns.Where(c => c.HasBar);
+
+        foreach (var (bar, column) in BarsOf(ChartOf(Laid(Typical, light, PanelDensity.Normal))).Zip(columns))
+        {
+            var card = CardOf(bar);
+            var lines = card.GetLogicalDescendants().OfType<TextBlock>().ToList();
+
+            Assert.Equal(Hex("TooltipBg", light), Colour(card.Background));
+            Assert.Equal(Hex("TooltipBorder", light), Colour(card.BorderBrush));
+            Assert.Equal(new CornerRadius(6), card.CornerRadius);
+            Assert.Equal([column.CardFigure, column.CardCaption], lines.Select(t => t.Text));
+
+            Assert.Equal(15, lines[0].FontSize);
+            Assert.Equal(FontWeight.SemiBold, lines[0].FontWeight);
+            Assert.Equal(Hex("TextPrimary", light), Colour(lines[0].Foreground));
+            Assert.Equal(10, lines[1].FontSize);
+            Assert.Equal(Hex("TextMuted", light), Colour(lines[1].Foreground));
+        }
+    }
+
+    /// <summary>
+    /// A card opens at the pointer while it has room right of its bar, and beside the bar on its
+    /// left after that, so the early days follow the pointer and the late ones open inwards. No
+    /// sample state has all 31 days, so this is laid out on one that does.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TheEarlyDaysCardsFollowThePointerAndTheLateOnesOpenLeft(bool compact)
+    {
+        var chart = ChartOf(Laid(EveryDayRecorded(), false, compact ? PanelDensity.Compact : PanelDensity.Normal));
+        var bars = BarsOf(chart);
+
+        Assert.Equal(31, bars.Count);
+        foreach (var bar in bars)
+        {
+            var card = CardOf(bar);
+            card.Measure(Size.Infinity);
+            var fitsRight = bar.Bounds.Right + ToolTip.GetHorizontalOffset(bar) + card.DesiredSize.Width <= chart.Bounds.Width;
+
+            Assert.Equal(fitsRight ? PlacementMode.Pointer : PlacementMode.Left, ToolTip.GetPlacement(bar));
+        }
+
+        Assert.Equal(PlacementMode.Pointer, ToolTip.GetPlacement(bars[0]));
+        Assert.Equal(PlacementMode.Left, ToolTip.GetPlacement(bars[^1]));
+    }
+    /// <summary>
+    /// No bar's card is measured while the panel is built, only once the chart is arranged. On
+    /// Ubuntu, a card measured that early made the panel's own table figures measure wider, and
+    /// the longest ones wrapped in their cells.
+    /// </summary>
+    [Fact]
+    public void NoBarsCardIsMeasuredUntilTheChartIsArranged()
+    {
+        UseRealFonts();
+        var state = SampleStates.All.Single(s => s.Name == Typical);
+        var panel = new PanelContent(new LinuxPanelTheme(false)) { Density = PanelDensity.Normal };
+        panel.Populate(state.Snapshot, state.Stats, state.Account, state.Plan, state.Scope,
+            SampleStates.Now, state.Boost, SampleStates.Zone, state.CachedUsage, state.View);
+
+        Assert.All(BarsOf(ChartOf(panel)), bar => Assert.False(CardOf(bar).IsMeasureValid));
+
+        PanelSampleRenderer.LayOut(panel);
+
+        Assert.All(BarsOf(ChartOf(panel)), bar => Assert.True(CardOf(bar).IsMeasureValid));
     }
 
     /// <summary>A day before install has no bar and no zero-height stand-in for one (F15).</summary>
@@ -200,7 +277,7 @@ public class PanelGraphLayoutTests
         var overall = Tips(PanelSections.LocalTotals(state.Stats, state.Snapshot, SampleStates.Zone, state.View).Chart);
 
         Assert.NotEqual(overall, output);
-        Assert.Equal(overall, BarsOf(ChartOf(Laid(state.Name, false, PanelDensity.Normal))).Select(b => (string)ToolTip.GetTip(b)!));
+        Assert.Equal(overall, BarsOf(ChartOf(Laid(state.Name, false, PanelDensity.Normal))).Select(CardWords));
     }
 
     // ── the column ──────────────────────────────────────────────────────────────────
@@ -279,11 +356,13 @@ public class PanelGraphLayoutTests
 
     // ── building the panels ─────────────────────────────────────────────────────────
 
-    private static PanelContent Laid(string name, bool light, PanelDensity density)
+    private static PanelContent Laid(string name, bool light, PanelDensity density) =>
+        Laid(SampleStates.All.Single(s => s.Name == name), light, density);
+
+    internal static PanelContent Laid(SampleState state, bool light, PanelDensity density)
     {
         UseRealFonts();
 
-        var state = SampleStates.All.Single(s => s.Name == name);
         var panel = new PanelContent(new LinuxPanelTheme(light)) { Density = density };
         panel.Populate(state.Snapshot, state.Stats, state.Account, state.Plan, state.Scope,
             SampleStates.Now, state.Boost, SampleStates.Zone, state.CachedUsage, state.View);
@@ -301,6 +380,20 @@ public class PanelGraphLayoutTests
     private static List<string> Tips(PanelLocalChartView chart) =>
         chart.Columns.Where(c => c.HasBar).Select(c => $"{c.CardFigure} · {c.CardCaption}").ToList();
 
+    /// <summary>
+    /// The typical state with every one of the 31 days recorded, each as busy as its busiest, so
+    /// every bar is drawn and every card is the widest that state has.
+    /// </summary>
+    internal static SampleState EveryDayRecorded()
+    {
+        var typical = SampleStates.All.Single(s => s.Name == Typical);
+        var busiest = typical.Stats.DailySeries.MaxBy(d => d.OutputTokens)!;
+        var series = typical.Stats.DailySeries
+            .Select(d => d with { PreInstall = false, OutputTokens = busiest.OutputTokens, BilledTokens = busiest.BilledTokens })
+            .ToList();
+
+        return typical with { Stats = typical.Stats with { DailySeries = series, RecordedDays = series.Count } };
+    }
     /// <summary>The surface the marks stand on: the one parent <c>today</c> can have.</summary>
     internal static Control ChartOf(Control panel) =>
         Assert.IsAssignableFrom<Control>(Words(panel, TokenText.ChartTodayLabel).GetVisualParent());
@@ -308,6 +401,12 @@ public class PanelGraphLayoutTests
     /// <summary>The bars, oldest first: the marks with a hover card.</summary>
     internal static List<Border> BarsOf(Control chart) =>
         chart.GetVisualChildren().OfType<Border>().Where(b => ToolTip.GetTip(b) is not null).ToList();
+
+    /// <summary>A bar's card, as one line: its figure, then its caption.</summary>
+    internal static string CardWords(Border bar) =>
+        string.Join(" · ", CardOf(bar).GetLogicalDescendants().OfType<TextBlock>().Select(t => t.Text));
+
+    internal static Border CardOf(Border bar) => Assert.IsType<Border>(ToolTip.GetTip(bar));
 
     /// <summary>The baseline, then the week lines.</summary>
     private static List<Border> Hairlines(Control chart) =>
