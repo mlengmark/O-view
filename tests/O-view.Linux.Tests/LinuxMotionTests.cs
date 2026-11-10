@@ -284,7 +284,7 @@ public class LinuxMotionTests
 
         var seeThrough = Body(window, "SeeThrough");
         Assert.Contains("_seeThrough = ActualTransparencyLevel == WindowTransparencyLevel.Transparent;", seeThrough, StringComparison.Ordinal);
-        Assert.Contains("Background = _seeThrough ? Brushes.Transparent : _panelBackground;", seeThrough, StringComparison.Ordinal);
+        Assert.DoesNotContain("Background", seeThrough, StringComparison.Ordinal);
 
         // Read after the window exists and before the card is set moving.
         var show = Body(window, "ShowWith");
@@ -292,6 +292,32 @@ public class LinuxMotionTests
         Assert.True(shown >= 0 && shown < show.IndexOf("SeeThrough();", StringComparison.Ordinal)
                     && show.IndexOf("SeeThrough();", StringComparison.Ordinal) < show.IndexOf("Arrive();", StringComparison.Ordinal),
             "the window's transparency is not read between the show and the arrival");
+    }
+
+    /// <summary>
+    /// At rest the window is solid, as it always was: the card's rounded corners would otherwise
+    /// show the desktop where today they show the panel colour. The window is cleared only as a
+    /// motion starts, through the one method that moves the card, and painted again in that
+    /// motion's landing, which a motion that does not run reaches at once. Nothing else clears it.
+    /// </summary>
+    [Fact]
+    public void TheWindowIsSolidAtRestAndSeeThroughOnlyWhileTheCardMoves()
+    {
+        var window = WithoutComments(Source("Panel", "PanelWindow.cs"));
+
+        Assert.Contains("Background = _panelBackground;", Body(window, "PanelWindow"), StringComparison.Ordinal);
+
+        var slide = Body(window, "Slide");
+        var cleared = slide.IndexOf("Background = Brushes.Transparent;", StringComparison.Ordinal);
+        var moves = slide.IndexOf("_slide.To(", StringComparison.Ordinal);
+        var restored = slide.IndexOf("Background = _panelBackground;", StringComparison.Ordinal);
+        Assert.True(cleared >= 0 && cleared < moves && moves < restored,
+            "Slide no longer clears the window as the card starts and paints it again as it lands");
+        Assert.True(restored < slide.IndexOf("landed?.Invoke();", StringComparison.Ordinal),
+            "the window is painted again only after the landing, which a hide would skip past");
+
+        Assert.Single(Regex.Matches(window, @"Background = Brushes\.Transparent;"));
+        Assert.Single(Regex.Matches(window, @"_slide\.To\("));
     }
 
     /// <summary>

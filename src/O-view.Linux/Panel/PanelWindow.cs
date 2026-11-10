@@ -324,9 +324,9 @@ public sealed class PanelWindow : Window
     private const double OutOfViewBeforePlacementDip = 100_000;
 
     /// <summary>
-    /// Makes the window see-through where the desktop granted it, so that while the card moves
-    /// nothing is drawn outside it, and answers nothing: a desktop that did not grant it gets the
-    /// solid window it always had and a panel that does not move.
+    /// Reads whether the desktop granted a see-through window, which decides whether the card may
+    /// move at all: a desktop that did not grant it gets the solid window it always had and a
+    /// panel that does not move.
     ///
     /// <para><b>Why moving needs this.</b> The card is what travels, the window stays put (a native
     /// Wayland compositor refuses a client that moves its own window). A solid window would be on
@@ -334,14 +334,17 @@ public sealed class PanelWindow : Window
     /// as an empty box for the length of a leave. A see-through one shows only the card, emerging
     /// from the window's edge as the Windows card does from its own.</para>
     ///
-    /// <para>At rest the card covers the whole window in the same colour, so the two cases draw
-    /// the same pixels. Logged, because "the panel just appears" has two causes, the desktop's
-    /// setting and a desktop that does not composite, and a report has to say which.</para>
+    /// <para><b>Only while it moves.</b> The window is cleared when a motion starts and painted
+    /// again when the card lands (<see cref="Slide"/>), so at rest it is the solid window it has
+    /// always been. That matters at the card's rounded corners: a window left see-through would
+    /// show the desktop there, where today it shows the panel colour.</para>
+    ///
+    /// <para>Logged, because "the panel just appears" has two causes, the desktop's setting and a
+    /// desktop that does not composite, and a report has to say which.</para>
     /// </summary>
     private void SeeThrough()
     {
         _seeThrough = ActualTransparencyLevel == WindowTransparencyLevel.Transparent;
-        Background = _seeThrough ? Brushes.Transparent : _panelBackground;
         _log?.Write($"panel window: {(_seeThrough ? "see-through, the card moves" : $"solid ({ActualTransparencyLevel}), the card does not move")}");
     }
 
@@ -353,7 +356,28 @@ public sealed class PanelWindow : Window
     private void Arrive()
     {
         _slide.Set(OutOfView());
-        _slide.To(0, PanelMotion.Ms(PanelMotion.SurfaceOpenBaseMs), PanelMotion.Decelerate);
+        Slide(0, PanelMotion.Ms(PanelMotion.SurfaceOpenBaseMs), PanelMotion.Decelerate);
+    }
+
+    /// <summary>
+    /// Moves the card to <paramref name="target"/>, with the window see-through for exactly the
+    /// length of the motion: cleared as it starts, solid again as it lands, before
+    /// <paramref name="landed"/> runs. A motion that does not run (animations off, or a window
+    /// that could not be see-through) lands within this call, so the window is never left clear.
+    /// A motion replaced by another drops its landing, and the new one restores the window.
+    /// </summary>
+    private void Slide(double target, double durationMs, PanelMotion.Curve curve, Action? landed = null)
+    {
+        if (_seeThrough)
+        {
+            Background = Brushes.Transparent;
+        }
+
+        _slide.To(target, durationMs, curve, () =>
+        {
+            Background = _panelBackground;
+            landed?.Invoke();
+        });
     }
 
     /// <summary>
@@ -372,7 +396,7 @@ public sealed class PanelWindow : Window
         }
 
         IsOpen = false;
-        _slide.To(OutOfView(), PanelMotion.Ms(PanelMotion.SurfaceCloseBaseMs), PanelMotion.Accelerate, () =>
+        Slide(OutOfView(), PanelMotion.Ms(PanelMotion.SurfaceCloseBaseMs), PanelMotion.Accelerate, () =>
         {
             Hide();
             _log?.Write($"panel hidden ({how})");
@@ -396,7 +420,7 @@ public sealed class PanelWindow : Window
 
         IsOpen = true;
         _dismissal.Opening();
-        _slide.To(0, PanelMotion.Ms(PanelMotion.SurfaceOpenBaseMs), PanelMotion.Decelerate);
+        Slide(0, PanelMotion.Ms(PanelMotion.SurfaceOpenBaseMs), PanelMotion.Decelerate);
         Activate();
         return true;
     }
