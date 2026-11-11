@@ -18,7 +18,7 @@ mixed together throughout, and they are not equally binding:
 | **Windows presentation**: *where* a surface appears and how it moves. Docked placement, `PopupPositioner`, work-area insets, the slide in and out, foreground/`AttachThreadInput` handling, `Shell_NotifyIcon` behaviour, Segoe glyph avoidance | **The Windows head only** | `O-view.Tray` |
 
 Read every section below as Windows presentation unless it is describing content. Where Linux
-**cannot** meet a section, it is noted inline rather than left to be inferred, the four real divergences are the tooltip (§1), the panel's placement (§2), the menu (§3) and motion (§4). The panel's layout is not one of them: both heads draw the two blocks described in §2.
+**cannot** meet a section, it is noted inline rather than left to be inferred, the real divergences are the tooltip (§1), the panel's placement (§2) and the menu (§3); motion (§4) is shared except for the menu. The panel's layout is not one of them: both heads draw the two blocks described in §2.
 
 The Linux head's own constraints are [ADR-0013](adr/0013-linux-ui-toolkit.md) and the [tray
 spike](findings/linux-tray-spike.md). Nothing in this document has been verified on Linux
@@ -255,10 +255,10 @@ Below the header, two blocks sit directly on the panel's surface, the full 368 w
 
 **The Linux head.** It reads the same view models in the same order, with the same measurements from `PanelMetrics` and the same colours from `PanelPalette`, and differs as follows:
 
-- **No motion.** The panel appears and disappears at once, the Output | Overall switch and the flip tag change the block in a single step, the banner goes when its control is pressed, and the bars and arcs are drawn complete. Section 4 is Windows only for this reason.
+- **Motion on the same figures, moved differently.** Section 4's figures and curves run on Linux too, through `LinuxMotion`. The panel's window is never moved (a native Wayland compositor refuses a client that moves its own window), so only the content slides, from the edge the panel is docked to; the window is see-through where the desktop composites, and where it is not the panel appears at once instead of showing an empty box. A bottom-docked panel keeps its lower edge while its height moves. The desktop's own animation setting decides whether anything moves.
 - **Width.** The panel's 1 px border is drawn inside the 400, so the content column is 366 wide at the natural density and beside the scroll bar, and 378 at the compact density, as measured when the chart was fitted to it. The Windows figures above are the Windows head's.
-- **The chart has no reset lines.** It has the Monday hairlines and dates, `today`, and no bar for a day before install. A bar's hover text is plain text, the figure and its caption on one line, and a model's name in the table carries its full id the same way. A doughnut section's hover card is the shared card with the model's chip and name, and the 31-day ring's opens to the left.
-- **Keyboard and pointer.** Each segment of the switch can take keyboard focus. The banner's `×` answers a pointer press only.
+- **The chart has no reset lines.** It has the Monday hairlines and dates, `today`, and no bar for a day before install. A bar's hover card is the shared figure card, the figure large with its day muted beneath, and a model's name in the table carries its full id on the shared text card. A doughnut section's hover card is the shared card with the model's chip and name, and the 31-day ring's opens to the left. Every card ends inside the panel.
+- **Keyboard and pointer.** Each segment of the switch can take keyboard focus. The banner's `×` is a tab stop and answers a pointer press, Enter and Space, with a focus ring only when the keyboard put the focus there.
 - **The short renders.** The panel is photographed short on the model face only, `offplan-on-models-short`, which is the tallest state that shows it; there is no `offplan-on-short` on Linux. `typical-compact` is drawn on both heads.
 - **The view is remembered the same way**, through the shell, so a Linux restart opens on the Output or Overall, totals or models, and hidden banner the reader left.
 
@@ -294,7 +294,7 @@ Any figure whose window exceeds recorded history shows coverage: `3 of 31 days r
 >
 > `--popup-samples` renders the graph's cards standalone as `graph-hover-cards-<theme>.png`, for the same reason `--tile-samples` renders the model-name card standalone: a `ToolTip` cannot be given a parent, so it appears in no screenshot of the panel, and hover is the only way to reach one in the running app.
 
-**On Linux** a doughnut section's card is the shared shape, built in `PanelDoughnut` with the model's chip and name above the figure. A bar's hover text and a model's full id are plain tooltip strings, not the card.
+**On Linux** every card is built in `PanelHoverCard`: a doughnut section's with the model's chip and name above the figure, a bar's as the figure over its caption, and a model's full id as a wrapping line of text.
 
 **Hover timing.** Applied to **each** element that carries a tooltip, by `HoverCard.ApplyTiming`. Setting these once on the control and relying on property inheritance looks right and silently does not work, the bar segments resolved to framework values instead. That is invisible in a screenshot, which is why `--tile-samples` writes a `hover-timing.txt` reporting what actually resolves on a model name cell.
 
@@ -312,7 +312,7 @@ Any figure whose window exceeds recorded history shows coverage: `3 of 31 days r
 
 ### Usage graph
 
-**Both heads draw the chart described in *The panel: two flat blocks*, above:** a bar per day for the trailing 31 days, a hairline and date at every Monday, `today` at the right-hand end, no bar at all for a day before install, and hover text per bar: a card on Windows, plain text on Linux. The daily totals come from the rollup store ([ADR-0006](adr/0006-local-rollup-store.md)).
+**Both heads draw the chart described in *The panel: two flat blocks*, above:** a bar per day for the trailing 31 days, a hairline and date at every Monday, `today` at the right-hand end, no bar at all for a day before install, and hover text per bar: a hover card on both heads. The daily totals come from the rollup store ([ADR-0006](adr/0006-local-rollup-store.md)).
 
 The earlier chart is gone from both: it drew dotted lines at the plan's weekly reset, or at Monday midnight as a labelled fallback until a reset had been seen, with a hover card each, rotated date labels under every column, and a light-to-dark blue banding within each week. The plan's weekly reset is now stated only by the Weekly meter's reset line, which is exact and never `~`; the chart claims nothing about it. Days before install are blank slots, never zero-height bars, which would misread as idle days (CLAUDE.md rule 6).
 
@@ -350,7 +350,7 @@ The banner also carries a link to Claude's own usage settings, the address Claud
 
 **The model limit has three sample states** (`model-limit`, `model-limit-spend` and `model-limit-spend-unknown`), the only ones with a model bar: the bar with its section hidden because nothing was reported, the bar with a reported figure beside $92.75 of recorded credit estimate that it must ignore, and the bar with extra usage on and no `spend`.
 
-**The redesign's sample states.** `typical-overall`, `typical-models`, `typical-models-overall`, `offplan-on-overall`, `offplan-on-models`, `offplan-on-hidden`, `longest-figures` and `longest-figures-models` carry the Output/Overall, model-face and hidden-banner views, and seven models where a model face needs them; `typical-overall-folding` is Windows-only, because Linux has no fold, and `offplan-on-short` is Windows-only too. Both heads draw `typical-compact` and `offplan-on-models-short`, and every other state.
+**The redesign's sample states.** `typical-overall`, `typical-models`, `typical-models-overall`, `offplan-on-overall`, `offplan-on-models`, `offplan-on-hidden`, `longest-figures` and `longest-figures-models` carry the Output/Overall, model-face and hidden-banner views, and seven models where a model face needs them; `typical-overall-folding` is Windows-only, because only the Windows head is photographed mid-fold, and `offplan-on-short` is Windows-only too. Both heads draw `typical-compact` and `offplan-on-models-short`, and every other state.
 
 **The three states have offscreen renders** (`--popup-samples` → `panel-offplan-{unknown,off,on}-{light,dark}.png`). They had none before, which is how a banner asserting a charge at accounts that could not be charged survived: no fixture had an exhausted meter, so nobody ever looked at it. Same shape as issues #58 and #170.
 
@@ -379,17 +379,20 @@ Exact credit *balances* remain deferred (no local or API source found). What the
 
 The right-click surface. Rebuilt as a **docked flyout window** ([GitHub issue #33](https://github.com/mlengmark/O-view/issues/33)), replacing a WPF `ContextMenu` placed at `PlacementMode.MousePoint`.
 
-> **This entire section is Windows-only.** On Linux the menu belongs to the SNI host, not to
+> **The flyout below is Windows-only.** On Linux the menu belongs to the SNI host, not to
 > O-view: the host renders it in its own style, at a position O-view cannot know, and the
 > custom flyout below has no equivalent.
 >
-> The Linux menu carries four rows, in this order:
+> The Linux menu carries these rows, in this order:
 >
 > | Row | Kind | Notes |
 > |---|---|---|
 > | Show usage | action | Opens the panel ([issue #315](https://github.com/mlengmark/O-view/issues/315)) |
 > | Reset panel position | action | Forgets the dragged place for this display and puts an open panel back at the work-area corner. Absent on a native Wayland session, there is nothing to reset there |
 > | Run at startup | toggle | Re-read from the autostart `.desktop` file whenever the panel opens |
+> | Notify at | submenu | 70%, 80%, 90% and Off as radio rows, the setting in effect ticked. A threshold edited by hand into settings.json gets its own ticked row. The tick shows what the shell returned, never what was asked |
+> | Weekly reset | action | Shows `derived` or the entered day and time, and opens a small dialog with the Windows dialog's words and rules. An empty time clears the entry |
+> | Copy diagnostics | action | Puts the support bundle on the clipboard and says so in a notification, as on Windows |
 > | Exit O-view | action | |
 >
 > **Show usage is first because on Ubuntu the panel otherwise has no gesture.** The
@@ -411,14 +414,14 @@ The right-click surface. Rebuilt as a **docked flyout window** ([GitHub issue #3
 > the file is the source of truth and the desktop's own settings may have changed it.
 >
 > A fifth row, **Resume usage refresh**, is built but kept hidden until the refresh has
-> stopped itself; a person sees four rows until there is something to undo, three on a
-> native Wayland session, where the reset row is absent.
+> stopped itself; it sits between Weekly reset and Copy diagnostics, so a person sees seven
+> rows until there is something to undo, six on a native Wayland session, where the reset
+> row is absent.
 >
-> The notification, diagnostics and update rows are **not** on the Linux menu. Each has a
-> command-line equivalent instead (`--diagnose`, `--probe`, `--startup-status`), which is
-> also the only route that works on GNOME without an AppIndicator extension, where there is
-> no menu at all. The README's matrix records this as a ⚠️ rather than a tick. The update row
-> is absent for a second reason that is not about room: **Linux updates are notify-only**
+> The update row is **not** on the Linux menu. The command-line flags (`--diagnose`, `--probe`,
+> `--startup-status`) remain the only route that works on GNOME without an AppIndicator
+> extension, where there is no menu at all. The update row is absent for a reason that is not
+> about room: **Linux updates are notify-only**
 > (ADR-0009 as amended), O-view says a newer version exists and the package manager installs
 > it, so no row here downloads or runs anything, and adding one would be a change to that
 > decision rather than to this menu.
@@ -459,13 +462,14 @@ Measured on a 2560×1440 display, taskbar bottom-docked at `y=1392`, **before th
 
 ## 4. Motion
 
-> **Windows-only, and for a stated reason.** The curves below are *fitted to Windows' own
-> Quick Settings flyout*: they exist to make O-view's surfaces move like the shell's.
-> Copying that curve onto a window in a Linux desktop's corner would imitate nothing; it would
-> just be an animation borrowed from another platform's shell. The Linux panel opens, closes,
-> turns its block between totals and models and changes between Output and Overall without any of the motion described here, and the
-> Linux menu is drawn by the desktop, so O-view cannot animate it at all. Nothing in this
-> section is built for Linux.
+> **Both heads move the panel; only Windows moves the menu.** The curves below were fitted to
+> Windows' own Quick Settings flyout, and the Linux panel runs the same figures and curves so
+> the two read as one product. The Linux menu is drawn by the desktop, so O-view cannot
+> animate it at all, and the sections below that describe the menu, its tick and its threshold
+> list are Windows only. Linux runs the panel's slide, the block's turn, the Output | Overall
+> fold, the bars and arcs arriving and the banner's fold through `LinuxMotion`, and follows the
+> desktop's animation setting, read through the XDG portal. Linux moves only the content, never
+> its window.
 
 Every figure in this section is a base figure in
 [`PanelMotion`](../src/O-view.App/Rendering/PanelMotion.cs) multiplied by its `Pace`, which is
