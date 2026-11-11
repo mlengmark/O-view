@@ -1,6 +1,6 @@
 # Platform status
 
-As of v1.2.1. What has actually been seen working, on which platform, and what has not. This page exists so that the README, CLAUDE.md and the build plan can point at one record instead of each retelling it. Update it when a report lands; nothing else in the repository should restate it.
+As of 2026-11-11. The latest release is v1.3.1, and the newest report recorded here is the Linux sign-off of 2026-11-11 on the unreleased test build 1.3.2-trial.2. Anything below that names v1.2.1 or earlier has not been re-checked since. What has actually been seen working, on which platform, and what has not. This page exists so that the README, CLAUDE.md and the build plan can point at one record instead of each retelling it. Update it when a report lands; nothing else in the repository should restate it.
 
 The distinction it keeps is between three claims that sound alike:
 
@@ -20,7 +20,7 @@ In daily use on the developer's machine since v0.1.0, and the platform every rel
 
 ### The v1.2.1 motion
 
-The panel and the menu sliding, the folds, the tick and the tile flip are Windows only; Linux has none. Maximilian signed the motion off on a test build on 2026-11-06 with no notes. No agent tried the following on that build, and whether he did is not recorded:
+The panel and the menu sliding, the folds, the tick and the tile flip were Windows only when this was signed off; the menu is still Windows only, because on Linux the desktop draws it. Linux has since gained the panel's motion, and what has been seen of it is under Linux below. Maximilian signed the motion off on a test build on 2026-11-06 with no notes. No agent tried the following on that build, and whether he did is not recorded:
 
 - A real mouse pointer over the tiles, rows and menu. The agents used keyboard focus and raised clicks.
 - Windows' animation setting switched off for real. The agents forced it off in a temporary build.
@@ -34,7 +34,7 @@ What repeats is three command-line checks, `--menu-check`, `--fold-check` and `-
 
 ## Linux
 
-Supported since v0.6.0 (ADR-0012). Two hardware reports and a series of virtual-machine runs are the whole of what has been seen. No report has landed since v1.2.1, so nothing in that release's Linux change has been seen on a desktop.
+Supported since v0.6.0 (ADR-0012). Two hardware reports and a series of virtual-machine runs are the whole of what has been seen. No hardware report has landed since v1.2.1, and the 2026-11-11 sign-off below did not list that release's Linux change, so it has still not been seen on a desktop.
 
 ### Hardware reports
 
@@ -68,9 +68,25 @@ One defect was seen and is open: the first Alt+arrow press right after clicking 
 
 A native Xorg GNOME session was run on 2026-10-15 against an earlier build and has not been re-tested against any fix made since.
 
+### The 2026-11-11 sign-off
+
+Maximilian signed off the Linux panel brought level with Windows on the Ubuntu 24.04 VM, on the test build 1.3.2-trial.2, at 08:23 UTC. His prompt had him confirm that he stopped the old copy, installed the build, and saw the version line say 1.3.2-trial.2, and that every check on the card held. He wrote no notes. Each of these was on the card he said Yes to:
+
+- The panel slides up out of its edge when it opens and back when it closes.
+- Clicking the tray icon again while the panel is open closes it.
+- The block turns when "by model" or "totals" is pressed, and the Output | Overall switch slides and folds the table, without the panel jumping.
+- The chart's bars rise and the doughnut rings sweep in when the panel opens.
+- Hovering a chart bar or a model's name shows a card like the doughnut sections' cards.
+- The right-click menu has "Notify at" with a tick on the setting in use, "Weekly reset…" opening a small window, and "Copy diagnostics".
+- With animations switched off in the Ubuntu settings, all of the above still works and nothing moves.
+
+The card made one check conditional: if his account showed the off-plan banner, Tab reaches its ×, Enter hides it, and it folds away. Whether his account showed the banner is not recorded, so that check is not called seen.
+
+The card recorded only that this was the VM. It did not record the session type, the display scale, a physical machine, or whether the pointer was real, and none of those is claimed here. It had no check for the tray icon's first reading, the tooltip, notifications, a theme setting, or a window dragged away from the panel's edge, so those are unchanged below.
+
 ### Never observed
 
-- The panel on a physical Linux desktop. Every panel observation above is from the VM.
+- The panel on a physical Linux desktop. Every panel observation above, motion included, is from the VM.
 - The tooltip. On GNOME it cannot appear at all (the README explains why); what KDE Plasma does with it is not known, and neither hardware report mentioned it.
 - Notifications.
 - The tray icon showing real usage the first time it is drawn (v1.2.1). It waits up to 5 seconds for the first reading before it is put on the desktop, and shows the grey ring if none is ready. The fix is shown against a stand-in tray host and by CI's headless job, not on the GNOME desktop where a grey icon was reported, so whether the grey icon is gone there is not known. The cause is the best route found, not an observed one.
